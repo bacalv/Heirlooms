@@ -224,3 +224,12 @@ files, and the corresponding source directory layout:
 - `HeirloomsApp`: `com/heirloom/app/` → `digital/heirlooms/app/`
 - `HeirloomsServer`: `com/heirloom/server/` → `digital/heirlooms/server/`
 - `HeirloomsTest`: `com/heirloom/test/` → `digital/heirlooms/test/`
+
+---
+
+**TEAM.md added**
+
+Documents the team structure: Bret Adam Calvey as Founder & CTO, the PA (claude.ai)
+for strategic/architectural thinking, and the Software Engineer (Claude Code in
+IntelliJ) for hands-on implementation. Establishes that the Software Engineer commits
+but Bret always does the final push.
