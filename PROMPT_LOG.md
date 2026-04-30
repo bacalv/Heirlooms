@@ -233,3 +233,12 @@ Documents the team structure: Bret Adam Calvey as Founder & CTO, the PA (claude.
 for strategic/architectural thinking, and the Software Engineer (Claude Code in
 IntelliJ) for hands-on implementation. Establishes that the Software Engineer commits
 but Bret always does the final push.
+
+---
+
+**PA_NOTES.md added**
+
+The PA's (claude.ai) working memory file, committed to the repo so it persists across
+sessions and is visible to all team members. Captures Bret's preferences and working
+style, project facts to always remember, pending decisions, known gotchas, and team
+reminders.
