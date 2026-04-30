@@ -250,3 +250,12 @@ reminders.
 The Software Engineer's (Claude Code) own working memory file. Covers how to get
 session context, commit conventions, project structure at a glance, and code-level
 things worth remembering between sessions.
+
+---
+
+**docs/chats/2026-04-30-initial-chat.md added**
+
+The original claude.ai founding session chat, formatted as markdown. 356 turns
+spanning 24–30 April 2026. Converted from `Original_chat.txt` (now removed):
+day-separated sections, `**Human**` / `**Claude**` blocks, action/tool lines
+stripped, duplicate lines deduplicated.
