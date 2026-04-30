@@ -2,7 +2,7 @@ plugins {
     kotlin("jvm") version "1.9.22"
 }
 
-group = "com.heirloom"
+group = "digital.heirlooms"
 version = "0.2.0"
 
 repositories {

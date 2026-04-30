@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.heirloom.app"
+    namespace = "digital.heirlooms.app"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.heirloom.app"
+        applicationId = "digital.heirlooms.app"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

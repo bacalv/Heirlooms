@@ -4,7 +4,7 @@ plugins {
     id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
-group = "com.heirloom"
+group = "digital.heirlooms"
 version = "0.3.0"
 
 repositories {
@@ -35,7 +35,7 @@ dependencies {
 }
 
 application {
-    mainClass.set("com.heirloom.server.MainKt")
+    mainClass.set("digital.heirlooms.server.MainKt")
 }
 
 tasks.test {
@@ -47,6 +47,6 @@ kotlin {
 }
 
 tasks.shadowJar {
-    manifest { attributes["Main-Class"] = "com.heirloom.server.MainKt" }
+    manifest { attributes["Main-Class"] = "digital.heirlooms.server.MainKt" }
     mergeServiceFiles()
 }
