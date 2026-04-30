@@ -92,7 +92,7 @@ class Uploader(
         val attempts = (1..maxAttempts)
         val delays = sequenceOf(0L) + backoffSequence(initialDelayMs)
 
-        return attempts.zip(delays).fold<Pair<Int, Long>, UploadResult>(
+        return attempts.asSequence().zip(delays).fold<Pair<Int, Long>, UploadResult>(
             initial = UploadResult.Failure("Upload not attempted"),
         ) { lastResult, (attempt, delayMs) ->
             // Stop folding early if the last result is not retryable
