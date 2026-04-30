@@ -259,3 +259,11 @@ The original claude.ai founding session chat, formatted as markdown. 356 turns
 spanning 24–30 April 2026. Converted from `Original_chat.txt` (now removed):
 day-separated sections, `**Human**` / `**Claude**` blocks, action/tool lines
 stripped, duplicate lines deduplicated.
+
+---
+
+**Docs reorganisation**
+
+All markdown files except `README.md` moved from the project root into `docs/`:
+`PROMPT_LOG.md`, `ROADMAP.md`, `TEAM.md`, `PA_NOTES.md`, `SE_NOTES.md`.
+`README.md` updated with a Docs table linking to each file with a description.

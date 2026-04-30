@@ -10,6 +10,17 @@ A personal digital vault — share photos and videos from your phone to your own
 | `HeirloomsApp/` | Android app — adds "My Heirlooms" to the system share sheet |
 | `HeirloomsTest/` | End-to-end test suite — spins up the full stack in Docker and runs tests |
 
+## Docs
+
+| File | Description |
+|---|---|
+| [ROADMAP.md](docs/ROADMAP.md) | Product vision, milestone plan, and key concepts explored during the founding session |
+| [PROMPT_LOG.md](docs/PROMPT_LOG.md) | Running record of key decisions, prompts, and technical choices made during development |
+| [TEAM.md](docs/TEAM.md) | Team structure: roles, responsibilities, and working agreements |
+| [PA_NOTES.md](docs/PA_NOTES.md) | PA (claude.ai) working memory — preferences, project facts, pending decisions, and known gotchas |
+| [SE_NOTES.md](docs/SE_NOTES.md) | Software Engineer (Claude Code) working memory — session context, commit conventions, and project notes |
+| [chats/2026-04-30-initial-chat.md](docs/chats/2026-04-30-initial-chat.md) | Original claude.ai founding session chat, formatted as markdown (356 turns, 24–30 April 2026) |
+
 ---
 
 ## One-time machine setup
