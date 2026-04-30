@@ -196,3 +196,31 @@ Build time on a cold cache (first run): 3–5 minutes for dependency downloads.
 
 The project name was updated from **Heirloom** to **Heirlooms** to match the domain.
 The rename is the first task queued for the next development session.
+
+---
+
+## Session — 30 April 2026 (v0.3.0 polish + package rename)
+
+**Fix: `Uploader.kt` compile error**
+
+`IntRange` implements `Iterable`, not `Sequence`, so calling `.zip(Sequence)` on it
+failed to compile. Fixed by inserting `.asSequence()` before `.zip()`.
+
+---
+
+**Tag: v0.3.0**
+
+Annotated git tag `v0.3.0` created on `main` to mark the state of the project at the
+end of the founding development session.
+
+---
+
+**Package rename: `com.heirloom` → `digital.heirlooms`**
+
+Queued at the end of the previous session to align with the `heirlooms.digital` domain.
+Completed across all three subprojects — 22 Kotlin source files, 3 `build.gradle.kts`
+files, and the corresponding source directory layout:
+
+- `HeirloomsApp`: `com/heirloom/app/` → `digital/heirlooms/app/`
+- `HeirloomsServer`: `com/heirloom/server/` → `digital/heirlooms/server/`
+- `HeirloomsTest`: `com/heirloom/test/` → `digital/heirlooms/test/`
