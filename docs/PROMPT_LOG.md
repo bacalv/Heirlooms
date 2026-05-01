@@ -267,3 +267,25 @@ stripped, duplicate lines deduplicated.
 All markdown files except `README.md` moved from the project root into `docs/`:
 `PROMPT_LOG.md`, `ROADMAP.md`, `TEAM.md`, `PA_NOTES.md`, `SE_NOTES.md`.
 `README.md` updated with a Docs table linking to each file with a description.
+
+---
+
+## Session — 2026-05-01 (Milestone 3 — self-hosted deployment)
+
+**deploy/ folder added**
+
+Three files added to a new `deploy/` folder at the repo root:
+- `docker-compose.yml` — production compose with named volumes, restart policies,
+  host port binding (8080:8080), and a `build:` directive pointing at HeirloomsServer
+- `.env.example` — credential template; the real `.env` is gitignored
+- `README.md` — step-by-step setup guide for a VPS or home server
+
+Key differences from the test compose:
+- Credentials sourced from .env (not hardcoded)
+- Named volumes: postgres_data, minio_data (data survives container restarts)
+- restart: unless-stopped on postgres, minio, and heirloom-server
+- Port 8080 bound to the host as 8080:8080
+- build: context points to ../HeirloomsServer so `docker compose up --build`
+  compiles and packages the JAR automatically
+
+HeirloomsTest's docker-compose.yml was not modified.
