@@ -32,8 +32,15 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 
 ## Pending decisions / next actions
 
-- **Milestone 3:** Self-hosted deployment — a `docker-compose.yml` for running the
-  full stack on a cheap VPS so the Android app has a real endpoint to point at
+- **Milestone 3 — DONE (pending SE commit + Bret push):** deploy/ folder added.
+  See PROMPT_LOG.md for details.
+
+- **Milestone 3 deployment — next session:** Provision Hetzner CX22, point
+  `heirlooms.digital` A record at its IP, run `docker compose up -d --build`
+  from deploy/. Verify health endpoint. Update Android app endpoint.
+
+- **HTTPS:** Deferred to Milestone 4. Will add Caddy as a reverse proxy in the
+  deploy/ compose file to handle SSL via Let's Encrypt.
 - **heirlooms.com:** Currently parked on venture.com. Worth monitoring — only worth
   acquiring if the project grows to consumer scale
 - **License:** Deliberately deferred. Revisit when deciding whether Heirlooms will

@@ -268,6 +268,51 @@ All markdown files except `README.md` moved from the project root into `docs/`:
 `PROMPT_LOG.md`, `ROADMAP.md`, `TEAM.md`, `PA_NOTES.md`, `SE_NOTES.md`.
 `README.md` updated with a Docs table linking to each file with a description.
 
+## Session — 1 May 2026 (Milestone 3 planning + deployment research)
+
+**Milestone 3 patch produced**
+
+The PA produced a patch for the Software Engineer containing three new files
+in a new `deploy/` folder at the repo root:
+- `docker-compose.yml` — production compose with named volumes, restart policies,
+  host port binding (8080:8080), and a `build:` directive pointing at HeirloomsServer
+- `.env.example` — credential template; the real `.env` is gitignored
+- `README.md` — step-by-step setup guide for a VPS or home server
+
+Key differences from the test compose:
+- Credentials sourced from .env (not hardcoded)
+- Named volumes: postgres_data, minio_data (data survives container restarts)
+- `restart: unless-stopped` on postgres, minio, and heirloom-server
+- Port 8080 bound to the host as 8080:8080
+- `build:` context points to ../HeirloomsServer so `docker compose up --build`
+  compiles and packages the JAR automatically
+
+HeirloomsTest's docker-compose.yml was not modified.
+
+---
+
+**Deployment research — cloud and VPS options evaluated**
+
+Google Cloud Run + Cloud SQL + Cloud Storage was evaluated as a cloud path.
+Viable but Cloud SQL alone costs ~£10-15/month, which is disproportionate for
+a personal project at this stage.
+
+Hetzner CX22 (~€4/month) chosen as the recommended deployment target.
+Runs the full stack on a single VPS via the Milestone 3 docker-compose.yml.
+
+---
+
+**Agreed next steps (queued for next session)**
+
+1. Provision a Hetzner CX22 VPS
+2. Add a DNS A record: `heirlooms.digital` → VPS IP (TTL 300)
+3. SSH in, clone repo, copy `.env.example` to `.env`, fill in passwords
+4. `docker compose up -d --build` from the `deploy/` folder
+5. Verify: `curl http://heirlooms.digital:8080/health`
+6. Update Android app endpoint to `http://heirlooms.digital:8080/api/content/upload`
+
+HTTPS (via Caddy reverse proxy + Let's Encrypt) deferred to Milestone 4.
+
 ---
 
 ## Session — 2026-05-01 (Milestone 3 — self-hosted deployment)
