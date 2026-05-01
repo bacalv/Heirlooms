@@ -24,7 +24,7 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - **Package name:** `digital.heirlooms` (not `com.heirloom` — that was the old name)
 - **Domain:** `heirlooms.digital` (registered 30 April 2026)
 - **GitHub:** `github.com/bacalv/Heirlooms` (capital H)
-- **Current version:** v0.3.0 (tagged on main)
+- **Current version:** v0.4.0 (tagged on main)
 - **One-time machine setup required:** `~/.testcontainers.properties` with
   `docker.raw.sock` path — see PROMPT_LOG.md for details
 
@@ -32,8 +32,8 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 
 ## Pending decisions / next actions
 
-- **Milestone 3 — DONE (pending SE commit + Bret push):** deploy/ folder added.
-  See PROMPT_LOG.md for details.
+- **Milestone 3 — DONE (v0.4.0):** deploy/ folder added, tested locally in Docker,
+  tagged and pushed. See PROMPT_LOG.md for details.
 
 - **Milestone 3 deployment — next session:** Provision Hetzner CX22, point
   `heirlooms.digital` A record at its IP, run `docker compose up -d --build`
