@@ -44,8 +44,12 @@ class ShareActivity : Activity() {
             return
         }
 
-        val fileUri: Uri = intent.getParcelableExtra(Intent.EXTRA_STREAM)
-            ?: run { showToastAndFinish("No file received."); return }
+        val fileUri: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(Intent.EXTRA_STREAM)
+        } ?: run { showToastAndFinish("No file received."); return }
 
         val mimeType = Uploader.resolveMimeType(
             intent.type?.takeIf { it.isNotEmpty() }
