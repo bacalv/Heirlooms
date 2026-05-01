@@ -46,3 +46,8 @@ Three Gradle subprojects under `/Users/bac/Downloads/Heirlooms/`:
   (see PA_NOTES.md for details) — one-time machine setup, not a code problem
 - `local.properties` in `HeirloomsApp` must contain:
   `sdk.dir=/Users/bac/Library/Android/sdk`
+- Swagger UI is at `http://localhost:8080/docs` (assets served from webjar — no CDN,
+  no internet required). OpenAPI spec at `http://localhost:8080/api/content/openapi.json`.
+  Routes use http4k-contract, which returns 404 (not 405) for wrong methods on
+  contract-owned paths. `Body.binary()` is an extension on `org.http4k.core.Body.Companion`
+  from `org.http4k.lens` — import both `org.http4k.core.Body` and `org.http4k.lens.binary`.

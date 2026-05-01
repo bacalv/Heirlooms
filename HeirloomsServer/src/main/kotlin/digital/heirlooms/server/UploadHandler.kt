@@ -1,5 +1,12 @@
 package digital.heirlooms.server
 
+import org.http4k.contract.ContractRoute
+import org.http4k.contract.contract
+import org.http4k.contract.meta
+import org.http4k.contract.openapi.ApiInfo
+import org.http4k.contract.openapi.v3.OpenApi3
+import org.http4k.core.Body
+import org.http4k.core.ContentType
 import org.http4k.core.HttpHandler
 import org.http4k.core.Method.GET
 import org.http4k.core.Method.POST
@@ -7,17 +14,65 @@ import org.http4k.core.Request
 import org.http4k.core.Response
 import org.http4k.core.Status.Companion.BAD_REQUEST
 import org.http4k.core.Status.Companion.CREATED
+import org.http4k.core.Status.Companion.FOUND
 import org.http4k.core.Status.Companion.INTERNAL_SERVER_ERROR
 import org.http4k.core.Status.Companion.OK
+import org.http4k.format.Jackson
+import org.http4k.lens.binary
+import org.http4k.routing.ResourceLoader
 import org.http4k.routing.bind
 import org.http4k.routing.routes
+import org.http4k.routing.static
 import java.util.UUID
 
-fun buildApp(storage: FileStore, database: Database): HttpHandler = routes(
-    "/api/content/upload"  bind POST to uploadHandler(storage, database),
-    "/api/content/uploads" bind GET  to listUploadsHandler(database),
-    "/health"              bind GET  to { Response(OK).body("ok") },
-)
+private const val SWAGGER_UI_VERSION = "5.11.8"
+
+private val swaggerInitializerJs = """
+window.onload = function() {
+  window.ui = SwaggerUIBundle({
+    url: "/api/content/openapi.json",
+    dom_id: '#swagger-ui',
+    deepLinking: true,
+    presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+    plugins: [SwaggerUIBundle.plugins.DownloadUrl],
+    layout: "StandaloneLayout"
+  });
+};
+""".trimIndent()
+
+fun buildApp(storage: FileStore, database: Database): HttpHandler {
+    val apiContract = contract {
+        renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
+        descriptionPath = "/openapi.json"
+        routes += listOf(
+            uploadContractRoute(storage, database),
+            listUploadsContractRoute(database),
+        )
+    }
+
+    return routes(
+        "/api/content" bind apiContract,
+        "/health" bind GET to { Response(OK).body("ok") },
+        "/docs" bind GET to { Response(FOUND).header("Location", "/docs/index.html") },
+        "/docs/swagger-initializer.js" bind GET to {
+            Response(OK).header("Content-Type", "application/javascript").body(swaggerInitializerJs)
+        },
+        "/docs" bind static(ResourceLoader.Classpath("META-INF/resources/webjars/swagger-ui/$SWAGGER_UI_VERSION")),
+    )
+}
+
+private fun uploadContractRoute(storage: FileStore, database: Database): ContractRoute =
+    "/upload" meta {
+        summary = "Upload a file"
+        description = "Upload an image or video. Content-Type header should reflect the file's MIME type (e.g. image/jpeg, video/mp4)."
+        receiving(Body.binary(ContentType("application/octet-stream")).toLens())
+    } bindContract POST to uploadHandler(storage, database)
+
+private fun listUploadsContractRoute(database: Database): ContractRoute =
+    "/uploads" meta {
+        summary = "List uploads"
+        description = "Returns all uploaded files as a JSON array with id, storageKey, mimeType, and fileSize fields."
+    } bindContract GET to listUploadsHandler(database)
 
 private fun uploadHandler(storage: FileStore, database: Database): HttpHandler = { request: Request ->
     val body = request.body.payload.array()

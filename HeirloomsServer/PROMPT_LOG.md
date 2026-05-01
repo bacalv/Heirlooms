@@ -115,6 +115,43 @@ Timestamps are not available and are marked as `[unknown]`.
 
 ---
 
+## Entry 10
+**Date:** 2026-05-01
+**Prompt:** Add Swagger to the backend server so API documentation is accessible in a
+browser and can be used as a simple client.
+
+**Response:** Added OpenAPI 3.0 spec generation and a fully self-hosted Swagger UI.
+
+- Added `http4k-contract`, `http4k-format-jackson`, and `org.webjars:swagger-ui:5.11.8`
+  to `build.gradle.kts`
+- Converted `UploadHandler.kt` from plain `routes()` to http4k contract routing; the
+  contract auto-generates and serves an OpenAPI 3.0 spec at `GET /api/content/openapi.json`
+- Swagger UI assets served from the webjar classpath at `/docs/` via
+  `static(ResourceLoader.Classpath("META-INF/resources/webjars/swagger-ui/5.11.8"))`
+- `swagger-initializer.js` overridden by a specific route before the static handler,
+  pointing Swagger UI at the local spec URL
+- `GET /docs` redirects to `/docs/index.html`
+- `Body.binary(ContentType("application/octet-stream")).toLens()` added to upload route
+  meta so Swagger UI renders a file picker — `binary` is an extension on
+  `org.http4k.core.Body.Companion` from `org.http4k.lens`; `org.http4k.lens.Body`
+  does not exist in http4k 4.46
+- Updated `UploadHandlerTest.kt`: `GET /api/content/upload` now expects 404 (not 405)
+  because http4k-contract returns 404 for unregistered methods on contract-owned paths
+- All 48 unit tests pass
+
+**Key gotcha:** `Body.binary()` is not a standalone top-level function; it is an
+extension on `org.http4k.core.Body.Companion`. Import `org.http4k.core.Body` and
+`org.http4k.lens.binary` together to call it as `Body.binary(...)`.
+
+**Files changed:**
+- `HeirloomsServer/build.gradle.kts`
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/UploadHandler.kt`
+- `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/UploadHandlerTest.kt`
+- `HeirloomsServer/README.md`
+- `HeirloomsServer/PROMPT_LOG.md` (this file)
+
+---
+
 ## Entry 9
 **Time:** [unknown]
 **Prompt:** You asked "where to host the server". We should add a Dockerfile to each backend service and change the gradle build to generate a docker image. Also introduced PostgreSQL, Flyway, MinIO support, and a new HeirloomsTest project.

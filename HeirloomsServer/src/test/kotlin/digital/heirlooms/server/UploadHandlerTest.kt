@@ -12,7 +12,6 @@ import org.http4k.core.Request
 import org.http4k.core.Status.Companion.BAD_REQUEST
 import org.http4k.core.Status.Companion.CREATED
 import org.http4k.core.Status.Companion.INTERNAL_SERVER_ERROR
-import org.http4k.core.Status.Companion.METHOD_NOT_ALLOWED
 import org.http4k.core.Status.Companion.NOT_FOUND
 import org.http4k.core.Status.Companion.OK
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -203,8 +202,8 @@ class UploadHandlerTest {
     }
 
     @Test
-    fun `GET to upload endpoint returns 405`() {
-        assertEquals(METHOD_NOT_ALLOWED, app(Request(GET, "/api/content/upload")).status)
+    fun `GET to upload endpoint returns 404`() {
+        assertEquals(NOT_FOUND, app(Request(GET, "/api/content/upload")).status)
     }
 
     @Test

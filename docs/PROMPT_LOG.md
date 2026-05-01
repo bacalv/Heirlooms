@@ -334,3 +334,44 @@ Key differences from the test compose:
   compiles and packages the JAR automatically
 
 HeirloomsTest's docker-compose.yml was not modified.
+
+---
+
+## Session — 2026-05-01 (Swagger UI / OpenAPI documentation)
+
+**Prompt:** "Is it possible to add swagger to our backend server so I can access
+detailed API documentation in a browser and use it as a simple client for our server?"
+
+**What was built:** Interactive API documentation served at `GET /docs`, backed by
+a fully self-hosted Swagger UI (no CDN dependency).
+
+- Added `http4k-contract`, `http4k-format-jackson`, and `org.webjars:swagger-ui:5.11.8`
+  to `build.gradle.kts`
+- Converted `UploadHandler.kt` from plain `routes()` to http4k contract routing;
+  the contract auto-generates and serves an OpenAPI 3.0 spec at
+  `GET /api/content/openapi.json`
+- Swagger UI assets served from the webjar on the classpath at `/docs/` via
+  http4k's `static(ResourceLoader.Classpath(...))` handler
+- `swagger-initializer.js` overridden via a specific route listed before the static
+  handler, pointing Swagger UI at `/api/content/openapi.json`
+- `GET /docs` redirects to `/docs/index.html`
+- `Body.binary(ContentType("application/octet-stream")).toLens()` declared in the
+  upload route meta so Swagger UI renders a file picker for the POST endpoint.
+  Note: `binary` is an extension on `org.http4k.core.Body.Companion` from the
+  `org.http4k.lens` package — `org.http4k.lens.Body` does not exist in http4k 4.46
+- Updated `UploadHandlerTest.kt`: `GET /api/content/upload` now returns 404 (not 405)
+  because http4k-contract does not produce METHOD_NOT_ALLOWED for wrong methods on
+  contract-owned paths
+
+**Key decision — CDN vs webjar:**
+CDN approach (unpkg) was considered first — simpler, no extra dependency, but requires
+the browser to have internet access. Webjar was preferred: all assets are bundled in the
+fat JAR, the server is fully self-contained, and no internet access is needed at runtime.
+
+**Files changed:**
+- `HeirloomsServer/build.gradle.kts`
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/UploadHandler.kt`
+- `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/UploadHandlerTest.kt`
+- `HeirloomsServer/README.md`
+- `HeirloomsServer/PROMPT_LOG.md`
+- `docs/SE_NOTES.md`

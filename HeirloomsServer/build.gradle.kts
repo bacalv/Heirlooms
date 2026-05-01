@@ -13,11 +13,15 @@ repositories {
 
 val http4kVersion = "4.46.0.0"
 val awsSdkVersion = "2.25.11"
+val swaggerUiVersion = "5.11.8"
 
 dependencies {
     implementation(kotlin("stdlib"))
     implementation("org.http4k:http4k-core:$http4kVersion")
     implementation("org.http4k:http4k-server-netty:$http4kVersion")
+    implementation("org.http4k:http4k-contract:$http4kVersion")
+    implementation("org.http4k:http4k-format-jackson:$http4kVersion")
+    implementation("org.webjars:swagger-ui:$swaggerUiVersion")
 
     // AWS SDK v2 — S3 async client
     implementation("software.amazon.awssdk:s3:$awsSdkVersion")

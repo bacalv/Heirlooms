@@ -6,11 +6,36 @@ or an Amazon S3 bucket.
 
 ---
 
-## Endpoint
+## API documentation
+
+An interactive Swagger UI is served at:
 
 ```
-POST /api/content/upload
+http://localhost:8080/docs
 ```
+
+The raw OpenAPI 3.0 spec (JSON) is at:
+
+```
+http://localhost:8080/api/content/openapi.json
+```
+
+> The Swagger UI loads assets from the unpkg CDN — the browser making the request
+> needs internet access. The server itself does not.
+
+---
+
+## Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/content/upload` | Upload a file |
+| `GET` | `/api/content/uploads` | List all uploaded files |
+| `GET` | `/health` | Health check |
+| `GET` | `/docs` | Swagger UI |
+| `GET` | `/api/content/openapi.json` | OpenAPI 3.0 spec |
+
+### POST /api/content/upload
 
 - **Request body**: raw file bytes
 - **`Content-Type` header**: MIME type of the file (e.g. `image/jpeg`, `video/mp4`)
@@ -125,7 +150,7 @@ The server prints the active backend and port on startup, then blocks until inte
 | `ContentTypeExtensionsTest` | MIME → extension mapping for images, videos, unknown types, case insensitivity, charset stripping |
 | `LocalFileStoreTest` | UUID naming, correct extension, exact bytes on disk, multiple saves get different UUIDs, nested directory creation |
 | `S3FileStoreTest` | Storage key format, bucket/key/Content-Type/Content-Length in PutObject request, exactly one call per save, S3 failure wrapped in RuntimeException |
-| `UploadHandlerTest` | 201 on success, key in response, correct bytes and MIME type passed to storage, charset stripping, missing Content-Type fallback, 400 on empty body, 500 on storage exception, 405 on wrong method, 404 on unknown path |
+| `UploadHandlerTest` | 201 on success, key in response, correct bytes and MIME type passed to storage, charset stripping, missing Content-Type fallback, 400 on empty body, 500 on storage exception, 404 on wrong method or unknown path |
 
 ---
 
