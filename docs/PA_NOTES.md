@@ -80,3 +80,60 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 
 **Credentials:** Service account JSON key downloaded locally. DB password stored
 separately. Neither should ever be committed to GitHub.
+
+---
+
+## GCP permissions — what actually worked (learned the hard way)
+
+All permissions must be granted via CLI, not the Console — the Console UI did not
+reliably apply them. Use these commands:
+
+```bash
+# Cloud SQL access
+gcloud projects add-iam-policy-binding heirlooms-495416 \
+  --member="serviceAccount:heirlooms-server@heirlooms-495416.iam.gserviceaccount.com" \
+  --role="roles/cloudsql.client"
+
+# Secret Manager access
+gcloud projects add-iam-policy-binding heirlooms-495416 \
+  --member="serviceAccount:heirlooms-server@heirlooms-495416.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+# GCS bucket access
+gcloud storage buckets add-iam-policy-binding gs://heirlooms-uploads \
+  --member="serviceAccount:heirlooms-server@heirlooms-495416.iam.gserviceaccount.com" \
+  --role="roles/storage.objectAdmin"
+```
+
+## Cloud Run deploy command (current, working)
+
+```bash
+gcloud run deploy heirlooms-server \
+  --image europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server:latest \
+  --region europe-west2 \
+  --platform managed \
+  --allow-unauthenticated \
+  --set-env-vars "STORAGE_BACKEND=GCS" \
+  --set-env-vars "GCS_BUCKET=heirlooms-uploads" \
+  --set-env-vars "DB_URL=jdbc:postgresql:///heirlooms?cloudSqlInstance=heirlooms-495416:europe-west2:heirlooms-db&socketFactory=com.google.cloud.sql.postgres.SocketFactory" \
+  --set-env-vars "DB_USER=heirlooms" \
+  --set-secrets "DB_PASSWORD=heirlooms-db-password:latest" \
+  --set-secrets "GCS_CREDENTIALS_JSON=heirlooms-gcs-credentials:latest" \
+  --set-secrets "API_KEY=heirlooms-api-key:latest" \
+  --service-account heirlooms-server@heirlooms-495416.iam.gserviceaccount.com \
+  --add-cloudsql-instances heirlooms-495416:europe-west2:heirlooms-db
+```
+
+## Docker build and push command (for future deployments)
+
+```bash
+cd ~/Downloads/Heirlooms/HeirloomsServer
+docker build \
+  --platform linux/amd64 \
+  -t europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server:latest \
+  .
+docker push europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server:latest
+```
+
+## Current version
+v0.5.0 (tagged on main, 5 May 2026)
