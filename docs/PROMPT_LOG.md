@@ -375,3 +375,67 @@ fat JAR, the server is fully self-contained, and no internet access is needed at
 - `HeirloomsServer/README.md`
 - `HeirloomsServer/PROMPT_LOG.md`
 - `docs/SE_NOTES.md`
+
+---
+
+## Milestone 3 — 2026-05-05 (GCP deployment, GCS storage, API key auth, end-to-end test)
+
+Full-stack milestone: server deployed to Google Cloud Run, storage migrated to GCS,
+API key authentication added across server and Android app, end-to-end photo upload
+confirmed from a real Android device.
+
+**What was built:**
+
+### HeirloomsServer
+
+- **`GcsFileStore.kt`** — new `FileStore` implementation backed by Google Cloud Storage.
+  Service account credentials are supplied as a JSON string via the `GCS_CREDENTIALS_JSON`
+  environment variable and loaded in-memory; credentials are never written to disk.
+  Activated by setting `STORAGE_BACKEND=GCS`, `GCS_BUCKET`, and `GCS_CREDENTIALS_JSON`.
+
+- **Cloud SQL socket factory** — added `com.google.cloud.sql:postgres-socket-factory:1.19.0`
+  dependency to support IAM-authenticated connections to Cloud SQL (PostgreSQL) via the
+  Cloud SQL Auth Proxy socket.
+
+- **`ApiKeyFilter.kt`** — http4k `Filter` that enforces `X-Api-Key` header authentication
+  on all requests. `/health` is unconditionally exempt (required for Cloud Run health checks).
+  Returns HTTP 401 for missing or incorrect keys. Key value read from the `API_KEY`
+  environment variable via `AppConfig`. Filter is only wired in `Main.kt` when `apiKey`
+  is non-empty, so local development works without a key.
+
+### HeirloomsApp
+
+- **`EndpointStore.kt`** — added `getApiKey()` / `setApiKey()` backed by SharedPreferences
+  key `api_key`.
+- **`Uploader.kt`** — added optional `apiKey: String?` parameter to `upload()`;
+  injects `X-Api-Key` header when non-blank.
+- **`SettingsActivity.kt` / `activity_settings.xml`** — added a masked password input
+  field for the API key alongside the existing endpoint URL field.
+- **`ShareActivity.kt`** — reads API key from `EndpointStore` and passes it to `upload()`.
+
+### GCP infrastructure provisioned
+
+- **Cloud Run** — HeirloomsServer deployed as a containerised service (Artifact Registry,
+  Jib build)
+- **Cloud SQL** — PostgreSQL instance, connected via Cloud SQL socket factory
+- **Cloud Storage** — GCS bucket for file storage
+- **Secret Manager** — secrets for API key and service account credentials
+- **Service account** — created with roles scoped to Cloud SQL, GCS, and Secret Manager
+
+### End-to-end validation
+
+Photo uploaded from a physical Android device → Cloud Run endpoint → stored in GCS bucket.
+Upload confirmed by checking the GCS bucket directly.
+
+**Files changed/added:**
+- `HeirloomsServer/build.gradle.kts` — GCS and Cloud SQL socket factory dependencies
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/GcsFileStore.kt` (new)
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/ApiKeyFilter.kt` (new)
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/AppConfig.kt` — GCS fields, `apiKey`
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/Main.kt` — GCS and filter wiring
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/EndpointStore.kt`
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/Uploader.kt`
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/SettingsActivity.kt`
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/ShareActivity.kt`
+- `HeirloomsApp/app/src/main/res/layout/activity_settings.xml`
+- `HeirloomsApp/app/src/main/res/values/strings.xml`
