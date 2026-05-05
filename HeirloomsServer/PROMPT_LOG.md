@@ -169,3 +169,16 @@ extension on `org.http4k.core.Body.Companion`. Import `org.http4k.core.Body` and
 - `HeirloomsServer/src/main/resources/application.properties`
 - `HeirloomsServer/src/main/resources/db/migration/V1__create_uploads_table.sql` (new)
 - `HeirloomsServer/VERSION_HISTORY.md`
+
+---
+
+## Entry [2026-05-05]
+**Prompt:** Milestone 3 — add Google Cloud Storage support to HeirloomsServer. New GcsFileStore implementing FileStore; extend AppConfig with GCS enum value and two new fields (GCS_BUCKET, GCS_CREDENTIALS_JSON); wire up in Main.kt. Existing S3FileStore and LocalFileStore unchanged.
+
+**Response:** Added GCS backend. Service account credentials are passed in as a JSON string via the GCS_CREDENTIALS_JSON environment variable (never written to disk). Set STORAGE_BACKEND=GCS, GCS_BUCKET, and GCS_CREDENTIALS_JSON to activate.
+
+**Files changed/added:**
+- `HeirloomsServer/build.gradle.kts` — added `com.google.cloud:google-cloud-storage:2.36.1`
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/GcsFileStore.kt` (new)
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/AppConfig.kt` — GCS enum + gcsBucket/gcsCredentialsJson fields
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/Main.kt` — GCS wiring
