@@ -24,7 +24,7 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - **Package name:** `digital.heirlooms` (not `com.heirloom` — that was the old name)
 - **Domain:** `heirlooms.digital` (registered 30 April 2026)
 - **GitHub:** `github.com/bacalv/Heirlooms` (capital H)
-- **Current version:** v0.4.0 (tagged on main)
+- **Current version:** v0.3.0 (tagged on main)
 - **One-time machine setup required:** `~/.testcontainers.properties` with
   `docker.raw.sock` path — see PROMPT_LOG.md for details
 
@@ -32,15 +32,8 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 
 ## Pending decisions / next actions
 
-- **Milestone 3 — DONE (v0.4.0):** deploy/ folder added, tested locally in Docker,
-  tagged and pushed. See PROMPT_LOG.md for details.
-
-- **Milestone 3 deployment — next session:** Provision Hetzner CX22, point
-  `heirlooms.digital` A record at its IP, run `docker compose up -d --build`
-  from deploy/. Verify health endpoint. Update Android app endpoint.
-
-- **HTTPS:** Deferred to Milestone 4. Will add Caddy as a reverse proxy in the
-  deploy/ compose file to handle SSL via Let's Encrypt.
+- **Milestone 3:** Self-hosted deployment — a `docker-compose.yml` for running the
+  full stack on a cheap VPS so the Android app has a real endpoint to point at
 - **heirlooms.com:** Currently parked on venture.com. Worth monitoring — only worth
   acquiring if the project grows to consumer scale
 - **License:** Deliberately deferred. Revisit when deciding whether Heirlooms will
@@ -68,3 +61,22 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Ask the Software Engineer to update PROMPT_LOG.md after significant code changes
 - At the start of a new claude.ai session, paste both PROMPT_LOG.md and TEAM.md
 - PA_NOTES.md (this file) should also be pasted in if working memory is needed
+
+---
+
+## GCP Infrastructure (Milestone 3)
+
+| Resource | Value |
+|---|---|
+| Project ID | `heirlooms-495416` |
+| Region | `europe-west2` |
+| Cloud SQL instance | `heirlooms-db` |
+| Database name | `heirlooms` |
+| Database user | `heirlooms` |
+| Cloud Storage bucket | `heirlooms-uploads` |
+| Service account | `heirlooms-server` |
+| Artifact Registry | `heirlooms` |
+| Full image path | `europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server` |
+
+**Credentials:** Service account JSON key downloaded locally. DB password stored
+separately. Neither should ever be committed to GitHub.
