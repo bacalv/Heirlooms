@@ -33,7 +33,7 @@ class SharedPreferenceStore(context: Context) : PreferenceStore {
 }
 
 /**
- * Persists the upload endpoint URL so it survives app restarts.
+ * Persists the upload endpoint URL and API key so they survive app restarts.
  *
  * Accepts a [PreferenceStore] so the Android runtime is never required in tests.
  * Use the [EndpointStore.create] factory in production code.
@@ -49,9 +49,16 @@ class EndpointStore(private val store: PreferenceStore) {
     /** True if the user has explicitly saved an endpoint at least once. */
     fun isConfigured(): Boolean = store.contains(KEY_ENDPOINT)
 
+    /** Returns the stored API key, or an empty string if none has been saved. */
+    fun getApiKey(): String = store.getString(KEY_API_KEY, "")
+
+    /** Persists [apiKey] so it survives app restarts. */
+    fun setApiKey(apiKey: String) = store.putString(KEY_API_KEY, apiKey.trim())
+
     companion object {
         const val DEFAULT_ENDPOINT = "http://12.34.56.78:8080/api/content/upload"
         private const val KEY_ENDPOINT = "endpoint"
+        private const val KEY_API_KEY = "api_key"
 
         /** Convenience factory for use in Activities and Services. */
         fun create(context: Context): EndpointStore =

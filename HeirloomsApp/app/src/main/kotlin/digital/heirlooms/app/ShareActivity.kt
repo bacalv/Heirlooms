@@ -59,8 +59,9 @@ class ShareActivity : Activity() {
         showToast("Uploading…")
 
         scope.launch {
-            // Read endpoint from SharedPreferences (replaces config.properties)
-            val endpoint = EndpointStore.create(applicationContext).get()
+            val store = EndpointStore.create(applicationContext)
+            val endpoint = store.get()
+            val apiKey = store.getApiKey().takeIf { it.isNotEmpty() }
 
             val fileBytes = withContext(Dispatchers.IO) {
                 try { readBytes(fileUri) } catch (e: IOException) { null }
@@ -73,7 +74,7 @@ class ShareActivity : Activity() {
             }
 
             val result = withContext(Dispatchers.IO) {
-                uploader.upload(endpoint, fileBytes, mimeType)
+                uploader.upload(endpoint, fileBytes, mimeType, apiKey)
             }
 
             when (result) {

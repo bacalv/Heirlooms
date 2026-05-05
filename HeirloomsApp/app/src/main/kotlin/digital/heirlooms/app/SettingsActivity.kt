@@ -9,6 +9,7 @@ import androidx.appcompat.app.AppCompatActivity
 class SettingsActivity : AppCompatActivity() {
 
     private lateinit var editEndpoint: EditText
+    private lateinit var editApiKey: EditText
     private lateinit var btnSave: Button
     private lateinit var store: EndpointStore
 
@@ -18,11 +19,12 @@ class SettingsActivity : AppCompatActivity() {
 
         store = EndpointStore.create(this)
         editEndpoint = findViewById(R.id.editEndpoint)
+        editApiKey = findViewById(R.id.editApiKey)
         btnSave = findViewById(R.id.btnSave)
 
-        // Pre-fill with the currently saved value (or the default)
         editEndpoint.setText(store.get())
-        editEndpoint.setSelection(editEndpoint.text.length)  // cursor at end
+        editEndpoint.setSelection(editEndpoint.text.length)
+        editApiKey.setText(store.getApiKey())
 
         btnSave.setOnClickListener { save() }
     }
@@ -37,6 +39,7 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         store.set(input)
+        store.setApiKey(editApiKey.text.toString())
         Toast.makeText(this, getString(R.string.settings_saved), Toast.LENGTH_SHORT).show()
     }
 }

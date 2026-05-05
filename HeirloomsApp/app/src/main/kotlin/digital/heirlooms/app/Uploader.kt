@@ -79,7 +79,7 @@ class Uploader(
      * - HTTP 4xx: not retried (permanent client error)
      * - Delay between attempts doubles each time: 1s, 2s, 4s, …
      */
-    fun upload(endpoint: String?, fileBytes: ByteArray?, mimeType: String): UploadResult {
+    fun upload(endpoint: String?, fileBytes: ByteArray?, mimeType: String, apiKey: String? = null): UploadResult {
         if (!isValidEndpoint(endpoint)) {
             return UploadResult.Failure("No endpoint configured in config.properties")
         }
@@ -100,7 +100,7 @@ class Uploader(
 
             if (delayMs > 0) Thread.sleep(delayMs)
 
-            val result = attemptUpload(endpoint!!, fileBytes, mimeType, attempt)
+            val result = attemptUpload(endpoint!!, fileBytes, mimeType, attempt, apiKey)
 
             if (!isRetryable(result)) return result
 
@@ -113,12 +113,14 @@ class Uploader(
         fileBytes: ByteArray,
         mimeType: String,
         attempt: Int,
+        apiKey: String?,
     ): UploadResult {
         val body = fileBytes.toRequestBody(mimeType.toMediaType())
         val request = Request.Builder()
             .url(endpoint)
             .post(body)
             .header("Content-Type", mimeType)
+            .apply { if (!apiKey.isNullOrBlank()) header("X-Api-Key", apiKey) }
             .build()
 
         return try {

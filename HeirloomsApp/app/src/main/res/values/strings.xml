@@ -8,6 +8,8 @@
     <string name="settings_endpoint_label">Upload URL</string>
     <string name="settings_endpoint_hint">http://your-server:8080/api/content/upload</string>
     <string name="settings_help">This is the address of your HeirloomsServer. Changes take effect immediately.</string>
+    <string name="settings_api_key_label">API Key</string>
+    <string name="settings_api_key_hint">Enter your API key</string>
     <string name="settings_save">Save</string>
     <string name="settings_saved">URL saved</string>
     <string name="settings_invalid_url">URL must start with http:// or https://</string>
