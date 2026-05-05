@@ -137,3 +137,18 @@ docker push europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-ser
 
 ## Current version
 v0.5.0 (tagged on main, 5 May 2026)
+
+---
+
+## Key documents in the repo
+
+| File | Purpose |
+|---|---|
+| `PROMPT_LOG.md` | Full history of decisions and what was built |
+| `TEAM.md` | Team structure and working practices |
+| `PA_NOTES.md` | This file — PA working memory and preferences |
+| `ROADMAP.md` | Milestone plan and product vision |
+| `IDEAS.md` | Product brainstorms not yet ready for the roadmap |
+
+**At the start of a new claude.ai session, paste:**
+`PROMPT_LOG.md`, `TEAM.md`, `PA_NOTES.md` — and `IDEAS.md` if discussing product direction.
