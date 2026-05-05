@@ -33,6 +33,12 @@ fun main() {
                 config.s3EndpointOverride,
             )
         }
+        StorageBackend.GCS -> {
+            require(config.gcsBucket.isNotEmpty())          { "GCS_BUCKET must be set" }
+            require(config.gcsCredentialsJson.isNotEmpty()) { "GCS_CREDENTIALS_JSON must be set" }
+            println("Storage: GCS bucket '${config.gcsBucket}'")
+            GcsFileStore.create(config.gcsBucket, config.gcsCredentialsJson)
+        }
     }
 
     val server = buildApp(storage, database).asServer(Netty(config.serverPort))

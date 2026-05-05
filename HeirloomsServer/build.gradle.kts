@@ -14,6 +14,7 @@ repositories {
 val http4kVersion = "4.46.0.0"
 val awsSdkVersion = "2.25.11"
 val swaggerUiVersion = "5.11.8"
+val gcsVersion = "2.36.1"
 
 dependencies {
     implementation(kotlin("stdlib"))
@@ -25,6 +26,9 @@ dependencies {
 
     // AWS SDK v2 — S3 async client
     implementation("software.amazon.awssdk:s3:$awsSdkVersion")
+
+    // Google Cloud Storage
+    implementation("com.google.cloud:google-cloud-storage:$gcsVersion")
 
     // Database
     implementation("org.postgresql:postgresql:42.7.2")

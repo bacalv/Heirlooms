@@ -2,7 +2,7 @@ package digital.heirlooms.server
 
 import java.util.Properties
 
-enum class StorageBackend { LOCAL, S3 }
+enum class StorageBackend { LOCAL, S3, GCS }
 
 data class AppConfig(
     val serverPort: Int,
@@ -13,6 +13,8 @@ data class AppConfig(
     val s3AccessKey: String,
     val s3SecretKey: String,
     val s3EndpointOverride: String,
+    val gcsBucket: String,
+    val gcsCredentialsJson: String,
     val dbUrl: String,
     val dbUser: String,
     val dbPassword: String,
@@ -40,6 +42,7 @@ data class AppConfig(
 
             val backend = when (env("STORAGE_BACKEND")?.uppercase()) {
                 "S3"    -> StorageBackend.S3
+                "GCS"   -> StorageBackend.GCS
                 "LOCAL" -> StorageBackend.LOCAL
                 else    -> StorageBackend.LOCAL
             }
@@ -53,6 +56,8 @@ data class AppConfig(
                 s3AccessKey        = env("S3_ACCESS_KEY")        ?: "",
                 s3SecretKey        = env("S3_SECRET_KEY")        ?: "",
                 s3EndpointOverride = env("S3_ENDPOINT_OVERRIDE") ?: "",
+                gcsBucket          = env("GCS_BUCKET")           ?: "",
+                gcsCredentialsJson = env("GCS_CREDENTIALS_JSON") ?: "",
                 dbUrl              = env("DB_URL")               ?: "",
                 dbUser             = env("DB_USER")              ?: "",
                 dbPassword         = env("DB_PASSWORD")          ?: "",
@@ -64,6 +69,7 @@ data class AppConfig(
 
             val backend = when (prop("storage.backend")?.uppercase()) {
                 "S3"    -> StorageBackend.S3
+                "GCS"   -> StorageBackend.GCS
                 "LOCAL" -> StorageBackend.LOCAL
                 else    -> StorageBackend.LOCAL
             }
@@ -71,15 +77,17 @@ data class AppConfig(
             return AppConfig(
                 serverPort         = prop("server.port")?.toIntOrNull() ?: 8080,
                 storageBackend     = backend,
-                storageDir         = prop("storage.dir")          ?: "uploads",
-                s3Bucket           = prop("s3.bucket")            ?: "",
-                s3Region           = prop("s3.region")            ?: "us-east-1",
-                s3AccessKey        = prop("s3.access-key")        ?: "",
-                s3SecretKey        = prop("s3.secret-key")        ?: "",
-                s3EndpointOverride = prop("s3.endpoint-override") ?: "",
-                dbUrl              = prop("db.url")               ?: "",
-                dbUser             = prop("db.user")              ?: "",
-                dbPassword         = prop("db.password")          ?: "",
+                storageDir         = prop("storage.dir")              ?: "uploads",
+                s3Bucket           = prop("s3.bucket")                ?: "",
+                s3Region           = prop("s3.region")                ?: "us-east-1",
+                s3AccessKey        = prop("s3.access-key")            ?: "",
+                s3SecretKey        = prop("s3.secret-key")            ?: "",
+                s3EndpointOverride = prop("s3.endpoint-override")     ?: "",
+                gcsBucket          = prop("gcs.bucket")               ?: "",
+                gcsCredentialsJson = prop("gcs.credentials-json")     ?: "",
+                dbUrl              = prop("db.url")                   ?: "",
+                dbUser             = prop("db.user")                  ?: "",
+                dbPassword         = prop("db.password")              ?: "",
             )
         }
     }
