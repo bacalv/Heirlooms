@@ -486,3 +486,9 @@ Fix: remove the per-operation `security` field so operations inherit global.
 - `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/ApiKeyFilter.kt`
 - `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/UploadHandler.kt`
 - `HeirloomsTest/src/test/resources/docker-compose.yml`
+
+**Validated end-to-end:**
+Deployed to Cloud Run (revision `heirlooms-server-00006-ckl`). Swagger UI loads at
+`https://heirlooms-server-340655233963.europe-west2.run.app/docs` without credentials,
+API key authorisation works via the Authorize button, and POST /upload returns 201.
+Tagged as **v0.6.0**.
