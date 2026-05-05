@@ -182,3 +182,15 @@ extension on `org.http4k.core.Body.Companion`. Import `org.http4k.core.Body` and
 - `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/GcsFileStore.kt` (new)
 - `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/AppConfig.kt` — GCS enum + gcsBucket/gcsCredentialsJson fields
 - `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/Main.kt` — GCS wiring
+
+---
+
+## Entry [2026-05-05]
+**Prompt:** Add simple API key authentication to HeirloomsServer. All requests must include `X-Api-Key` header matching the `API_KEY` environment variable. `/health` is exempt for Cloud Run health checks.
+
+**Response:** Added `ApiKeyFilter.kt` (http4k Filter). Updated `AppConfig` with `apiKey` field (env: `API_KEY`, property: `api.key`). Updated `Main.kt` to wrap `buildApp` with the filter when `apiKey` is non-empty — allowing local dev without a key while enforcing auth in production. Filter returns 401 for missing or incorrect keys; `/health` bypasses it unconditionally.
+
+**Files changed/added:**
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/ApiKeyFilter.kt` (new)
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/AppConfig.kt` — added `apiKey` field
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/Main.kt` — wire filter conditionally

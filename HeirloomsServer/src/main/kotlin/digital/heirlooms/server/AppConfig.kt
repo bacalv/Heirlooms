@@ -18,6 +18,7 @@ data class AppConfig(
     val dbUrl: String,
     val dbUser: String,
     val dbPassword: String,
+    val apiKey: String,
 ) {
     companion object {
 
@@ -61,6 +62,7 @@ data class AppConfig(
                 dbUrl              = env("DB_URL")               ?: "",
                 dbUser             = env("DB_USER")              ?: "",
                 dbPassword         = env("DB_PASSWORD")          ?: "",
+                apiKey             = env("API_KEY")              ?: "",
             )
         }
 
@@ -88,6 +90,7 @@ data class AppConfig(
                 dbUrl              = prop("db.url")                   ?: "",
                 dbUser             = prop("db.user")                  ?: "",
                 dbPassword         = prop("db.password")              ?: "",
+                apiKey             = prop("api.key")                  ?: "",
             )
         }
     }

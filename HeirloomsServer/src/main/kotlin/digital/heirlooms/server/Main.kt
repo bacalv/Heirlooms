@@ -1,5 +1,6 @@
 package digital.heirlooms.server
 
+import org.http4k.core.then
 import org.http4k.server.Netty
 import org.http4k.server.asServer
 
@@ -41,7 +42,12 @@ fun main() {
         }
     }
 
-    val server = buildApp(storage, database).asServer(Netty(config.serverPort))
+    val app = buildApp(storage, database)
+    val server = if (config.apiKey.isNotEmpty()) {
+        apiKeyFilter(config.apiKey).then(app)
+    } else {
+        app
+    }.asServer(Netty(config.serverPort))
     server.start()
     println("HeirloomsServer running on port ${config.serverPort}")
 
