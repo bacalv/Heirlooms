@@ -43,11 +43,13 @@ fun main() {
     }
 
     val app = buildApp(storage, database)
-    val server = if (config.apiKey.isNotEmpty()) {
-        apiKeyFilter(config.apiKey).then(app)
-    } else {
-        app
-    }.asServer(Netty(config.serverPort))
+    val server = corsFilter().then(
+        if (config.apiKey.isNotEmpty()) {
+            apiKeyFilter(config.apiKey).then(app)
+        } else {
+            app
+        }
+    ).asServer(Netty(config.serverPort))
     server.start()
     println("HeirloomsServer running on port ${config.serverPort}")
 

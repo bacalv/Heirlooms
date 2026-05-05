@@ -203,6 +203,18 @@ extension on `org.http4k.core.Body.Companion`. Import `org.http4k.core.Body` and
 
 ---
 
+## Entry [2026-05-06] — CORS
+**Prompt:** Add CORS support to HeirloomsServer — allow all origins for now, tighten later when domain is set up.
+
+**Response:** Added `CorsFilter.kt` — a simple http4k Filter that returns 200 + CORS headers for OPTIONS preflight requests, and appends `Access-Control-Allow-Origin: *` to all other responses. Wired as the outermost filter in `Main.kt` (before `ApiKeyFilter`) so browser preflight requests are answered without an API key. Allows `Content-Type` and `X-Api-Key` headers; `GET`, `POST`, `OPTIONS` methods. 6 tests in `CorsFilterTest.kt`, all green.
+
+**Files changed/added:**
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/CorsFilter.kt` (new)
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/Main.kt` — wrap with corsFilter()
+- `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/CorsFilterTest.kt` (new)
+
+---
+
 ## Entry [2026-05-06] — Part 2
 **Prompt:** Milestone 4 — Part 2: Create HeirloomsWeb sub-project — React + Tailwind + Vite gallery UI for browsing uploads, with nginx for production serving.
 
