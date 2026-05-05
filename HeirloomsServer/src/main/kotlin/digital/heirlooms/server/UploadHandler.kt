@@ -20,13 +20,16 @@ import org.http4k.core.Status.Companion.BAD_REQUEST
 import org.http4k.core.Status.Companion.CREATED
 import org.http4k.core.Status.Companion.FOUND
 import org.http4k.core.Status.Companion.INTERNAL_SERVER_ERROR
+import org.http4k.core.Status.Companion.NOT_FOUND
 import org.http4k.core.Status.Companion.OK
 import org.http4k.format.Jackson
 import org.http4k.lens.binary
 import org.http4k.routing.ResourceLoader
 import org.http4k.routing.bind
+import org.http4k.routing.path
 import org.http4k.routing.routes
 import org.http4k.routing.static
+import java.io.ByteArrayInputStream
 import java.util.UUID
 
 private const val SWAGGER_UI_VERSION = "5.11.8"
@@ -57,6 +60,7 @@ fun buildApp(storage: FileStore, database: Database): HttpHandler {
     }
 
     return routes(
+        "/api/content/uploads/{id}/file" bind GET to fileProxyHandler(storage, database),
         "/api/content" bind apiContract,
         "/health" bind GET to { Response(OK).body("ok") },
         "/docs/api.json" bind GET to { specWithApiKeyAuth(apiContract) },
@@ -153,12 +157,34 @@ private fun listUploadsHandler(database: Database): HttpHandler = {
             append("[")
             uploads.forEachIndexed { i, u ->
                 if (i > 0) append(",")
-                append("""{"id":"${u.id}","storageKey":"${u.storageKey}","mimeType":"${u.mimeType}","fileSize":${u.fileSize}}""")
+                append("""{"id":"${u.id}","storageKey":"${u.storageKey}","mimeType":"${u.mimeType}","fileSize":${u.fileSize},"uploadedAt":"${u.uploadedAt}"}""")
             }
             append("]")
         }
         Response(OK).header("Content-Type", "application/json").body(json)
     } catch (e: Exception) {
         Response(INTERNAL_SERVER_ERROR).body("Failed to list uploads: ${e.message}")
+    }
+}
+
+private fun fileProxyHandler(storage: FileStore, database: Database): HttpHandler = { request: Request ->
+    val idStr = request.path("id")
+    val id = try { idStr?.let { UUID.fromString(it) } } catch (_: IllegalArgumentException) { null }
+    if (id == null) {
+        Response(NOT_FOUND)
+    } else {
+        val record = database.getUploadById(id)
+        if (record == null) {
+            Response(NOT_FOUND)
+        } else {
+            try {
+                val bytes = storage.get(StorageKey(record.storageKey))
+                Response(OK)
+                    .header("Content-Type", record.mimeType)
+                    .body(ByteArrayInputStream(bytes), bytes.size.toLong())
+            } catch (e: Exception) {
+                Response(INTERNAL_SERVER_ERROR).body("Failed to fetch file: ${e.message}")
+            }
+        }
     }
 }

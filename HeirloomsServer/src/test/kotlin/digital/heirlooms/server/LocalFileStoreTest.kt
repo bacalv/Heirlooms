@@ -83,4 +83,19 @@ class LocalFileStoreTest {
         LocalFileStore(nested) { fixedUuid }
         assertTrue(Files.isDirectory(nested))
     }
+
+    @Test
+    fun `get returns bytes that were previously saved`() {
+        val payload = byteArrayOf(0xDE.toByte(), 0xAD.toByte(), 0xBE.toByte(), 0xEF.toByte())
+        val key = storeWithFixedUuid().save(payload, "image/jpeg")
+        assertArrayEquals(payload, storeWithFixedUuid().get(key))
+    }
+
+    @Test
+    fun `get retrieves file by storage key`() {
+        val store = storeWithFixedUuid()
+        val payload = "hello".toByteArray()
+        val key = store.save(payload, "image/png")
+        assertArrayEquals(payload, store.get(key))
+    }
 }

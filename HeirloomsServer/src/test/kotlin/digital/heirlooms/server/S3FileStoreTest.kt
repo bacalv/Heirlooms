@@ -4,11 +4,16 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import software.amazon.awssdk.core.ResponseBytes
 import software.amazon.awssdk.core.async.AsyncRequestBody
+import software.amazon.awssdk.core.async.AsyncResponseTransformer
 import software.amazon.awssdk.services.s3.S3AsyncClient
+import software.amazon.awssdk.services.s3.model.GetObjectRequest
+import software.amazon.awssdk.services.s3.model.GetObjectResponse
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import software.amazon.awssdk.services.s3.model.PutObjectResponse
 import java.util.UUID
@@ -143,5 +148,51 @@ class S3FileStoreTest {
 
         assertTrue(ex is RuntimeException)
         assertTrue(ex!!.message!!.contains("S3 upload failed"))
+    }
+
+    // -------------------------------------------------------------------------
+    // get()
+    // -------------------------------------------------------------------------
+
+    private fun stubGetObject(bytes: ByteArray) {
+        val responseBytes = ResponseBytes.fromByteArray(GetObjectResponse.builder().build(), bytes)
+        every {
+            mockClient.getObject(any<GetObjectRequest>(), any<AsyncResponseTransformer<GetObjectResponse, ResponseBytes<GetObjectResponse>>>())
+        } returns CompletableFuture.completedFuture(responseBytes)
+    }
+
+    @Test
+    fun `get returns bytes from S3`() {
+        val payload = byteArrayOf(1, 2, 3)
+        stubGetObject(payload)
+        assertArrayEquals(payload, storeWithFixedUuid().get(StorageKey("some-key.jpg")))
+    }
+
+    @Test
+    fun `get targets the correct bucket and key`() {
+        val capturedRequest = slot<GetObjectRequest>()
+        val responseBytes = ResponseBytes.fromByteArray(GetObjectResponse.builder().build(), ByteArray(0))
+        every {
+            mockClient.getObject(capture(capturedRequest), any<AsyncResponseTransformer<GetObjectResponse, ResponseBytes<GetObjectResponse>>>())
+        } returns CompletableFuture.completedFuture(responseBytes)
+
+        storeWithFixedUuid().get(StorageKey("target-key.jpg"))
+
+        assertEquals("my-heirloom-bucket", capturedRequest.captured.bucket())
+        assertEquals("target-key.jpg", capturedRequest.captured.key())
+    }
+
+    @Test
+    fun `get wraps S3 failure in RuntimeException`() {
+        every {
+            mockClient.getObject(any<GetObjectRequest>(), any<AsyncResponseTransformer<GetObjectResponse, ResponseBytes<GetObjectResponse>>>())
+        } returns CompletableFuture.failedFuture(RuntimeException("NoSuchKey"))
+
+        val ex = runCatching {
+            storeWithFixedUuid().get(StorageKey("missing.jpg"))
+        }.exceptionOrNull()
+
+        assertTrue(ex is RuntimeException)
+        assertTrue(ex!!.message!!.contains("S3 download failed"))
     }
 }

@@ -24,4 +24,10 @@ interface FileStore {
      * @throws Exception if the file could not be stored.
      */
     fun save(bytes: ByteArray, mimeType: String): StorageKey
+
+    /**
+     * Retrieves the raw bytes stored under [key].
+     * @throws Exception if the file could not be retrieved.
+     */
+    fun get(key: StorageKey): ByteArray
 }

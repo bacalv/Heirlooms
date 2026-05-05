@@ -28,6 +28,8 @@ class GcsFileStore(
         return StorageKey(key)
     }
 
+    override fun get(key: StorageKey): ByteArray = storage.readAllBytes(BlobId.of(bucket, key.value))
+
     companion object {
         fun create(bucket: String, credentialsJson: String): GcsFileStore {
             val credentials = GoogleCredentials

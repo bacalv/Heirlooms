@@ -14,9 +14,11 @@ import org.http4k.core.Status.Companion.CREATED
 import org.http4k.core.Status.Companion.INTERNAL_SERVER_ERROR
 import org.http4k.core.Status.Companion.NOT_FOUND
 import org.http4k.core.Status.Companion.OK
+import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.time.Instant
 import java.util.UUID
 
 class UploadHandlerTest {
@@ -209,5 +211,59 @@ class UploadHandlerTest {
     @Test
     fun `unknown path returns 404`() {
         assertEquals(NOT_FOUND, app(Request(POST, "/api/other")).status)
+    }
+
+    // -------------------------------------------------------------------------
+    // File proxy endpoint
+    // -------------------------------------------------------------------------
+
+    private val knownId = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+    private val knownRecord = UploadRecord(knownId, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.jpg", "image/jpeg", 512, Instant.EPOCH)
+
+    @Test
+    fun `GET uploads id file returns 200 with file bytes`() {
+        every { mockDatabase.getUploadById(knownId) } returns knownRecord
+        every { mockStorage.get(StorageKey(knownRecord.storageKey)) } returns byteArrayOf(1, 2, 3)
+
+        val response = app(Request(GET, "/api/content/uploads/$knownId/file"))
+
+        assertEquals(OK, response.status)
+        assertArrayEquals(byteArrayOf(1, 2, 3), response.body.payload.array())
+    }
+
+    @Test
+    fun `GET uploads id file sets correct Content-Type`() {
+        every { mockDatabase.getUploadById(knownId) } returns knownRecord
+        every { mockStorage.get(StorageKey(knownRecord.storageKey)) } returns ByteArray(0)
+
+        val response = app(Request(GET, "/api/content/uploads/$knownId/file"))
+
+        assertEquals("image/jpeg", response.header("Content-Type"))
+    }
+
+    @Test
+    fun `GET uploads id file returns 404 when upload not found`() {
+        every { mockDatabase.getUploadById(knownId) } returns null
+
+        val response = app(Request(GET, "/api/content/uploads/$knownId/file"))
+
+        assertEquals(NOT_FOUND, response.status)
+    }
+
+    @Test
+    fun `GET uploads id file returns 404 for malformed UUID`() {
+        val response = app(Request(GET, "/api/content/uploads/not-a-uuid/file"))
+        assertEquals(NOT_FOUND, response.status)
+    }
+
+    @Test
+    fun `GET uploads id file returns 500 when storage throws`() {
+        every { mockDatabase.getUploadById(knownId) } returns knownRecord
+        every { mockStorage.get(any()) } throws RuntimeException("GCS error")
+
+        val response = app(Request(GET, "/api/content/uploads/$knownId/file"))
+
+        assertEquals(INTERNAL_SERVER_ERROR, response.status)
+        assertTrue(response.bodyString().contains("GCS error"))
     }
 }

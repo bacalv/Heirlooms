@@ -4,6 +4,7 @@ import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import org.flywaydb.core.Flyway
 import java.sql.Connection
+import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
 
@@ -12,6 +13,7 @@ data class UploadRecord(
     val storageKey: String,
     val mimeType: String,
     val fileSize: Long,
+    val uploadedAt: Instant = Instant.now(),
 )
 
 class Database(private val dataSource: DataSource) {
@@ -38,10 +40,29 @@ class Database(private val dataSource: DataSource) {
         }
     }
 
+    fun getUploadById(id: UUID): UploadRecord? {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                "SELECT id, storage_key, mime_type, file_size, uploaded_at FROM uploads WHERE id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, id)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return null
+                return UploadRecord(
+                    id = rs.getObject("id", UUID::class.java),
+                    storageKey = rs.getString("storage_key"),
+                    mimeType = rs.getString("mime_type"),
+                    fileSize = rs.getLong("file_size"),
+                    uploadedAt = rs.getTimestamp("uploaded_at").toInstant(),
+                )
+            }
+        }
+    }
+
     fun listUploads(): List<UploadRecord> {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
-                "SELECT id, storage_key, mime_type, file_size FROM uploads ORDER BY uploaded_at DESC"
+                "SELECT id, storage_key, mime_type, file_size, uploaded_at FROM uploads ORDER BY uploaded_at DESC"
             ).use { stmt ->
                 val rs = stmt.executeQuery()
                 val results = mutableListOf<UploadRecord>()
@@ -52,6 +73,7 @@ class Database(private val dataSource: DataSource) {
                             storageKey = rs.getString("storage_key"),
                             mimeType = rs.getString("mime_type"),
                             fileSize = rs.getLong("file_size"),
+                            uploadedAt = rs.getTimestamp("uploaded_at").toInstant(),
                         )
                     )
                 }

@@ -3,8 +3,10 @@ package digital.heirlooms.server
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.core.async.AsyncRequestBody
+import software.amazon.awssdk.core.async.AsyncResponseTransformer
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3AsyncClient
+import software.amazon.awssdk.services.s3.model.GetObjectRequest
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import java.net.URI
 import java.util.UUID
@@ -40,6 +42,18 @@ class S3FileStore(
         }
 
         return StorageKey(key)
+    }
+
+    override fun get(key: StorageKey): ByteArray {
+        val request = GetObjectRequest.builder()
+            .bucket(bucket)
+            .key(key.value)
+            .build()
+        return try {
+            client.getObject(request, AsyncResponseTransformer.toBytes()).get().asByteArray()
+        } catch (e: ExecutionException) {
+            throw RuntimeException("S3 download failed for key '${key.value}': ${e.cause?.message}", e.cause)
+        }
     }
 
     companion object {

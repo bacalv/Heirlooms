@@ -185,6 +185,44 @@ extension on `org.http4k.core.Body.Companion`. Import `org.http4k.core.Body` and
 
 ---
 
+## Entry [2026-05-06]
+**Prompt:** Milestone 4 — Part 1: Add `GET /api/content/uploads/{id}/file` file proxy endpoint. Add `get(key: StorageKey): ByteArray` to the FileStore interface and all implementations (LocalFileStore, S3FileStore, GcsFileStore). Add `getUploadById(id: UUID): UploadRecord?` to Database. Add `uploadedAt: Instant` to UploadRecord (backed by the existing `uploaded_at` DB column). Update the list endpoint JSON to include `uploadedAt`. Add tests for the new interface method in LocalFileStoreTest and S3FileStoreTest, and for the new endpoint in UploadHandlerTest.
+
+**Response:** Implemented all changes. FileStore interface extended with `get`. LocalFileStore, S3FileStore, GcsFileStore all implement it. Database.getUploadById added; listUploads updated to SELECT uploaded_at. UploadRecord now includes uploadedAt with default Instant.now(). New top-level route `/api/content/uploads/{id}/file` (GET) added before the contract binding so it takes priority; protected by the existing ApiKeyFilter. 17 new/updated tests; all pass.
+
+**Files changed:**
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/FileStore.kt` — added `get` method
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/FileStorage.kt` — implemented `get`
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/S3FileStore.kt` — implemented `get`
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/GcsFileStore.kt` — implemented `get`
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/Database.kt` — added `uploadedAt` to UploadRecord, added `getUploadById`, updated `listUploads`
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/UploadHandler.kt` — added file proxy route and handler, updated list JSON
+- `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/LocalFileStoreTest.kt` — added `get` tests
+- `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/S3FileStoreTest.kt` — added `get` tests
+- `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/UploadHandlerTest.kt` — added file proxy tests
+
+---
+
+## Entry [2026-05-06] — Part 2
+**Prompt:** Milestone 4 — Part 2: Create HeirloomsWeb sub-project — React + Tailwind + Vite gallery UI for browsing uploads, with nginx for production serving.
+
+**Response:** Created `HeirloomsWeb/` at monorepo root. React 18 + Tailwind CSS 3 + Vite 6. Gallery grid shows image thumbnails (fetched via `/api/content/uploads/{id}/file`), generic file icon for videos/other types, upload date, MIME type, and file size. Clicking an image opens a lightbox. All API requests include `X-Api-Key` header from `VITE_API_KEY` env var. Multi-stage Dockerfile (Node build → nginx:alpine). `.gitignore` excludes node_modules/, dist/, .env. Vite build verified clean (27 modules, no errors).
+
+**Files created:**
+- `HeirloomsWeb/package.json`
+- `HeirloomsWeb/vite.config.js`
+- `HeirloomsWeb/tailwind.config.js`
+- `HeirloomsWeb/postcss.config.js`
+- `HeirloomsWeb/index.html`
+- `HeirloomsWeb/src/main.jsx`
+- `HeirloomsWeb/src/index.css`
+- `HeirloomsWeb/src/App.jsx`
+- `HeirloomsWeb/Dockerfile`
+- `HeirloomsWeb/.gitignore`
+- `HeirloomsWeb/README.md`
+
+---
+
 ## Entry [2026-05-05]
 **Prompt:** Add simple API key authentication to HeirloomsServer. All requests must include `X-Api-Key` header matching the `API_KEY` environment variable. `/health` is exempt for Cloud Run health checks.
 

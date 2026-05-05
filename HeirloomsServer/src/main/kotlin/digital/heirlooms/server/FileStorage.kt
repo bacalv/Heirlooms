@@ -29,6 +29,8 @@ class LocalFileStore(
         return StorageKey(filename)
     }
 
+    override fun get(key: StorageKey): ByteArray = Files.readAllBytes(storageDir.resolve(key.value))
+
     companion object {
         fun create(storageDir: String): LocalFileStore =
             LocalFileStore(Paths.get(storageDir))
