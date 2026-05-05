@@ -328,3 +328,19 @@ Timestamps are not available and are marked as `[unknown]`.
 
 **Files changed:**
 - `HeirloomsApp/app/src/main/kotlin/com/heirloom/app/Uploader.kt`
+
+---
+
+## Entry 25
+**Time:** 2026-05-05
+**Prompt:** Update HeirloomsApp to support API key authentication against the deployed server. Add an `apiKey` field to `EndpointStore.kt` stored in SharedPreferences under `api_key`; add a masked password input field for the API key in `SettingsActivity.kt` and the settings layout XML; update `Uploader.kt` to include an `X-Api-Key` header on every request when a key is set; update `ShareActivity.kt` to read and pass the key through.
+
+**Response:** Added `getApiKey()`/`setApiKey()` to `EndpointStore`; added `apiKey: String? = null` parameter to `Uploader.upload()` and `attemptUpload()` with conditional `X-Api-Key` header injection; added a masked `editApiKey` EditText to `SettingsActivity` and `activity_settings.xml`; updated `ShareActivity` to read the API key from the store and pass it to `upload()`. All 23 existing unit tests continue to pass.
+
+**Files changed:**
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/EndpointStore.kt`
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/SettingsActivity.kt`
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/ShareActivity.kt`
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/Uploader.kt`
+- `HeirloomsApp/app/src/main/res/layout/activity_settings.xml`
+- `HeirloomsApp/app/src/main/res/values/strings.xml`
