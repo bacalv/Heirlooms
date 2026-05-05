@@ -439,3 +439,50 @@ Upload confirmed by checking the GCS bucket directly.
 - `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/ShareActivity.kt`
 - `HeirloomsApp/app/src/main/res/layout/activity_settings.xml`
 - `HeirloomsApp/app/src/main/res/values/strings.xml`
+
+---
+
+## Session — 2026-05-05 (Swagger UI — API key auth integration)
+
+**Prompt:** "When I access the swagger UI using the Cloud Run URL /docs I get
+unauthorised. The security filter is kicking in. We need to fix the filter so
+it excludes the docs path, and add an Authorize mechanism in Swagger UI for
+the API key."
+
+**What was built:**
+
+- **`ApiKeyFilter.kt`** — added `path.startsWith("/docs")` exemption so the
+  Swagger UI and all its static assets load without credentials.
+
+- **`/docs/api.json` route** — new handler (`specWithApiKeyAuth`) that calls
+  the http4k contract internally to get the raw OpenAPI spec, then patches it
+  with Jackson before returning it:
+  - Adds `components.securitySchemes.ApiKeyAuth` (`type: apiKey`, `in: header`,
+    `name: X-Api-Key`)
+  - Adds a global `security: [{ApiKeyAuth: []}]` block
+  - Overrides `servers` to `[{url: "/api/content"}]` (http4k generates `"/"` which
+    caused Swagger UI to POST to `/upload` instead of `/api/content/upload`)
+  - Removes per-operation `security: []` entries — an empty array overrides the
+    global block, so Swagger UI was silently dropping the key after re-authorisation
+
+- **`swaggerInitializerJs`** updated:
+  - `url` changed from `/api/content/openapi.json` to `/docs/api.json`
+    (the patched spec endpoint, already exempt from the filter)
+  - `persistAuthorization: true` — key survives page refresh
+  - `tryItOutEnabled: true` — request form open by default, no extra click
+
+- **`docker-compose.yml`** (test) — added `API_KEY: "${API_KEY:-}"` so the key
+  can be injected for manual local testing without breaking the e2e tests
+  (which run without a key and rely on the filter being inactive).
+
+**Key gotcha — per-operation `security: []`:**
+http4k generates `"security": []` on every operation when no contract-level
+security is configured. In OpenAPI 3, an empty array means "no security" and
+overrides the global block. This caused Swagger UI to stop sending the key after
+logout and re-authorisation, despite the Authorize dialog appearing to work.
+Fix: remove the per-operation `security` field so operations inherit global.
+
+**Files changed:**
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/ApiKeyFilter.kt`
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/UploadHandler.kt`
+- `HeirloomsTest/src/test/resources/docker-compose.yml`
