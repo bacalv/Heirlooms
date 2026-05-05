@@ -1,5 +1,9 @@
 package digital.heirlooms.server
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.node.ArrayNode
+import com.fasterxml.jackson.databind.node.JsonNodeFactory
+import com.fasterxml.jackson.databind.node.ObjectNode
 import org.http4k.contract.ContractRoute
 import org.http4k.contract.contract
 import org.http4k.contract.meta
@@ -30,12 +34,14 @@ private const val SWAGGER_UI_VERSION = "5.11.8"
 private val swaggerInitializerJs = """
 window.onload = function() {
   window.ui = SwaggerUIBundle({
-    url: "/api/content/openapi.json",
+    url: "/docs/api.json",
     dom_id: '#swagger-ui',
     deepLinking: true,
     presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
     plugins: [SwaggerUIBundle.plugins.DownloadUrl],
-    layout: "StandaloneLayout"
+    layout: "StandaloneLayout",
+    persistAuthorization: true,
+    tryItOutEnabled: true
   });
 };
 """.trimIndent()
@@ -53,12 +59,49 @@ fun buildApp(storage: FileStore, database: Database): HttpHandler {
     return routes(
         "/api/content" bind apiContract,
         "/health" bind GET to { Response(OK).body("ok") },
+        "/docs/api.json" bind GET to { specWithApiKeyAuth(apiContract) },
         "/docs" bind GET to { Response(FOUND).header("Location", "/docs/index.html") },
         "/docs/swagger-initializer.js" bind GET to {
             Response(OK).header("Content-Type", "application/javascript").body(swaggerInitializerJs)
         },
         "/docs" bind static(ResourceLoader.Classpath("META-INF/resources/webjars/swagger-ui/$SWAGGER_UI_VERSION")),
     )
+}
+
+private fun specWithApiKeyAuth(apiContract: HttpHandler): Response {
+    val specResponse = apiContract(Request(GET, "/openapi.json"))
+    val factory = JsonNodeFactory.instance
+    val spec = ObjectMapper().readTree(specResponse.bodyString()) as? ObjectNode
+        ?: return specResponse
+
+    val apiKeyScheme = factory.objectNode().apply {
+        put("type", "apiKey")
+        put("in", "header")
+        put("name", "X-Api-Key")
+    }
+    val components = (spec.get("components") as? ObjectNode ?: factory.objectNode()).apply {
+        set<ObjectNode>("securitySchemes", factory.objectNode().apply {
+            set<ObjectNode>("ApiKeyAuth", apiKeyScheme)
+        })
+    }
+    spec.set<ObjectNode>("components", components)
+    spec.set<ArrayNode>("security", factory.arrayNode().add(
+        factory.objectNode().apply { set<ArrayNode>("ApiKeyAuth", factory.arrayNode()) }
+    ))
+    spec.set<ArrayNode>("servers", factory.arrayNode().add(
+        factory.objectNode().apply { put("url", "/api/content") }
+    ))
+
+    // Remove per-operation "security": [] entries — an empty array means "no auth"
+    // and overrides the global security block, so Swagger UI won't send the key.
+    val paths = spec.get("paths") as? ObjectNode
+    paths?.fields()?.forEach { (_, pathItem) ->
+        (pathItem as? ObjectNode)?.fields()?.forEach { (_, operation) ->
+            (operation as? ObjectNode)?.remove("security")
+        }
+    }
+
+    return Response(OK).header("Content-Type", "application/json").body(spec.toString())
 }
 
 private fun uploadContractRoute(storage: FileStore, database: Database): ContractRoute =
