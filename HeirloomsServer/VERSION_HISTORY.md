@@ -2,6 +2,23 @@
 
 ---
 
+### 0.11.0 — 6 May 2026
+
+- SHA-256 duplicate detection on all upload paths
+- `POST /api/content/upload` — computes SHA-256 of incoming bytes before storing;
+  returns `409 Conflict` with `{"storageKey":"..."}` if a matching hash already
+  exists; no file is stored and no database record is created
+- `POST /api/content/uploads/confirm` — accepts optional `contentHash` field in
+  request body; returns `409 Conflict` if a matching hash is found (file was
+  already PUT directly to GCS, which is acceptable — only the metadata is withheld)
+- `UploadRecord` gains nullable `contentHash: String?` field
+- Flyway V2 migration: adds `content_hash VARCHAR(64)` (nullable) with a partial
+  index on non-null values; existing rows backfilled with random 64-char
+  placeholders so they cannot cause false positives
+- 8 new unit tests
+
+---
+
 ### 0.9.0 — 6 May 2026
 
 - `generateReadUrl(key: StorageKey): String` added to `DirectUploadSupport`

@@ -2,6 +2,21 @@
 
 ---
 
+## v0.11.0 — SHA-256 duplicate detection (6 May 2026)
+
+Prevents the same file being stored twice, on both upload paths.
+
+- **Direct upload** (`POST /upload`) — server computes SHA-256 of the incoming
+  bytes; if a matching hash is found in the database, returns `409 Conflict` with
+  `{"storageKey":"..."}` pointing to the existing copy; nothing is stored
+- **Signed URL flow** (`POST /uploads/confirm`) — client sends the hash in the
+  request body as `contentHash`; same 409 logic applies; the file will already
+  have been PUT to GCS but no metadata record is created
+- Flyway V2 migration: `content_hash VARCHAR(64)` column + partial index;
+  existing rows backfilled with random placeholders (no false positives)
+
+---
+
 ## v0.10.0 — Custom domain live + full Swagger coverage (6 May 2026)
 
 - **Custom domains live** — `https://heirlooms.digital` and
