@@ -47,6 +47,16 @@ function VideoIcon() {
   )
 }
 
+function PlayIcon() {
+  return (
+    <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center">
+      <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M8 5v14l11-7z" />
+      </svg>
+    </div>
+  )
+}
+
 function LoginScreen({ onLogin }) {
   const [value, setValue] = useState('')
   const [error, setError] = useState(null)
@@ -163,7 +173,7 @@ function UploadCard({ upload, apiKey, onImageClick, onVideoClick }) {
   // Videos are fetched on demand when the user clicks, to avoid loading
   // large files until they're actually wanted.
   useEffect(() => {
-    if (!isImage(upload.mimeType)) return
+    if (!isImage(upload.mimeType) && !upload.thumbnailKey) return
     let cancelled = false
     fetch(displayUrl, { headers: { 'X-Api-Key': apiKey } })
       .then((r) => r.ok ? r.blob() : null)
@@ -193,13 +203,27 @@ function UploadCard({ upload, apiKey, onImageClick, onVideoClick }) {
           ) : (
             <Spinner />
           )
+        ) : isVideo(upload.mimeType) && blobUrl ? (
+          <div
+            className="relative w-full h-full cursor-pointer group"
+            onClick={handleVideoClick}
+          >
+            <img
+              src={blobUrl}
+              alt={upload.storageKey}
+              className="object-cover w-full h-full"
+            />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
+              <PlayIcon />
+            </div>
+          </div>
         ) : isVideo(upload.mimeType) ? (
           <button
             className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity cursor-pointer"
             onClick={handleVideoClick}
           >
-            <VideoIcon />
-            <span className="text-xs text-gray-400">Click to play</span>
+            {upload.thumbnailKey ? <Spinner /> : <VideoIcon />}
+            {!upload.thumbnailKey && <span className="text-xs text-gray-400">Click to play</span>}
           </button>
         ) : (
           <FileIcon />
