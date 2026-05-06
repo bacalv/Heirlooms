@@ -85,6 +85,8 @@ class UploadWorker(
         const val KEY_FILE_PATHS = "file_paths"
         const val KEY_MIME_TYPES = "mime_types"
         const val KEY_API_KEY = "api_key"
+        const val TAG = "heirloom_upload"
+        const val TAG_COUNT_PREFIX = "count:"
 
         private const val BASE_URL = "https://api.heirlooms.digital"
         private const val CHANNEL_RESULT = "heirloom_upload_v2"

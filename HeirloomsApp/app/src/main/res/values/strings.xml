@@ -8,6 +8,10 @@
     <string name="settings_api_key_label">API Key</string>
     <string name="settings_api_key_hint">Enter your API key</string>
     <string name="settings_wifi_only">Upload on WiFi only</string>
+    <string name="settings_queue_title">Upload queue</string>
+    <string name="settings_queue_empty">No pending uploads</string>
+    <string name="settings_queue_cancel">Cancel</string>
+    <string name="settings_queue_cancel_all">Cancel all</string>
     <string name="settings_save">Save</string>
     <string name="settings_saved">Settings saved</string>
 </resources>

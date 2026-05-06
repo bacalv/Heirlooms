@@ -67,6 +67,8 @@ class ShareActivity : Activity() {
                 .enqueue(OneTimeWorkRequestBuilder<UploadWorker>()
                     .setInputData(data)
                     .setConstraints(constraints)
+                    .addTag(UploadWorker.TAG)
+                    .addTag("${UploadWorker.TAG_COUNT_PREFIX}${tempFiles.size}")
                     .build())
 
             val count = tempFiles.size
