@@ -67,7 +67,7 @@ class SettingsActivity : AppCompatActivity() {
         items.forEach { info ->
             queueContainer.addView(queueRow(info))
         }
-        queueContainer.addView(cancelAllButton(items))
+        queueContainer.addView(cancelAllButton())
     }
 
     private fun emptyLabel() = TextView(this).apply {
@@ -109,7 +109,7 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    private fun cancelAllButton(items: List<WorkInfo>) = Button(this).apply {
+    private fun cancelAllButton() = Button(this).apply {
         text = getString(R.string.settings_queue_cancel_all)
         layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
             topMargin = 8.dp
