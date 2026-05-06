@@ -560,6 +560,36 @@ Server deployed to Cloud Run (revision `heirlooms-server-00008-vt7`). Fresh APK 
 
 ---
 
+## Session — 2026-05-06 (All endpoints in Swagger)
+
+`GET /uploads/{id}/file` and `GET /uploads/{id}/url` were registered directly
+in `routes()`, making them invisible to the http4k contract and Swagger UI.
+
+**Fix:** converted both to `ContractRoute` entries inside the contract.
+
+Key discovery: `String.div(PathLens<A>)` is a top-level extension in
+`org.http4k.contract.ExtensionsKt` and requires `import org.http4k.contract.div`.
+Without this import, the `/` operator was unresolved and the meta block failed
+with cascade errors.
+
+`ContractRouteSpec1<A>.div(String)` (member method) returns
+`ContractRouteSpec2<A, String>`, whose `Binder.to` takes `(A, String) -> HttpHandler`.
+The trailing String parameter is the constant path segment ("file"/"url") and is
+ignored with `_` in the handler.
+
+String-based paths like `"/uploads/{id}/file"` in contract routes do NOT do
+path variable matching — they are treated as literal strings, returning 404 for
+all real UUID paths. Typed path lenses are required for routing to work.
+
+A malformed UUID in the path returns 404 (route doesn't match) not 400
+(the typed lens fails silently and falls through to the 404 handler).
+
+**Files changed:**
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/UploadHandler.kt`
+- `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/UploadHandlerTest.kt`
+
+---
+
 ## Session — 2026-05-06 (Hardcode server URL in Android app)
 
 Now that the app targets `https://api.heirlooms.digital` exclusively, the endpoint

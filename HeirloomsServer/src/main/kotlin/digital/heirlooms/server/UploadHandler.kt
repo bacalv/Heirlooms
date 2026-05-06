@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import com.fasterxml.jackson.databind.node.ObjectNode
 import org.http4k.contract.ContractRoute
 import org.http4k.contract.contract
+import org.http4k.contract.div
 import org.http4k.contract.meta
 import org.http4k.contract.openapi.ApiInfo
 import org.http4k.contract.openapi.v3.OpenApi3
@@ -24,10 +25,11 @@ import org.http4k.core.Status.Companion.NOT_FOUND
 import org.http4k.core.Status.Companion.NOT_IMPLEMENTED
 import org.http4k.core.Status.Companion.OK
 import org.http4k.format.Jackson
+import org.http4k.lens.Path
 import org.http4k.lens.binary
+import org.http4k.lens.uuid
 import org.http4k.routing.ResourceLoader
 import org.http4k.routing.bind
-import org.http4k.routing.path
 import org.http4k.routing.routes
 import org.http4k.routing.static
 import java.io.ByteArrayInputStream
@@ -61,12 +63,12 @@ fun buildApp(storage: FileStore, database: Database): HttpHandler {
             listUploadsContractRoute(database),
             prepareUploadContractRoute(directUpload),
             confirmUploadContractRoute(database),
+            fileProxyContractRoute(storage, database),
+            readUrlContractRoute(directUpload, database),
         )
     }
 
     return routes(
-        "/api/content/uploads/{id}/file" bind GET to fileProxyHandler(storage, database),
-        "/api/content/uploads/{id}/url" bind GET to readUrlHandler(directUpload, database),
         "/api/content" bind apiContract,
         "/health" bind GET to { Response(OK).body("ok") },
         "/docs/api.json" bind GET to { specWithApiKeyAuth(apiContract) },
@@ -173,48 +175,52 @@ private fun listUploadsHandler(database: Database): HttpHandler = {
     }
 }
 
-private fun fileProxyHandler(storage: FileStore, database: Database): HttpHandler = { request: Request ->
-    val idStr = request.path("id")
-    val id = try { idStr?.let { UUID.fromString(it) } } catch (_: IllegalArgumentException) { null }
-    if (id == null) {
-        Response(NOT_FOUND)
-    } else {
-        val record = database.getUploadById(id)
-        if (record == null) {
-            Response(NOT_FOUND)
-        } else {
-            try {
-                val bytes = storage.get(StorageKey(record.storageKey))
-                Response(OK)
-                    .header("Content-Type", record.mimeType)
-                    .body(ByteArrayInputStream(bytes), bytes.size.toLong())
-            } catch (e: Exception) {
-                Response(INTERNAL_SERVER_ERROR).body("Failed to fetch file: ${e.message}")
+private fun fileProxyContractRoute(storage: FileStore, database: Database): ContractRoute {
+    val id = Path.uuid().of("id")
+    return "/uploads" / id / "file" meta {
+        summary = "Get file"
+        description = "Streams the raw file bytes for the given upload ID with the correct Content-Type."
+    } bindContract GET to { uploadId: UUID, _: String ->
+        { _: Request ->
+            val record = database.getUploadById(uploadId)
+            if (record == null) {
+                Response(NOT_FOUND)
+            } else {
+                try {
+                    val bytes = storage.get(StorageKey(record.storageKey))
+                    Response(OK)
+                        .header("Content-Type", record.mimeType)
+                        .body(ByteArrayInputStream(bytes), bytes.size.toLong())
+                } catch (e: Exception) {
+                    Response(INTERNAL_SERVER_ERROR).body("Failed to fetch file: ${e.message}")
+                }
             }
         }
     }
 }
 
-private fun readUrlHandler(directUpload: DirectUploadSupport?, database: Database): HttpHandler = { request: Request ->
-    if (directUpload == null) {
-        Response(NOT_IMPLEMENTED).body("Signed URLs not supported by the current storage backend")
-    } else {
-        val idStr = request.path("id")
-        val id = try { idStr?.let { UUID.fromString(it) } } catch (_: IllegalArgumentException) { null }
-        if (id == null) {
-            Response(NOT_FOUND)
-        } else {
-            val record = database.getUploadById(id)
-            if (record == null) {
-                Response(NOT_FOUND)
+private fun readUrlContractRoute(directUpload: DirectUploadSupport?, database: Database): ContractRoute {
+    val id = Path.uuid().of("id")
+    return "/uploads" / id / "url" meta {
+        summary = "Get signed read URL"
+        description = "Returns a 1-hour signed GCS URL for the given upload ID. Use directly as a video src for streaming."
+    } bindContract GET to { uploadId: UUID, _: String ->
+        { _: Request ->
+            if (directUpload == null) {
+                Response(NOT_IMPLEMENTED).body("Signed URLs not supported by the current storage backend")
             } else {
-                try {
-                    val url = directUpload.generateReadUrl(StorageKey(record.storageKey))
-                    Response(OK)
-                        .header("Content-Type", "application/json")
-                        .body("""{"url":"$url"}""")
-                } catch (e: Exception) {
-                    Response(INTERNAL_SERVER_ERROR).body("Failed to generate URL: ${e.message}")
+                val record = database.getUploadById(uploadId)
+                if (record == null) {
+                    Response(NOT_FOUND)
+                } else {
+                    try {
+                        val url = directUpload.generateReadUrl(StorageKey(record.storageKey))
+                        Response(OK)
+                            .header("Content-Type", "application/json")
+                            .body("""{"url":"$url"}""")
+                    } catch (e: Exception) {
+                        Response(INTERNAL_SERVER_ERROR).body("Failed to generate URL: ${e.message}")
+                    }
                 }
             }
         }
