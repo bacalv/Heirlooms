@@ -24,7 +24,7 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.14.0 (6 May 2026) — metadata extraction + GPS + Android fixes
+- Current version: v0.16.0 (6 May 2026) — tags (schema, API, web UI)
 - One-time machine setup required: ~/.testcontainers.properties with
   docker.raw.sock path — see PROMPT_LOG.md for details
 
@@ -37,7 +37,7 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Swagger UI confirmed at https://api.heirlooms.digital/docs/index.html
 - heirlooms.com: Currently parked on venture.com. Worth monitoring
 - License: Deliberately deferred
-- Tags: Not yet in schema or UI — planned for Milestone 4 completion
+
 
 ---
 
@@ -57,6 +57,12 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
   glob `HeirloomsServer-*-all.jar` matches all accumulated JARs in build/libs;
   without `clean`, Docker picks the wrong one (e.g. `0.9.0` sorts after `0.11.0`
   lexicographically, so the older JAR wins)
+- `private data class` in Kotlin breaks Jackson's OpenAPI schema generator
+  at runtime — fails at the `/openapi.json` (or equivalent spec) endpoint,
+  not at unit test time. Without a spec-endpoint test, the failure ships.
+  The spec-endpoint test added in v0.16.0 is now the canary for any future
+  schema-affecting change — keep it in place. Keywords: `private`, `data class`,
+  `Jackson`, `OpenAPI`, `schema`.
 
 ---
 

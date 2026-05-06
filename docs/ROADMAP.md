@@ -142,9 +142,12 @@ A single `docker-compose.yml` that a non-developer could run on a home server or
 a cheap VPS to stand up the full stack: server, database, and object storage.
 Simple instructions. No Kubernetes, no cloud accounts required.
 
-**Milestone 4 — Settings and organisation**
-In-app settings screen to configure the endpoint without editing config files.
-Basic organisation: folders or tags per upload. Simple web UI to browse uploads.
+**Milestone 4 — Settings and organisation (done)**
+In-app settings screen to configure the endpoint without editing config files
+(simplified in v0.10.0 to API key only after the domain went live).
+Tag-based organisation of uploads (v0.16.0). Simple web UI to browse uploads
+(v0.7.0). Tag rename, merge, colours/descriptions, exclude-filter UI, and
+Android tagging are deferred — see IDEAS.md.
 
 **Milestone 5 — The capsule mechanic**
 The ability to mark a set of uploads as a named capsule with access rules:

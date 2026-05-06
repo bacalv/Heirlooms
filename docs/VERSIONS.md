@@ -2,6 +2,30 @@
 
 ---
 
+## v0.16.0 — Tags (6 May 2026)
+
+Milestone 4 complete (tag support). Three increments delivered together:
+
+**Schema and write API (Increment 1):**
+- Flyway V6 migration: `tags TEXT[] NOT NULL DEFAULT '{}'` with GIN index on the uploads table; existing rows get the empty-array default automatically
+- `TagValidator` enforces kebab-case (`^[a-z0-9]+(-[a-z0-9]+)*$`), length 1–50; rejects rather than coerces (`My-Children` → 400 with the offending tag named in the response body, not silent normalisation)
+- `PATCH /api/content/uploads/{id}/tags` — full-replace semantics; 400 on invalid tag (offending tag + reason in body); 404 if upload not found; 200 with the updated upload record on success
+- `tags` field always present in all upload JSON responses (`POST /upload`, `GET /uploads`); empty array default for pre-migration rows
+
+**Read API and filtering (Increment 2):**
+- `GET /api/content/uploads` extended with `?tag=X` and `?exclude_tag=Y` query params; backed by the V6 GIN index via `tags @> ARRAY[?]::text[]`
+- OpenAPI body schemas added to both PATCH endpoints via `receiving(lens to example)` so Swagger UI shows a populated request body; `RotationRequest` and `TagsRequest` data classes must be non-`private` for Jackson's schema generator — `private` causes `IllegalAccessException` at the spec endpoint at runtime (not caught by unit tests); fixed and a spec-endpoint test added as a permanent regression guard
+
+**Web UI (Increment 3):**
+- Tag chips on each gallery card below the metadata row; hidden when no tags present
+- Inline tag editor per card: tag icon in the card header opens the editor; existing chips show with × to remove; text input with autocomplete dropdown of all tags used across the gallery (derived client-side from the uploads list, filtered as you type); pending input text is flushed into the tag list on Save so pressing Enter before clicking Save is not required
+- Tags updated in gallery state from the server response after a successful PATCH
+- Exclude-filter is live on the API but not yet surfaced in the web UI
+
+135 tests total, 134 passing, 1 skipped (FFmpeg video thumbnail — runs in Docker).
+
+---
+
 ## v0.15.0 — Image rotation (6 May 2026)
 
 - `PATCH /api/content/uploads/{id}/rotation` — accepts `{"rotation":0|90|180|270}` to set display rotation for an image; persisted in the database
