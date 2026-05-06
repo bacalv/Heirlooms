@@ -51,3 +51,7 @@ Three Gradle subprojects under `/Users/bac/Downloads/Heirlooms/`:
   Routes use http4k-contract, which returns 404 (not 405) for wrong methods on
   contract-owned paths. `Body.binary()` is an extension on `org.http4k.core.Body.Companion`
   from `org.http4k.lens` — import both `org.http4k.core.Body` and `org.http4k.lens.binary`.
+- Docker images for Cloud Run **must** be built with `--platform linux/amd64`.
+  Building on Apple Silicon without this flag produces an arm64 manifest list that
+  Cloud Run rejects. The correct command is in PA_NOTES.md under "Cloud Run deploy
+  commands".

@@ -305,6 +305,19 @@ extension on `org.http4k.core.Body.Companion`. Import `org.http4k.core.Body` and
 
 ---
 
+## Entry [2026-05-06] — Deployed v0.11.0 to Cloud Run
+
+Built shadow JAR, Docker image (linux/amd64), pushed to Artifact Registry, deployed
+to Cloud Run. Flyway V2 migration applied on startup — `content_hash` column live in
+production. Revision: `heirlooms-server-00004-hg4`.
+
+**Gotcha:** first build attempt omitted `--platform linux/amd64`, producing an arm64
+manifest list that Cloud Run rejected ("must support amd64/linux"). Always use
+`docker build --platform linux/amd64` for Cloud Run images. This is now documented in
+PA_NOTES.md (Things that tripped us up) and SE_NOTES.md.
+
+---
+
 ## Entry [2026-05-06] — SHA-256 duplicate detection
 
 **Prompt:** Add SHA-256-based duplicate detection to HeirloomsServer. Database migration adds nullable `content_hash VARCHAR(64)` column with index and populates existing rows with random placeholder values. Direct upload computes SHA-256 of incoming bytes and returns 409 Conflict with existing storageKey if a match is found. Confirm flow accepts optional `contentHash` in request body and likewise returns 409 if a duplicate is detected. `UploadRecord` gains a nullable `contentHash` field. 8 new tests covering new file, duplicate, two-distinct-files, null-hash-no-false-positive, and confirm flow variants.

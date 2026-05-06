@@ -50,6 +50,9 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - GCP permissions must be granted via CLI, not the Console
 - Cloud Run domain-mappings only work in us-central1 — not europe-west2
 - CNAME value for GoDaddy: ghs.googlehosted.com (no trailing dot)
+- Docker images for Cloud Run must be built with `--platform linux/amd64` —
+  building on an Apple Silicon Mac produces an arm64 manifest list that Cloud
+  Run rejects with "must support amd64/linux"
 
 ---
 
@@ -77,7 +80,7 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 | Artifact Registry | heirlooms (europe-west2) |
 | HeirloomsServer image | europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server |
 | HeirloomsWeb image | europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-web |
-| HeirloomsServer Cloud Run URL | https://heirlooms-server-340655233963.us-central1.run.app (revision heirlooms-server-00002-stq) |
+| HeirloomsServer Cloud Run URL | https://heirlooms-server-340655233963.us-central1.run.app (revision heirlooms-server-00004-hg4) |
 | HeirloomsWeb Cloud Run URL | https://heirlooms-web-340655233963.us-central1.run.app |
 | Target domain (web) | https://heirlooms.digital (live) |
 | Target domain (server) | https://api.heirlooms.digital (live) |
