@@ -20,26 +20,29 @@ function isImage(mimeType) {
   return mimeType.startsWith('image/')
 }
 
+function isVideo(mimeType) {
+  return mimeType.startsWith('video/')
+}
+
+function Spinner() {
+  return <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+}
+
 function FileIcon() {
   return (
-    <svg
-      className="w-16 h-16 text-gray-400"
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={1.5}
-        d="M15.172 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V8.828a2 2 0 00-.586-1.414l-3.828-3.828A2 2 0 0015.172 3z"
-      />
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={1.5}
-        d="M15 3v5a1 1 0 001 1h5"
-      />
+    <svg className="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M15.172 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V8.828a2 2 0 00-.586-1.414l-3.828-3.828A2 2 0 0015.172 3z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 3v5a1 1 0 001 1h5" />
+    </svg>
+  )
+}
+
+function VideoIcon() {
+  return (
+    <svg className="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
     </svg>
   )
 }
@@ -50,29 +53,19 @@ function LoginScreen({ onLogin }) {
   const [checking, setChecking] = useState(false)
   const inputRef = useRef(null)
 
-  useEffect(() => {
-    inputRef.current?.focus()
-  }, [])
+  useEffect(() => { inputRef.current?.focus() }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
     const key = value.trim()
     if (!key) return
-
     setChecking(true)
     setError(null)
-
     try {
-      const r = await fetch(`${API_URL}/api/content/uploads`, {
-        headers: { 'X-Api-Key': key },
-      })
-      if (r.status === 401) {
-        setError('Incorrect API key.')
-      } else if (!r.ok) {
-        setError(`Server error (${r.status}).`)
-      } else {
-        onLogin(key)
-      }
+      const r = await fetch(`${API_URL}/api/content/uploads`, { headers: { 'X-Api-Key': key } })
+      if (r.status === 401) setError('Incorrect API key.')
+      else if (!r.ok) setError(`Server error (${r.status}).`)
+      else onLogin(key)
     } catch {
       setError('Could not reach the server.')
     } finally {
@@ -108,7 +101,7 @@ function LoginScreen({ onLogin }) {
   )
 }
 
-function Lightbox({ url, onClose }) {
+function Modal({ onClose, children }) {
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', handler)
@@ -120,12 +113,9 @@ function Lightbox({ url, onClose }) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
       onClick={onClose}
     >
-      <img
-        src={url}
-        alt="Full size"
-        className="max-w-[90vw] max-h-[90vh] object-contain rounded shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      />
+      <div onClick={(e) => e.stopPropagation()}>
+        {children}
+      </div>
       <button
         className="absolute top-4 right-6 text-white text-3xl font-light leading-none hover:text-gray-300"
         onClick={onClose}
@@ -136,27 +126,55 @@ function Lightbox({ url, onClose }) {
   )
 }
 
-function UploadCard({ upload, apiKey, onImageClick }) {
-  const fileUrl = `${API_URL}/api/content/uploads/${upload.id}/file`
+function Lightbox({ url, onClose }) {
+  return (
+    <Modal onClose={onClose}>
+      <img
+        src={url}
+        alt="Full size"
+        className="max-w-[90vw] max-h-[90vh] object-contain rounded shadow-2xl"
+      />
+    </Modal>
+  )
+}
 
-  // Images need the API key in the request header, but <img src> can't send
-  // custom headers. We fetch the blob manually and create an object URL.
+function VideoPlayer({ url, mimeType, onClose }) {
+  return (
+    <Modal onClose={onClose}>
+      <video
+        src={url}
+        type={mimeType}
+        controls
+        autoPlay
+        className="max-w-[90vw] max-h-[90vh] rounded shadow-2xl bg-black"
+      />
+    </Modal>
+  )
+}
+
+function UploadCard({ upload, apiKey, onImageClick, onVideoClick }) {
+  const fileUrl = `${API_URL}/api/content/uploads/${upload.id}/file`
   const [blobUrl, setBlobUrl] = useState(null)
 
+  // Pre-fetch image thumbnails on mount so they display in the grid.
+  // Videos are fetched on demand when the user clicks, to avoid loading
+  // large files until they're actually wanted.
   useEffect(() => {
     if (!isImage(upload.mimeType)) return
     let cancelled = false
     fetch(fileUrl, { headers: { 'X-Api-Key': apiKey } })
       .then((r) => r.ok ? r.blob() : null)
-      .then((blob) => {
-        if (!cancelled && blob) setBlobUrl(URL.createObjectURL(blob))
-      })
+      .then((blob) => { if (!cancelled && blob) setBlobUrl(URL.createObjectURL(blob)) })
       .catch(() => {})
     return () => {
       cancelled = true
       if (blobUrl) URL.revokeObjectURL(blobUrl)
     }
   }, [fileUrl, apiKey])
+
+  function handleVideoClick() {
+    onVideoClick({ fileUrl, mimeType: upload.mimeType, apiKey })
+  }
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
@@ -170,12 +188,18 @@ function UploadCard({ upload, apiKey, onImageClick }) {
               onClick={() => onImageClick(blobUrl)}
             />
           ) : (
-            <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+            <Spinner />
           )
+        ) : isVideo(upload.mimeType) ? (
+          <button
+            className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity cursor-pointer"
+            onClick={handleVideoClick}
+          >
+            <VideoIcon />
+            <span className="text-xs text-gray-400">Click to play</span>
+          </button>
         ) : (
-          <div className="flex items-center justify-center w-full h-full">
-            <FileIcon />
-          </div>
+          <FileIcon />
         )}
       </div>
       <div className="p-3 space-y-1 text-sm text-gray-600">
@@ -195,37 +219,48 @@ function Gallery({ apiKey, onSignOut }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lightboxUrl, setLightboxUrl] = useState(null)
+  const [videoPlayer, setVideoPlayer] = useState(null) // { blobUrl, mimeType }
+  const [videoLoading, setVideoLoading] = useState(false)
 
   useEffect(() => {
     fetch(`${API_URL}/api/content/uploads`, { headers: { 'X-Api-Key': apiKey } })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
-      })
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then(setUploads)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
   }, [apiKey])
 
+  async function handleVideoClick({ fileUrl, mimeType, apiKey: key }) {
+    setVideoLoading(true)
+    try {
+      const r = await fetch(fileUrl, { headers: { 'X-Api-Key': key } })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const blob = await r.blob()
+      setVideoPlayer({ blobUrl: URL.createObjectURL(blob), mimeType })
+    } catch (e) {
+      alert(`Could not load video: ${e.message}`)
+    } finally {
+      setVideoLoading(false)
+    }
+  }
+
+  function closeVideoPlayer() {
+    if (videoPlayer?.blobUrl) URL.revokeObjectURL(videoPlayer.blobUrl)
+    setVideoPlayer(null)
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold text-gray-900">Heirlooms</h1>
-        <button
-          onClick={onSignOut}
-          className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
-        >
+        <button onClick={onSignOut} className="text-sm text-gray-500 hover:text-gray-800 transition-colors">
           Sign out
         </button>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
-        {loading && (
-          <p className="text-center text-gray-500 py-20">Loading uploads…</p>
-        )}
-        {error && (
-          <p className="text-center text-red-500 py-20">Error: {error}</p>
-        )}
+        {loading && <p className="text-center text-gray-500 py-20">Loading uploads…</p>}
+        {error && <p className="text-center text-red-500 py-20">Error: {error}</p>}
         {!loading && !error && uploads.length === 0 && (
           <p className="text-center text-gray-400 py-20">No uploads yet.</p>
         )}
@@ -237,14 +272,30 @@ function Gallery({ apiKey, onSignOut }) {
                 upload={upload}
                 apiKey={apiKey}
                 onImageClick={setLightboxUrl}
+                onVideoClick={handleVideoClick}
               />
             ))}
           </div>
         )}
       </main>
 
-      {lightboxUrl && (
-        <Lightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
+      {/* Video loading overlay */}
+      {videoLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="flex flex-col items-center gap-3 text-white">
+            <Spinner />
+            <p className="text-sm">Loading video…</p>
+          </div>
+        </div>
+      )}
+
+      {lightboxUrl && <Lightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
+      {videoPlayer && (
+        <VideoPlayer
+          url={videoPlayer.blobUrl}
+          mimeType={videoPlayer.mimeType}
+          onClose={closeVideoPlayer}
+        />
       )}
     </div>
   )
@@ -252,10 +303,6 @@ function Gallery({ apiKey, onSignOut }) {
 
 export default function App() {
   const [apiKey, setApiKey] = useState(null)
-
-  if (!apiKey) {
-    return <LoginScreen onLogin={setApiKey} />
-  }
-
+  if (!apiKey) return <LoginScreen onLogin={setApiKey} />
   return <Gallery apiKey={apiKey} onSignOut={() => setApiKey(null)} />
 }

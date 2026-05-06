@@ -31,5 +31,15 @@ Timestamps are not available and are marked as `[unknown]`.
 
 ---
 
+## Entry [2026-05-06] — Video player
+**Prompt:** Add a video player to the gallery so that clicking a video file opens it in a player.
+
+**Response:** Videos now show a video icon with "Click to play" in the grid instead of a generic file icon. Clicking fetches the video as a blob URL (same API key mechanism as images) and opens it in a `<video controls autoPlay>` modal. A loading overlay with spinner is shown while the file downloads. Blob URL is revoked when the modal is closed to free memory. The `Modal` component was extracted and reused by both `Lightbox` (images) and `VideoPlayer` (videos). A distinct `VideoIcon` SVG was added for video cards.
+
+**Files changed:**
+- `src/App.jsx` — VideoIcon, VideoPlayer, Modal extraction, video fetch on click, loading overlay
+
+---
+
 ## Entry [2026-05-06] — Validated
 **Validated end-to-end:** Dev server run via `npm run dev`. Login screen confirmed. Gallery loaded against production server after server was redeployed with CORS support (revision `heirlooms-server-00007-7vw`). Image thumbnails displayed correctly.
