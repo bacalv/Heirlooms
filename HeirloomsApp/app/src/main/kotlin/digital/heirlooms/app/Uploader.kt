@@ -5,6 +5,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
+import java.security.MessageDigest
 
 /**
  * Handles HTTP upload logic independently of Android framework classes,
@@ -70,6 +71,10 @@ class Uploader(
 
         fun parseJsonStringField(json: String, key: String): String? =
             Regex(""""$key"\s*:\s*"([^"]+)"""").find(json)?.groupValues?.get(1)
+
+        fun sha256Hex(bytes: ByteArray): String =
+            MessageDigest.getInstance("SHA-256").digest(bytes)
+                .joinToString("") { "%02x".format(it) }
     }
 
     /**
@@ -196,7 +201,8 @@ class Uploader(
         }
 
         // Step 3: confirm — record metadata in the database
-        val confirmBody = """{"storageKey":"$storageKey","mimeType":"$mimeType","fileSize":${fileBytes.size}}"""
+        val contentHash = Companion.sha256Hex(fileBytes)
+        val confirmBody = """{"storageKey":"$storageKey","mimeType":"$mimeType","fileSize":${fileBytes.size},"contentHash":"$contentHash"}"""
         val confirmRequest = Request.Builder()
             .url("$base/api/content/uploads/confirm")
             .post(confirmBody.toRequestBody("application/json".toMediaType()))
