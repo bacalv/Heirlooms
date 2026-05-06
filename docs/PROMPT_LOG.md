@@ -610,3 +610,14 @@ URL is no longer user-configurable. The settings screen is reduced to API key on
   `settings_help`, `settings_invalid_url`; updated `settings_saved` to "Settings saved".
 - `EndpointStoreTest.kt` — replaced endpoint tests with equivalent API key tests
   (5 tests, all passing).
+
+---
+
+## Session wrap-up — 2026-05-06 (v0.10.0)
+
+**Validated end-to-end:** Upload from Android confirmed working via
+`https://api.heirlooms.digital`. Swagger UI confirmed at
+`https://api.heirlooms.digital/docs/index.html`. All 6 endpoints visible.
+
+**Cloud Run:** server deployed as revision `heirlooms-server-00002-stq`
+(us-central1). Tagged as **v0.10.0**.

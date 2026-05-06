@@ -2,6 +2,21 @@
 
 ---
 
+## v0.10.0 — Custom domain live + full Swagger coverage (6 May 2026)
+
+- **Custom domains live** — `https://heirlooms.digital` and
+  `https://api.heirlooms.digital` confirmed working; GoDaddy DNS A records
+  cleaned up (WebsiteBuilder parking record removed), Google SSL cert issued
+- **Android app hardcoded to `api.heirlooms.digital`** — endpoint URL no
+  longer user-configurable; settings screen reduced to API key only; app
+  always targets the production domain
+- **Full Swagger coverage** — `GET /uploads/{id}/file` and
+  `GET /uploads/{id}/url` were previously invisible to the OpenAPI contract;
+  converted to typed `ContractRoute` entries using `import org.http4k.contract.div`
+  so all six endpoints now appear in Swagger UI at `api.heirlooms.digital/docs`
+
+---
+
 ## v0.9.0 — Video player + streaming (6 May 2026)
 
 - **Video player** — clicking a video card in HeirloomsWeb opens a native
