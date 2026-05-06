@@ -302,3 +302,15 @@ extension on `org.http4k.core.Body.Companion`. Import `org.http4k.core.Body` and
 - `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/ApiKeyFilter.kt` (new)
 - `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/AppConfig.kt` — added `apiKey` field
 - `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/Main.kt` — wire filter conditionally
+
+---
+
+## Entry [2026-05-06] — SHA-256 duplicate detection
+
+**Prompt:** Add SHA-256-based duplicate detection to HeirloomsServer. Database migration adds nullable `content_hash VARCHAR(64)` column with index and populates existing rows with random placeholder values. Direct upload computes SHA-256 of incoming bytes and returns 409 Conflict with existing storageKey if a match is found. Confirm flow accepts optional `contentHash` in request body and likewise returns 409 if a duplicate is detected. `UploadRecord` gains a nullable `contentHash` field. 8 new tests covering new file, duplicate, two-distinct-files, null-hash-no-false-positive, and confirm flow variants.
+
+**Files changed/added:**
+- `HeirloomsServer/src/main/resources/db/migration/V2__add_content_hash.sql` (new) — adds column, index, populates existing rows
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/Database.kt` — `contentHash` field on `UploadRecord`; `recordUpload` now persists it; new `findByContentHash(hash)`; all SELECTs include `content_hash`
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/UploadHandler.kt` — `sha256Hex` helper; `uploadHandler` checks hash before storing; `confirmUploadHandler` accepts and checks `contentHash`; CONFLICT imported
+- `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/UploadHandlerTest.kt` — `findByContentHash` stubbed in shared helper and patched into existing tests that bypassed it; 8 new duplicate-detection tests

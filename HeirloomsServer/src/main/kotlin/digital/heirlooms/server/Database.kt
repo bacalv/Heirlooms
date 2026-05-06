@@ -14,6 +14,7 @@ data class UploadRecord(
     val mimeType: String,
     val fileSize: Long,
     val uploadedAt: Instant = Instant.now(),
+    val contentHash: String? = null,
 )
 
 class Database(private val dataSource: DataSource) {
@@ -29,13 +30,34 @@ class Database(private val dataSource: DataSource) {
     fun recordUpload(record: UploadRecord) {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
-                "INSERT INTO uploads (id, storage_key, mime_type, file_size) VALUES (?, ?, ?, ?)"
+                "INSERT INTO uploads (id, storage_key, mime_type, file_size, content_hash) VALUES (?, ?, ?, ?, ?)"
             ).use { stmt ->
                 stmt.setObject(1, record.id)
                 stmt.setString(2, record.storageKey)
                 stmt.setString(3, record.mimeType)
                 stmt.setLong(4, record.fileSize)
+                stmt.setString(5, record.contentHash)
                 stmt.executeUpdate()
+            }
+        }
+    }
+
+    fun findByContentHash(hash: String): UploadRecord? {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                "SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash FROM uploads WHERE content_hash = ? LIMIT 1"
+            ).use { stmt ->
+                stmt.setString(1, hash)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return null
+                return UploadRecord(
+                    id = rs.getObject("id", UUID::class.java),
+                    storageKey = rs.getString("storage_key"),
+                    mimeType = rs.getString("mime_type"),
+                    fileSize = rs.getLong("file_size"),
+                    uploadedAt = rs.getTimestamp("uploaded_at").toInstant(),
+                    contentHash = rs.getString("content_hash"),
+                )
             }
         }
     }
@@ -43,7 +65,7 @@ class Database(private val dataSource: DataSource) {
     fun getUploadById(id: UUID): UploadRecord? {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
-                "SELECT id, storage_key, mime_type, file_size, uploaded_at FROM uploads WHERE id = ?"
+                "SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash FROM uploads WHERE id = ?"
             ).use { stmt ->
                 stmt.setObject(1, id)
                 val rs = stmt.executeQuery()
@@ -54,6 +76,7 @@ class Database(private val dataSource: DataSource) {
                     mimeType = rs.getString("mime_type"),
                     fileSize = rs.getLong("file_size"),
                     uploadedAt = rs.getTimestamp("uploaded_at").toInstant(),
+                    contentHash = rs.getString("content_hash"),
                 )
             }
         }
@@ -62,7 +85,7 @@ class Database(private val dataSource: DataSource) {
     fun listUploads(): List<UploadRecord> {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
-                "SELECT id, storage_key, mime_type, file_size, uploaded_at FROM uploads ORDER BY uploaded_at DESC"
+                "SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash FROM uploads ORDER BY uploaded_at DESC"
             ).use { stmt ->
                 val rs = stmt.executeQuery()
                 val results = mutableListOf<UploadRecord>()
@@ -74,6 +97,7 @@ class Database(private val dataSource: DataSource) {
                             mimeType = rs.getString("mime_type"),
                             fileSize = rs.getLong("file_size"),
                             uploadedAt = rs.getTimestamp("uploaded_at").toInstant(),
+                            contentHash = rs.getString("content_hash"),
                         )
                     )
                 }

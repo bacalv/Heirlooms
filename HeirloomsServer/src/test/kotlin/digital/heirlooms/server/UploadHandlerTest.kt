@@ -10,6 +10,7 @@ import org.http4k.core.Method.GET
 import org.http4k.core.Method.POST
 import org.http4k.core.Request
 import org.http4k.core.Status.Companion.BAD_REQUEST
+import org.http4k.core.Status.Companion.CONFLICT
 import org.http4k.core.Status.Companion.CREATED
 import org.http4k.core.Status.Companion.INTERNAL_SERVER_ERROR
 import org.http4k.core.Status.Companion.NOT_FOUND
@@ -31,6 +32,7 @@ class UploadHandlerTest {
     // Stub the database record call used by the upload handler
     private fun stubDatabase() {
         every { mockDatabase.recordUpload(any()) } just runs
+        every { mockDatabase.findByContentHash(any()) } returns null
     }
 
     // -------------------------------------------------------------------------
@@ -126,6 +128,7 @@ class UploadHandlerTest {
     fun `upload records metadata to the database`() {
         val capturedRecord = slot<UploadRecord>()
         every { mockStorage.save(any(), any()) } returns StorageKey("some-uuid.jpg")
+        every { mockDatabase.findByContentHash(any()) } returns null
         every { mockDatabase.recordUpload(capture(capturedRecord)) } just runs
 
         app(
@@ -156,6 +159,7 @@ class UploadHandlerTest {
 
     @Test
     fun `storage exception returns 500`() {
+        every { mockDatabase.findByContentHash(any()) } returns null
         every { mockStorage.save(any(), any()) } throws RuntimeException("disk full")
 
         val response = app(
@@ -348,6 +352,7 @@ class UploadHandlerTest {
     @Test
     fun `POST uploads confirm records upload and returns 201`() {
         val capturedRecord = slot<UploadRecord>()
+        every { mockDatabase.findByContentHash(any()) } returns null
         every { mockDatabase.recordUpload(capture(capturedRecord)) } just runs
 
         val response = app(
@@ -370,5 +375,135 @@ class UploadHandlerTest {
                 .body("""{"storageKey":"uuid.mp4"}""")
         )
         assertEquals(BAD_REQUEST, response.status)
+    }
+
+    // -------------------------------------------------------------------------
+    // Duplicate detection — direct upload (/upload)
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `uploading a new file succeeds with 201`() {
+        stubDatabase()
+        every { mockStorage.save(any(), any()) } returns StorageKey("new-file.jpg")
+
+        val response = app(
+            Request(POST, "/api/content/upload")
+                .header("Content-Type", "image/jpeg")
+                .body("unique-file-bytes")
+        )
+
+        assertEquals(CREATED, response.status)
+    }
+
+    @Test
+    fun `uploading the same file twice returns 409 with storageKey of the first`() {
+        every { mockStorage.save(any(), any()) } returns StorageKey("first-upload.jpg")
+        every { mockDatabase.recordUpload(any()) } just runs
+        every { mockDatabase.findByContentHash(any()) } returnsMany listOf(
+            null,
+            UploadRecord(UUID.randomUUID(), "first-upload.jpg", "image/jpeg", 5L),
+        )
+
+        app(
+            Request(POST, "/api/content/upload")
+                .header("Content-Type", "image/jpeg")
+                .body("same-bytes")
+        )
+        val second = app(
+            Request(POST, "/api/content/upload")
+                .header("Content-Type", "image/jpeg")
+                .body("same-bytes")
+        )
+
+        assertEquals(CONFLICT, second.status)
+        assertTrue(second.bodyString().contains("first-upload.jpg"))
+    }
+
+    @Test
+    fun `uploading two different files both succeed with 201`() {
+        every { mockStorage.save(any(), any()) } returnsMany listOf(
+            StorageKey("file-a.jpg"),
+            StorageKey("file-b.jpg"),
+        )
+        every { mockDatabase.recordUpload(any()) } just runs
+        every { mockDatabase.findByContentHash(any()) } returns null
+
+        val first = app(
+            Request(POST, "/api/content/upload")
+                .header("Content-Type", "image/jpeg")
+                .body("bytes-for-file-a")
+        )
+        val second = app(
+            Request(POST, "/api/content/upload")
+                .header("Content-Type", "image/jpeg")
+                .body("bytes-for-file-b")
+        )
+
+        assertEquals(CREATED, first.status)
+        assertEquals(CREATED, second.status)
+    }
+
+    @Test
+    fun `uploading when existing rows have null hashes does not cause false duplicate`() {
+        every { mockStorage.save(any(), any()) } returns StorageKey("new-file.jpg")
+        every { mockDatabase.recordUpload(any()) } just runs
+        every { mockDatabase.findByContentHash(any()) } returns null
+
+        val response = app(
+            Request(POST, "/api/content/upload")
+                .header("Content-Type", "image/jpeg")
+                .body("some-bytes")
+        )
+
+        assertEquals(CREATED, response.status)
+    }
+
+    // -------------------------------------------------------------------------
+    // Duplicate detection — confirm flow (/uploads/confirm)
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `confirm with new contentHash succeeds with 201`() {
+        every { mockDatabase.findByContentHash(any()) } returns null
+        every { mockDatabase.recordUpload(any()) } just runs
+
+        val response = app(
+            Request(POST, "/api/content/uploads/confirm")
+                .header("Content-Type", "application/json")
+                .body("""{"storageKey":"uuid.mp4","mimeType":"video/mp4","fileSize":1000,"contentHash":"abcd1234"}""")
+        )
+
+        assertEquals(CREATED, response.status)
+    }
+
+    @Test
+    fun `confirm with duplicate contentHash returns 409 with existing storageKey`() {
+        every { mockDatabase.findByContentHash("abcd1234") } returns
+            UploadRecord(UUID.randomUUID(), "original.mp4", "video/mp4", 1000L)
+
+        val response = app(
+            Request(POST, "/api/content/uploads/confirm")
+                .header("Content-Type", "application/json")
+                .body("""{"storageKey":"new.mp4","mimeType":"video/mp4","fileSize":1000,"contentHash":"abcd1234"}""")
+        )
+
+        assertEquals(CONFLICT, response.status)
+        assertTrue(response.bodyString().contains("original.mp4"))
+    }
+
+    @Test
+    fun `confirm without contentHash records upload normally`() {
+        val capturedRecord = slot<UploadRecord>()
+        every { mockDatabase.findByContentHash(any()) } returns null
+        every { mockDatabase.recordUpload(capture(capturedRecord)) } just runs
+
+        val response = app(
+            Request(POST, "/api/content/uploads/confirm")
+                .header("Content-Type", "application/json")
+                .body("""{"storageKey":"uuid.mp4","mimeType":"video/mp4","fileSize":1000}""")
+        )
+
+        assertEquals(CREATED, response.status)
+        assertEquals(null, capturedRecord.captured.contentHash)
     }
 }

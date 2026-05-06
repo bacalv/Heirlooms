@@ -22,6 +22,7 @@ import org.http4k.core.Status.Companion.CREATED
 import org.http4k.core.Status.Companion.FOUND
 import org.http4k.core.Status.Companion.INTERNAL_SERVER_ERROR
 import org.http4k.core.Status.Companion.NOT_FOUND
+import org.http4k.core.Status.Companion.CONFLICT
 import org.http4k.core.Status.Companion.NOT_IMPLEMENTED
 import org.http4k.core.Status.Companion.OK
 import org.http4k.format.Jackson
@@ -33,9 +34,15 @@ import org.http4k.routing.bind
 import org.http4k.routing.routes
 import org.http4k.routing.static
 import java.io.ByteArrayInputStream
+import java.security.MessageDigest
 import java.util.UUID
 
 private const val SWAGGER_UI_VERSION = "5.11.8"
+
+private fun sha256Hex(bytes: ByteArray): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    return digest.digest(bytes).joinToString("") { "%02x".format(it) }
+}
 
 private val swaggerInitializerJs = """
 window.onload = function() {
@@ -141,19 +148,28 @@ private fun uploadHandler(storage: FileStore, database: Database): HttpHandler =
             ?.takeIf { it.isNotEmpty() }
             ?: "application/octet-stream"
 
-        try {
-            val key = storage.save(body, mimeType)
-            database.recordUpload(
-                UploadRecord(
-                    id = UUID.randomUUID(),
-                    storageKey = key.value,
-                    mimeType = mimeType,
-                    fileSize = body.size.toLong(),
+        val hash = sha256Hex(body)
+        val existing = database.findByContentHash(hash)
+        if (existing != null) {
+            Response(CONFLICT)
+                .header("Content-Type", "application/json")
+                .body("""{"storageKey":"${existing.storageKey}"}""")
+        } else {
+            try {
+                val key = storage.save(body, mimeType)
+                database.recordUpload(
+                    UploadRecord(
+                        id = UUID.randomUUID(),
+                        storageKey = key.value,
+                        mimeType = mimeType,
+                        fileSize = body.size.toLong(),
+                        contentHash = hash,
+                    )
                 )
-            )
-            Response(CREATED).body(key.value)
-        } catch (e: Exception) {
-            Response(INTERNAL_SERVER_ERROR).body("Failed to store file: ${e.message}")
+                Response(CREATED).body(key.value)
+            } catch (e: Exception) {
+                Response(INTERNAL_SERVER_ERROR).body("Failed to store file: ${e.message}")
+            }
         }
     }
 }
@@ -236,7 +252,7 @@ private fun prepareUploadContractRoute(directUpload: DirectUploadSupport?): Cont
 private fun confirmUploadContractRoute(database: Database): ContractRoute =
     "/uploads/confirm" meta {
         summary = "Confirm a direct upload"
-        description = "Records upload metadata after the client has PUT the file directly to GCS. Body: {\"storageKey\":\"...\",\"mimeType\":\"...\",\"fileSize\":...}."
+        description = "Records upload metadata after the client has PUT the file directly to GCS. Body: {\"storageKey\":\"...\",\"mimeType\":\"...\",\"fileSize\":...,\"contentHash\":\"<sha256-hex>\"}. If contentHash matches an existing upload, returns 409 with the existing storageKey."
     } bindContract POST to confirmUploadHandler(database)
 
 private fun prepareUploadHandler(directUpload: DirectUploadSupport?): HttpHandler = { request: Request ->
@@ -267,19 +283,28 @@ private fun confirmUploadHandler(database: Database): HttpHandler = { request: R
         val storageKey = node?.get("storageKey")?.asText()
         val mimeType = node?.get("mimeType")?.asText()
         val fileSize = node?.get("fileSize")?.asLong()
+        val contentHash = node?.get("contentHash")?.asText()?.takeIf { it.isNotBlank() }
 
         if (storageKey.isNullOrBlank() || mimeType.isNullOrBlank() || fileSize == null) {
             Response(BAD_REQUEST).body("Missing storageKey, mimeType, or fileSize in request body")
         } else {
-            database.recordUpload(
-                UploadRecord(
-                    id = UUID.randomUUID(),
-                    storageKey = storageKey,
-                    mimeType = mimeType,
-                    fileSize = fileSize,
+            val existing = if (contentHash != null) database.findByContentHash(contentHash) else null
+            if (existing != null) {
+                Response(CONFLICT)
+                    .header("Content-Type", "application/json")
+                    .body("""{"storageKey":"${existing.storageKey}"}""")
+            } else {
+                database.recordUpload(
+                    UploadRecord(
+                        id = UUID.randomUUID(),
+                        storageKey = storageKey,
+                        mimeType = mimeType,
+                        fileSize = fileSize,
+                        contentHash = contentHash,
+                    )
                 )
-            )
-            Response(CREATED)
+                Response(CREATED)
+            }
         }
     } catch (e: Exception) {
         Response(INTERNAL_SERVER_ERROR).body("Failed to confirm upload: ${e.message}")
