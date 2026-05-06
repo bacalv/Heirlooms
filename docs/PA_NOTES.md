@@ -32,8 +32,8 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 
 ## Pending decisions / next actions
 
-- Domain mapping: DNS records added to GoDaddy, awaiting SSL certificate
-  provisioning by Google (can take up to 1 hour)
+- Domain mapping: live — heirlooms.digital and api.heirlooms.digital confirmed
+  working (end-to-end upload validated from Android app, 6 May 2026)
 - heirlooms.com: Currently parked on venture.com. Worth monitoring
 - License: Deliberately deferred
 - Tags: Not yet in schema or UI — planned for Milestone 4 completion
@@ -78,8 +78,8 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 | HeirloomsWeb image | europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-web |
 | HeirloomsServer Cloud Run URL | https://heirlooms-server-340655233963.us-central1.run.app |
 | HeirloomsWeb Cloud Run URL | https://heirlooms-web-340655233963.us-central1.run.app |
-| Target domain (web) | https://heirlooms.digital (DNS added, cert pending) |
-| Target domain (server) | https://api.heirlooms.digital (DNS added, cert pending) |
+| Target domain (web) | https://heirlooms.digital (live) |
+| Target domain (server) | https://api.heirlooms.digital (live) |
 
 Credentials: Service account JSON key downloaded locally. DB password stored
 separately. Neither should ever be committed to GitHub.
