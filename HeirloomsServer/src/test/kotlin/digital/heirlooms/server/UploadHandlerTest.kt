@@ -18,6 +18,7 @@ import org.http4k.core.Status.Companion.NOT_IMPLEMENTED
 import org.http4k.core.Status.Companion.OK
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.Instant
@@ -505,5 +506,126 @@ class UploadHandlerTest {
 
         assertEquals(CREATED, response.status)
         assertEquals(null, capturedRecord.captured.contentHash)
+    }
+
+    // -------------------------------------------------------------------------
+    // Thumbnail generation — upload (/upload)
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `thumbnail is generated and stored for supported image type`() {
+        val thumbBytes = byteArrayOf(1, 2, 3)
+        every { mockDatabase.findByContentHash(any()) } returns null
+        every { mockStorage.save(any(), any()) } returns StorageKey("some-uuid.jpg")
+        every { mockStorage.saveWithKey(any(), any(), any()) } just runs
+        val capturedRecord = slot<UploadRecord>()
+        every { mockDatabase.recordUpload(capture(capturedRecord)) } just runs
+
+        val appWithThumb = buildApp(mockStorage, mockDatabase) { _, _ -> thumbBytes }
+        appWithThumb(
+            Request(POST, "/api/content/upload")
+                .header("Content-Type", "image/jpeg")
+                .body("fake-image-bytes")
+        )
+
+        verify { mockStorage.saveWithKey(thumbBytes, StorageKey("some-uuid-thumb.jpg"), "image/jpeg") }
+        assertEquals("some-uuid-thumb.jpg", capturedRecord.captured.thumbnailKey)
+    }
+
+    @Test
+    fun `no thumbnail generated for unsupported MIME type`() {
+        every { mockDatabase.findByContentHash(any()) } returns null
+        every { mockStorage.save(any(), any()) } returns StorageKey("uuid.mp4")
+        val capturedRecord = slot<UploadRecord>()
+        every { mockDatabase.recordUpload(capture(capturedRecord)) } just runs
+
+        app(
+            Request(POST, "/api/content/upload")
+                .header("Content-Type", "video/mp4")
+                .body("fake-video-bytes")
+        )
+
+        verify(exactly = 0) { mockStorage.saveWithKey(any(), any(), any()) }
+        assertNull(capturedRecord.captured.thumbnailKey)
+    }
+
+    @Test
+    fun `upload succeeds even when thumbnail generation throws`() {
+        every { mockDatabase.findByContentHash(any()) } returns null
+        every { mockStorage.save(any(), any()) } returns StorageKey("uuid.jpg")
+        every { mockDatabase.recordUpload(any()) } just runs
+
+        val appWithFailingThumb = buildApp(mockStorage, mockDatabase) { _, _ -> throw RuntimeException("out of memory") }
+        val response = appWithFailingThumb(
+            Request(POST, "/api/content/upload")
+                .header("Content-Type", "image/jpeg")
+                .body("bytes")
+        )
+
+        assertEquals(CREATED, response.status)
+    }
+
+    // -------------------------------------------------------------------------
+    // Thumbnail key — list response
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `thumbnailKey is null in list response for non-image uploads`() {
+        every { mockDatabase.listUploads() } returns listOf(
+            UploadRecord(UUID.randomUUID(), "uuid.mp4", "video/mp4", 10000L),
+        )
+
+        val response = app(Request(GET, "/api/content/uploads"))
+
+        assertTrue(response.bodyString().contains(""""thumbnailKey":null"""))
+    }
+
+    @Test
+    fun `thumbnailKey appears in list response when thumbnail exists`() {
+        every { mockDatabase.listUploads() } returns listOf(
+            UploadRecord(UUID.randomUUID(), "uuid.jpg", "image/jpeg", 1024L, thumbnailKey = "uuid-thumb.jpg"),
+        )
+
+        val response = app(Request(GET, "/api/content/uploads"))
+
+        assertTrue(response.bodyString().contains("uuid-thumb.jpg"))
+    }
+
+    // -------------------------------------------------------------------------
+    // Thumb proxy endpoint
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `GET uploads id thumb returns thumbnail when thumbnail key exists`() {
+        val recordWithThumb = knownRecord.copy(thumbnailKey = "thumb-key.jpg")
+        every { mockDatabase.getUploadById(knownId) } returns recordWithThumb
+        every { mockStorage.get(StorageKey("thumb-key.jpg")) } returns byteArrayOf(1, 2, 3)
+
+        val response = app(Request(GET, "/api/content/uploads/$knownId/thumb"))
+
+        assertEquals(OK, response.status)
+        assertEquals("image/jpeg", response.header("Content-Type"))
+        assertArrayEquals(byteArrayOf(1, 2, 3), response.body.payload.array())
+    }
+
+    @Test
+    fun `GET uploads id thumb falls back to full file when no thumbnail key`() {
+        every { mockDatabase.getUploadById(knownId) } returns knownRecord
+        every { mockStorage.get(StorageKey(knownRecord.storageKey)) } returns byteArrayOf(4, 5, 6)
+
+        val response = app(Request(GET, "/api/content/uploads/$knownId/thumb"))
+
+        assertEquals(OK, response.status)
+        assertEquals("image/jpeg", response.header("Content-Type"))
+        assertArrayEquals(byteArrayOf(4, 5, 6), response.body.payload.array())
+    }
+
+    @Test
+    fun `GET uploads id thumb returns 404 when upload not found`() {
+        every { mockDatabase.getUploadById(knownId) } returns null
+
+        val response = app(Request(GET, "/api/content/uploads/$knownId/thumb"))
+
+        assertEquals(NOT_FOUND, response.status)
     }
 }

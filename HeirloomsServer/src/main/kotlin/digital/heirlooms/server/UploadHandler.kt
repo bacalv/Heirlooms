@@ -59,18 +59,23 @@ window.onload = function() {
 };
 """.trimIndent()
 
-fun buildApp(storage: FileStore, database: Database): HttpHandler {
+fun buildApp(
+    storage: FileStore,
+    database: Database,
+    thumbnailGenerator: (ByteArray, String) -> ByteArray? = ::generateThumbnail,
+): HttpHandler {
     val directUpload = storage as? DirectUploadSupport
 
     val apiContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
         descriptionPath = "/openapi.json"
         routes += listOf(
-            uploadContractRoute(storage, database),
+            uploadContractRoute(storage, database, thumbnailGenerator),
             listUploadsContractRoute(database),
             prepareUploadContractRoute(directUpload),
-            confirmUploadContractRoute(database),
+            confirmUploadContractRoute(storage, database, thumbnailGenerator),
             fileProxyContractRoute(storage, database),
+            thumbProxyContractRoute(storage, database),
             readUrlContractRoute(directUpload, database),
         )
     }
@@ -123,7 +128,11 @@ private fun specWithApiKeyAuth(apiContract: HttpHandler): Response {
     return Response(OK).header("Content-Type", "application/json").body(spec.toString())
 }
 
-private fun uploadContractRoute(storage: FileStore, database: Database): ContractRoute =
+private fun uploadContractRoute(
+    storage: FileStore,
+    database: Database,
+    thumbnailGenerator: (ByteArray, String) -> ByteArray?,
+): ContractRoute =
     "/upload" meta {
         summary = "Upload a file"
         description = "Upload an image or video. Content-Type header should reflect the file's MIME type (e.g. image/jpeg, video/mp4)."
@@ -142,7 +151,7 @@ private fun uploadContractRoute(storage: FileStore, database: Database): Contrac
         receiving(Body.binary(ContentType("video/3gpp")).toLens())
         receiving(Body.binary(ContentType("video/mpeg")).toLens())
         receiving(Body.binary(ContentType("application/octet-stream")).toLens())
-    } bindContract POST to uploadHandler(storage, database)
+    } bindContract POST to uploadHandler(storage, database, thumbnailGenerator)
 
 private fun listUploadsContractRoute(database: Database): ContractRoute =
     "/uploads" meta {
@@ -150,7 +159,11 @@ private fun listUploadsContractRoute(database: Database): ContractRoute =
         description = "Returns all uploaded files as a JSON array with id, storageKey, mimeType, and fileSize fields."
     } bindContract GET to listUploadsHandler(database)
 
-private fun uploadHandler(storage: FileStore, database: Database): HttpHandler = { request: Request ->
+private fun uploadHandler(
+    storage: FileStore,
+    database: Database,
+    thumbnailGenerator: (ByteArray, String) -> ByteArray?,
+): HttpHandler = { request: Request ->
     val body = request.body.payload.array()
 
     if (body.isEmpty()) {
@@ -171,6 +184,7 @@ private fun uploadHandler(storage: FileStore, database: Database): HttpHandler =
         } else {
             try {
                 val key = storage.save(body, mimeType)
+                val thumbKey = tryStoreThumbnail(body, mimeType, key, storage, thumbnailGenerator)
                 database.recordUpload(
                     UploadRecord(
                         id = UUID.randomUUID(),
@@ -178,6 +192,7 @@ private fun uploadHandler(storage: FileStore, database: Database): HttpHandler =
                         mimeType = mimeType,
                         fileSize = body.size.toLong(),
                         contentHash = hash,
+                        thumbnailKey = thumbKey?.value,
                     )
                 )
                 Response(CREATED).body(key.value)
@@ -195,7 +210,8 @@ private fun listUploadsHandler(database: Database): HttpHandler = {
             append("[")
             uploads.forEachIndexed { i, u ->
                 if (i > 0) append(",")
-                append("""{"id":"${u.id}","storageKey":"${u.storageKey}","mimeType":"${u.mimeType}","fileSize":${u.fileSize},"uploadedAt":"${u.uploadedAt}"}""")
+                val thumbJson = if (u.thumbnailKey != null) "\"${u.thumbnailKey}\"" else "null"
+                append("""{"id":"${u.id}","storageKey":"${u.storageKey}","mimeType":"${u.mimeType}","fileSize":${u.fileSize},"uploadedAt":"${u.uploadedAt}","thumbnailKey":$thumbJson}""")
             }
             append("]")
         }
@@ -220,6 +236,32 @@ private fun fileProxyContractRoute(storage: FileStore, database: Database): Cont
                     val bytes = storage.get(StorageKey(record.storageKey))
                     Response(OK)
                         .header("Content-Type", record.mimeType)
+                        .body(ByteArrayInputStream(bytes), bytes.size.toLong())
+                } catch (e: Exception) {
+                    Response(INTERNAL_SERVER_ERROR).body("Failed to fetch file: ${e.message}")
+                }
+            }
+        }
+    }
+}
+
+private fun thumbProxyContractRoute(storage: FileStore, database: Database): ContractRoute {
+    val id = Path.uuid().of("id")
+    return "/uploads" / id / "thumb" meta {
+        summary = "Get thumbnail"
+        description = "Returns the JPEG thumbnail for the given upload ID if one exists, otherwise falls back to the full file."
+    } bindContract GET to { uploadId: UUID, _: String ->
+        { _: Request ->
+            val record = database.getUploadById(uploadId)
+            if (record == null) {
+                Response(NOT_FOUND)
+            } else {
+                val keyToFetch = record.thumbnailKey?.let { StorageKey(it) } ?: StorageKey(record.storageKey)
+                val mimeType = if (record.thumbnailKey != null) "image/jpeg" else record.mimeType
+                try {
+                    val bytes = storage.get(keyToFetch)
+                    Response(OK)
+                        .header("Content-Type", mimeType)
                         .body(ByteArrayInputStream(bytes), bytes.size.toLong())
                 } catch (e: Exception) {
                     Response(INTERNAL_SERVER_ERROR).body("Failed to fetch file: ${e.message}")
@@ -263,11 +305,15 @@ private fun prepareUploadContractRoute(directUpload: DirectUploadSupport?): Cont
         description = "Returns a signed GCS URL the client can PUT the file to directly, bypassing the 32 MB Cloud Run limit. Body: {\"mimeType\":\"video/mp4\"}."
     } bindContract POST to prepareUploadHandler(directUpload)
 
-private fun confirmUploadContractRoute(database: Database): ContractRoute =
+private fun confirmUploadContractRoute(
+    storage: FileStore,
+    database: Database,
+    thumbnailGenerator: (ByteArray, String) -> ByteArray?,
+): ContractRoute =
     "/uploads/confirm" meta {
         summary = "Confirm a direct upload"
         description = "Records upload metadata after the client has PUT the file directly to GCS. Body: {\"storageKey\":\"...\",\"mimeType\":\"...\",\"fileSize\":...,\"contentHash\":\"<sha256-hex>\"}. If contentHash matches an existing upload, returns 409 with the existing storageKey."
-    } bindContract POST to confirmUploadHandler(database)
+    } bindContract POST to confirmUploadHandler(storage, database, thumbnailGenerator)
 
 private fun prepareUploadHandler(directUpload: DirectUploadSupport?): HttpHandler = { request: Request ->
     if (directUpload == null) {
@@ -291,7 +337,11 @@ private fun prepareUploadHandler(directUpload: DirectUploadSupport?): HttpHandle
     }
 }
 
-private fun confirmUploadHandler(database: Database): HttpHandler = { request: Request ->
+private fun confirmUploadHandler(
+    storage: FileStore,
+    database: Database,
+    thumbnailGenerator: (ByteArray, String) -> ByteArray?,
+): HttpHandler = { request: Request ->
     try {
         val node = ObjectMapper().readTree(request.bodyString())
         val storageKey = node?.get("storageKey")?.asText()
@@ -308,6 +358,7 @@ private fun confirmUploadHandler(database: Database): HttpHandler = { request: R
                     .header("Content-Type", "application/json")
                     .body("""{"storageKey":"${existing.storageKey}"}""")
             } else {
+                val thumbKey = tryFetchAndStoreThumbnail(storageKey, mimeType, storage, thumbnailGenerator)
                 database.recordUpload(
                     UploadRecord(
                         id = UUID.randomUUID(),
@@ -315,6 +366,7 @@ private fun confirmUploadHandler(database: Database): HttpHandler = { request: R
                         mimeType = mimeType,
                         fileSize = fileSize,
                         contentHash = contentHash,
+                        thumbnailKey = thumbKey?.value,
                     )
                 )
                 Response(CREATED)
@@ -323,4 +375,32 @@ private fun confirmUploadHandler(database: Database): HttpHandler = { request: R
     } catch (e: Exception) {
         Response(INTERNAL_SERVER_ERROR).body("Failed to confirm upload: ${e.message}")
     }
+}
+
+private fun tryStoreThumbnail(
+    bytes: ByteArray,
+    mimeType: String,
+    originalKey: StorageKey,
+    storage: FileStore,
+    thumbnailGenerator: (ByteArray, String) -> ByteArray?,
+): StorageKey? {
+    return try {
+        val thumbBytes = thumbnailGenerator(bytes, mimeType) ?: return null
+        val thumbKeyValue = "${originalKey.value.substringBeforeLast(".")}-thumb.jpg"
+        storage.saveWithKey(thumbBytes, StorageKey(thumbKeyValue), "image/jpeg")
+        StorageKey(thumbKeyValue)
+    } catch (_: Exception) { null }
+}
+
+private fun tryFetchAndStoreThumbnail(
+    storageKey: String,
+    mimeType: String,
+    storage: FileStore,
+    thumbnailGenerator: (ByteArray, String) -> ByteArray?,
+): StorageKey? {
+    if (mimeType.substringBefore(";").trim().lowercase() !in THUMBNAIL_SUPPORTED_MIME_TYPES) return null
+    return try {
+        val bytes = storage.get(StorageKey(storageKey))
+        tryStoreThumbnail(bytes, mimeType, StorageKey(storageKey), storage, thumbnailGenerator)
+    } catch (_: Exception) { null }
 }

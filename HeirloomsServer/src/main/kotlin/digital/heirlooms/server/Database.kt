@@ -15,6 +15,7 @@ data class UploadRecord(
     val fileSize: Long,
     val uploadedAt: Instant = Instant.now(),
     val contentHash: String? = null,
+    val thumbnailKey: String? = null,
 )
 
 class Database(private val dataSource: DataSource) {
@@ -30,13 +31,14 @@ class Database(private val dataSource: DataSource) {
     fun recordUpload(record: UploadRecord) {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
-                "INSERT INTO uploads (id, storage_key, mime_type, file_size, content_hash) VALUES (?, ?, ?, ?, ?)"
+                "INSERT INTO uploads (id, storage_key, mime_type, file_size, content_hash, thumbnail_key) VALUES (?, ?, ?, ?, ?, ?)"
             ).use { stmt ->
                 stmt.setObject(1, record.id)
                 stmt.setString(2, record.storageKey)
                 stmt.setString(3, record.mimeType)
                 stmt.setLong(4, record.fileSize)
                 stmt.setString(5, record.contentHash)
+                stmt.setString(6, record.thumbnailKey)
                 stmt.executeUpdate()
             }
         }
@@ -45,7 +47,7 @@ class Database(private val dataSource: DataSource) {
     fun findByContentHash(hash: String): UploadRecord? {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
-                "SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash FROM uploads WHERE content_hash = ? LIMIT 1"
+                "SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key FROM uploads WHERE content_hash = ? LIMIT 1"
             ).use { stmt ->
                 stmt.setString(1, hash)
                 val rs = stmt.executeQuery()
@@ -57,6 +59,7 @@ class Database(private val dataSource: DataSource) {
                     fileSize = rs.getLong("file_size"),
                     uploadedAt = rs.getTimestamp("uploaded_at").toInstant(),
                     contentHash = rs.getString("content_hash"),
+                    thumbnailKey = rs.getString("thumbnail_key"),
                 )
             }
         }
@@ -65,7 +68,7 @@ class Database(private val dataSource: DataSource) {
     fun getUploadById(id: UUID): UploadRecord? {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
-                "SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash FROM uploads WHERE id = ?"
+                "SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key FROM uploads WHERE id = ?"
             ).use { stmt ->
                 stmt.setObject(1, id)
                 val rs = stmt.executeQuery()
@@ -77,6 +80,7 @@ class Database(private val dataSource: DataSource) {
                     fileSize = rs.getLong("file_size"),
                     uploadedAt = rs.getTimestamp("uploaded_at").toInstant(),
                     contentHash = rs.getString("content_hash"),
+                    thumbnailKey = rs.getString("thumbnail_key"),
                 )
             }
         }
@@ -85,7 +89,7 @@ class Database(private val dataSource: DataSource) {
     fun listUploads(): List<UploadRecord> {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
-                "SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash FROM uploads ORDER BY uploaded_at DESC"
+                "SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key FROM uploads ORDER BY uploaded_at DESC"
             ).use { stmt ->
                 val rs = stmt.executeQuery()
                 val results = mutableListOf<UploadRecord>()
@@ -98,6 +102,7 @@ class Database(private val dataSource: DataSource) {
                             fileSize = rs.getLong("file_size"),
                             uploadedAt = rs.getTimestamp("uploaded_at").toInstant(),
                             contentHash = rs.getString("content_hash"),
+                            thumbnailKey = rs.getString("thumbnail_key"),
                         )
                     )
                 }

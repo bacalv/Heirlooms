@@ -26,6 +26,13 @@ interface FileStore {
     fun save(bytes: ByteArray, mimeType: String): StorageKey
 
     /**
+     * Persists [bytes] under the explicit [key] with the given [mimeType].
+     * Used for storing thumbnails alongside the original file.
+     * @throws Exception if the file could not be stored.
+     */
+    fun saveWithKey(bytes: ByteArray, key: StorageKey, mimeType: String)
+
+    /**
      * Retrieves the raw bytes stored under [key].
      * @throws Exception if the file could not be retrieved.
      */

@@ -154,6 +154,9 @@ function VideoPlayer({ url, mimeType, onClose }) {
 
 function UploadCard({ upload, apiKey, onImageClick, onVideoClick }) {
   const fileUrl = `${API_URL}/api/content/uploads/${upload.id}/file`
+  const displayUrl = upload.thumbnailKey
+    ? `${API_URL}/api/content/uploads/${upload.id}/thumb`
+    : fileUrl
   const [blobUrl, setBlobUrl] = useState(null)
 
   // Pre-fetch image thumbnails on mount so they display in the grid.
@@ -162,7 +165,7 @@ function UploadCard({ upload, apiKey, onImageClick, onVideoClick }) {
   useEffect(() => {
     if (!isImage(upload.mimeType)) return
     let cancelled = false
-    fetch(fileUrl, { headers: { 'X-Api-Key': apiKey } })
+    fetch(displayUrl, { headers: { 'X-Api-Key': apiKey } })
       .then((r) => r.ok ? r.blob() : null)
       .then((blob) => { if (!cancelled && blob) setBlobUrl(URL.createObjectURL(blob)) })
       .catch(() => {})
@@ -170,7 +173,7 @@ function UploadCard({ upload, apiKey, onImageClick, onVideoClick }) {
       cancelled = true
       if (blobUrl) URL.revokeObjectURL(blobUrl)
     }
-  }, [fileUrl, apiKey])
+  }, [displayUrl, apiKey])
 
   function handleVideoClick() {
     onVideoClick({ uploadId: upload.id, mimeType: upload.mimeType, apiKey })

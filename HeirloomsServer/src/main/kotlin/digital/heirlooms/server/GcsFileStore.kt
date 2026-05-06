@@ -35,6 +35,12 @@ class GcsFileStore(
         return StorageKey(key)
     }
 
+    override fun saveWithKey(bytes: ByteArray, key: StorageKey, mimeType: String) {
+        val blobId = BlobId.of(bucket, key.value)
+        val blobInfo = BlobInfo.newBuilder(blobId).setContentType(mimeType).build()
+        storage.create(blobInfo, bytes)
+    }
+
     override fun get(key: StorageKey): ByteArray = storage.readAllBytes(BlobId.of(bucket, key.value))
 
     override fun generateReadUrl(key: StorageKey): String {

@@ -621,3 +621,76 @@ URL is no longer user-configurable. The settings screen is reduced to API key on
 
 **Cloud Run:** server deployed as revision `heirlooms-server-00002-stq`
 (us-central1). Tagged as **v0.10.0**.
+
+---
+
+## Session — 2026-05-06 (Phase 1 thumbnail generation)
+
+**Prompt:** Add synchronous image thumbnail generation at upload time —
+Phase 1 of a three-phase pipeline (Phase 2: video first-frame via FFmpeg,
+Phase 3: async generation).
+
+**What was built:**
+
+### Database
+- `V3__add_thumbnail_key.sql` — adds nullable `thumbnail_key VARCHAR(512)`
+  column to the uploads table. Nullable because existing uploads have none,
+  non-image files never get one, and generation can fail silently.
+
+### ThumbnailGenerator
+- `ThumbnailGenerator.kt` — top-level `generateThumbnail(bytes, mimeType)`
+  function using only `javax.imageio.ImageIO` and `java.awt` (no extra
+  dependencies). Scales to fit a 400×400 bounding box preserving aspect
+  ratio, outputs JPEG. Returns null for unsupported types (everything except
+  image/jpeg, image/png, image/gif, image/webp) or if ImageIO can't decode
+  the input. Try/catch ensures thumbnail failure never propagates to the
+  upload response.
+
+### FileStore — saveWithKey
+- `FileStore.saveWithKey(bytes, key, mimeType)` added to the interface.
+  Implemented in `LocalFileStore`, `S3FileStore`, and `GcsFileStore`.
+  Used to store thumbnails under an explicit key (`{uuid}-thumb.jpg`)
+  alongside the original file.
+
+### Database — thumbnailKey
+- `UploadRecord` gains `thumbnailKey: String? = null` (trailing default,
+  backward compatible).
+- All INSERT and SELECT queries updated to include `thumbnail_key`.
+
+### Upload flow
+- `buildApp` gains an injectable `thumbnailGenerator` parameter (default
+  `::generateThumbnail`) so tests can inject a stub or failing lambda.
+- `POST /upload` (direct path): after storing the original, calls
+  `tryStoreThumbnail` to generate + store the thumbnail, then records
+  `thumbnailKey` in the database. On any failure, proceeds without thumbnail.
+- `POST /uploads/confirm` (signed URL path): calls
+  `tryFetchAndStoreThumbnail`, which first checks if the MIME type is
+  supported (skip early for videos, avoiding a wasteful GCS fetch) then
+  fetches bytes, generates, and stores the thumbnail. On any failure,
+  proceeds without thumbnail.
+- Thumbnail stored under `{original-uuid}-thumb.jpg` in the same bucket.
+
+### API changes
+- `GET /api/content/uploads` — list JSON now includes `"thumbnailKey":null`
+  or `"thumbnailKey":"uuid-thumb.jpg"` on each item.
+- `GET /api/content/uploads/{id}/thumb` — new contract route. Returns the
+  JPEG thumbnail if `thumbnailKey` is set; falls back to the full file if
+  not. Returns 404 if the upload record doesn't exist.
+
+### HeirloomsWeb
+- `UploadCard` uses `GET /uploads/{id}/thumb` when `upload.thumbnailKey` is
+  non-null (fetching the smaller thumbnail for the grid), falling back to
+  `GET /uploads/{id}/file` for uploads without a thumbnail.
+
+### Tests
+- `ThumbnailGeneratorTest.kt` (8 tests): supported JPEG returns non-null,
+  output is valid JPEG, unsupported type returns null, invalid bytes returns
+  null, fits within 400×400, preserves aspect ratio, no upscaling for small
+  images, octet-stream returns null.
+- `UploadHandlerTest.kt` (11 new tests): thumbnail generated and stored for
+  supported type, no thumbnail for video/mp4, upload succeeds when generator
+  throws, thumbnailKey null in list for non-image, thumbnailKey present in
+  list, thumb endpoint returns thumbnail bytes, thumb endpoint falls back to
+  full file, thumb endpoint returns 404.
+
+All tests passing (95 total across 6 test classes, 0 failures).

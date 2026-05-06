@@ -44,6 +44,20 @@ class S3FileStore(
         return StorageKey(key)
     }
 
+    override fun saveWithKey(bytes: ByteArray, key: StorageKey, mimeType: String) {
+        val request = PutObjectRequest.builder()
+            .bucket(bucket)
+            .key(key.value)
+            .contentType(mimeType)
+            .contentLength(bytes.size.toLong())
+            .build()
+        try {
+            client.putObject(request, AsyncRequestBody.fromBytes(bytes)).get()
+        } catch (e: ExecutionException) {
+            throw RuntimeException("S3 upload failed for key '${key.value}': ${e.cause?.message}", e.cause)
+        }
+    }
+
     override fun get(key: StorageKey): ByteArray {
         val request = GetObjectRequest.builder()
             .bucket(bucket)
