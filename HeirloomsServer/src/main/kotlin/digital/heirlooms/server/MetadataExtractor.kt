@@ -46,13 +46,17 @@ class MetadataExtractor {
 
             val gpsDir = metadata.getFirstDirectoryOfType(GpsDirectory::class.java)
             val geoLocation = gpsDir?.geoLocation
-            val latitude = geoLocation?.latitude?.takeIf { !it.isNaN() }
-            val longitude = geoLocation?.longitude?.takeIf { !it.isNaN() }
-            val altitude = gpsDir?.getRational(GpsDirectory.TAG_ALTITUDE)?.let { rational ->
-                val altRef = gpsDir.getByteArray(GpsDirectory.TAG_ALTITUDE_REF)
-                val sign = if (altRef != null && altRef.isNotEmpty() && altRef[0].toInt() == 1) -1.0 else 1.0
-                sign * rational.toDouble()
-            }
+            val rawLat = geoLocation?.latitude?.takeIf { !it.isNaN() }
+            val rawLon = geoLocation?.longitude?.takeIf { !it.isNaN() }
+            // (0.0, 0.0) is a Samsung placeholder written when the GPS fix isn't yet acquired
+            val (latitude, longitude) = if (rawLat == 0.0 && rawLon == 0.0) Pair(null, null) else Pair(rawLat, rawLon)
+            val altitude = if (latitude != null) {
+                gpsDir?.getRational(GpsDirectory.TAG_ALTITUDE)?.let { rational ->
+                    val altRef = gpsDir.getByteArray(GpsDirectory.TAG_ALTITUDE_REF)
+                    val sign = if (altRef != null && altRef.isNotEmpty() && altRef[0].toInt() == 1) -1.0 else 1.0
+                    sign * rational.toDouble()
+                }
+            } else null
 
             val capturedAt = extractCapturedAt(metadata)
 
