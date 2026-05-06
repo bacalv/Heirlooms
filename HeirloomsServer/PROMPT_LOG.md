@@ -185,6 +185,22 @@ extension on `org.http4k.core.Body.Companion`. Import `org.http4k.core.Body` and
 
 ---
 
+## Entry [2026-05-06] — Signed URL upload
+**Prompt:** Add GCS signed URL upload flow to bypass Cloud Run 32 MB request body limit. Three-step flow: prepare (get signed URL) → PUT directly to GCS → confirm (record metadata). Update HeirloomsApp to use the new flow.
+
+**Response:** Added `DirectUploadSupport` interface and `PreparedUpload` data class. `GcsFileStore` now implements it using V4 signed PUT URLs (15-minute expiry); switched from `GoogleCredentials` to `ServiceAccountCredentials` for signing capability. Added `POST /api/content/uploads/prepare` and `POST /api/content/uploads/confirm` contract routes; prepare returns 501 for non-GCS backends. Android `Uploader.uploadViaSigned()` implements the three-step flow; `ShareActivity` now calls it and derives the base URL from the stored endpoint. Write timeout increased to 300s. All tests pass (server + Android).
+
+**Files changed:**
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/DirectUploadSupport.kt` (new)
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/GcsFileStore.kt` — ServiceAccountCredentials, prepareUpload()
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/UploadHandler.kt` — prepare/confirm routes and handlers
+- `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/UploadHandlerTest.kt` — prepare/confirm tests
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/Uploader.kt` — uploadViaSigned()
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/ShareActivity.kt` — use uploadViaSigned, 300s timeout
+- `HeirloomsApp/app/src/test/kotlin/digital/heirlooms/app/UploaderTest.kt` — uploadViaSigned tests
+
+---
+
 ## Entry [2026-05-06]
 **Prompt:** Milestone 4 — Part 1: Add `GET /api/content/uploads/{id}/file` file proxy endpoint. Add `get(key: StorageKey): ByteArray` to the FileStore interface and all implementations (LocalFileStore, S3FileStore, GcsFileStore). Add `getUploadById(id: UUID): UploadRecord?` to Database. Add `uploadedAt: Instant` to UploadRecord (backed by the existing `uploaded_at` DB column). Update the list endpoint JSON to include `uploadedAt`. Add tests for the new interface method in LocalFileStoreTest and S3FileStoreTest, and for the new endpoint in UploadHandlerTest.
 

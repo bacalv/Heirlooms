@@ -67,6 +67,9 @@ class Uploader(
          */
         private fun backoffSequence(initialDelayMs: Long): Sequence<Long> =
             generateSequence(initialDelayMs) { it * 2 }
+
+        fun parseJsonStringField(json: String, key: String): String? =
+            Regex(""""$key"\s*:\s*"([^"]+)"""").find(json)?.groupValues?.get(1)
     }
 
     /**
@@ -136,4 +139,82 @@ class Uploader(
             UploadResult.Failure("Upload error: ${e.message}", NO_HTTP_CODE, attempt)
         }
     }
+
+    /**
+     * Uploads a file in three steps to bypass the Cloud Run 32 MB request limit:
+     * 1. POST {baseUrl}/api/content/uploads/prepare  → get a signed GCS PUT URL
+     * 2. PUT  {signedUrl}                            → send bytes directly to GCS
+     * 3. POST {baseUrl}/api/content/uploads/confirm  → record metadata in the database
+     *
+     * [baseUrl] should be the server root, e.g. "https://heirlooms-server-…run.app"
+     */
+    fun uploadViaSigned(baseUrl: String?, fileBytes: ByteArray?, mimeType: String, apiKey: String? = null): UploadResult {
+        if (!isValidEndpoint(baseUrl)) {
+            return UploadResult.Failure("No endpoint configured")
+        }
+        if (fileBytes == null || fileBytes.isEmpty()) {
+            return UploadResult.Failure("File is empty")
+        }
+
+        val base = baseUrl!!.trimEnd('/')
+
+        // Step 1: prepare — get storageKey and signed upload URL
+        val prepareBody = """{"mimeType":"$mimeType"}"""
+        val prepareRequest = Request.Builder()
+            .url("$base/api/content/uploads/prepare")
+            .post(prepareBody.toRequestBody("application/json".toMediaType()))
+            .apply { if (!apiKey.isNullOrBlank()) header("X-Api-Key", apiKey) }
+            .build()
+
+        val prepareResponse = try {
+            httpClient.newCall(prepareRequest).execute().use { response ->
+                if (!response.isSuccessful) return UploadResult.Failure("Prepare failed: HTTP ${response.code}", response.code)
+                response.body?.string() ?: return UploadResult.Failure("Empty prepare response")
+            }
+        } catch (e: IOException) {
+            return UploadResult.Failure("Prepare error: ${e.message}")
+        }
+
+        val storageKey = Companion.parseJsonStringField(prepareResponse, "storageKey")
+            ?: return UploadResult.Failure("Missing storageKey in prepare response")
+        val uploadUrl = Companion.parseJsonStringField(prepareResponse, "uploadUrl")
+            ?: return UploadResult.Failure("Missing uploadUrl in prepare response")
+
+        // Step 2: PUT file bytes directly to GCS — no API key needed (signed URL is self-authenticating)
+        val putRequest = Request.Builder()
+            .url(uploadUrl)
+            .put(fileBytes.toRequestBody(mimeType.toMediaType()))
+            .header("Content-Type", mimeType)
+            .build()
+
+        try {
+            httpClient.newCall(putRequest).execute().use { response ->
+                if (!response.isSuccessful) return UploadResult.Failure("GCS upload failed: HTTP ${response.code}", response.code)
+            }
+        } catch (e: IOException) {
+            return UploadResult.Failure("GCS upload error: ${e.message}")
+        }
+
+        // Step 3: confirm — record metadata in the database
+        val confirmBody = """{"storageKey":"$storageKey","mimeType":"$mimeType","fileSize":${fileBytes.size}}"""
+        val confirmRequest = Request.Builder()
+            .url("$base/api/content/uploads/confirm")
+            .post(confirmBody.toRequestBody("application/json".toMediaType()))
+            .apply { if (!apiKey.isNullOrBlank()) header("X-Api-Key", apiKey) }
+            .build()
+
+        return try {
+            httpClient.newCall(confirmRequest).execute().use { response ->
+                val code = response.code
+                if (response.isSuccessful) {
+                    UploadResult.Success("Uploaded successfully ($code)", code, 1)
+                } else {
+                    UploadResult.Failure("Confirm failed: HTTP $code", code)
+                }
+            }
+        } catch (e: IOException) {
+            UploadResult.Failure("Confirm error: ${e.message}")
+        }
+    }
+
 }

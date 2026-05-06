@@ -30,8 +30,8 @@ class ShareActivity : Activity() {
     private val uploader = Uploader(
         OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(120, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(300, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
             .build()
     )
 
@@ -73,8 +73,10 @@ class ShareActivity : Activity() {
                 return@launch
             }
 
+            val baseUrl = if (endpoint.contains("/api/")) endpoint.substringBefore("/api/") else endpoint
+
             val result = withContext(Dispatchers.IO) {
-                uploader.upload(endpoint, fileBytes, mimeType, apiKey)
+                uploader.uploadViaSigned(baseUrl, fileBytes, mimeType, apiKey)
             }
 
             when (result) {

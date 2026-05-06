@@ -13,6 +13,7 @@ import org.http4k.core.Status.Companion.BAD_REQUEST
 import org.http4k.core.Status.Companion.CREATED
 import org.http4k.core.Status.Companion.INTERNAL_SERVER_ERROR
 import org.http4k.core.Status.Companion.NOT_FOUND
+import org.http4k.core.Status.Companion.NOT_IMPLEMENTED
 import org.http4k.core.Status.Companion.OK
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -265,5 +266,79 @@ class UploadHandlerTest {
 
         assertEquals(INTERNAL_SERVER_ERROR, response.status)
         assertTrue(response.bodyString().contains("GCS error"))
+    }
+
+    // -------------------------------------------------------------------------
+    // Prepare endpoint — storage supports direct upload
+    // -------------------------------------------------------------------------
+
+    private val mockDirectStorage = mockk<FileStore>(moreInterfaces = arrayOf(DirectUploadSupport::class))
+    private val appWithDirectUpload = buildApp(mockDirectStorage, mockDatabase)
+
+    @Test
+    fun `POST uploads prepare returns 200 with storageKey and uploadUrl`() {
+        every { (mockDirectStorage as DirectUploadSupport).prepareUpload("video/mp4") } returns
+            PreparedUpload(StorageKey("uuid.mp4"), "https://gcs.example.com/signed")
+
+        val response = appWithDirectUpload(
+            Request(POST, "/api/content/uploads/prepare")
+                .header("Content-Type", "application/json")
+                .body("""{"mimeType":"video/mp4"}""")
+        )
+
+        assertEquals(OK, response.status)
+        assertTrue(response.bodyString().contains("uuid.mp4"))
+        assertTrue(response.bodyString().contains("https://gcs.example.com/signed"))
+    }
+
+    @Test
+    fun `POST uploads prepare returns 400 when mimeType missing`() {
+        val response = appWithDirectUpload(
+            Request(POST, "/api/content/uploads/prepare")
+                .header("Content-Type", "application/json")
+                .body("""{}""")
+        )
+        assertEquals(BAD_REQUEST, response.status)
+    }
+
+    @Test
+    fun `POST uploads prepare returns 501 when storage does not support direct upload`() {
+        val response = app(
+            Request(POST, "/api/content/uploads/prepare")
+                .header("Content-Type", "application/json")
+                .body("""{"mimeType":"video/mp4"}""")
+        )
+        assertEquals(NOT_IMPLEMENTED, response.status)
+    }
+
+    // -------------------------------------------------------------------------
+    // Confirm endpoint
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `POST uploads confirm records upload and returns 201`() {
+        val capturedRecord = slot<UploadRecord>()
+        every { mockDatabase.recordUpload(capture(capturedRecord)) } just runs
+
+        val response = app(
+            Request(POST, "/api/content/uploads/confirm")
+                .header("Content-Type", "application/json")
+                .body("""{"storageKey":"uuid.mp4","mimeType":"video/mp4","fileSize":34000000}""")
+        )
+
+        assertEquals(CREATED, response.status)
+        assertEquals("uuid.mp4", capturedRecord.captured.storageKey)
+        assertEquals("video/mp4", capturedRecord.captured.mimeType)
+        assertEquals(34000000L, capturedRecord.captured.fileSize)
+    }
+
+    @Test
+    fun `POST uploads confirm returns 400 when body is incomplete`() {
+        val response = app(
+            Request(POST, "/api/content/uploads/confirm")
+                .header("Content-Type", "application/json")
+                .body("""{"storageKey":"uuid.mp4"}""")
+        )
+        assertEquals(BAD_REQUEST, response.status)
     }
 }

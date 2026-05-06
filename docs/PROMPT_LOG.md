@@ -492,3 +492,51 @@ Deployed to Cloud Run (revision `heirlooms-server-00006-ckl`). Swagger UI loads 
 `https://heirlooms-server-340655233963.europe-west2.run.app/docs` without credentials,
 API key authorisation works via the Authorize button, and POST /upload returns 201.
 Tagged as **v0.6.0**.
+
+---
+
+## Milestone 4 — Web gallery UI + large file support (6 May 2026)
+
+### Part 1 — File proxy endpoint + HeirloomsWeb
+
+**Prompt:** Build Milestone 4: a file proxy endpoint on HeirloomsServer and a new HeirloomsWeb sub-project (React gallery).
+
+**What was built:**
+
+*HeirloomsServer:*
+- `FileStore.get(key)` added to interface; implemented in LocalFileStore, S3FileStore, GcsFileStore
+- `GET /api/content/uploads/{id}/file` — streams file bytes from GCS with correct Content-Type; 404 if not found
+- `uploadedAt: Instant` added to UploadRecord; list endpoint JSON now includes it
+- CORS filter added (all origins); handles OPTIONS preflight before ApiKeyFilter
+
+*HeirloomsWeb (new sub-project):*
+- React 18 + Tailwind CSS + Vite; gallery grid with image thumbnails, file icons for videos, upload date, MIME type, file size; lightbox on click
+- API key entered at login per session, held in React state only (cleared on reload, never stored)
+- Images fetched as blob URLs (fetch + createObjectURL) so X-Api-Key header can be sent
+- Multi-stage Dockerfile: Node 22 build → nginx:alpine
+
+Deployed to Cloud Run (revision `heirlooms-server-00007-7vw`). Gallery confirmed working at http://localhost:5173 against production server. Tagged as **v0.7.0**.
+
+---
+
+### Part 2 — Large file upload via GCS signed URLs
+
+**Problem discovered:** Uploading a 34.57 MB video from the Android app returns HTTP 413. Root cause: Cloud Run enforces a hard 32 MB request body limit at the load balancer level — no server-side config change can fix this.
+
+**Solution — three-step signed URL upload flow:**
+
+1. Mobile app `POST /api/content/uploads/prepare` with `{"mimeType":"video/mp4"}` → server returns `{"storageKey":"uuid.mp4","uploadUrl":"https://...signed-gcs-url..."}` (15-minute expiry)
+2. Mobile app `PUT {signedUrl}` with file bytes **directly to GCS** — bypasses Cloud Run entirely, no size limit
+3. Mobile app `POST /api/content/uploads/confirm` with `{"storageKey":"...","mimeType":"...","fileSize":...}` → server records metadata in the database
+
+**Server changes:**
+- `DirectUploadSupport` interface + `PreparedUpload` data class (new file)
+- `GcsFileStore` now implements `DirectUploadSupport`; switched from `GoogleCredentials` to `ServiceAccountCredentials` so the credentials can sign URLs (V4 signing); `prepareUpload()` generates a signed PUT URL with 15-minute expiry
+- `POST /api/content/uploads/prepare` and `POST /api/content/uploads/confirm` added as contract routes; prepare returns 501 if the storage backend doesn't support direct upload (i.e. local/S3)
+
+**Android app changes:**
+- `Uploader.uploadViaSigned()` — new method implementing the three-step flow; no API key sent on the GCS PUT (signed URL is self-authenticating)
+- `ShareActivity` now calls `uploadViaSigned()` instead of `upload()`; derives base URL from stored endpoint by splitting on `/api/`
+- OkHttp write timeout increased from 120s → 300s to accommodate large video uploads
+
+**Note for deployment:** The new server image must be built and deployed to Cloud Run before large video uploads will work. The existing `POST /api/content/upload` direct endpoint still works for small files. No change to stored endpoint format in the Android app.

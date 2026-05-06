@@ -6,6 +6,7 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -359,5 +360,103 @@ class UploaderTest {
         uploader.upload(server.url("/upload").toString(), "data".toByteArray(), mime)
 
         assertEquals("application/octet-stream", server.takeRequest().getHeader("Content-Type"))
+    }
+
+    // -------------------------------------------------------------------------
+    // parseJsonStringField
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `parseJsonStringField extracts storageKey`() {
+        val json = """{"storageKey":"uuid.mp4","uploadUrl":"https://gcs.example.com/signed"}"""
+        assertEquals("uuid.mp4", Uploader.parseJsonStringField(json, "storageKey"))
+    }
+
+    @Test
+    fun `parseJsonStringField extracts uploadUrl`() {
+        val json = """{"storageKey":"uuid.mp4","uploadUrl":"https://gcs.example.com/signed?foo=bar"}"""
+        assertEquals("https://gcs.example.com/signed?foo=bar", Uploader.parseJsonStringField(json, "uploadUrl"))
+    }
+
+    @Test
+    fun `parseJsonStringField returns null for missing key`() {
+        assertNull(Uploader.parseJsonStringField("{}", "storageKey"))
+    }
+
+    // -------------------------------------------------------------------------
+    // uploadViaSigned
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `uploadViaSigned succeeds when all three steps return 2xx`() {
+        val prepareJson = """{"storageKey":"uuid.mp4","uploadUrl":"${server.url("/gcs-put")}"}"""
+        server.enqueue(MockResponse().setResponseCode(200).setBody(prepareJson))  // prepare
+        server.enqueue(MockResponse().setResponseCode(200))                        // GCS PUT
+        server.enqueue(MockResponse().setResponseCode(201))                        // confirm
+
+        val result = uploader.uploadViaSigned(server.url("/").toString(), "data".toByteArray(), "video/mp4", "key")
+
+        assertTrue(result is Uploader.UploadResult.Success)
+        assertEquals(3, server.requestCount)
+    }
+
+    @Test
+    fun `uploadViaSigned sends mimeType in prepare body`() {
+        val prepareJson = """{"storageKey":"uuid.mp4","uploadUrl":"${server.url("/gcs-put")}"}"""
+        server.enqueue(MockResponse().setResponseCode(200).setBody(prepareJson))
+        server.enqueue(MockResponse().setResponseCode(200))
+        server.enqueue(MockResponse().setResponseCode(201))
+
+        uploader.uploadViaSigned(server.url("/").toString(), "data".toByteArray(), "video/mp4", "key")
+
+        val prepareRequest = server.takeRequest()
+        assertTrue(prepareRequest.body.readUtf8().contains("video/mp4"))
+    }
+
+    @Test
+    fun `uploadViaSigned sends X-Api-Key on prepare and confirm but not GCS PUT`() {
+        val prepareJson = """{"storageKey":"uuid.mp4","uploadUrl":"${server.url("/gcs-put")}"}"""
+        server.enqueue(MockResponse().setResponseCode(200).setBody(prepareJson))
+        server.enqueue(MockResponse().setResponseCode(200))
+        server.enqueue(MockResponse().setResponseCode(201))
+
+        uploader.uploadViaSigned(server.url("/").toString(), "data".toByteArray(), "video/mp4", "mykey")
+
+        val prepareReq = server.takeRequest()
+        val gcsReq = server.takeRequest()
+        val confirmReq = server.takeRequest()
+
+        assertEquals("mykey", prepareReq.getHeader("X-Api-Key"))
+        assertNull(gcsReq.getHeader("X-Api-Key"))
+        assertEquals("mykey", confirmReq.getHeader("X-Api-Key"))
+    }
+
+    @Test
+    fun `uploadViaSigned returns Failure when prepare returns 4xx`() {
+        server.enqueue(MockResponse().setResponseCode(401))
+
+        val result = uploader.uploadViaSigned(server.url("/").toString(), "data".toByteArray(), "video/mp4")
+
+        assertTrue(result is Uploader.UploadResult.Failure)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun `uploadViaSigned returns Failure when GCS PUT fails`() {
+        val prepareJson = """{"storageKey":"uuid.mp4","uploadUrl":"${server.url("/gcs-put")}"}"""
+        server.enqueue(MockResponse().setResponseCode(200).setBody(prepareJson))
+        server.enqueue(MockResponse().setResponseCode(403))
+
+        val result = uploader.uploadViaSigned(server.url("/").toString(), "data".toByteArray(), "video/mp4")
+
+        assertTrue(result is Uploader.UploadResult.Failure)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun `uploadViaSigned fails fast on null endpoint`() {
+        val result = uploader.uploadViaSigned(null, "data".toByteArray(), "video/mp4")
+        assertTrue(result is Uploader.UploadResult.Failure)
+        assertEquals(0, server.requestCount)
     }
 }

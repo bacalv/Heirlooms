@@ -21,6 +21,7 @@ import org.http4k.core.Status.Companion.CREATED
 import org.http4k.core.Status.Companion.FOUND
 import org.http4k.core.Status.Companion.INTERNAL_SERVER_ERROR
 import org.http4k.core.Status.Companion.NOT_FOUND
+import org.http4k.core.Status.Companion.NOT_IMPLEMENTED
 import org.http4k.core.Status.Companion.OK
 import org.http4k.format.Jackson
 import org.http4k.lens.binary
@@ -50,12 +51,16 @@ window.onload = function() {
 """.trimIndent()
 
 fun buildApp(storage: FileStore, database: Database): HttpHandler {
+    val directUpload = storage as? DirectUploadSupport
+
     val apiContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
         descriptionPath = "/openapi.json"
         routes += listOf(
             uploadContractRoute(storage, database),
             listUploadsContractRoute(database),
+            prepareUploadContractRoute(directUpload),
+            confirmUploadContractRoute(database),
         )
     }
 
@@ -186,5 +191,64 @@ private fun fileProxyHandler(storage: FileStore, database: Database): HttpHandle
                 Response(INTERNAL_SERVER_ERROR).body("Failed to fetch file: ${e.message}")
             }
         }
+    }
+}
+
+private fun prepareUploadContractRoute(directUpload: DirectUploadSupport?): ContractRoute =
+    "/uploads/prepare" meta {
+        summary = "Prepare a direct upload"
+        description = "Returns a signed GCS URL the client can PUT the file to directly, bypassing the 32 MB Cloud Run limit. Body: {\"mimeType\":\"video/mp4\"}."
+    } bindContract POST to prepareUploadHandler(directUpload)
+
+private fun confirmUploadContractRoute(database: Database): ContractRoute =
+    "/uploads/confirm" meta {
+        summary = "Confirm a direct upload"
+        description = "Records upload metadata after the client has PUT the file directly to GCS. Body: {\"storageKey\":\"...\",\"mimeType\":\"...\",\"fileSize\":...}."
+    } bindContract POST to confirmUploadHandler(database)
+
+private fun prepareUploadHandler(directUpload: DirectUploadSupport?): HttpHandler = { request: Request ->
+    if (directUpload == null) {
+        Response(NOT_IMPLEMENTED).body("Direct upload not supported by the current storage backend")
+    } else {
+        val mimeType = try {
+            ObjectMapper().readTree(request.bodyString())?.get("mimeType")?.asText()
+        } catch (_: Exception) { null }
+
+        if (mimeType.isNullOrBlank()) {
+            Response(BAD_REQUEST).body("Missing or invalid mimeType in request body")
+        } else {
+            try {
+                val prepared = directUpload.prepareUpload(mimeType)
+                val json = """{"storageKey":"${prepared.storageKey}","uploadUrl":"${prepared.uploadUrl}"}"""
+                Response(OK).header("Content-Type", "application/json").body(json)
+            } catch (e: Exception) {
+                Response(INTERNAL_SERVER_ERROR).body("Failed to prepare upload: ${e.message}")
+            }
+        }
+    }
+}
+
+private fun confirmUploadHandler(database: Database): HttpHandler = { request: Request ->
+    try {
+        val node = ObjectMapper().readTree(request.bodyString())
+        val storageKey = node?.get("storageKey")?.asText()
+        val mimeType = node?.get("mimeType")?.asText()
+        val fileSize = node?.get("fileSize")?.asLong()
+
+        if (storageKey.isNullOrBlank() || mimeType.isNullOrBlank() || fileSize == null) {
+            Response(BAD_REQUEST).body("Missing storageKey, mimeType, or fileSize in request body")
+        } else {
+            database.recordUpload(
+                UploadRecord(
+                    id = UUID.randomUUID(),
+                    storageKey = storageKey,
+                    mimeType = mimeType,
+                    fileSize = fileSize,
+                )
+            )
+            Response(CREATED)
+        }
+    } catch (e: Exception) {
+        Response(INTERNAL_SERVER_ERROR).body("Failed to confirm upload: ${e.message}")
     }
 }
