@@ -53,7 +53,7 @@ class ShareActivity : Activity() {
         } ?: run { showToastAndFinish("No file received."); return }
 
         val mimeType = Uploader.resolveMimeType(
-            intent.type?.takeIf { it.isNotEmpty() }
+            intent.type?.takeIf { it.isNotEmpty() && !it.contains('*') }
                 ?: contentResolver.getType(fileUri)
         )
 
