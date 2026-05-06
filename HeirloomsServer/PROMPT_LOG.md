@@ -463,3 +463,19 @@ PA_NOTES.md (Things that tripped us up) and SE_NOTES.md.
 - 5 new `UploadHandlerTest` tests; 107 total, 106 passing, 1 skipped
 
 **Deployed:** Cloud Run revision `heirlooms-server-00015-ztc`.
+
+---
+
+## Entry [2026-05-06] — CORS fix: PATCH method missing from Allow-Methods
+
+**Prompt:** Rotation applied in UI but not persisting on reload.
+
+**Root cause:** `CorsFilter` only advertised `GET, POST, OPTIONS` in `Access-Control-Allow-Methods`. Browser preflight for `PATCH /rotation` was rejected, error silently swallowed by `.catch(() => {})` in the web app.
+
+**Fix:** Added `PATCH` to the Allow-Methods header in `CorsFilter.kt`. Tightened `CorsFilterTest` to assert PATCH is present.
+
+**Deployed:** Cloud Run revision `heirlooms-server-00016-d45`.
+
+**Files changed:**
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/CorsFilter.kt`
+- `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/CorsFilterTest.kt`
