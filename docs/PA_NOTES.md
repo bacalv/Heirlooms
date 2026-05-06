@@ -90,8 +90,8 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 | Artifact Registry | heirlooms (europe-west2) |
 | HeirloomsServer image | europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server |
 | HeirloomsWeb image | europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-web |
-| HeirloomsServer Cloud Run URL | https://heirlooms-server-340655233963.us-central1.run.app (revision heirlooms-server-00014-97p, 2Gi) |
-| HeirloomsWeb Cloud Run URL | https://heirlooms-web-340655233963.us-central1.run.app (revision heirlooms-web-00004-vxm) |
+| HeirloomsServer Cloud Run URL | https://heirlooms-server-340655233963.us-central1.run.app (revision heirlooms-server-00021-fqb, 2Gi) |
+| HeirloomsWeb Cloud Run URL | https://heirlooms-web-340655233963.us-central1.run.app (revision heirlooms-web-00006-wlf) |
 | Target domain (web) | https://heirlooms.digital (live) |
 | Target domain (server) | https://api.heirlooms.digital (live) |
 

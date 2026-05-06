@@ -83,3 +83,32 @@ testing with real accounts. Plan for creating test user accounts to validate the
 full journey before real family members are onboarded.
 
 ---
+## Server-side tag listing for multi-user (6 May 2026)
+
+### Context
+v0.16.0 implemented tag autocomplete in the web UI by deriving the tag list
+client-side from the gallery's existing upload data. For the current single-user
+deployment this is correct: the gallery already holds every upload, so a
+dedicated `GET /tags` endpoint would be a redundant round-trip.
+
+### What changes at Milestone 7
+Once beneficiary accounts arrive, a beneficiary won't see every upload — only
+ones shared with them via tag-based sharing rules. Their tag autocomplete
+should be scoped to "tags I have access to", not the global tag set. That
+makes a server-side endpoint the right shape, returning tags filtered by the
+caller's view.
+
+### Likely API
+`GET /api/content/tags` — returns distinct tags visible to the calling user,
+sorted, possibly with usage counts to drive a "tags you use most" UI later.
+Backed by the existing GIN index on `uploads.tags` (added in V6).
+
+### Why this is worth recording now
+The Increment 2 plan specified this endpoint but it was deliberately dropped
+during build in favour of client-side derivation. That was the right call
+for v0.16.0 but means the gap is invisible in the codebase — no TODO, no
+stub, nothing pointing at it. Recording the reasoning here so a future
+Milestone 7 session doesn't have to reverse-engineer why the endpoint
+isn't there.
+
+---
