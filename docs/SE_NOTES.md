@@ -55,3 +55,7 @@ Three Gradle subprojects under `/Users/bac/Downloads/Heirlooms/`:
   Building on Apple Silicon without this flag produces an arm64 manifest list that
   Cloud Run rejects. The correct command is in PA_NOTES.md under "Cloud Run deploy
   commands".
+- Always run `./gradlew clean shadowJar` (not just `shadowJar`) before `docker build`.
+  The Dockerfile glob matches all `*-all.jar` files; without `clean`, an older JAR
+  with a higher version string (e.g. `0.9.0` > `0.11.0` lexicographically) gets
+  packed into the image instead of the latest one.

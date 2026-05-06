@@ -53,6 +53,10 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Docker images for Cloud Run must be built with `--platform linux/amd64` —
   building on an Apple Silicon Mac produces an arm64 manifest list that Cloud
   Run rejects with "must support amd64/linux"
+- Always run `./gradlew clean shadowJar` before `docker build` — the Dockerfile
+  glob `HeirloomsServer-*-all.jar` matches all accumulated JARs in build/libs;
+  without `clean`, Docker picks the wrong one (e.g. `0.9.0` sorts after `0.11.0`
+  lexicographically, so the older JAR wins)
 
 ---
 
@@ -80,7 +84,7 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 | Artifact Registry | heirlooms (europe-west2) |
 | HeirloomsServer image | europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server |
 | HeirloomsWeb image | europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-web |
-| HeirloomsServer Cloud Run URL | https://heirlooms-server-340655233963.us-central1.run.app (revision heirlooms-server-00005-zd9) |
+| HeirloomsServer Cloud Run URL | https://heirlooms-server-340655233963.us-central1.run.app (revision heirlooms-server-00006-qw8) |
 | HeirloomsWeb Cloud Run URL | https://heirlooms-web-340655233963.us-central1.run.app |
 | Target domain (web) | https://heirlooms.digital (live) |
 | Target domain (server) | https://api.heirlooms.digital (live) |
@@ -115,7 +119,7 @@ Domain mappings only work in us-central1 — do not deploy to europe-west2.
 
 HeirloomsServer:
 cd ~/Downloads/Heirlooms/HeirloomsServer
-./gradlew shadowJar --no-daemon
+./gradlew clean shadowJar --no-daemon
 docker build --platform linux/amd64 \
 -t europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server:latest .
 docker push europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server:latest
