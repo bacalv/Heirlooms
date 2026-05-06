@@ -305,6 +305,25 @@ extension on `org.http4k.core.Body.Companion`. Import `org.http4k.core.Body` and
 
 ---
 
+## Entry [2026-05-06] — Swagger content-type dropdown for /upload
+
+**Prompt:** Add image and video MIME types to the Swagger UI content-type dropdown
+for `POST /upload` — currently only `application/octet-stream` is shown.
+
+**Response:** Added 14 additional `receiving(...)` calls to `uploadContractRoute`,
+one per content type, mirroring the types already in `ContentTypeExtensions.kt`.
+http4k accumulates rather than overwrites when `receiving` is called multiple times,
+so all 15 types appear in the generated OpenAPI spec and Swagger UI dropdown. No
+test changes required (handler behaviour is unchanged).
+
+Note: `receiving` in http4k 4.46.0 takes a single `HttpMessageMeta<Request>` — there
+is no vararg overload.
+
+**Files changed:**
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/UploadHandler.kt`
+
+---
+
 ## Entry [2026-05-06] — Deployed v0.11.0 to Cloud Run
 
 Built shadow JAR, Docker image (linux/amd64), pushed to Artifact Registry, deployed

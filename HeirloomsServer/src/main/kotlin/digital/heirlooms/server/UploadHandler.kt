@@ -127,6 +127,20 @@ private fun uploadContractRoute(storage: FileStore, database: Database): Contrac
     "/upload" meta {
         summary = "Upload a file"
         description = "Upload an image or video. Content-Type header should reflect the file's MIME type (e.g. image/jpeg, video/mp4)."
+        receiving(Body.binary(ContentType("image/jpeg")).toLens())
+        receiving(Body.binary(ContentType("image/png")).toLens())
+        receiving(Body.binary(ContentType("image/gif")).toLens())
+        receiving(Body.binary(ContentType("image/webp")).toLens())
+        receiving(Body.binary(ContentType("image/heic")).toLens())
+        receiving(Body.binary(ContentType("image/heif")).toLens())
+        receiving(Body.binary(ContentType("image/bmp")).toLens())
+        receiving(Body.binary(ContentType("image/tiff")).toLens())
+        receiving(Body.binary(ContentType("video/mp4")).toLens())
+        receiving(Body.binary(ContentType("video/quicktime")).toLens())
+        receiving(Body.binary(ContentType("video/x-msvideo")).toLens())
+        receiving(Body.binary(ContentType("video/webm")).toLens())
+        receiving(Body.binary(ContentType("video/3gpp")).toLens())
+        receiving(Body.binary(ContentType("video/mpeg")).toLens())
         receiving(Body.binary(ContentType("application/octet-stream")).toLens())
     } bindContract POST to uploadHandler(storage, database)
 
