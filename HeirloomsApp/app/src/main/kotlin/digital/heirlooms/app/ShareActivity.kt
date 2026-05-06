@@ -40,56 +40,78 @@ class ShareActivity : Activity() {
         super.onCreate(savedInstanceState)
         ensureNotificationChannels()
 
-        if (intent?.action != Intent.ACTION_SEND) {
-            showToastAndFinish("Unsupported action.")
+        val uris = resolveUris()
+        if (uris.isEmpty()) {
+            showToastAndFinish("No files received.")
             return
         }
-
-        val fileUri: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            intent.getParcelableExtra(Intent.EXTRA_STREAM)
-        } ?: run { showToastAndFinish("No file received."); return }
-
-        val mimeType = Uploader.resolveMimeType(
-            intent.type?.takeIf { it.isNotEmpty() && !it.contains('*') }
-                ?: contentResolver.getType(fileUri)
-        )
 
         scope.launch {
             val store = EndpointStore.create(applicationContext)
             val apiKey = store.getApiKey().takeIf { it.isNotEmpty() }
-
-            val fileBytes = withContext(Dispatchers.IO) {
-                try { readBytes(fileUri) } catch (e: Exception) { null }
-            }
-
-            if (fileBytes == null) {
-                notifyResult("Upload failed", "Could not read the file.")
-                finish()
-                return@launch
-            }
-
             val baseUrl = "https://api.heirlooms.digital"
+            val total = uris.size
+            var succeeded = 0
+            var failed = 0
 
-            val result = withContext(Dispatchers.IO) {
-                uploader.uploadViaSigned(
-                    baseUrl, fileBytes, mimeType, apiKey,
-                    onProgress = { percent -> notifyProgress(percent) },
-                    onConfirming = { notifyProcessing() },
-                )
+            uris.forEachIndexed { index, uri ->
+                val fileNum = index + 1
+                val mimeType = Uploader.resolveMimeType(contentResolver.getType(uri))
+
+                val fileBytes = withContext(Dispatchers.IO) {
+                    try { readBytes(uri) } catch (_: Exception) { null }
+                }
+                if (fileBytes == null) {
+                    failed++
+                    return@forEachIndexed
+                }
+
+                val result = withContext(Dispatchers.IO) {
+                    uploader.uploadViaSigned(
+                        baseUrl, fileBytes, mimeType, apiKey,
+                        onProgress = { percent -> notifyProgress(fileNum, total, percent) },
+                        onConfirming = { notifyProcessing(fileNum, total) },
+                    )
+                }
+
+                if (result is Uploader.UploadResult.Success) succeeded++ else failed++
             }
 
             cancelProgress()
-            when (result) {
-                is Uploader.UploadResult.Success ->
-                    notifyResult("Upload complete", "File uploaded successfully.")
-                is Uploader.UploadResult.Failure ->
-                    notifyResult("Upload failed", result.message)
+            val title = if (failed == 0) "Upload complete" else "Upload partially complete"
+            val text = when {
+                total == 1 && failed == 0 -> "File uploaded successfully."
+                total == 1 -> "Upload failed."
+                failed == 0 -> "$total files uploaded."
+                succeeded == 0 -> "All $total uploads failed."
+                else -> "$succeeded of $total files uploaded."
             }
-
+            notifyResult(title, text)
             finish()
+        }
+    }
+
+    private fun resolveUris(): List<Uri> {
+        return when (intent?.action) {
+            Intent.ACTION_SEND -> {
+                val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+                }
+                listOfNotNull(uri)
+            }
+            Intent.ACTION_SEND_MULTIPLE -> {
+                val list = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
+                }
+                list ?: emptyList()
+            }
+            else -> emptyList()
         }
     }
 
@@ -107,11 +129,12 @@ class ShareActivity : Activity() {
         }
     }
 
-    private fun notifyProgress(percent: Int) {
+    private fun notifyProgress(fileNum: Int, total: Int, percent: Int) {
         if (!canNotify()) return
+        val title = if (total == 1) "Uploading…" else "Uploading $fileNum of $total"
         val n = NotificationCompat.Builder(applicationContext, CHANNEL_PROGRESS)
             .setSmallIcon(android.R.drawable.ic_menu_upload)
-            .setContentTitle("Uploading…")
+            .setContentTitle(title)
             .setContentText("$percent%")
             .setProgress(100, percent, false)
             .setOngoing(true)
@@ -120,11 +143,12 @@ class ShareActivity : Activity() {
         NotificationManagerCompat.from(applicationContext).notify(NOTIFICATION_PROGRESS, n)
     }
 
-    private fun notifyProcessing() {
+    private fun notifyProcessing(fileNum: Int, total: Int) {
         if (!canNotify()) return
+        val title = if (total == 1) "Processing…" else "Processing $fileNum of $total"
         val n = NotificationCompat.Builder(applicationContext, CHANNEL_PROGRESS)
             .setSmallIcon(android.R.drawable.ic_menu_upload)
-            .setContentTitle("Processing…")
+            .setContentTitle(title)
             .setProgress(0, 0, true)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -164,9 +188,6 @@ class ShareActivity : Activity() {
         return contentResolver.openInputStream(uri)?.use { it.readBytes() }
             ?: throw IOException("Could not open stream for URI")
     }
-
-    private fun showToast(message: String) =
-        Toast.makeText(applicationContext, message, Toast.LENGTH_SHORT).show()
 
     private fun showToastAndFinish(message: String) {
         Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()

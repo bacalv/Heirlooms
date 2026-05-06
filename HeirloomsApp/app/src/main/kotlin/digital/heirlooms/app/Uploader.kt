@@ -176,8 +176,11 @@ class Uploader(
         return try {
             httpClient.newCall(confirmRequest).execute().use { response ->
                 val code = response.code
-                if (response.isSuccessful) UploadResult.Success("Uploaded successfully ($code)", code, 1)
-                else UploadResult.Failure("Confirm failed: HTTP $code", code)
+                when {
+                    response.isSuccessful -> UploadResult.Success("Uploaded successfully", code, 1)
+                    code == 409 -> UploadResult.Success("Already uploaded (duplicate)", code, 1)
+                    else -> UploadResult.Failure("Confirm failed: HTTP $code", code)
+                }
             }
         } catch (e: IOException) {
             UploadResult.Failure("Confirm error: ${e.message}")
