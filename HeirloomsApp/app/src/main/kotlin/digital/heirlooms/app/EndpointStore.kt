@@ -10,7 +10,6 @@ import android.content.Context
 interface PreferenceStore {
     fun getString(key: String, default: String): String
     fun putString(key: String, value: String)
-    fun contains(key: String): Boolean
 }
 
 /**
@@ -25,29 +24,18 @@ class SharedPreferenceStore(context: Context) : PreferenceStore {
     override fun putString(key: String, value: String) =
         prefs.edit().putString(key, value).apply()
 
-    override fun contains(key: String): Boolean = prefs.contains(key)
-
     companion object {
         private const val PREFS_NAME = "heirloom_prefs"
     }
 }
 
 /**
- * Persists the upload endpoint URL and API key so they survive app restarts.
+ * Persists the API key so it survives app restarts.
  *
  * Accepts a [PreferenceStore] so the Android runtime is never required in tests.
  * Use the [EndpointStore.create] factory in production code.
  */
 class EndpointStore(private val store: PreferenceStore) {
-
-    /** Returns the stored endpoint, or [DEFAULT_ENDPOINT] if none has been saved yet. */
-    fun get(): String = store.getString(KEY_ENDPOINT, DEFAULT_ENDPOINT)
-
-    /** Persists [endpoint] so it survives app restarts. */
-    fun set(endpoint: String) = store.putString(KEY_ENDPOINT, endpoint.trim())
-
-    /** True if the user has explicitly saved an endpoint at least once. */
-    fun isConfigured(): Boolean = store.contains(KEY_ENDPOINT)
 
     /** Returns the stored API key, or an empty string if none has been saved. */
     fun getApiKey(): String = store.getString(KEY_API_KEY, "")
@@ -56,8 +44,6 @@ class EndpointStore(private val store: PreferenceStore) {
     fun setApiKey(apiKey: String) = store.putString(KEY_API_KEY, apiKey.trim())
 
     companion object {
-        const val DEFAULT_ENDPOINT = "http://12.34.56.78:8080/api/content/upload"
-        private const val KEY_ENDPOINT = "endpoint"
         private const val KEY_API_KEY = "api_key"
 
         /** Convenience factory for use in Activities and Services. */

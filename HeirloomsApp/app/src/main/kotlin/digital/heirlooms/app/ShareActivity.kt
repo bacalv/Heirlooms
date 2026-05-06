@@ -60,7 +60,6 @@ class ShareActivity : Activity() {
 
         scope.launch {
             val store = EndpointStore.create(applicationContext)
-            val endpoint = store.get()
             val apiKey = store.getApiKey().takeIf { it.isNotEmpty() }
 
             val fileBytes = withContext(Dispatchers.IO) {
@@ -73,7 +72,7 @@ class ShareActivity : Activity() {
                 return@launch
             }
 
-            val baseUrl = if (endpoint.contains("/api/")) endpoint.substringBefore("/api/") else endpoint
+            val baseUrl = "https://api.heirlooms.digital"
 
             val result = withContext(Dispatchers.IO) {
                 uploader.uploadViaSigned(baseUrl, fileBytes, mimeType, apiKey)

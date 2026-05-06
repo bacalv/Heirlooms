@@ -557,3 +557,26 @@ Server deployed to Cloud Run (revision `heirlooms-server-00008-vt7`). Fresh APK 
 **Dockerfile fix:** Docker Desktop on macOS was dropping the build daemon connection during long Gradle downloads inside the container, requiring a manual Docker restart every deployment. Fixed by removing the multi-stage build: JAR is now built locally with `./gradlew shadowJar` first, then `docker build` simply copies the pre-built JAR into a JRE image. Build time: ~2 seconds. PA_NOTES.md updated with the new deploy sequence.
 
 **Validated end-to-end:** Video streaming confirmed working. Server deployed to Cloud Run revision `heirlooms-server-00009-58m`. Tagged as **v0.9.0**.
+
+---
+
+## Session — 2026-05-06 (Hardcode server URL in Android app)
+
+Now that the app targets `https://api.heirlooms.digital` exclusively, the endpoint
+URL is no longer user-configurable. The settings screen is reduced to API key only.
+
+**Changes:**
+
+- `EndpointStore.kt` — removed `get()`, `set()`, `isConfigured()`, `DEFAULT_ENDPOINT`,
+  and `KEY_ENDPOINT`. Removed `contains()` from `PreferenceStore` interface (was only
+  needed by `isConfigured()`). Class now persists the API key only.
+- `ShareActivity.kt` — replaced the stored endpoint + `baseUrl` derivation with a
+  hardcoded `val baseUrl = "https://api.heirlooms.digital"`.
+- `SettingsActivity.kt` — removed endpoint `EditText` and URL validation; screen now
+  shows API key field only.
+- `activity_settings.xml` — removed endpoint label, input, and help text views;
+  API key section anchored directly below the title.
+- `strings.xml` — removed `settings_endpoint_label`, `settings_endpoint_hint`,
+  `settings_help`, `settings_invalid_url`; updated `settings_saved` to "Settings saved".
+- `EndpointStoreTest.kt` — replaced endpoint tests with equivalent API key tests
+  (5 tests, all passing).
