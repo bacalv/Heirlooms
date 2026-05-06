@@ -785,3 +785,34 @@ video icon. Now:
 **Key gotchas:**
 - Adding `metadataExtractor` as the last `buildApp` parameter broke existing tests that used trailing lambda syntax for `thumbnailGenerator`. Fixed by using named parameter syntax throughout.
 - Confirm path previously fetched bytes inside `tryFetchAndStoreThumbnail`. Refactored to fetch once and share with metadata extraction.
+
+---
+
+## Session — 2026-05-06 (Metadata extraction debugging and stabilisation)
+
+**Context:** Follow-on to the metadata extraction session. End-to-end testing with a real Samsung Galaxy A02s revealed several issues that were diagnosed and fixed iteratively.
+
+**Issues found and fixed:**
+
+### capturedAt missing on Samsung
+Samsung writes `DateTime` to `ExifIFD0Directory` rather than `DateTimeOriginal` in `ExifSubIFDDirectory`. Added two fallbacks in `extractCapturedAt()`: IFD0 DateTime, then SubIFD DateTimeDigitized. Deployed as `heirlooms-server-00011-gbq`.
+
+### GPS returning (0, 0)
+Samsung entry-level cameras write GPS IFD tags with zero values when the GPS fix hasn't been acquired at shutter time. The library parsed them as `GeoLocation(0.0, 0.0)` rather than null. Added a filter: if both lat and lon are exactly 0.0, treat as null. Deployed as `heirlooms-server-00012-6ll`.
+
+### OutOfMemoryError on large image uploads
+Cloud Run default 512Mi heap was exhausted when loading a 5.4 MB photo: GCS `readAllBytes()` (5.4 MB) + `BufferedImage` decode (4160×3120 = ~52 MB) + JVM overhead. Two fixes: (1) increased Cloud Run memory to 2Gi; (2) metadata extraction in the confirm path now calls `GcsFileStore.getFirst()` which streams only the first 64 KB from GCS via `Storage.reader()` ReadChannel — JPEG EXIF is always within that range. Thumbnails still fetch the full file. Deployed as `heirlooms-server-00014-97p`.
+
+### No metadata at all (mimeType: "image/*")
+Samsung Gallery provides `intent.type = "image/*"` (wildcard) in the share intent. The app was using this directly, so uploads were stored as `.bin` with MIME type `image/*`, which is not in the metadata or thumbnail supported sets. Fixed by skipping wildcards and falling back to `contentResolver.getType(uri)` for the real specific type. Installed via ADB.
+
+### Silent upload failure (SecurityException not caught)
+`MediaStore.setRequireOriginal()` requires `ACCESS_MEDIA_LOCATION`. When denied, `openInputStream()` on the original URI threw `SecurityException`, which propagated uncaught through `catch (e: IOException)` and silently killed the coroutine. Fixed: (1) `readBytes()` wraps the entire `setRequireOriginal` + `openInputStream` in a single try/catch and falls back to the plain URI; (2) catch block in `ShareActivity` changed from `IOException` to `Exception`.
+
+**End state:** Photo shared from Samsung Galaxy A02s → full metadata response including `capturedAt`, `latitude`, `longitude`, `deviceMake`, `deviceModel`. Coordinates confirmed real (East Midlands, UK). GPS pin 📍 visible in web gallery.
+
+**Android gotchas for future reference:**
+- `ACCESS_MEDIA_LOCATION` must be declared in manifest AND requested at runtime AND `setRequireOriginal()` must be called — three separate requirements
+- Samsung Galaxy shares with wildcard MIME types
+- Notification channel importance is immutable after first creation — bump the channel ID to change it
+- Samsung Camera "Location tags" toggle (in Camera Settings) is separate from the system Location permission

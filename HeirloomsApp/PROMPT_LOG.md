@@ -344,3 +344,29 @@ Timestamps are not available and are marked as `[unknown]`.
 - `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/Uploader.kt`
 - `HeirloomsApp/app/src/main/res/layout/activity_settings.xml`
 - `HeirloomsApp/app/src/main/res/values/strings.xml`
+
+---
+
+## Session — 2026-05-06 (GPS, app rename, notification fix)
+
+**What was built:**
+
+- **`ACCESS_MEDIA_LOCATION` permission** added to manifest. `SettingsActivity` requests it at runtime on first launch. `ShareActivity.readBytes()` calls `MediaStore.setRequireOriginal()` on Android 10+ so the ContentResolver returns GPS-intact bytes, with a graceful fallback to the plain URI if the permission is denied or the provider doesn't support it.
+- **Silent upload failure fixed**: `readBytes` could throw `SecurityException` (not `IOException`) when `setRequireOriginal` was used without the permission granted. Changed the catch block from `IOException` to `Exception` so the fallback path always runs.
+- **MIME type wildcard fix**: Samsung Gallery provides `intent.type = "image/*"` (wildcard) rather than the specific type. The app now skips wildcards and asks `contentResolver.getType(uri)` instead, so the MIME type resolves correctly to `image/jpeg`. Previously this caused uploads to be stored as `.bin` with no thumbnail or metadata.
+- **Notification importance**: channel upgraded from `IMPORTANCE_DEFAULT` to `IMPORTANCE_HIGH` (new channel ID `heirloom_upload_v2` to force recreation) so upload result shows as a heads-up banner.
+- **App renamed** from "My Heirlooms" to "Heirlooms" in `strings.xml`.
+
+**End-to-end validated:** Photo shared from Samsung Galaxy A02s Gallery → Heirlooms app → upload confirmed with `mimeType: "image/jpeg"`, `thumbnailKey`, `capturedAt`, `latitude`, `longitude`, `deviceMake`, `deviceModel` all present in the API response.
+
+**Key gotchas:**
+- Android 10+ strips GPS from ContentResolver reads unless `ACCESS_MEDIA_LOCATION` is granted AND `setRequireOriginal()` is called. Having location enabled system-wide or in the camera app is not sufficient.
+- Samsung Camera must have "Location tags" enabled in Camera Settings for GPS to be embedded in photos at capture time.
+- Notification channels cache their importance level — must use a new channel ID to change importance on existing installs.
+- Samsung Gallery shares with a wildcard MIME type (`image/*`) rather than the specific type. Always fall back to `ContentResolver.getType()` when the intent type contains `*`.
+
+**Files changed:**
+- `HeirloomsApp/app/src/main/AndroidManifest.xml`
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/ShareActivity.kt`
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/SettingsActivity.kt`
+- `HeirloomsApp/app/src/main/res/values/strings.xml`
