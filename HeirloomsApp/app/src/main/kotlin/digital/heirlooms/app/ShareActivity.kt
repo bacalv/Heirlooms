@@ -38,7 +38,7 @@ class ShareActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        ensureNotificationChannel()
+        ensureNotificationChannels()
 
         if (intent?.action != Intent.ACTION_SEND) {
             showToastAndFinish("Unsupported action.")
@@ -57,8 +57,6 @@ class ShareActivity : Activity() {
                 ?: contentResolver.getType(fileUri)
         )
 
-        showToast("Uploading…")
-
         scope.launch {
             val store = EndpointStore.create(applicationContext)
             val apiKey = store.getApiKey().takeIf { it.isNotEmpty() }
@@ -68,7 +66,7 @@ class ShareActivity : Activity() {
             }
 
             if (fileBytes == null) {
-                notify("Upload failed", "Could not read the file.")
+                notifyResult("Upload failed", "Could not read the file.")
                 finish()
                 return@launch
             }
@@ -76,58 +74,87 @@ class ShareActivity : Activity() {
             val baseUrl = "https://api.heirlooms.digital"
 
             val result = withContext(Dispatchers.IO) {
-                uploader.uploadViaSigned(baseUrl, fileBytes, mimeType, apiKey)
+                uploader.uploadViaSigned(
+                    baseUrl, fileBytes, mimeType, apiKey,
+                    onProgress = { percent -> notifyProgress(percent) },
+                    onConfirming = { notifyProcessing() },
+                )
             }
 
+            cancelProgress()
             when (result) {
-                is Uploader.UploadResult.Success -> {
-                    val attemptText = if (result.attempts > 1) " (${result.attempts} attempts)" else ""
-                    notify("Upload complete", "File uploaded successfully$attemptText.")
-                }
-                is Uploader.UploadResult.Failure -> {
-                    notify("Upload failed", result.message)
-                }
+                is Uploader.UploadResult.Success ->
+                    notifyResult("Upload complete", "File uploaded successfully.")
+                is Uploader.UploadResult.Failure ->
+                    notifyResult("Upload failed", result.message)
             }
 
             finish()
         }
     }
 
-    private fun ensureNotificationChannel() {
+    private fun ensureNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Upload status",
-                NotificationManager.IMPORTANCE_HIGH,
-            ).apply { description = "Shows the result of an heirloom upload" }
-            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(
+                NotificationChannel(CHANNEL_PROGRESS, "Upload progress", NotificationManager.IMPORTANCE_LOW)
+                    .apply { description = "Silent progress bar during upload" }
+            )
+            manager.createNotificationChannel(
+                NotificationChannel(CHANNEL_RESULT, "Upload result", NotificationManager.IMPORTANCE_HIGH)
+                    .apply { description = "Shows the result of an heirloom upload" }
+            )
         }
     }
 
-    private fun notify(title: String, text: String) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
+    private fun notifyProgress(percent: Int) {
+        if (!canNotify()) return
+        val n = NotificationCompat.Builder(applicationContext, CHANNEL_PROGRESS)
+            .setSmallIcon(android.R.drawable.ic_menu_upload)
+            .setContentTitle("Uploading…")
+            .setContentText("$percent%")
+            .setProgress(100, percent, false)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .build()
+        NotificationManagerCompat.from(applicationContext).notify(NOTIFICATION_PROGRESS, n)
+    }
+
+    private fun notifyProcessing() {
+        if (!canNotify()) return
+        val n = NotificationCompat.Builder(applicationContext, CHANNEL_PROGRESS)
+            .setSmallIcon(android.R.drawable.ic_menu_upload)
+            .setContentTitle("Processing…")
+            .setProgress(0, 0, true)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .build()
+        NotificationManagerCompat.from(applicationContext).notify(NOTIFICATION_PROGRESS, n)
+    }
+
+    private fun cancelProgress() {
+        NotificationManagerCompat.from(applicationContext).cancel(NOTIFICATION_PROGRESS)
+    }
+
+    private fun notifyResult(title: String, text: String) {
+        if (!canNotify()) {
             Toast.makeText(applicationContext, "$title: $text", Toast.LENGTH_LONG).show()
             return
         }
-
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+        val n = NotificationCompat.Builder(applicationContext, CHANNEL_RESULT)
             .setSmallIcon(android.R.drawable.ic_menu_upload)
             .setContentTitle(title)
             .setContentText(text)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .build()
-
-        NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
+        NotificationManagerCompat.from(applicationContext).notify(NOTIFICATION_RESULT, n)
     }
 
+    private fun canNotify() = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
     private fun readBytes(uri: Uri): ByteArray {
-        // On Android 10+, try to get unredacted bytes (preserves GPS EXIF).
-        // setRequireOriginal needs ACCESS_MEDIA_LOCATION; if denied or unsupported,
-        // fall through to the plain URI so the upload still works without GPS.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
                 val originalUri = MediaStore.setRequireOriginal(uri)
@@ -152,7 +179,9 @@ class ShareActivity : Activity() {
     }
 
     companion object {
-        private const val CHANNEL_ID = "heirloom_upload_v2"
-        private const val NOTIFICATION_ID = 1
+        private const val CHANNEL_PROGRESS = "heirloom_progress"
+        private const val CHANNEL_RESULT = "heirloom_upload_v2"
+        private const val NOTIFICATION_PROGRESS = 1
+        private const val NOTIFICATION_RESULT = 2
     }
 }
