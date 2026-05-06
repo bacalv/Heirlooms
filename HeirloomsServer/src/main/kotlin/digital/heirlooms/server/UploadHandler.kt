@@ -35,6 +35,7 @@ import org.http4k.routing.routes
 import org.http4k.routing.static
 import java.io.ByteArrayInputStream
 import java.security.MessageDigest
+import java.time.Instant
 import java.util.UUID
 
 private const val SWAGGER_UI_VERSION = "5.11.8"
@@ -183,19 +184,24 @@ private fun uploadHandler(
                 .body("""{"storageKey":"${existing.storageKey}"}""")
         } else {
             try {
+                val id = UUID.randomUUID()
+                val uploadedAt = Instant.now()
                 val key = storage.save(body, mimeType)
                 val thumbKey = tryStoreThumbnail(body, mimeType, key, storage, thumbnailGenerator)
-                database.recordUpload(
-                    UploadRecord(
-                        id = UUID.randomUUID(),
-                        storageKey = key.value,
-                        mimeType = mimeType,
-                        fileSize = body.size.toLong(),
-                        contentHash = hash,
-                        thumbnailKey = thumbKey?.value,
-                    )
+                val record = UploadRecord(
+                    id = id,
+                    storageKey = key.value,
+                    mimeType = mimeType,
+                    fileSize = body.size.toLong(),
+                    uploadedAt = uploadedAt,
+                    contentHash = hash,
+                    thumbnailKey = thumbKey?.value,
                 )
-                Response(CREATED).body(key.value)
+                database.recordUpload(record)
+                val thumbJson = if (thumbKey != null) "\"${thumbKey.value}\"" else "null"
+                Response(CREATED)
+                    .header("Content-Type", "application/json")
+                    .body("""{"id":"$id","storageKey":"${key.value}","mimeType":"$mimeType","fileSize":${body.size},"uploadedAt":"$uploadedAt","thumbnailKey":$thumbJson}""")
             } catch (e: Exception) {
                 Response(INTERNAL_SERVER_ERROR).body("Failed to store file: ${e.message}")
             }

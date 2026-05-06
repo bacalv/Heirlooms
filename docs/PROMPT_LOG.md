@@ -697,3 +697,19 @@ All tests passing (95 total across 6 test classes, 0 failures).
 
 **Cloud Run:** server deployed as revision `heirlooms-server-00007-gvl`,
 web as revision `heirlooms-web-00002-jjr` (us-central1). Tagged as **v0.12.0**.
+
+---
+
+## Session — 2026-05-06 (POST /upload JSON response)
+
+**Fix:** `POST /upload` 201 response was returning a raw storage key string
+(`780aa0d2-fd28-4ad0-8c6d-e3aec4d30fa3.jpg`). Changed to return a full JSON
+object matching the shape of items in the `GET /uploads` list:
+`{"id":"...","storageKey":"...","mimeType":"...","fileSize":...,"uploadedAt":"...","thumbnailKey":...}`.
+
+`uploadedAt` is captured at the point of the `save()` call in Kotlin (very
+close to the DB `DEFAULT NOW()` value — the column is not included in the
+INSERT so the DB sets it independently). `Content-Type: application/json`
+header added to the 201 response. All 95 tests still passing.
+
+**Cloud Run:** server deployed as revision `heirlooms-server-00008-kdz`.
