@@ -6,6 +6,24 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-07 (post-v0.16.1 doc follow-ups)
+
+**PA brief:** Refresh Cloud Run revision identifiers in PA_NOTES.md and add an explicit test count to the v0.16.1 entry in VERSIONS.md.
+
+**Cloud Run revisions verified via `gcloud run services describe`:**
+- `heirlooms-server`: `heirlooms-server-00021-fqb` — unchanged. No server code was deployed in v0.16.1, so no revision bump. Confirmed stable.
+- `heirlooms-web`: moved from `heirlooms-web-00006-wlf` → `heirlooms-web-00008-9qv`. Web was redeployed for the tag-dropdown fix.
+
+**Test count for v0.16.1:** No new tests were added. The Android OOM fix is a memory-pressure scenario requiring a real constrained-heap device — not unit-testable. HeirloomsWeb has no frontend test runner. Count remains 135 total, 134 passing, 1 skipped (FFmpeg video thumbnail — runs in Docker).
+
+**Also took the soft suggestion from the SE brief:**
+- One-line comment on `suppressBlurRef` in `HeirloomsWeb/src/App.jsx` explaining why `e.preventDefault()` / `e.relatedTarget` are unreliable — prevents a future reader from "simplifying" the fix away.
+- Strengthened KDoc on `Uploader.uploadViaSigned(File, ...)` with explicit warning against `file.readBytes()`.
+
+**Commit:** `cfbc501` — `docs: post-v0.16.1 follow-ups (refresh Cloud Run revisions, add test count to v0.16.1)`. No tag. v0.16.1 is already tagged.
+
+---
+
 ## Phase 1 — Product brainstorm
 
 **Prompt:** "Hi Claude! I'm new here. Could you brainstorm creative concepts?"
