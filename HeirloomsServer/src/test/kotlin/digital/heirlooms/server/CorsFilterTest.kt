@@ -34,9 +34,10 @@ class CorsFilterTest {
     }
 
     @Test
-    fun `OPTIONS preflight includes Allow-Methods`() {
+    fun `OPTIONS preflight includes PATCH in Allow-Methods`() {
         val response = handler(Request(OPTIONS, "/api/content/uploads"))
-        assertNotNull(response.header("Access-Control-Allow-Methods"))
+        val header = response.header("Access-Control-Allow-Methods") ?: ""
+        assert(header.contains("PATCH")) { "Expected PATCH in Allow-Methods but got: $header" }
     }
 
     @Test
