@@ -34,6 +34,7 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 
 - Domain mapping: live — heirlooms.digital and api.heirlooms.digital confirmed
   working (end-to-end upload validated from Android app, 6 May 2026)
+- Swagger UI confirmed at https://api.heirlooms.digital/docs/index.html
 - heirlooms.com: Currently parked on venture.com. Worth monitoring
 - License: Deliberately deferred
 - Tags: Not yet in schema or UI — planned for Milestone 4 completion
