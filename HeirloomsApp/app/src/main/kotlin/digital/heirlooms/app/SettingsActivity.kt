@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -14,6 +15,7 @@ import androidx.core.content.ContextCompat
 class SettingsActivity : AppCompatActivity() {
 
     private lateinit var editApiKey: EditText
+    private lateinit var checkWifiOnly: CheckBox
     private lateinit var btnSave: Button
     private lateinit var store: EndpointStore
 
@@ -23,9 +25,11 @@ class SettingsActivity : AppCompatActivity() {
 
         store = EndpointStore.create(this)
         editApiKey = findViewById(R.id.editApiKey)
+        checkWifiOnly = findViewById(R.id.checkWifiOnly)
         btnSave = findViewById(R.id.btnSave)
 
         editApiKey.setText(store.getApiKey())
+        checkWifiOnly.isChecked = store.getWifiOnly()
         btnSave.setOnClickListener { save() }
 
         requestMediaLocationPermissionIfNeeded()
@@ -46,6 +50,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun save() {
         store.setApiKey(editApiKey.text.toString())
+        store.setWifiOnly(checkWifiOnly.isChecked)
         Toast.makeText(this, getString(R.string.settings_saved), Toast.LENGTH_SHORT).show()
     }
 }

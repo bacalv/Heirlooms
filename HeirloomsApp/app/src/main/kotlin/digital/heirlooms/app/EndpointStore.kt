@@ -37,14 +37,15 @@ class SharedPreferenceStore(context: Context) : PreferenceStore {
  */
 class EndpointStore(private val store: PreferenceStore) {
 
-    /** Returns the stored API key, or an empty string if none has been saved. */
     fun getApiKey(): String = store.getString(KEY_API_KEY, "")
-
-    /** Persists [apiKey] so it survives app restarts. */
     fun setApiKey(apiKey: String) = store.putString(KEY_API_KEY, apiKey.trim())
+
+    fun getWifiOnly(): Boolean = store.getString(KEY_WIFI_ONLY, "false") == "true"
+    fun setWifiOnly(enabled: Boolean) = store.putString(KEY_WIFI_ONLY, if (enabled) "true" else "false")
 
     companion object {
         private const val KEY_API_KEY = "api_key"
+        private const val KEY_WIFI_ONLY = "wifi_only"
 
         /** Convenience factory for use in Activities and Services. */
         fun create(context: Context): EndpointStore =

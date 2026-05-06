@@ -7,6 +7,7 @@
     <string name="settings_title">Heirloom settings</string>
     <string name="settings_api_key_label">API Key</string>
     <string name="settings_api_key_hint">Enter your API key</string>
+    <string name="settings_wifi_only">Upload on WiFi only</string>
     <string name="settings_save">Save</string>
     <string name="settings_saved">Settings saved</string>
 </resources>
