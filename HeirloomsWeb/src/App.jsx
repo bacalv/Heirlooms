@@ -162,6 +162,17 @@ function VideoPlayer({ url, mimeType, onClose }) {
   )
 }
 
+function PinIcon({ latitude, longitude }) {
+  return (
+    <div
+      className="absolute top-2 right-2 text-sm leading-none cursor-default select-none"
+      title={`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`}
+    >
+      📍
+    </div>
+  )
+}
+
 function UploadCard({ upload, apiKey, onImageClick, onVideoClick }) {
   const fileUrl = `${API_URL}/api/content/uploads/${upload.id}/file`
   const displayUrl = upload.thumbnailKey
@@ -190,7 +201,7 @@ function UploadCard({ upload, apiKey, onImageClick, onVideoClick }) {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+    <div className="relative bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
       <div className="bg-gray-50 h-48 flex items-center justify-center">
         {isImage(upload.mimeType) ? (
           blobUrl ? (
@@ -229,6 +240,9 @@ function UploadCard({ upload, apiKey, onImageClick, onVideoClick }) {
           <FileIcon />
         )}
       </div>
+      {upload.latitude != null && upload.longitude != null && (
+        <PinIcon latitude={upload.latitude} longitude={upload.longitude} />
+      )}
       <div className="p-3 space-y-1 text-sm text-gray-600">
         <p className="font-medium text-gray-800 truncate" title={upload.storageKey}>
           {upload.storageKey}

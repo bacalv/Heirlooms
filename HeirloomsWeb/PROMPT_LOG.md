@@ -55,3 +55,17 @@ Timestamps are not available and are marked as `[unknown]`.
 **Validated end-to-end:** Dev server run via `npm run dev`. Login screen confirmed. Gallery loaded against production server after server was redeployed with CORS support (revision `heirlooms-server-00007-7vw`). Image thumbnails displayed correctly.
 
 Video player and streaming validated end-to-end against revision `heirlooms-server-00009-58m`. Videos open immediately, stream and seek natively. Tagged as **v0.9.0**.
+
+---
+
+## Entry [2026-05-06] — GPS pin indicator
+
+**Prompt:** For cards with GPS data (latitude and longitude both non-null), show a small 📍 pin icon on the card. Hovering shows raw coordinates as a tooltip.
+
+**What was built:**
+- `PinIcon` component: 📍 emoji in an absolutely-positioned div with `title` attribute showing `lat, lon` to 6 decimal places.
+- `UploadCard` outer div gains `relative` positioning class.
+- Pin renders when `upload.latitude != null && upload.longitude != null`.
+
+**Files changed:**
+- `HeirloomsWeb/src/App.jsx`

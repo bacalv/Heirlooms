@@ -40,9 +40,22 @@ import java.util.UUID
 
 private const val SWAGGER_UI_VERSION = "5.11.8"
 
+private val PROCESSING_SUPPORTED_MIME_TYPES = THUMBNAIL_SUPPORTED_MIME_TYPES + METADATA_SUPPORTED_MIME_TYPES
+
 private fun sha256Hex(bytes: ByteArray): String {
     val digest = MessageDigest.getInstance("SHA-256")
     return digest.digest(bytes).joinToString("") { "%02x".format(it) }
+}
+
+private fun UploadRecord.toJson(): String = buildString {
+    append("""{"id":"$id","storageKey":"$storageKey","mimeType":"$mimeType","fileSize":$fileSize,"uploadedAt":"$uploadedAt","thumbnailKey":${if (thumbnailKey != null) "\"$thumbnailKey\"" else "null"}""")
+    if (capturedAt != null) append(""","capturedAt":"$capturedAt"""")
+    if (latitude != null) append(""","latitude":$latitude""")
+    if (longitude != null) append(""","longitude":$longitude""")
+    if (altitude != null) append(""","altitude":$altitude""")
+    if (deviceMake != null) append(""","deviceMake":"$deviceMake"""")
+    if (deviceModel != null) append(""","deviceModel":"$deviceModel"""")
+    append("}")
 }
 
 private val swaggerInitializerJs = """
@@ -64,6 +77,7 @@ fun buildApp(
     storage: FileStore,
     database: Database,
     thumbnailGenerator: (ByteArray, String) -> ByteArray? = ::generateThumbnail,
+    metadataExtractor: (ByteArray, String) -> MediaMetadata = MetadataExtractor()::extract,
 ): HttpHandler {
     val directUpload = storage as? DirectUploadSupport
 
@@ -71,10 +85,10 @@ fun buildApp(
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
         descriptionPath = "/openapi.json"
         routes += listOf(
-            uploadContractRoute(storage, database, thumbnailGenerator),
+            uploadContractRoute(storage, database, thumbnailGenerator, metadataExtractor),
             listUploadsContractRoute(database),
             prepareUploadContractRoute(directUpload),
-            confirmUploadContractRoute(storage, database, thumbnailGenerator),
+            confirmUploadContractRoute(storage, database, thumbnailGenerator, metadataExtractor),
             fileProxyContractRoute(storage, database),
             thumbProxyContractRoute(storage, database),
             readUrlContractRoute(directUpload, database),
@@ -133,6 +147,7 @@ private fun uploadContractRoute(
     storage: FileStore,
     database: Database,
     thumbnailGenerator: (ByteArray, String) -> ByteArray?,
+    metadataExtractor: (ByteArray, String) -> MediaMetadata,
 ): ContractRoute =
     "/upload" meta {
         summary = "Upload a file"
@@ -152,7 +167,7 @@ private fun uploadContractRoute(
         receiving(Body.binary(ContentType("video/3gpp")).toLens())
         receiving(Body.binary(ContentType("video/mpeg")).toLens())
         receiving(Body.binary(ContentType("application/octet-stream")).toLens())
-    } bindContract POST to uploadHandler(storage, database, thumbnailGenerator)
+    } bindContract POST to uploadHandler(storage, database, thumbnailGenerator, metadataExtractor)
 
 private fun listUploadsContractRoute(database: Database): ContractRoute =
     "/uploads" meta {
@@ -164,6 +179,7 @@ private fun uploadHandler(
     storage: FileStore,
     database: Database,
     thumbnailGenerator: (ByteArray, String) -> ByteArray?,
+    metadataExtractor: (ByteArray, String) -> MediaMetadata,
 ): HttpHandler = { request: Request ->
     val body = request.body.payload.array()
 
@@ -188,6 +204,7 @@ private fun uploadHandler(
                 val uploadedAt = Instant.now()
                 val key = storage.save(body, mimeType)
                 val thumbKey = tryStoreThumbnail(body, mimeType, key, storage, thumbnailGenerator)
+                val metadata = try { metadataExtractor(body, mimeType) } catch (_: Exception) { MediaMetadata() }
                 val record = UploadRecord(
                     id = id,
                     storageKey = key.value,
@@ -196,12 +213,17 @@ private fun uploadHandler(
                     uploadedAt = uploadedAt,
                     contentHash = hash,
                     thumbnailKey = thumbKey?.value,
+                    capturedAt = metadata.capturedAt,
+                    latitude = metadata.latitude,
+                    longitude = metadata.longitude,
+                    altitude = metadata.altitude,
+                    deviceMake = metadata.deviceMake,
+                    deviceModel = metadata.deviceModel,
                 )
                 database.recordUpload(record)
-                val thumbJson = if (thumbKey != null) "\"${thumbKey.value}\"" else "null"
                 Response(CREATED)
                     .header("Content-Type", "application/json")
-                    .body("""{"id":"$id","storageKey":"${key.value}","mimeType":"$mimeType","fileSize":${body.size},"uploadedAt":"$uploadedAt","thumbnailKey":$thumbJson}""")
+                    .body(record.toJson())
             } catch (e: Exception) {
                 Response(INTERNAL_SERVER_ERROR).body("Failed to store file: ${e.message}")
             }
@@ -216,8 +238,7 @@ private fun listUploadsHandler(database: Database): HttpHandler = {
             append("[")
             uploads.forEachIndexed { i, u ->
                 if (i > 0) append(",")
-                val thumbJson = if (u.thumbnailKey != null) "\"${u.thumbnailKey}\"" else "null"
-                append("""{"id":"${u.id}","storageKey":"${u.storageKey}","mimeType":"${u.mimeType}","fileSize":${u.fileSize},"uploadedAt":"${u.uploadedAt}","thumbnailKey":$thumbJson}""")
+                append(u.toJson())
             }
             append("]")
         }
@@ -315,11 +336,12 @@ private fun confirmUploadContractRoute(
     storage: FileStore,
     database: Database,
     thumbnailGenerator: (ByteArray, String) -> ByteArray?,
+    metadataExtractor: (ByteArray, String) -> MediaMetadata,
 ): ContractRoute =
     "/uploads/confirm" meta {
         summary = "Confirm a direct upload"
         description = "Records upload metadata after the client has PUT the file directly to GCS. Body: {\"storageKey\":\"...\",\"mimeType\":\"...\",\"fileSize\":...,\"contentHash\":\"<sha256-hex>\"}. If contentHash matches an existing upload, returns 409 with the existing storageKey."
-    } bindContract POST to confirmUploadHandler(storage, database, thumbnailGenerator)
+    } bindContract POST to confirmUploadHandler(storage, database, thumbnailGenerator, metadataExtractor)
 
 private fun prepareUploadHandler(directUpload: DirectUploadSupport?): HttpHandler = { request: Request ->
     if (directUpload == null) {
@@ -347,6 +369,7 @@ private fun confirmUploadHandler(
     storage: FileStore,
     database: Database,
     thumbnailGenerator: (ByteArray, String) -> ByteArray?,
+    metadataExtractor: (ByteArray, String) -> MediaMetadata,
 ): HttpHandler = { request: Request ->
     try {
         val node = ObjectMapper().readTree(request.bodyString())
@@ -364,7 +387,11 @@ private fun confirmUploadHandler(
                     .header("Content-Type", "application/json")
                     .body("""{"storageKey":"${existing.storageKey}"}""")
             } else {
-                val thumbKey = tryFetchAndStoreThumbnail(storageKey, mimeType, storage, thumbnailGenerator)
+                val bytes = fetchBytesIfNeeded(storageKey, mimeType, storage)
+                val thumbKey = if (bytes != null) tryStoreThumbnail(bytes, mimeType, StorageKey(storageKey), storage, thumbnailGenerator) else null
+                val metadata = if (bytes != null) {
+                    try { metadataExtractor(bytes, mimeType) } catch (_: Exception) { MediaMetadata() }
+                } else MediaMetadata()
                 database.recordUpload(
                     UploadRecord(
                         id = UUID.randomUUID(),
@@ -373,6 +400,12 @@ private fun confirmUploadHandler(
                         fileSize = fileSize,
                         contentHash = contentHash,
                         thumbnailKey = thumbKey?.value,
+                        capturedAt = metadata.capturedAt,
+                        latitude = metadata.latitude,
+                        longitude = metadata.longitude,
+                        altitude = metadata.altitude,
+                        deviceMake = metadata.deviceMake,
+                        deviceModel = metadata.deviceModel,
                     )
                 )
                 Response(CREATED)
@@ -381,6 +414,12 @@ private fun confirmUploadHandler(
     } catch (e: Exception) {
         Response(INTERNAL_SERVER_ERROR).body("Failed to confirm upload: ${e.message}")
     }
+}
+
+private fun fetchBytesIfNeeded(storageKey: String, mimeType: String, storage: FileStore): ByteArray? {
+    val normalized = mimeType.substringBefore(";").trim().lowercase()
+    if (normalized !in PROCESSING_SUPPORTED_MIME_TYPES) return null
+    return try { storage.get(StorageKey(storageKey)) } catch (_: Exception) { null }
 }
 
 private fun tryStoreThumbnail(
@@ -395,18 +434,5 @@ private fun tryStoreThumbnail(
         val thumbKeyValue = "${originalKey.value.substringBeforeLast(".")}-thumb.jpg"
         storage.saveWithKey(thumbBytes, StorageKey(thumbKeyValue), "image/jpeg")
         StorageKey(thumbKeyValue)
-    } catch (_: Exception) { null }
-}
-
-private fun tryFetchAndStoreThumbnail(
-    storageKey: String,
-    mimeType: String,
-    storage: FileStore,
-    thumbnailGenerator: (ByteArray, String) -> ByteArray?,
-): StorageKey? {
-    if (mimeType.substringBefore(";").trim().lowercase() !in THUMBNAIL_SUPPORTED_MIME_TYPES) return null
-    return try {
-        val bytes = storage.get(StorageKey(storageKey))
-        tryStoreThumbnail(bytes, mimeType, StorageKey(storageKey), storage, thumbnailGenerator)
     } catch (_: Exception) { null }
 }

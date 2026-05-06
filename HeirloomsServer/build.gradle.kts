@@ -24,6 +24,9 @@ dependencies {
     implementation("org.http4k:http4k-format-jackson:$http4kVersion")
     implementation("org.webjars:swagger-ui:$swaggerUiVersion")
 
+    // EXIF / video metadata extraction
+    implementation("com.drewnoakes:metadata-extractor:2.19.0")
+
     // AWS SDK v2 — S3 async client
     implementation("software.amazon.awssdk:s3:$awsSdkVersion")
 

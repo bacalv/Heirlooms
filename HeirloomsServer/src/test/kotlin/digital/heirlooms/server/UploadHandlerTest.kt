@@ -355,6 +355,7 @@ class UploadHandlerTest {
         val capturedRecord = slot<UploadRecord>()
         every { mockDatabase.findByContentHash(any()) } returns null
         every { mockDatabase.recordUpload(capture(capturedRecord)) } just runs
+        every { mockStorage.get(any()) } returns ByteArray(0)
 
         val response = app(
             Request(POST, "/api/content/uploads/confirm")
@@ -467,6 +468,7 @@ class UploadHandlerTest {
     fun `confirm with new contentHash succeeds with 201`() {
         every { mockDatabase.findByContentHash(any()) } returns null
         every { mockDatabase.recordUpload(any()) } just runs
+        every { mockStorage.get(any()) } returns ByteArray(0)
 
         val response = app(
             Request(POST, "/api/content/uploads/confirm")
@@ -497,6 +499,7 @@ class UploadHandlerTest {
         val capturedRecord = slot<UploadRecord>()
         every { mockDatabase.findByContentHash(any()) } returns null
         every { mockDatabase.recordUpload(capture(capturedRecord)) } just runs
+        every { mockStorage.get(any()) } returns ByteArray(0)
 
         val response = app(
             Request(POST, "/api/content/uploads/confirm")
@@ -521,7 +524,7 @@ class UploadHandlerTest {
         val capturedRecord = slot<UploadRecord>()
         every { mockDatabase.recordUpload(capture(capturedRecord)) } just runs
 
-        val appWithThumb = buildApp(mockStorage, mockDatabase) { _, _ -> thumbBytes }
+        val appWithThumb = buildApp(mockStorage, mockDatabase, thumbnailGenerator = { _, _ -> thumbBytes })
         appWithThumb(
             Request(POST, "/api/content/upload")
                 .header("Content-Type", "image/jpeg")
@@ -555,7 +558,7 @@ class UploadHandlerTest {
         every { mockStorage.save(any(), any()) } returns StorageKey("uuid.jpg")
         every { mockDatabase.recordUpload(any()) } just runs
 
-        val appWithFailingThumb = buildApp(mockStorage, mockDatabase) { _, _ -> throw RuntimeException("out of memory") }
+        val appWithFailingThumb = buildApp(mockStorage, mockDatabase, thumbnailGenerator = { _, _ -> throw RuntimeException("out of memory") })
         val response = appWithFailingThumb(
             Request(POST, "/api/content/upload")
                 .header("Content-Type", "image/jpeg")
@@ -627,5 +630,28 @@ class UploadHandlerTest {
         val response = app(Request(GET, "/api/content/uploads/$knownId/thumb"))
 
         assertEquals(NOT_FOUND, response.status)
+    }
+
+    // -------------------------------------------------------------------------
+    // Metadata extraction
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `upload succeeds even when metadata extraction throws`() {
+        every { mockDatabase.findByContentHash(any()) } returns null
+        every { mockStorage.save(any(), any()) } returns StorageKey("uuid.jpg")
+        every { mockDatabase.recordUpload(any()) } just runs
+
+        val appWithFailingMeta = buildApp(
+            mockStorage, mockDatabase,
+            metadataExtractor = { _, _ -> throw RuntimeException("extractor failed") }
+        )
+        val response = appWithFailingMeta(
+            Request(POST, "/api/content/upload")
+                .header("Content-Type", "image/jpeg")
+                .body("bytes")
+        )
+
+        assertEquals(CREATED, response.status)
     }
 }

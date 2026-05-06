@@ -381,3 +381,50 @@ PA_NOTES.md (Things that tripped us up) and SE_NOTES.md.
 - `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/ThumbnailGenerator.kt`
 - `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/ThumbnailGeneratorTest.kt`
 - `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/UploadHandlerTest.kt`
+
+---
+
+## Entry [2026-05-06] — EXIF and video metadata extraction (Phase 1)
+
+**Prompt:** Add EXIF and video metadata extraction to HeirloomsServer. Metadata extracted at upload time alongside thumbnail generation and stored in the database. Six new nullable columns: captured_at, latitude, longitude, altitude, device_make, device_model. MetadataExtractor class extracts from images (via metadata-extractor library) and videos (via ffprobe JSON). Failures never fail the upload. GPS pin icon in HeirloomsWeb for cards with coordinates.
+
+**What was built:**
+
+### Database
+- `V4__add_metadata_columns.sql` — adds six nullable columns to the uploads table.
+
+### MetadataExtractor
+- `MetadataExtractor.kt` — new class. `MediaMetadata` data class (six nullable fields). `extract(bytes, mimeType): MediaMetadata`. Image path uses `com.drewnoakes:metadata-extractor:2.19.0` to read GPS directory (lat/lon/alt via `GpsDirectory.getGeoLocation()` and `TAG_ALTITUDE`), capture time from `ExifSubIFDDirectory.TAG_DATETIME_ORIGINAL` (UTC), make/model from `ExifIFD0Directory`. Video path writes bytes to a temp file, runs `ffprobe -v quiet -print_format json -show_format -show_streams`, parses `format.tags.creation_time`, `format.tags.location` (ISO 6709 regex), `com.apple.quicktime.make/model`. All exceptions caught, return `MediaMetadata()` with all nulls.
+
+### Upload flow
+- `buildApp` gains `metadataExtractor` parameter (default `MetadataExtractor()::extract`).
+- Direct upload path (`/upload`): bytes already in hand; metadata extracted after thumbnail.
+- Confirm path (`/uploads/confirm`): bytes fetched once from storage (using new `fetchBytesIfNeeded`) and passed to both thumbnail and metadata extraction. Removed the old `tryFetchAndStoreThumbnail` helper.
+- All failures wrapped in try/catch — metadata failure never fails the upload.
+
+### JSON
+- `UploadRecord.toJson()` private extension: metadata fields included only when non-null (omitted otherwise); `thumbnailKey` still always present (null serialised as JSON null).
+- Both `listUploadsHandler` and `uploadHandler` use `toJson()`.
+
+### HeirloomsWeb
+- `PinIcon` component: 📍 emoji with coordinates tooltip.
+- `UploadCard`: outer div gains `relative` class; pin rendered when `upload.latitude` and `upload.longitude` are both non-null.
+
+### Tests
+- `MetadataExtractorTest` (4 tests): GPS JPEG returns correct lat/lon/alt (bytes constructed from raw TIFF/EXIF structure), plain JPEG returns null coords, unsupported MIME type returns all nulls, invalid bytes return null.
+- `UploadHandlerTest`: 1 new test — upload succeeds even when metadata extraction throws. Three existing confirm-flow tests updated to stub `storage.get()` (now called once per confirm to fetch bytes for both thumbnail and metadata).
+- All 102 tests pass (1 skipped — FFmpeg-dependent video thumbnail test).
+
+**Key decision — trailing lambda fix:** Adding `metadataExtractor` as the last parameter to `buildApp` meant existing tests using trailing lambda syntax for `thumbnailGenerator` bound to the wrong parameter. Fixed by switching to named parameter syntax: `buildApp(..., thumbnailGenerator = { _, _ -> ... })`.
+
+**Key decision — single fetch in confirm path:** Confirm flow previously called `storage.get()` inside `tryFetchAndStoreThumbnail`. With metadata extraction added, refactored to fetch bytes once via `fetchBytesIfNeeded` and pass to both thumbnail and metadata, avoiding a second GCS round-trip.
+
+**Files changed:**
+- `HeirloomsServer/build.gradle.kts` — `com.drewnoakes:metadata-extractor:2.19.0` dependency
+- `HeirloomsServer/src/main/resources/db/migration/V4__add_metadata_columns.sql` (new)
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/MetadataExtractor.kt` (new)
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/Database.kt` — UploadRecord + all SQL queries
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/UploadHandler.kt` — metadata integration + JSON
+- `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/MetadataExtractorTest.kt` (new)
+- `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/UploadHandlerTest.kt` — new test + 3 confirm tests updated
+- `HeirloomsWeb/src/App.jsx` — PinIcon + relative positioning on UploadCard
