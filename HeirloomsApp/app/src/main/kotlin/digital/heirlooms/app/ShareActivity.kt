@@ -104,19 +104,26 @@ class ShareActivity : Activity() {
         val mimeType = Uploader.resolveMimeType(contentResolver.getType(uri))
         val tempFile = File(cacheDir, "upload-${UUID.randomUUID()}.tmp")
         return try {
-            // On Android 10+, request unredacted URI to preserve GPS EXIF.
-            val resolvedUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                try { MediaStore.setRequireOriginal(uri) } catch (_: Exception) { uri }
-            } else uri
-            val inputStream = contentResolver.openInputStream(resolvedUri)
-                ?: contentResolver.openInputStream(uri)
-                ?: return null
+            val inputStream = openStream(uri) ?: return null
             inputStream.use { input -> tempFile.outputStream().use { input.copyTo(it) } }
             Pair(tempFile.absolutePath, mimeType)
         } catch (_: Exception) {
             tempFile.delete()
             null
         }
+    }
+
+    // Try the unredacted URI first (preserves GPS EXIF on Android 10+).
+    // SecurityException from openInputStream must be caught separately —
+    // it bypasses the null-coalescing fallback if left in the outer try block.
+    private fun openStream(uri: Uri): java.io.InputStream? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                val stream = contentResolver.openInputStream(MediaStore.setRequireOriginal(uri))
+                if (stream != null) return stream
+            } catch (_: Exception) { }
+        }
+        return contentResolver.openInputStream(uri)
     }
 
     private fun isOnWifi(): Boolean {
