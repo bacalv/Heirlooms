@@ -185,6 +185,11 @@ extension on `org.http4k.core.Body.Companion`. Import `org.http4k.core.Body` and
 
 ---
 
+## Entry [2026-05-06] — Signed URL upload — validated
+**Validated end-to-end:** Server deployed to Cloud Run revision `heirlooms-server-00008-vt7`. Fresh APK installed via `adb install -r`. 34.57 MB video uploaded successfully via the three-step signed URL flow. Tagged as **v0.8.0**.
+
+---
+
 ## Entry [2026-05-06] — Signed URL upload
 **Prompt:** Add GCS signed URL upload flow to bypass Cloud Run 32 MB request body limit. Three-step flow: prepare (get signed URL) → PUT directly to GCS → confirm (record metadata). Update HeirloomsApp to use the new flow.
 

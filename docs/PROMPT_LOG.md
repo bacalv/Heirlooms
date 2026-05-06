@@ -540,3 +540,6 @@ Deployed to Cloud Run (revision `heirlooms-server-00007-7vw`). Gallery confirmed
 - OkHttp write timeout increased from 120s → 300s to accommodate large video uploads
 
 **Note for deployment:** The new server image must be built and deployed to Cloud Run before large video uploads will work. The existing `POST /api/content/upload` direct endpoint still works for small files. No change to stored endpoint format in the Android app.
+
+**Validated end-to-end (6 May 2026):**
+Server deployed to Cloud Run (revision `heirlooms-server-00008-vt7`). Fresh APK installed via `adb install -r`. Large video (34.57 MB) shared successfully from Android — three-step signed URL flow completed transparently. Tagged as **v0.8.0**.

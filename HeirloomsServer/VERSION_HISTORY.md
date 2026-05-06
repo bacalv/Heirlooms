@@ -2,6 +2,17 @@
 
 ---
 
+### 0.8.0 — 6 May 2026
+
+- `DirectUploadSupport` interface + `PreparedUpload` data class added
+- `GcsFileStore` implements `DirectUploadSupport`; switched to `ServiceAccountCredentials`
+  for V4 signed URL generation; `prepareUpload()` generates 15-minute signed PUT URLs
+- `POST /api/content/uploads/prepare` — returns signed GCS URL; 501 for non-GCS backends
+- `POST /api/content/uploads/confirm` — records upload metadata after direct GCS PUT
+- Validated: 34.57 MB video uploaded successfully end-to-end
+
+---
+
 ### 0.7.0 — 6 May 2026
 
 - Added `FileStore.get(key: StorageKey): ByteArray` to the interface; implemented

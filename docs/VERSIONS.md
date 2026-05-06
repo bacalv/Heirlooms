@@ -2,6 +2,26 @@
 
 ---
 
+## v0.8.0 — Large file upload via GCS signed URLs (6 May 2026)
+
+Fixes the 34 MB+ video upload failure (Cloud Run enforces a hard 32 MB request
+body limit that cannot be configured away).
+
+Three-step upload flow in HeirloomsApp:
+1. `POST /api/content/uploads/prepare` → server returns a signed GCS PUT URL (15-min expiry)
+2. Mobile app PUTs file bytes **directly to GCS** — Cloud Run is bypassed entirely
+3. `POST /api/content/uploads/confirm` → server records metadata in the database
+
+- `DirectUploadSupport` interface + `PreparedUpload` data class added to HeirloomsServer
+- `GcsFileStore` implements `DirectUploadSupport`; uses `ServiceAccountCredentials`
+  (already in `GCS_CREDENTIALS_JSON`) for V4 URL signing — no new secrets needed
+- Prepare endpoint returns 501 for non-GCS backends (local, S3)
+- `Uploader.uploadViaSigned()` added to HeirloomsApp; `ShareActivity` now always
+  uses this path; OkHttp write timeout raised to 300s
+- Validated end-to-end: 34.57 MB video uploaded successfully
+
+---
+
 ## v0.7.0 — Web gallery UI (6 May 2026)
 
 Milestone 4 complete. Adds HeirloomsWeb and a file retrieval endpoint.
