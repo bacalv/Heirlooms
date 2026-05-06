@@ -694,3 +694,6 @@ Phase 3: async generation).
   full file, thumb endpoint returns 404.
 
 All tests passing (95 total across 6 test classes, 0 failures).
+
+**Cloud Run:** server deployed as revision `heirlooms-server-00007-gvl`,
+web as revision `heirlooms-web-00002-jjr` (us-central1). Tagged as **v0.12.0**.
