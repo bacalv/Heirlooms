@@ -37,4 +37,11 @@ interface FileStore {
      * @throws Exception if the file could not be retrieved.
      */
     fun get(key: StorageKey): ByteArray
+
+    /**
+     * Retrieves at most [maxBytes] bytes from the start of the object stored under [key].
+     * Used for reading EXIF headers without downloading the full file.
+     * Default implementation falls back to [get] — override for efficiency.
+     */
+    fun getFirst(key: StorageKey, maxBytes: Int): ByteArray = get(key)
 }

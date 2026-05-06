@@ -7,6 +7,7 @@ import com.google.cloud.storage.HttpMethod
 import com.google.cloud.storage.Storage.SignUrlOption
 import com.google.cloud.storage.StorageOptions
 import java.io.ByteArrayInputStream
+import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -42,6 +43,17 @@ class GcsFileStore(
     }
 
     override fun get(key: StorageKey): ByteArray = storage.readAllBytes(BlobId.of(bucket, key.value))
+
+    override fun getFirst(key: StorageKey, maxBytes: Int): ByteArray {
+        val buf = ByteBuffer.allocate(maxBytes)
+        storage.reader(bucket, key.value).use { channel ->
+            while (buf.hasRemaining()) {
+                if (channel.read(buf) == -1) break
+            }
+        }
+        buf.flip()
+        return ByteArray(buf.limit()).also { buf.get(it) }
+    }
 
     override fun generateReadUrl(key: StorageKey): String {
         val blobInfo = BlobInfo.newBuilder(BlobId.of(bucket, key.value)).build()

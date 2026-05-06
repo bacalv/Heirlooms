@@ -14,7 +14,7 @@ import java.time.Instant
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
-private val METADATA_IMAGE_MIME_TYPES = setOf("image/jpeg", "image/png", "image/heic", "image/webp")
+val METADATA_IMAGE_MIME_TYPES = setOf("image/jpeg", "image/png", "image/heic", "image/webp")
 private val METADATA_VIDEO_MIME_TYPES = setOf("video/mp4", "video/quicktime", "video/x-msvideo", "video/webm")
 val METADATA_SUPPORTED_MIME_TYPES = METADATA_IMAGE_MIME_TYPES + METADATA_VIDEO_MIME_TYPES
 

@@ -389,8 +389,9 @@ private fun confirmUploadHandler(
             } else {
                 val bytes = fetchBytesIfNeeded(storageKey, mimeType, storage)
                 val thumbKey = if (bytes != null) tryStoreThumbnail(bytes, mimeType, StorageKey(storageKey), storage, thumbnailGenerator) else null
-                val metadata = if (bytes != null) {
-                    try { metadataExtractor(bytes, mimeType) } catch (_: Exception) { MediaMetadata() }
+                val metaBytes = fetchHeaderForMetadata(storageKey, mimeType, storage)
+                val metadata = if (metaBytes != null) {
+                    try { metadataExtractor(metaBytes, mimeType) } catch (_: Exception) { MediaMetadata() }
                 } else MediaMetadata()
                 database.recordUpload(
                     UploadRecord(
@@ -416,10 +417,24 @@ private fun confirmUploadHandler(
     }
 }
 
+private const val EXIF_HEADER_BYTES = 65_536 // JPEG EXIF lives in APP1, always within first 64 KB
+
 private fun fetchBytesIfNeeded(storageKey: String, mimeType: String, storage: FileStore): ByteArray? {
     val normalized = mimeType.substringBefore(";").trim().lowercase()
     if (normalized !in PROCESSING_SUPPORTED_MIME_TYPES) return null
     return try { storage.get(StorageKey(storageKey)) } catch (_: Exception) { null }
+}
+
+private fun fetchHeaderForMetadata(storageKey: String, mimeType: String, storage: FileStore): ByteArray? {
+    val normalized = mimeType.substringBefore(";").trim().lowercase()
+    if (normalized !in METADATA_SUPPORTED_MIME_TYPES) return null
+    return try {
+        if (normalized in METADATA_IMAGE_MIME_TYPES) {
+            storage.getFirst(StorageKey(storageKey), EXIF_HEADER_BYTES)
+        } else {
+            storage.get(StorageKey(storageKey)) // videos still need the full file for ffprobe
+        }
+    } catch (_: Exception) { null }
 }
 
 private fun tryStoreThumbnail(
