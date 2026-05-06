@@ -533,7 +533,7 @@ class UploadHandlerTest {
     }
 
     @Test
-    fun `no thumbnail generated for unsupported MIME type`() {
+    fun `no thumbnail stored when video bytes are invalid`() {
         every { mockDatabase.findByContentHash(any()) } returns null
         every { mockStorage.save(any(), any()) } returns StorageKey("uuid.mp4")
         val capturedRecord = slot<UploadRecord>()

@@ -346,3 +346,36 @@ PA_NOTES.md (Things that tripped us up) and SE_NOTES.md.
 - `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/Database.kt` — `contentHash` field on `UploadRecord`; `recordUpload` now persists it; new `findByContentHash(hash)`; all SELECTs include `content_hash`
 - `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/UploadHandler.kt` — `sha256Hex` helper; `uploadHandler` checks hash before storing; `confirmUploadHandler` accepts and checks `contentHash`; CONFLICT imported
 - `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/UploadHandlerTest.kt` — `findByContentHash` stubbed in shared helper and patched into existing tests that bypassed it; 8 new duplicate-detection tests
+
+---
+
+## Entry [2026-05-06] — Phase 2 thumbnails: video first-frame extraction via FFmpeg
+
+**Prompt:** Extend `ThumbnailGenerator` to support video MIME types (mp4, quicktime, x-msvideo, webm) by extracting the first frame using FFmpeg via `ProcessBuilder`. Add FFmpeg to the Docker image. Add tests.
+
+**What was built:**
+
+- **`Dockerfile`** — added `RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*` before the `USER heirloom` instruction so it runs as root.
+
+- **`ThumbnailGenerator.kt`** — extended to handle video types:
+  - `THUMBNAIL_VIDEO_MIME_TYPES` private constant for the four supported video types
+  - `THUMBNAIL_SUPPORTED_MIME_TYPES` now includes image + video types (used by `tryFetchAndStoreThumbnail` in `UploadHandler.kt`)
+  - `generateThumbnail` dispatches to `extractImageThumbnail` or `extractVideoThumbnail` based on MIME type
+  - `extractVideoThumbnail`: writes bytes to a temp file, runs `ffmpeg -vframes 1 -f image2`, reads the output JPEG, scales via `scaleAndEncode`, cleans up temp files in finally
+  - `scaleAndEncode` extracted as a shared helper used by both image and video paths
+  - All failures (FFmpeg not found, non-zero exit, invalid frame bytes) return null gracefully
+
+- **`ThumbnailGeneratorTest.kt`** — 2 new tests:
+  - `valid MP4 produces non-null thumbnail` — uses `assumeTrue(isFFmpegAvailable())` so it skips gracefully when FFmpeg is not on the PATH; generates a synthetic 1-frame test video via FFmpeg lavfi source
+  - `corrupt video returns null gracefully` — always runs; passes invalid bytes as video/mp4 and expects null
+  - Updated `returns null for unsupported MIME type` from `video/mp4` (now supported) to `audio/mpeg`
+
+- **`UploadHandlerTest.kt`** — renamed `no thumbnail generated for unsupported MIME type` to `no thumbnail stored when video bytes are invalid` (video/mp4 is now a supported type; the test still passes because fake bytes cause FFmpeg extraction to fail and return null)
+
+**Test result:** 97 tests, 0 failures, 1 skipped (`valid MP4 produces non-null thumbnail` skipped locally — FFmpeg not installed; will run in Docker)
+
+**Files changed:**
+- `HeirloomsServer/Dockerfile`
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/ThumbnailGenerator.kt`
+- `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/ThumbnailGeneratorTest.kt`
+- `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/UploadHandlerTest.kt`

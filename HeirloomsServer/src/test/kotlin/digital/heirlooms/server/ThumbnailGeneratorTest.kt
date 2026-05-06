@@ -4,11 +4,14 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import java.awt.Color
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.util.concurrent.TimeUnit
 import javax.imageio.ImageIO
 
 class ThumbnailGeneratorTest {
@@ -39,7 +42,7 @@ class ThumbnailGeneratorTest {
 
     @Test
     fun `returns null for unsupported MIME type`() {
-        val result = generateThumbnail(byteArrayOf(1, 2, 3), "video/mp4")
+        val result = generateThumbnail(byteArrayOf(1, 2, 3), "audio/mpeg")
         assertNull(result)
     }
 
@@ -77,5 +80,42 @@ class ThumbnailGeneratorTest {
     @Test
     fun `returns null for application-octet-stream`() {
         assertNull(generateThumbnail(createJpegBytes(100, 100), "application/octet-stream"))
+    }
+
+    @Test
+    fun `valid MP4 produces non-null thumbnail`() {
+        assumeTrue(isFFmpegAvailable(), "ffmpeg not available — skipping video thumbnail test")
+        val mp4Bytes = createTestMp4() ?: return
+        val result = generateThumbnail(mp4Bytes, "video/mp4")
+        assertNotNull(result)
+    }
+
+    @Test
+    fun `corrupt video returns null gracefully`() {
+        val result = generateThumbnail("not-a-video".toByteArray(), "video/mp4")
+        assertNull(result)
+    }
+
+    private fun isFFmpegAvailable(): Boolean = try {
+        ProcessBuilder("ffmpeg", "-version").start().waitFor() == 0
+    } catch (_: Exception) { false }
+
+    private fun createTestMp4(): ByteArray? {
+        val output = File.createTempFile("test-video", ".mp4")
+        return try {
+            val proc = ProcessBuilder(
+                "ffmpeg", "-y",
+                "-f", "lavfi", "-i", "color=c=black:size=16x16:rate=1:duration=1",
+                "-vframes", "1",
+                output.absolutePath
+            ).redirectErrorStream(true).start()
+            val exited = proc.waitFor(10, TimeUnit.SECONDS)
+            if (!exited || proc.exitValue() != 0) null
+            else output.readBytes().takeIf { it.isNotEmpty() }
+        } catch (_: Exception) {
+            null
+        } finally {
+            output.delete()
+        }
     }
 }
