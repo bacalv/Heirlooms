@@ -1,6 +1,5 @@
 FROM node:22-alpine AS build
 ARG VITE_API_URL
-ARG VITE_API_KEY
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci

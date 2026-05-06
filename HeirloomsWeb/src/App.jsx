@@ -1,9 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const API_URL = import.meta.env.VITE_API_URL ?? ''
-const API_KEY = import.meta.env.VITE_API_KEY ?? ''
-
-const headers = { 'X-Api-Key': API_KEY }
 
 function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`
@@ -47,6 +44,70 @@ function FileIcon() {
   )
 }
 
+function LoginScreen({ onLogin }) {
+  const [value, setValue] = useState('')
+  const [error, setError] = useState(null)
+  const [checking, setChecking] = useState(false)
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    const key = value.trim()
+    if (!key) return
+
+    setChecking(true)
+    setError(null)
+
+    try {
+      const r = await fetch(`${API_URL}/api/content/uploads`, {
+        headers: { 'X-Api-Key': key },
+      })
+      if (r.status === 401) {
+        setError('Incorrect API key.')
+      } else if (!r.ok) {
+        setError(`Server error (${r.status}).`)
+      } else {
+        onLogin(key)
+      }
+    } catch {
+      setError('Could not reach the server.')
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 w-full max-w-sm">
+        <h1 className="text-xl font-semibold text-gray-900 mb-1">Heirlooms</h1>
+        <p className="text-sm text-gray-500 mb-6">Enter your API key to continue.</p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input
+            ref={inputRef}
+            type="password"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="API key"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+          />
+          {error && <p className="text-sm text-red-500">{error}</p>}
+          <button
+            type="submit"
+            disabled={checking || !value.trim()}
+            className="w-full bg-gray-900 text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-700 disabled:opacity-40 transition-colors"
+          >
+            {checking ? 'Checking…' : 'Sign in'}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function Lightbox({ url, onClose }) {
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose() }
@@ -75,30 +136,44 @@ function Lightbox({ url, onClose }) {
   )
 }
 
-function UploadCard({ upload, onImageClick }) {
+function UploadCard({ upload, apiKey, onImageClick }) {
   const fileUrl = `${API_URL}/api/content/uploads/${upload.id}/file`
+
+  // Images need the API key in the request header, but <img src> can't send
+  // custom headers. We fetch the blob manually and create an object URL.
+  const [blobUrl, setBlobUrl] = useState(null)
+
+  useEffect(() => {
+    if (!isImage(upload.mimeType)) return
+    let cancelled = false
+    fetch(fileUrl, { headers: { 'X-Api-Key': apiKey } })
+      .then((r) => r.ok ? r.blob() : null)
+      .then((blob) => {
+        if (!cancelled && blob) setBlobUrl(URL.createObjectURL(blob))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+      if (blobUrl) URL.revokeObjectURL(blobUrl)
+    }
+  }, [fileUrl, apiKey])
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
       <div className="bg-gray-50 h-48 flex items-center justify-center">
         {isImage(upload.mimeType) ? (
-          <img
-            src={fileUrl}
-            alt={upload.storageKey}
-            className="object-cover w-full h-full cursor-pointer hover:opacity-90 transition-opacity"
-            onClick={() => onImageClick(fileUrl)}
-            onError={(e) => {
-              e.target.style.display = 'none'
-              e.target.nextSibling.style.display = 'flex'
-            }}
-          />
+          blobUrl ? (
+            <img
+              src={blobUrl}
+              alt={upload.storageKey}
+              className="object-cover w-full h-full cursor-pointer hover:opacity-90 transition-opacity"
+              onClick={() => onImageClick(blobUrl)}
+            />
+          ) : (
+            <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+          )
         ) : (
           <div className="flex items-center justify-center w-full h-full">
-            <FileIcon />
-          </div>
-        )}
-        {isImage(upload.mimeType) && (
-          <div className="hidden items-center justify-center w-full h-full">
             <FileIcon />
           </div>
         )}
@@ -115,14 +190,14 @@ function UploadCard({ upload, onImageClick }) {
   )
 }
 
-export default function App() {
+function Gallery({ apiKey, onSignOut }) {
   const [uploads, setUploads] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lightboxUrl, setLightboxUrl] = useState(null)
 
   useEffect(() => {
-    fetch(`${API_URL}/api/content/uploads`, { headers })
+    fetch(`${API_URL}/api/content/uploads`, { headers: { 'X-Api-Key': apiKey } })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
@@ -130,12 +205,18 @@ export default function App() {
       .then(setUploads)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [])
+  }, [apiKey])
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
+      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold text-gray-900">Heirlooms</h1>
+        <button
+          onClick={onSignOut}
+          className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
+        >
+          Sign out
+        </button>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
@@ -154,6 +235,7 @@ export default function App() {
               <UploadCard
                 key={upload.id}
                 upload={upload}
+                apiKey={apiKey}
                 onImageClick={setLightboxUrl}
               />
             ))}
@@ -166,4 +248,14 @@ export default function App() {
       )}
     </div>
   )
+}
+
+export default function App() {
+  const [apiKey, setApiKey] = useState(null)
+
+  if (!apiKey) {
+    return <LoginScreen onLogin={setApiKey} />
+  }
+
+  return <Gallery apiKey={apiKey} onSignOut={() => setApiKey(null)} />
 }

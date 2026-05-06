@@ -203,6 +203,19 @@ extension on `org.http4k.core.Body.Companion`. Import `org.http4k.core.Body` and
 
 ---
 
+## Entry [2026-05-06] — HeirloomsWeb: in-memory auth
+**Prompt:** Replace VITE_API_KEY build-time env var with a login screen. API key entered at runtime, held in React state only — cleared on page reload, never written to localStorage or disk.
+
+**Response:** Added LoginScreen component that validates the key against the server before proceeding (returns a real 401 check, not just a truthy test). Removed VITE_API_KEY from App.jsx, Dockerfile ARG, and README. Image thumbnails now fetched via blob URLs (fetch + createObjectURL) so the X-Api-Key header can be sent — plain `<img src>` can't send custom headers. Sign out button clears state. VITE_API_URL remains as the only build-time variable.
+
+**Files changed:**
+- `HeirloomsWeb/src/App.jsx` — login screen, in-memory key, blob URL thumbnails
+- `HeirloomsWeb/Dockerfile` — removed VITE_API_KEY ARG
+- `HeirloomsWeb/.env` — removed VITE_API_KEY line
+- `HeirloomsWeb/README.md` — updated instructions
+
+---
+
 ## Entry [2026-05-06] — CORS
 **Prompt:** Add CORS support to HeirloomsServer — allow all origins for now, tighten later when domain is set up.
 
