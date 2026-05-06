@@ -53,3 +53,5 @@ Timestamps are not available and are marked as `[unknown]`.
 
 ## Entry [2026-05-06] — Validated
 **Validated end-to-end:** Dev server run via `npm run dev`. Login screen confirmed. Gallery loaded against production server after server was redeployed with CORS support (revision `heirlooms-server-00007-7vw`). Image thumbnails displayed correctly.
+
+Video player and streaming validated end-to-end against revision `heirlooms-server-00009-58m`. Videos open immediately, stream and seek natively. Tagged as **v0.9.0**.

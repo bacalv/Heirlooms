@@ -185,6 +185,17 @@ extension on `org.http4k.core.Body.Companion`. Import `org.http4k.core.Body` and
 
 ---
 
+## Entry [2026-05-06] — Dockerfile fix
+**Prompt:** Docker Desktop on macOS drops the build connection during long Gradle downloads inside the container, requiring a manual Docker restart every build. Fix it.
+
+**Response:** Simplified Dockerfile to remove the multi-stage Gradle build entirely. JAR is now built locally with `./gradlew shadowJar` first, then `docker build` just COPYs the pre-built JAR into the JRE image. Build time dropped from ~3 minutes (with repeated failures) to ~2 seconds. Updated PA_NOTES.md deploy command. Validated: `heirlooms-server-00009-58m` deployed successfully without any Docker restarts. Tagged as **v0.9.0**.
+
+**Files changed:**
+- `HeirloomsServer/Dockerfile` — removed multi-stage Gradle build, COPY pre-built JAR only
+- `docs/PA_NOTES.md` — updated Docker build command to include `./gradlew shadowJar` step
+
+---
+
 ## Entry [2026-05-06] — Signed read URL for video streaming
 **Prompt:** Add a signed GCS read URL endpoint so the web app can stream videos instead of downloading them as blobs.
 

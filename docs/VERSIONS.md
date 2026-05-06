@@ -2,6 +2,23 @@
 
 ---
 
+## v0.9.0 — Video player + streaming (6 May 2026)
+
+- **Video player** — clicking a video card in HeirloomsWeb opens a native
+  `<video controls>` modal; a distinct video icon with "Click to play" label
+  replaces the generic file icon for video files
+- **Streaming via signed read URLs** — new `GET /api/content/uploads/{id}/url`
+  endpoint generates a 1-hour signed GCS read URL; the web app sets this directly
+  as `<video src>` so the browser handles streaming, buffering, and seeking
+  natively via GCS range requests — no full download required
+- **Dockerfile simplified** — JAR now built locally with `./gradlew shadowJar`
+  before `docker build`; eliminates Gradle distribution downloads inside the
+  container that were causing Docker Desktop connection drops on macOS; build
+  time drops from ~3 minutes to ~2 seconds
+- Validated end-to-end: video streaming confirmed working
+
+---
+
 ## v0.8.0 — Large file upload via GCS signed URLs (6 May 2026)
 
 Fixes the 34 MB+ video upload failure (Cloud Run enforces a hard 32 MB request

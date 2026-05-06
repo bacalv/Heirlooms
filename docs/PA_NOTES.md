@@ -140,7 +140,7 @@ docker push europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-ser
 ```
 
 ## Current version
-v0.8.0 (6 May 2026)
+v0.9.0 (6 May 2026)
 
 ---
 

@@ -2,6 +2,18 @@
 
 ---
 
+### 0.9.0 — 6 May 2026
+
+- `generateReadUrl(key: StorageKey): String` added to `DirectUploadSupport`
+  interface and implemented in `GcsFileStore` (V4 signed GET URL, 1-hour expiry)
+- `GET /api/content/uploads/{id}/url` — new endpoint returning a signed GCS read
+  URL; 501 for non-GCS backends, 404 if record not found
+- `Dockerfile` simplified — no longer builds inside Docker; expects the fat JAR
+  to be pre-built locally with `./gradlew shadowJar`; eliminates Gradle download
+  failures caused by Docker Desktop connection drops on macOS
+
+---
+
 ### 0.8.0 — 6 May 2026
 
 - `DirectUploadSupport` interface + `PreparedUpload` data class added
