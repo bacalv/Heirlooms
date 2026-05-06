@@ -148,13 +148,29 @@ function Modal({ onClose, children }) {
   )
 }
 
-function Lightbox({ url, onClose }) {
+function RotateIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+  )
+}
+
+function Lightbox({ url, rotation = 0, onClose }) {
+  const swapped = rotation === 90 || rotation === 270
   return (
     <Modal onClose={onClose}>
       <img
         src={url}
         alt="Full size"
-        className="max-w-[90vw] max-h-[90vh] object-contain rounded shadow-2xl"
+        className="object-contain rounded shadow-2xl"
+        style={{
+          transform: rotation ? `rotate(${rotation}deg)` : undefined,
+          maxWidth: swapped ? '90vh' : '90vw',
+          maxHeight: swapped ? '90vw' : '90vh',
+          transition: 'transform 0.2s',
+        }}
       />
     </Modal>
   )
@@ -185,7 +201,7 @@ function PinIcon({ latitude, longitude }) {
   )
 }
 
-function UploadCard({ upload, apiKey, onImageClick, onVideoClick }) {
+function UploadCard({ upload, apiKey, onImageClick, onVideoClick, onRotate }) {
   const fileUrl = `${API_URL}/api/content/uploads/${upload.id}/file`
   const displayUrl = upload.thumbnailKey
     ? `${API_URL}/api/content/uploads/${upload.id}/thumb`
@@ -214,14 +230,15 @@ function UploadCard({ upload, apiKey, onImageClick, onVideoClick }) {
 
   return (
     <div className="relative bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-      <div className="bg-gray-50 h-48 flex items-center justify-center">
+      <div className="bg-gray-50 h-48 flex items-center justify-center overflow-hidden">
         {isImage(upload.mimeType) ? (
           blobUrl ? (
             <img
               src={blobUrl}
               alt={upload.storageKey}
               className="object-cover w-full h-full cursor-pointer hover:opacity-90 transition-opacity"
-              onClick={() => onImageClick(blobUrl)}
+              style={upload.rotation ? { transform: `rotate(${upload.rotation}deg)`, transition: 'transform 0.2s' } : {}}
+              onClick={() => onImageClick(blobUrl, upload.rotation ?? 0)}
             />
           ) : (
             <Spinner />
@@ -256,9 +273,20 @@ function UploadCard({ upload, apiKey, onImageClick, onVideoClick }) {
         <PinIcon latitude={upload.latitude} longitude={upload.longitude} />
       )}
       <div className="p-3 space-y-1 text-sm text-gray-600">
-        <p className="font-medium text-gray-800 truncate" title={upload.storageKey}>
-          {upload.storageKey}
-        </p>
+        <div className="flex items-start justify-between gap-1">
+          <p className="font-medium text-gray-800 truncate" title={upload.storageKey}>
+            {upload.storageKey}
+          </p>
+          {isImage(upload.mimeType) && onRotate && (
+            <button
+              onClick={() => onRotate(upload.id)}
+              title="Rotate 90°"
+              className="flex-shrink-0 text-gray-400 hover:text-gray-700 transition-colors p-0.5"
+            >
+              <RotateIcon />
+            </button>
+          )}
+        </div>
         <p>{upload.mimeType}</p>
         <p>{formatBytes(upload.fileSize)}</p>
         <p className="text-gray-400 text-xs">{formatDate(upload.uploadedAt)}</p>
@@ -273,7 +301,7 @@ function Gallery({ apiKey, onSignOut }) {
   const [error, setError] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(false)
-  const [lightboxUrl, setLightboxUrl] = useState(null)
+  const [lightbox, setLightbox] = useState(null) // { url, rotation }
   const [videoPlayer, setVideoPlayer] = useState(null)
 
   const fetchUploads = useCallback(async (showSpinner = false) => {
@@ -297,6 +325,19 @@ function Gallery({ apiKey, onSignOut }) {
     const id = setInterval(() => fetchUploads(), 10_000)
     return () => clearInterval(id)
   }, [autoRefresh, fetchUploads])
+
+  async function handleRotate(uploadId) {
+    setUploads((prev) => prev.map((u) => {
+      if (u.id !== uploadId) return u
+      const newRotation = ((u.rotation ?? 0) + 90) % 360
+      fetch(`${API_URL}/api/content/uploads/${uploadId}/rotation`, {
+        method: 'PATCH',
+        headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rotation: newRotation }),
+      }).catch(() => {})
+      return { ...u, rotation: newRotation }
+    }))
+  }
 
   async function handleVideoClick({ uploadId, mimeType, apiKey: key }) {
     try {
@@ -356,15 +397,16 @@ function Gallery({ apiKey, onSignOut }) {
                 key={upload.id}
                 upload={upload}
                 apiKey={apiKey}
-                onImageClick={setLightboxUrl}
+                onImageClick={(url, rotation) => setLightbox({ url, rotation })}
                 onVideoClick={handleVideoClick}
+                onRotate={handleRotate}
               />
             ))}
           </div>
         )}
       </main>
 
-      {lightboxUrl && <Lightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
+      {lightbox && <Lightbox url={lightbox.url} rotation={lightbox.rotation} onClose={() => setLightbox(null)} />}
       {videoPlayer && (
         <VideoPlayer
           url={videoPlayer.url}

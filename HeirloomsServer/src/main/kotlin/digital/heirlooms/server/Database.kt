@@ -23,6 +23,7 @@ data class UploadRecord(
     val altitude: Double? = null,
     val deviceMake: String? = null,
     val deviceModel: String? = null,
+    val rotation: Int = 0,
 )
 
 class Database(private val dataSource: DataSource) {
@@ -64,7 +65,7 @@ class Database(private val dataSource: DataSource) {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
-                          captured_at, latitude, longitude, altitude, device_make, device_model
+                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation
                    FROM uploads WHERE content_hash = ? LIMIT 1"""
             ).use { stmt ->
                 stmt.setString(1, hash)
@@ -79,7 +80,7 @@ class Database(private val dataSource: DataSource) {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
-                          captured_at, latitude, longitude, altitude, device_make, device_model
+                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation
                    FROM uploads WHERE id = ?"""
             ).use { stmt ->
                 stmt.setObject(1, id)
@@ -94,13 +95,23 @@ class Database(private val dataSource: DataSource) {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
-                          captured_at, latitude, longitude, altitude, device_make, device_model
+                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation
                    FROM uploads ORDER BY uploaded_at DESC"""
             ).use { stmt ->
                 val rs = stmt.executeQuery()
                 val results = mutableListOf<UploadRecord>()
                 while (rs.next()) results.add(rs.toUploadRecord())
                 return results
+            }
+        }
+    }
+
+    fun updateRotation(id: UUID, rotation: Int) {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement("UPDATE uploads SET rotation = ? WHERE id = ?").use { stmt ->
+                stmt.setInt(1, rotation)
+                stmt.setObject(2, id)
+                stmt.executeUpdate()
             }
         }
     }
@@ -135,4 +146,5 @@ private fun java.sql.ResultSet.toUploadRecord() = UploadRecord(
     altitude = getDouble("altitude").takeUnless { wasNull() },
     deviceMake = getString("device_make"),
     deviceModel = getString("device_model"),
+    rotation = getInt("rotation"),
 )

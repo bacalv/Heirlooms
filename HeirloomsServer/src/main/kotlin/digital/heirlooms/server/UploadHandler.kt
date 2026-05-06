@@ -14,6 +14,7 @@ import org.http4k.core.Body
 import org.http4k.core.ContentType
 import org.http4k.core.HttpHandler
 import org.http4k.core.Method.GET
+import org.http4k.core.Method.PATCH
 import org.http4k.core.Method.POST
 import org.http4k.core.Request
 import org.http4k.core.Response
@@ -48,7 +49,7 @@ private fun sha256Hex(bytes: ByteArray): String {
 }
 
 private fun UploadRecord.toJson(): String = buildString {
-    append("""{"id":"$id","storageKey":"$storageKey","mimeType":"$mimeType","fileSize":$fileSize,"uploadedAt":"$uploadedAt","thumbnailKey":${if (thumbnailKey != null) "\"$thumbnailKey\"" else "null"}""")
+    append("""{"id":"$id","storageKey":"$storageKey","mimeType":"$mimeType","fileSize":$fileSize,"uploadedAt":"$uploadedAt","rotation":$rotation,"thumbnailKey":${if (thumbnailKey != null) "\"$thumbnailKey\"" else "null"}""")
     if (capturedAt != null) append(""","capturedAt":"$capturedAt"""")
     if (latitude != null) append(""","latitude":$latitude""")
     if (longitude != null) append(""","longitude":$longitude""")
@@ -92,6 +93,7 @@ fun buildApp(
             fileProxyContractRoute(storage, database),
             thumbProxyContractRoute(storage, database),
             readUrlContractRoute(directUpload, database),
+            rotationContractRoute(database),
         )
     }
 
@@ -435,6 +437,34 @@ private fun fetchHeaderForMetadata(storageKey: String, mimeType: String, storage
             storage.get(StorageKey(storageKey)) // videos still need the full file for ffprobe
         }
     } catch (_: Exception) { null }
+}
+
+private val VALID_ROTATIONS = setOf(0, 90, 180, 270)
+
+private fun rotationContractRoute(database: Database): ContractRoute {
+    val id = Path.uuid().of("id")
+    return "/uploads" / id / "rotation" meta {
+        summary = "Set image rotation"
+        description = "Sets the display rotation for an image (0, 90, 180, or 270 degrees)."
+    } bindContract PATCH to { uploadId: UUID, _: String ->
+        { request: Request ->
+            try {
+                val rotation = ObjectMapper().readTree(request.bodyString())?.get("rotation")?.asInt(-1) ?: -1
+                when {
+                    rotation !in VALID_ROTATIONS ->
+                        Response(BAD_REQUEST).body("rotation must be 0, 90, 180, or 270")
+                    database.getUploadById(uploadId) == null ->
+                        Response(NOT_FOUND)
+                    else -> {
+                        database.updateRotation(uploadId, rotation)
+                        Response(OK)
+                    }
+                }
+            } catch (e: Exception) {
+                Response(INTERNAL_SERVER_ERROR).body("Failed to update rotation: ${e.message}")
+            }
+        }
+    }
 }
 
 private fun tryStoreThumbnail(
