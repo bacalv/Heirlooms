@@ -13,6 +13,8 @@
 - Root cause: `onBlur` was firing on the input and closing the dropdown. `e.preventDefault()` on the suggestion button's `mousedown` is not reliable across browsers (Safari on macOS does not focus buttons on click). `e.relatedTarget` was therefore null and could not be used to detect intra-dropdown focus movement.
 - Fix: `suppressBlurRef` — the dropdown container's `onMouseDown` sets a ref flag before `onBlur` fires; `onBlur` skips the close while the flag is set; `onMouseUp` resets it. Browser-agnostic.
 
+No new tests. The Android OOM fix is a memory-pressure scenario that requires a real device with a constrained heap to reproduce — not unit-testable. HeirloomsWeb has no frontend test runner; adding one just for this fix is disproportionate. 135 tests total, 134 passing, 1 skipped (FFmpeg video thumbnail — runs in Docker).
+
 ---
 
 ## v0.16.0 — Tags (6 May 2026)

@@ -217,6 +217,8 @@ function TagEditor({ currentTags, allTags, onSave, onCancel }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const inputRef = useRef(null)
+  // suppressBlurRef: prevents onBlur from closing the dropdown when the user clicks a suggestion.
+  // e.preventDefault() on button mousedown and e.relatedTarget are both unreliable in Safari/macOS.
   const suppressBlurRef = useRef(false)
 
   useEffect(() => { inputRef.current?.focus() }, [])

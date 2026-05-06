@@ -204,6 +204,7 @@ class Uploader(
     /**
      * File-streaming variant of [uploadViaSigned]. Reads the file in chunks rather than
      * loading it into a ByteArray, so large videos don't exhaust the heap.
+     * Do not call file.readBytes() before this — it causes OOM on small-heap devices (e.g. Samsung Galaxy A02s, 201 MB heap).
      */
     fun uploadViaSigned(
         baseUrl: String?,
