@@ -217,6 +217,7 @@ function TagEditor({ currentTags, allTags, onSave, onCancel }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const inputRef = useRef(null)
+  const suppressBlurRef = useRef(false)
 
   useEffect(() => { inputRef.current?.focus() }, [])
 
@@ -228,7 +229,7 @@ function TagEditor({ currentTags, allTags, onSave, onCancel }) {
     const t = tag.trim().toLowerCase()
     if (t && !selected.includes(t)) setSelected(prev => [...prev, t])
     setInput('')
-    setDropdownOpen(false)
+    inputRef.current?.focus()
   }
 
   function handleKeyDown(e) {
@@ -283,7 +284,9 @@ function TagEditor({ currentTags, allTags, onSave, onCancel }) {
         value={input}
         onChange={(e) => { setInput(e.target.value); setDropdownOpen(true) }}
         onFocus={() => setDropdownOpen(true)}
-        onBlur={() => setDropdownOpen(false)}
+        onBlur={() => {
+          if (!suppressBlurRef.current) setDropdownOpen(false)
+        }}
         onKeyDown={handleKeyDown}
         placeholder="Add tag…"
         autoComplete="off"
@@ -291,12 +294,16 @@ function TagEditor({ currentTags, allTags, onSave, onCancel }) {
         className="w-full text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-gray-400"
       />
       {dropdownOpen && suggestions.length > 0 && (
-        <div className="mt-0.5 border border-gray-200 rounded bg-white shadow-sm max-h-28 overflow-y-auto">
+        <div
+          className="mt-0.5 border border-gray-200 rounded bg-white shadow-sm max-h-28 overflow-y-auto"
+          onMouseDown={() => { suppressBlurRef.current = true }}
+          onMouseUp={() => { suppressBlurRef.current = false }}
+        >
           {suggestions.map(tag => (
             <button
               key={tag}
               type="button"
-              onMouseDown={(e) => { e.preventDefault(); addTag(tag) }}
+              onClick={() => addTag(tag)}
               className="w-full text-left text-xs px-2 py-1 hover:bg-gray-50 text-gray-700"
             >
               {tag}

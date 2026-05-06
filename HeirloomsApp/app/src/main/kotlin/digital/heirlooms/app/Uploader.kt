@@ -4,8 +4,10 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okio.BufferedSink
+import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
 
@@ -59,6 +61,18 @@ class Uploader(
         fun sha256Hex(bytes: ByteArray): String =
             MessageDigest.getInstance("SHA-256").digest(bytes)
                 .joinToString("") { "%02x".format(it) }
+
+        fun sha256Hex(file: File): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            file.inputStream().buffered().use { stream ->
+                val buffer = ByteArray(8192)
+                var bytesRead: Int
+                while (stream.read(buffer).also { bytesRead = it } != -1) {
+                    digest.update(buffer, 0, bytesRead)
+                }
+            }
+            return digest.digest().joinToString("") { "%02x".format(it) }
+        }
     }
 
     fun upload(endpoint: String?, fileBytes: ByteArray?, mimeType: String, apiKey: String? = null): UploadResult {
@@ -186,6 +200,85 @@ class Uploader(
             UploadResult.Failure("Confirm error: ${e.message}")
         }
     }
+
+    /**
+     * File-streaming variant of [uploadViaSigned]. Reads the file in chunks rather than
+     * loading it into a ByteArray, so large videos don't exhaust the heap.
+     */
+    fun uploadViaSigned(
+        baseUrl: String?,
+        file: File,
+        mimeType: String,
+        apiKey: String? = null,
+        onProgress: ((Int) -> Unit)? = null,
+        onConfirming: (() -> Unit)? = null,
+    ): UploadResult {
+        if (!isValidEndpoint(baseUrl)) return UploadResult.Failure("No endpoint configured")
+        if (!file.exists() || file.length() == 0L) return UploadResult.Failure("File is empty")
+
+        val base = baseUrl!!.trimEnd('/')
+
+        val prepareRequest = Request.Builder()
+            .url("$base/api/content/uploads/prepare")
+            .post("""{"mimeType":"$mimeType"}""".toRequestBody("application/json".toMediaType()))
+            .apply { if (!apiKey.isNullOrBlank()) header("X-Api-Key", apiKey) }
+            .build()
+
+        val prepareResponse = try {
+            httpClient.newCall(prepareRequest).execute().use { response ->
+                if (!response.isSuccessful) return UploadResult.Failure("Prepare failed: HTTP ${response.code}", response.code)
+                response.body?.string() ?: return UploadResult.Failure("Empty prepare response")
+            }
+        } catch (e: IOException) {
+            return UploadResult.Failure("Prepare error: ${e.message}")
+        }
+
+        val storageKey = parseJsonStringField(prepareResponse, "storageKey")
+            ?: return UploadResult.Failure("Missing storageKey in prepare response")
+        val uploadUrl = parseJsonStringField(prepareResponse, "uploadUrl")
+            ?: return UploadResult.Failure("Missing uploadUrl in prepare response")
+
+        val putBody: RequestBody = if (onProgress != null)
+            ProgressFileRequestBody(file, mimeType, onProgress)
+        else
+            file.asRequestBody(mimeType.toMediaType())
+
+        val putRequest = Request.Builder()
+            .url(uploadUrl)
+            .put(putBody)
+            .header("Content-Type", mimeType)
+            .build()
+
+        try {
+            httpClient.newCall(putRequest).execute().use { response ->
+                if (!response.isSuccessful) return UploadResult.Failure("GCS upload failed: HTTP ${response.code}", response.code)
+            }
+        } catch (e: IOException) {
+            return UploadResult.Failure("GCS upload error: ${e.message}")
+        }
+
+        onConfirming?.invoke()
+        val contentHash = sha256Hex(file)
+        val confirmRequest = Request.Builder()
+            .url("$base/api/content/uploads/confirm")
+            .post("""{"storageKey":"$storageKey","mimeType":"$mimeType","fileSize":${file.length()},"contentHash":"$contentHash"}"""
+                .toRequestBody("application/json".toMediaType()))
+            .apply { if (!apiKey.isNullOrBlank()) header("X-Api-Key", apiKey) }
+            .build()
+
+        return try {
+            httpClient.newCall(confirmRequest).execute().use { response ->
+                val code = response.code
+                when {
+                    response.isSuccessful -> UploadResult.Success("Uploaded successfully", code, 1)
+                    code == 409 -> UploadResult.Success("Already uploaded (duplicate)", code, 1)
+                    else -> UploadResult.Failure("Confirm failed: HTTP $code", code)
+                }
+            }
+        } catch (e: IOException) {
+            UploadResult.Failure("Confirm error: ${e.message}")
+        }
+    }
 }
 
 private class ProgressRequestBody(
@@ -209,6 +302,34 @@ private class ProgressRequestBody(
             if (percent != lastPercent) {
                 lastPercent = percent
                 onProgress(percent)
+            }
+        }
+    }
+}
+
+private class ProgressFileRequestBody(
+    private val file: File,
+    private val mimeType: String,
+    private val onProgress: (Int) -> Unit,
+) : RequestBody() {
+    override fun contentType() = mimeType.toMediaType()
+    override fun contentLength() = file.length()
+    override fun writeTo(sink: BufferedSink) {
+        val total = file.length()
+        if (total == 0L) return
+        var written = 0L
+        var lastPercent = -1
+        val buffer = ByteArray(8 * 1024)
+        file.inputStream().use { input ->
+            var bytesRead: Int
+            while (input.read(buffer).also { bytesRead = it } != -1) {
+                sink.write(buffer, 0, bytesRead)
+                written += bytesRead
+                val percent = (written * 100L / total).toInt()
+                if (percent != lastPercent) {
+                    lastPercent = percent
+                    onProgress(percent)
+                }
             }
         }
     }

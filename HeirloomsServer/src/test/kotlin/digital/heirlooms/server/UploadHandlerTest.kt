@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.UUID
 
-class UploadHandlerTest {
+class FinUploadHandlerTest {
 
     private val mockStorage = mockk<FileStore>()
     private val mockDatabase = mockk<Database>()

@@ -900,3 +900,25 @@ Samsung Gallery provides `intent.type = "image/*"` (wildcard) in the share inten
 **Cloud Run:** latest revision `heirlooms-server-00021-fqb`.
 
 **v0.16.0 not yet tagged** — releasing once all three increments are confirmed working end-to-end.
+
+---
+
+## Session — 2026-05-07 (v0.16.1 — video upload OOM fix + tag dropdown UX)
+
+**Android: video upload OOM fix**
+
+Root cause identified via ADB logcat: `UploadWorker` called `file.readBytes()` before `uploadViaSigned`, loading the entire video into the Java heap (201 MB growth limit on Samsung Galaxy A02s). When OkHttp then tried to allocate an 8 KB Okio buffer segment to begin the GCS PUT, the heap was exhausted — `OutOfMemoryError: Failed to allocate a 8208 byte allocation with 55224 free bytes`. Because `OutOfMemoryError` is a `java.lang.Error` (not `Exception`), the `catch (_: Exception)` in `UploadWorker` did not catch it: the coroutine crashed silently, the GCS PUT never completed, no DB record was created, and no result notification appeared.
+
+Fix: new `Uploader.uploadViaSigned(File, ...)` overload that streams the video from disk to GCS directly using `file.asRequestBody()` / `ProgressFileRequestBody`, never loading the full content into memory. SHA-256 computed by reading the file in 8 KB chunks. `UploadWorker` now passes the `File` object directly, removing `readBytes()` entirely. Confirmed working: 1-minute Samsung video (~90 MB) uploaded in ~8 min 46 s on slow home WiFi.
+
+**Web: tag dropdown stays open after selection**
+
+The tag editor dropdown was closing after each selection, requiring the user to click away and back to reopen it. Three approaches were tried before finding a reliable fix:
+
+1. Removed `setDropdownOpen(false)` from `addTag` — failed because `onBlur` was still firing and closing the dropdown.
+2. Used `e.relatedTarget` in `onBlur` to detect intra-dropdown clicks — failed because Safari on macOS does not focus `<button>` elements on click, so `e.relatedTarget` was null.
+3. `suppressBlurRef`: the dropdown container's `onMouseDown` sets a ref flag before `onBlur` fires on the input; `onBlur` skips the close while the flag is set; `onMouseUp` clears it. This is browser-agnostic. ✓
+
+**Cloud Run:** `heirlooms-web-00008-9qv` (web), server unchanged at `heirlooms-server-00021-fqb`.
+
+**v0.16.1 not yet tagged** — Bret tags after push.

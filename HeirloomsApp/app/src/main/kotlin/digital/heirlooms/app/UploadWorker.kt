@@ -38,8 +38,7 @@ class UploadWorker(
             val file = File(path)
             if (!file.exists()) { failed++; return@forEach }
             try {
-                val bytes = file.readBytes()
-                val result = uploader.uploadViaSigned(BASE_URL, bytes, mimeType, apiKey)
+                val result = uploader.uploadViaSigned(BASE_URL, file, mimeType, apiKey)
                 if (result is Uploader.UploadResult.Success) succeeded++ else failed++
             } catch (_: Exception) {
                 failed++

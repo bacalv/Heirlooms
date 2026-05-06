@@ -24,7 +24,7 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.16.0 (6 May 2026) — tags (schema, API, web UI)
+- Current version: v0.16.1 (7 May 2026) — video upload OOM fix, tag dropdown UX fix
 - One-time machine setup required: ~/.testcontainers.properties with
   docker.raw.sock path — see PROMPT_LOG.md for details
 
@@ -63,6 +63,11 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
   The spec-endpoint test added in v0.16.0 is now the canary for any future
   schema-affecting change — keep it in place. Keywords: `private`, `data class`,
   `Jackson`, `OpenAPI`, `schema`.
+- Never use `file.readBytes()` before a large network upload on Android — it loads
+  the entire file into the Java heap. On a budget device (e.g. Samsung Galaxy A02s,
+  201 MB heap limit) this leaves no room for OkHttp's Okio buffers, causing a silent
+  `OutOfMemoryError` mid-upload (`Error`, not `Exception`, so `catch (_: Exception)`
+  misses it). Always stream from a `File` or `InputStream` directly. Fixed in v0.16.1.
 
 ---
 
