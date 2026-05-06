@@ -41,5 +41,15 @@ Timestamps are not available and are marked as `[unknown]`.
 
 ---
 
+## Entry [2026-05-06] — Streaming video via signed read URLs
+**Prompt:** Replace the blob-download approach for videos with GCS signed read URLs so the video streams instead of downloading all at once.
+
+**Response:** New server endpoint `GET /api/content/uploads/{id}/url` generates a 1-hour signed GCS read URL and returns `{"url":"..."}`. The web app fetches this URL (one fast API call with the key), then sets it directly as `<video src>`. The browser handles streaming, buffering, and seeking natively via GCS range requests. Loading overlay removed — playback starts as soon as the `<video>` element receives the signed URL. Blob URL creation and revocation also removed.
+
+**Files changed:**
+- `src/App.jsx` — fetch signed URL instead of blob, pass to VideoPlayer src directly
+
+---
+
 ## Entry [2026-05-06] — Validated
 **Validated end-to-end:** Dev server run via `npm run dev`. Login screen confirmed. Gallery loaded against production server after server was redeployed with CORS support (revision `heirlooms-server-00007-7vw`). Image thumbnails displayed correctly.

@@ -37,6 +37,16 @@ class GcsFileStore(
 
     override fun get(key: StorageKey): ByteArray = storage.readAllBytes(BlobId.of(bucket, key.value))
 
+    override fun generateReadUrl(key: StorageKey): String {
+        val blobInfo = BlobInfo.newBuilder(BlobId.of(bucket, key.value)).build()
+        return storage.signUrl(
+            blobInfo,
+            60L, TimeUnit.MINUTES,
+            SignUrlOption.withV4Signature(),
+            SignUrlOption.signWith(credentials),
+        ).toString()
+    }
+
     override fun prepareUpload(mimeType: String): PreparedUpload {
         val key = "${uuidProvider()}.${mimeTypeToExtension(mimeType)}"
         val blobInfo = BlobInfo.newBuilder(BlobId.of(bucket, key))

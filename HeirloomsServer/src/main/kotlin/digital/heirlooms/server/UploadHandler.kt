@@ -66,6 +66,7 @@ fun buildApp(storage: FileStore, database: Database): HttpHandler {
 
     return routes(
         "/api/content/uploads/{id}/file" bind GET to fileProxyHandler(storage, database),
+        "/api/content/uploads/{id}/url" bind GET to readUrlHandler(directUpload, database),
         "/api/content" bind apiContract,
         "/health" bind GET to { Response(OK).body("ok") },
         "/docs/api.json" bind GET to { specWithApiKeyAuth(apiContract) },
@@ -189,6 +190,32 @@ private fun fileProxyHandler(storage: FileStore, database: Database): HttpHandle
                     .body(ByteArrayInputStream(bytes), bytes.size.toLong())
             } catch (e: Exception) {
                 Response(INTERNAL_SERVER_ERROR).body("Failed to fetch file: ${e.message}")
+            }
+        }
+    }
+}
+
+private fun readUrlHandler(directUpload: DirectUploadSupport?, database: Database): HttpHandler = { request: Request ->
+    if (directUpload == null) {
+        Response(NOT_IMPLEMENTED).body("Signed URLs not supported by the current storage backend")
+    } else {
+        val idStr = request.path("id")
+        val id = try { idStr?.let { UUID.fromString(it) } } catch (_: IllegalArgumentException) { null }
+        if (id == null) {
+            Response(NOT_FOUND)
+        } else {
+            val record = database.getUploadById(id)
+            if (record == null) {
+                Response(NOT_FOUND)
+            } else {
+                try {
+                    val url = directUpload.generateReadUrl(StorageKey(record.storageKey))
+                    Response(OK)
+                        .header("Content-Type", "application/json")
+                        .body("""{"url":"$url"}""")
+                } catch (e: Exception) {
+                    Response(INTERNAL_SERVER_ERROR).body("Failed to generate URL: ${e.message}")
+                }
             }
         }
     }

@@ -7,4 +7,5 @@ data class PreparedUpload(
 
 interface DirectUploadSupport {
     fun prepareUpload(mimeType: String): PreparedUpload
+    fun generateReadUrl(key: StorageKey): String
 }

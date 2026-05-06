@@ -269,6 +269,36 @@ class UploadHandlerTest {
     }
 
     // -------------------------------------------------------------------------
+    // Read URL endpoint
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `GET uploads id url returns signed URL for known upload`() {
+        every { mockDatabase.getUploadById(knownId) } returns knownRecord
+        every { (mockDirectStorage as DirectUploadSupport).generateReadUrl(StorageKey(knownRecord.storageKey)) } returns "https://gcs.example.com/signed-read"
+
+        val response = appWithDirectUpload(Request(GET, "/api/content/uploads/$knownId/url"))
+
+        assertEquals(OK, response.status)
+        assertTrue(response.bodyString().contains("https://gcs.example.com/signed-read"))
+    }
+
+    @Test
+    fun `GET uploads id url returns 404 when upload not found`() {
+        every { mockDatabase.getUploadById(knownId) } returns null
+
+        val response = appWithDirectUpload(Request(GET, "/api/content/uploads/$knownId/url"))
+
+        assertEquals(NOT_FOUND, response.status)
+    }
+
+    @Test
+    fun `GET uploads id url returns 501 when storage does not support signed URLs`() {
+        val response = app(Request(GET, "/api/content/uploads/$knownId/url"))
+        assertEquals(NOT_IMPLEMENTED, response.status)
+    }
+
+    // -------------------------------------------------------------------------
     // Prepare endpoint — storage supports direct upload
     // -------------------------------------------------------------------------
 

@@ -185,6 +185,19 @@ extension on `org.http4k.core.Body.Companion`. Import `org.http4k.core.Body` and
 
 ---
 
+## Entry [2026-05-06] — Signed read URL for video streaming
+**Prompt:** Add a signed GCS read URL endpoint so the web app can stream videos instead of downloading them as blobs.
+
+**Response:** Added `generateReadUrl(key: StorageKey): String` to `DirectUploadSupport` interface and implemented in `GcsFileStore` (V4 signed GET URL, 1-hour expiry). New top-level route `GET /api/content/uploads/{id}/url` looks up the upload record, generates the signed URL, returns `{"url":"..."}`. Returns 501 for non-GCS backends, 404 if record not found. 3 new tests.
+
+**Files changed:**
+- `DirectUploadSupport.kt` — added `generateReadUrl`
+- `GcsFileStore.kt` — implemented `generateReadUrl`
+- `UploadHandler.kt` — added `readUrlHandler` and route
+- `UploadHandlerTest.kt` — 3 new tests
+
+---
+
 ## Entry [2026-05-06] — Signed URL upload — validated
 **Validated end-to-end:** Server deployed to Cloud Run revision `heirlooms-server-00008-vt7`. Fresh APK installed via `adb install -r`. 34.57 MB video uploaded successfully via the three-step signed URL flow. Tagged as **v0.8.0**.
 

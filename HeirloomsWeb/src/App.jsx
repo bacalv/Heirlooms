@@ -173,7 +173,7 @@ function UploadCard({ upload, apiKey, onImageClick, onVideoClick }) {
   }, [fileUrl, apiKey])
 
   function handleVideoClick() {
-    onVideoClick({ fileUrl, mimeType: upload.mimeType, apiKey })
+    onVideoClick({ uploadId: upload.id, mimeType: upload.mimeType, apiKey })
   }
 
   return (
@@ -219,8 +219,7 @@ function Gallery({ apiKey, onSignOut }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lightboxUrl, setLightboxUrl] = useState(null)
-  const [videoPlayer, setVideoPlayer] = useState(null) // { blobUrl, mimeType }
-  const [videoLoading, setVideoLoading] = useState(false)
+  const [videoPlayer, setVideoPlayer] = useState(null) // { url, mimeType }
 
   useEffect(() => {
     fetch(`${API_URL}/api/content/uploads`, { headers: { 'X-Api-Key': apiKey } })
@@ -230,22 +229,20 @@ function Gallery({ apiKey, onSignOut }) {
       .finally(() => setLoading(false))
   }, [apiKey])
 
-  async function handleVideoClick({ fileUrl, mimeType, apiKey: key }) {
-    setVideoLoading(true)
+  async function handleVideoClick({ uploadId, mimeType, apiKey: key }) {
     try {
-      const r = await fetch(fileUrl, { headers: { 'X-Api-Key': key } })
+      const r = await fetch(`${API_URL}/api/content/uploads/${uploadId}/url`, {
+        headers: { 'X-Api-Key': key },
+      })
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const blob = await r.blob()
-      setVideoPlayer({ blobUrl: URL.createObjectURL(blob), mimeType })
+      const { url } = await r.json()
+      setVideoPlayer({ url, mimeType })
     } catch (e) {
       alert(`Could not load video: ${e.message}`)
-    } finally {
-      setVideoLoading(false)
     }
   }
 
   function closeVideoPlayer() {
-    if (videoPlayer?.blobUrl) URL.revokeObjectURL(videoPlayer.blobUrl)
     setVideoPlayer(null)
   }
 
@@ -279,20 +276,10 @@ function Gallery({ apiKey, onSignOut }) {
         )}
       </main>
 
-      {/* Video loading overlay */}
-      {videoLoading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="flex flex-col items-center gap-3 text-white">
-            <Spinner />
-            <p className="text-sm">Loading video…</p>
-          </div>
-        </div>
-      )}
-
       {lightboxUrl && <Lightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
       {videoPlayer && (
         <VideoPlayer
-          url={videoPlayer.blobUrl}
+          url={videoPlayer.url}
           mimeType={videoPlayer.mimeType}
           onClose={closeVideoPlayer}
         />
