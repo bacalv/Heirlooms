@@ -735,3 +735,26 @@ header added to the 201 response. All 95 tests still passing.
 **Result:** 97 tests, 0 failures, 1 skipped locally (valid-MP4 test runs in Docker where FFmpeg is installed).
 
 **Deployed:** Cloud Run revision `heirlooms-server-00009-gdv`. Health check confirmed `ok`. Tagged as **v0.13.0**.
+
+---
+
+## Session — 2026-05-06 (Web gallery — video thumbnails)
+
+**Prompt:** Update HeirloomsWeb to use the Phase 2 video thumbnails.
+
+**What was built:**
+
+`UploadCard` previously ignored `thumbnailKey` for video files, always showing a generic
+video icon. Now:
+
+- Videos with a `thumbnailKey` pre-fetch the JPEG thumbnail (via the same `/thumb` endpoint
+  used for images) and display it in the card with a semi-transparent play-button overlay.
+  Clicking the card still opens the video via the signed read URL.
+- Videos without a `thumbnailKey` keep the existing `VideoIcon` + "Click to play" behaviour.
+  While a thumbnail is loading, a spinner is shown.
+- Added `PlayIcon` component (circular button, 48×48, play arrow).
+
+**Files changed:**
+- `HeirloomsWeb/src/App.jsx`
+
+**Deployed:** Cloud Run revision `heirlooms-web-00003-4nx`.
