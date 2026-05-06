@@ -448,3 +448,18 @@ PA_NOTES.md (Things that tripped us up) and SE_NOTES.md.
 - `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/MetadataExtractorTest.kt` (new)
 - `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/UploadHandlerTest.kt` — new test + 3 confirm tests updated
 - `HeirloomsWeb/src/App.jsx` — PinIcon + relative positioning on UploadCard
+
+---
+
+## Entry [2026-05-06] — Image rotation endpoint
+
+**Prompt:** Add image rotation support — PATCH endpoint, DB column, web button.
+
+**What was built:**
+- `V5__add_rotation.sql` — `rotation INT NOT NULL DEFAULT 0`
+- `UploadRecord` gains `rotation: Int = 0`; all SELECT queries updated; `toJson()` always includes `rotation`
+- `Database.updateRotation(id, rotation)` — UPDATE statement
+- `PATCH /uploads/{id}/rotation` contract route — validates 0/90/180/270, returns 400/404/200
+- 5 new `UploadHandlerTest` tests; 107 total, 106 passing, 1 skipped
+
+**Deployed:** Cloud Run revision `heirlooms-server-00015-ztc`.

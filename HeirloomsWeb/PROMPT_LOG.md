@@ -69,3 +69,21 @@ Video player and streaming validated end-to-end against revision `heirlooms-serv
 
 **Files changed:**
 - `HeirloomsWeb/src/App.jsx`
+
+---
+
+## Entry [2026-05-06] — Image rotation + refresh
+
+**Rotation:**
+- `RotateIcon` component (SVG arrow)
+- ↻ button in image card info row; `onRotate` callback fires `PATCH /uploads/{id}/rotation`
+- Optimistic state update — `upload.rotation` updated immediately in `Gallery` state; server persisted in the background
+- CSS `transform: rotate(Xdeg)` on thumbnail images; `overflow-hidden` on container
+- `Lightbox` accepts `rotation` prop; swaps `max-w`/`max-h` at 90°/270° so portrait-rotated images fill the viewport
+- `lightboxUrl` state replaced with `lightbox: { url, rotation }` object
+
+**Refresh:**
+- `RefreshIcon` component (spins via `animate-spin` while fetching)
+- Manual refresh button in header; `fetchUploads(true)` shows spinner
+- Auto-refresh checkbox — polls every 10 seconds while checked
+- `useCallback` + separate `useEffect` for interval; clean teardown on uncheck

@@ -2,6 +2,30 @@
 
 ---
 
+### 0.15.0 — 6 May 2026
+
+- Image rotation: `PATCH /api/content/uploads/{id}/rotation` accepts 0/90/180/270; V5 migration
+- `rotation` field in all upload JSON responses (always present, defaults to 0)
+- `Database.updateRotation()` method
+- 5 new tests; 107 total, 106 passing, 1 skipped
+- Deployed: Cloud Run revision `heirlooms-server-00015-ztc`
+
+---
+
+### 0.14.0 — 6 May 2026
+
+- EXIF and video metadata extraction at upload time
+- `MetadataExtractor.kt` — `com.drewnoakes:metadata-extractor` for images; `ffprobe` JSON for videos
+- V4 migration: 6 nullable metadata columns (captured_at, latitude, longitude, altitude, device_make, device_model)
+- `GcsFileStore.getFirst(key, maxBytes)` — partial GCS read (64 KB) for metadata extraction; avoids loading full file
+- `FileStore.getFirst()` default implementation falls back to `get()`
+- Cloud Run memory increased to 2 Gi
+- GPS (0,0) placeholder filter — Samsung entry-level cameras write empty GPS IFD; treated as null
+- `capturedAt` fallback: tries ExifSubIFD → IFD0 DateTime → SubIFD DateTimeDigitized
+- Deployed: Cloud Run revision `heirlooms-server-00014-97p`
+
+---
+
 ### 0.13.0 — 6 May 2026
 
 - Video thumbnail extraction via FFmpeg (Phase 2)

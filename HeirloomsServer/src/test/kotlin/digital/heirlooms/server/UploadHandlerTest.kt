@@ -7,6 +7,7 @@ import io.mockk.runs
 import io.mockk.slot
 import io.mockk.verify
 import org.http4k.core.Method.GET
+import org.http4k.core.Method.PATCH
 import org.http4k.core.Method.POST
 import org.http4k.core.Request
 import org.http4k.core.Status.Companion.BAD_REQUEST
@@ -653,5 +654,69 @@ class UploadHandlerTest {
         )
 
         assertEquals(CREATED, response.status)
+    }
+
+    // -------------------------------------------------------------------------
+    // Rotation endpoint
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `PATCH uploads id rotation returns 200 for valid value`() {
+        every { mockDatabase.getUploadById(knownId) } returns knownRecord
+        every { mockDatabase.updateRotation(knownId, 90) } just runs
+
+        val response = app(
+            Request(PATCH, "/api/content/uploads/$knownId/rotation")
+                .header("Content-Type", "application/json")
+                .body("""{"rotation":90}""")
+        )
+
+        assertEquals(OK, response.status)
+        verify { mockDatabase.updateRotation(knownId, 90) }
+    }
+
+    @Test
+    fun `PATCH uploads id rotation returns 400 for invalid value`() {
+        val response = app(
+            Request(PATCH, "/api/content/uploads/$knownId/rotation")
+                .header("Content-Type", "application/json")
+                .body("""{"rotation":45}""")
+        )
+        assertEquals(BAD_REQUEST, response.status)
+    }
+
+    @Test
+    fun `PATCH uploads id rotation returns 404 when upload not found`() {
+        every { mockDatabase.getUploadById(knownId) } returns null
+
+        val response = app(
+            Request(PATCH, "/api/content/uploads/$knownId/rotation")
+                .header("Content-Type", "application/json")
+                .body("""{"rotation":90}""")
+        )
+        assertEquals(NOT_FOUND, response.status)
+    }
+
+    @Test
+    fun `rotation field appears in list response`() {
+        every { mockDatabase.listUploads() } returns listOf(
+            UploadRecord(UUID.randomUUID(), "uuid.jpg", "image/jpeg", 1024L, rotation = 90),
+        )
+
+        val response = app(Request(GET, "/api/content/uploads"))
+
+        assertEquals(OK, response.status)
+        assertTrue(response.bodyString().contains(""""rotation":90"""))
+    }
+
+    @Test
+    fun `rotation defaults to 0 in list response`() {
+        every { mockDatabase.listUploads() } returns listOf(
+            UploadRecord(UUID.randomUUID(), "uuid.jpg", "image/jpeg", 1024L),
+        )
+
+        val response = app(Request(GET, "/api/content/uploads"))
+
+        assertTrue(response.bodyString().contains(""""rotation":0"""))
     }
 }

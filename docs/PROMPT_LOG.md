@@ -816,3 +816,20 @@ Samsung Gallery provides `intent.type = "image/*"` (wildcard) in the share inten
 - Samsung Galaxy shares with wildcard MIME types
 - Notification channel importance is immutable after first creation — bump the channel ID to change it
 - Samsung Camera "Location tags" toggle (in Camera Settings) is separate from the system Location permission
+
+---
+
+## Session — 2026-05-06 (Image rotation)
+
+**Prompt:** Add the ability to rotate images 90° in the web gallery. Rotation persists and applies to both thumbnail and lightbox view.
+
+**What was built:**
+
+- **`V5__add_rotation.sql`** — `rotation INT NOT NULL DEFAULT 0` on uploads table
+- **`Database.updateRotation(id, rotation)`** — UPDATE statement; `rotation` added to all SELECT queries and `UploadRecord`
+- **`PATCH /api/content/uploads/{id}/rotation`** — new contract route accepting `{"rotation":0|90|180|270}`; returns 400 for invalid values, 404 if upload not found
+- **`UploadRecord.toJson()`** — `rotation` always included (even 0)
+- **HeirloomsWeb** — `RotateIcon` component; ↻ button in each image card's info row; `handleRotate` in Gallery with optimistic state update + fire-and-forget PATCH call; CSS `transform: rotate(Xdeg)` on thumbnail image with `overflow-hidden` container clipping; `Lightbox` accepts `rotation` prop and swaps `max-w`/`max-h` at 90°/270° so portrait-rotated images fill the viewport; `lightboxUrl` state replaced with `lightbox: {url, rotation}` object
+- **5 new tests** in `UploadHandlerTest`: valid rotation returns 200 + verifies DB call, invalid rotation returns 400, upload not found returns 404, rotation field in list response, rotation defaults to 0
+
+**107 tests total, 106 passing, 1 skipped** (FFmpeg video thumbnail — passes in Docker).
