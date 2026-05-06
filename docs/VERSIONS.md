@@ -2,6 +2,47 @@
 
 ---
 
+## v0.7.0 — Web gallery UI (6 May 2026)
+
+Milestone 4 complete. Adds HeirloomsWeb and a file retrieval endpoint.
+
+- `GET /api/content/uploads/{id}/file` — new HeirloomsServer endpoint; looks up
+  the upload record by UUID, fetches the file from GCS, streams it back with the
+  correct `Content-Type`; returns 404 if not found
+- `FileStore.get(key)` — new method on the interface, implemented in
+  `LocalFileStore`, `S3FileStore`, and `GcsFileStore`
+- `uploadedAt` added to `UploadRecord` and the list endpoint JSON response
+- CORS support added to HeirloomsServer (all origins; tighten when domain is live);
+  OPTIONS preflight answered before `ApiKeyFilter` runs
+- `HeirloomsWeb/` — new React 18 + Tailwind CSS + Vite sub-project; gallery grid
+  with image thumbnails (blob URL fetch so `X-Api-Key` header can be sent), file
+  icons for non-images, upload date, MIME type, file size; lightbox on click;
+  in-session API key login (React state only — cleared on every page reload);
+  multi-stage Dockerfile (Node 22 → nginx:alpine)
+
+---
+
+## v0.6.0 — Swagger UI + API key auth in docs (5 May 2026)
+
+- Swagger UI integrated and validated on Cloud Run
+- API key auth surfaced in Swagger UI (`X-Api-Key` header scheme)
+- `persistAuthorization: true` so the key survives page refresh in the docs UI
+
+---
+
+## v0.5.0 — GCS backend + Cloud Run deployment (2–4 May 2026)
+
+- `GcsFileStore` — Google Cloud Storage backend; credentials from
+  `GCS_CREDENTIALS_JSON` env var (never written to disk)
+- Cloud SQL PostgreSQL socket factory for Cloud Run → Cloud SQL connectivity
+- API key authentication added to HeirloomsServer (`ApiKeyFilter`) and
+  HeirloomsApp (settings screen + `X-Api-Key` header on uploads)
+- Full GCP infrastructure provisioned: Cloud Run, Cloud SQL, GCS bucket,
+  Artifact Registry, service account with least-privilege IAM, secrets in
+  Secret Manager
+
+---
+
 ## v0.4.0 — Self-hosted deployment (1 May 2026)
 
 Milestone 3 complete. Adds a `deploy/` folder so the full stack can be run on a

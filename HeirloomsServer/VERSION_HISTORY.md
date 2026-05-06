@@ -2,6 +2,21 @@
 
 ---
 
+### 0.7.0 — 6 May 2026
+
+- Added `FileStore.get(key: StorageKey): ByteArray` to the interface; implemented
+  in `LocalFileStore`, `S3FileStore`, and `GcsFileStore`
+- New endpoint: `GET /api/content/uploads/{id}/file` — streams file bytes from
+  GCS with the correct `Content-Type`; returns 404 if the upload record is missing
+- `UploadRecord` extended with `uploadedAt: Instant`; list endpoint JSON now
+  includes `uploadedAt`
+- `Database.getUploadById(id: UUID): UploadRecord?` added
+- `CorsFilter` added — handles OPTIONS preflight and appends
+  `Access-Control-Allow-Origin: *` to all responses; wired as the outermost
+  filter so preflight requests bypass `ApiKeyFilter`
+
+---
+
 ### 0.2.0
 - Introduced `FileStore` interface as an abstraction over storage backends
 - Introduced `StorageKey` value class to represent the stored file's key/filename
