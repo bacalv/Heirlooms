@@ -1,10 +1,15 @@
 package digital.heirlooms.app
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -21,8 +26,22 @@ class SettingsActivity : AppCompatActivity() {
         btnSave = findViewById(R.id.btnSave)
 
         editApiKey.setText(store.getApiKey())
-
         btnSave.setOnClickListener { save() }
+
+        requestMediaLocationPermissionIfNeeded()
+    }
+
+    private fun requestMediaLocationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_MEDIA_LOCATION)
+                != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.ACCESS_MEDIA_LOCATION),
+                0,
+            )
+        }
     }
 
     private fun save() {

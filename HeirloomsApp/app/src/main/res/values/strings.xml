@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Share sheet label -->
-    <string name="app_name">My Heirlooms</string>
+    <string name="app_name">Heirlooms</string>
 
     <!-- Settings screen -->
     <string name="settings_title">Heirloom settings</string>

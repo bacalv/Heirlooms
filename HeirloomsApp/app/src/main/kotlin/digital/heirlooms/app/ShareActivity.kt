@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -63,7 +64,7 @@ class ShareActivity : Activity() {
             val apiKey = store.getApiKey().takeIf { it.isNotEmpty() }
 
             val fileBytes = withContext(Dispatchers.IO) {
-                try { readBytes(fileUri) } catch (e: IOException) { null }
+                try { readBytes(fileUri) } catch (e: Exception) { null }
             }
 
             if (fileBytes == null) {
@@ -97,7 +98,7 @@ class ShareActivity : Activity() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Upload status",
-                NotificationManager.IMPORTANCE_DEFAULT,
+                NotificationManager.IMPORTANCE_HIGH,
             ).apply { description = "Shows the result of an heirloom upload" }
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
@@ -123,9 +124,19 @@ class ShareActivity : Activity() {
         NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
     }
 
-    private fun readBytes(uri: Uri): ByteArray =
-        contentResolver.openInputStream(uri)?.use { it.readBytes() }
+    private fun readBytes(uri: Uri): ByteArray {
+        // On Android 10+, try to get unredacted bytes (preserves GPS EXIF).
+        // setRequireOriginal needs ACCESS_MEDIA_LOCATION; if denied or unsupported,
+        // fall through to the plain URI so the upload still works without GPS.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                val originalUri = MediaStore.setRequireOriginal(uri)
+                contentResolver.openInputStream(originalUri)?.use { return it.readBytes() }
+            } catch (_: Exception) { }
+        }
+        return contentResolver.openInputStream(uri)?.use { it.readBytes() }
             ?: throw IOException("Could not open stream for URI")
+    }
 
     private fun showToast(message: String) =
         Toast.makeText(applicationContext, message, Toast.LENGTH_SHORT).show()
@@ -141,7 +152,7 @@ class ShareActivity : Activity() {
     }
 
     companion object {
-        private const val CHANNEL_ID = "heirloom_upload"
+        private const val CHANNEL_ID = "heirloom_upload_v2"
         private const val NOTIFICATION_ID = 1
     }
 }
