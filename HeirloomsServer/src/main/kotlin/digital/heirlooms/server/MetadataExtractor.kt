@@ -1,6 +1,7 @@
 package digital.heirlooms.server
 
 import com.drew.imaging.ImageMetadataReader
+import com.drew.metadata.exif.ExifDirectoryBase
 import com.drew.metadata.exif.ExifIFD0Directory
 import com.drew.metadata.exif.ExifSubIFDDirectory
 import com.drew.metadata.exif.GpsDirectory
@@ -53,9 +54,7 @@ class MetadataExtractor {
                 sign * rational.toDouble()
             }
 
-            val capturedAt = metadata.getFirstDirectoryOfType(ExifSubIFDDirectory::class.java)
-                ?.getDate(ExifSubIFDDirectory.TAG_DATETIME_ORIGINAL, TimeZone.getTimeZone("UTC"))
-                ?.toInstant()
+            val capturedAt = extractCapturedAt(metadata)
 
             val ifd0 = metadata.getFirstDirectoryOfType(ExifIFD0Directory::class.java)
             val make = ifd0?.getString(ExifIFD0Directory.TAG_MAKE)?.trim()?.takeIf { it.isNotBlank() }
@@ -111,6 +110,26 @@ class MetadataExtractor {
         } catch (_: Exception) {
             MediaMetadata()
         }
+    }
+
+    private fun extractCapturedAt(metadata: com.drew.metadata.Metadata): Instant? {
+        val utc = TimeZone.getTimeZone("UTC")
+        // 1. SubIFD DateTimeOriginal — standard capture time tag
+        metadata.getFirstDirectoryOfType(ExifSubIFDDirectory::class.java)
+            ?.getDate(ExifSubIFDDirectory.TAG_DATETIME_ORIGINAL, utc)
+            ?.toInstant()
+            ?.let { return it }
+        // 2. IFD0 DateTime — Samsung and some Android cameras write here instead of SubIFD
+        metadata.getFirstDirectoryOfType(ExifIFD0Directory::class.java)
+            ?.getDate(ExifDirectoryBase.TAG_DATETIME, utc)
+            ?.toInstant()
+            ?.let { return it }
+        // 3. SubIFD DateTimeDigitized — last resort
+        metadata.getFirstDirectoryOfType(ExifSubIFDDirectory::class.java)
+            ?.getDate(ExifSubIFDDirectory.TAG_DATETIME_DIGITIZED, utc)
+            ?.toInstant()
+            ?.let { return it }
+        return null
     }
 
     private fun JsonNode.isMissingOrNull() = this is MissingNode || this is NullNode

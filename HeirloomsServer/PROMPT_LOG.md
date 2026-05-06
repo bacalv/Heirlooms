@@ -419,7 +419,27 @@ PA_NOTES.md (Things that tripped us up) and SE_NOTES.md.
 
 **Key decision — single fetch in confirm path:** Confirm flow previously called `storage.get()` inside `tryFetchAndStoreThumbnail`. With metadata extraction added, refactored to fetch bytes once via `fetchBytesIfNeeded` and pass to both thumbnail and metadata, avoiding a second GCS round-trip.
 
+---
+
+## Entry [2026-05-06] — capturedAt fallback for Samsung EXIF
+
+**Problem:** `capturedAt` was missing from Samsung JPEG uploads even though `deviceMake`/`deviceModel` were extracted correctly. Samsung (and some Android cameras) write `DateTime` to `ExifIFD0Directory` rather than `DateTimeOriginal` in `ExifSubIFDDirectory`. Our code only checked `ExifSubIFDDirectory.TAG_DATETIME_ORIGINAL`.
+
+**Fix:** `extractCapturedAt()` private helper with three-level fallback:
+1. `ExifSubIFDDirectory.TAG_DATETIME_ORIGINAL` — standard
+2. `ExifIFD0Directory` / `ExifDirectoryBase.TAG_DATETIME` — Samsung fallback
+3. `ExifSubIFDDirectory.TAG_DATETIME_DIGITIZED` — last resort
+
+**GPS still absent:** Expected for browser-based uploads. Android 10+ strips GPS from images when accessed by apps without `ACCESS_MEDIA_LOCATION` permission (browsers don't have it). GPS will work when uploading via the Heirlooms Android app share sheet. Camera app also needs "Location tags" enabled in Samsung Camera settings.
+
+**Deployed:** Cloud Run revision `heirlooms-server-00011-gbq`.
+
 **Files changed:**
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/MetadataExtractor.kt`
+
+---
+
+**Files changed (original metadata session):**
 - `HeirloomsServer/build.gradle.kts` — `com.drewnoakes:metadata-extractor:2.19.0` dependency
 - `HeirloomsServer/src/main/resources/db/migration/V4__add_metadata_columns.sql` (new)
 - `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/MetadataExtractor.kt` (new)
