@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 const API_URL = import.meta.env.VITE_API_URL ?? ''
 
@@ -43,6 +43,18 @@ function VideoIcon() {
     <svg className="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
         d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+    </svg>
+  )
+}
+
+function RefreshIcon({ spinning = false }) {
+  return (
+    <svg
+      className={`w-4 h-4 ${spinning ? 'animate-spin' : ''}`}
+      fill="none" stroke="currentColor" viewBox="0 0 24 24"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
     </svg>
   )
 }
@@ -259,16 +271,32 @@ function Gallery({ apiKey, onSignOut }) {
   const [uploads, setUploads] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [autoRefresh, setAutoRefresh] = useState(false)
   const [lightboxUrl, setLightboxUrl] = useState(null)
-  const [videoPlayer, setVideoPlayer] = useState(null) // { url, mimeType }
+  const [videoPlayer, setVideoPlayer] = useState(null)
+
+  const fetchUploads = useCallback(async (showSpinner = false) => {
+    if (showSpinner) setRefreshing(true)
+    try {
+      const r = await fetch(`${API_URL}/api/content/uploads`, { headers: { 'X-Api-Key': apiKey } })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      setUploads(await r.json())
+    } catch (e) {
+      if (showSpinner) setError(e.message)
+    } finally {
+      if (showSpinner) setRefreshing(false)
+      setLoading(false)
+    }
+  }, [apiKey])
+
+  useEffect(() => { fetchUploads() }, [fetchUploads])
 
   useEffect(() => {
-    fetch(`${API_URL}/api/content/uploads`, { headers: { 'X-Api-Key': apiKey } })
-      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
-      .then(setUploads)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false))
-  }, [apiKey])
+    if (!autoRefresh) return
+    const id = setInterval(() => fetchUploads(), 10_000)
+    return () => clearInterval(id)
+  }, [autoRefresh, fetchUploads])
 
   async function handleVideoClick({ uploadId, mimeType, apiKey: key }) {
     try {
@@ -291,9 +319,28 @@ function Gallery({ apiKey, onSignOut }) {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold text-gray-900">Heirlooms</h1>
-        <button onClick={onSignOut} className="text-sm text-gray-500 hover:text-gray-800 transition-colors">
-          Sign out
-        </button>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+              className="rounded"
+            />
+            Auto-refresh
+          </label>
+          <button
+            onClick={() => fetchUploads(true)}
+            disabled={refreshing}
+            title="Refresh"
+            className="text-gray-500 hover:text-gray-800 transition-colors disabled:opacity-40"
+          >
+            <RefreshIcon spinning={refreshing} />
+          </button>
+          <button onClick={onSignOut} className="text-sm text-gray-500 hover:text-gray-800 transition-colors">
+            Sign out
+          </button>
+        </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
