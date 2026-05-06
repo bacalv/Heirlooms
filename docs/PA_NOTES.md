@@ -126,8 +126,12 @@ gcloud run deploy heirlooms-server \
 
 ## Docker build and push command (for future deployments)
 
+The Dockerfile no longer builds inside Docker (avoids Docker Desktop connection
+drops on macOS during long Gradle builds). Build the JAR locally first:
+
 ```bash
 cd ~/Downloads/Heirlooms/HeirloomsServer
+./gradlew shadowJar --no-daemon
 docker build \
   --platform linux/amd64 \
   -t europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server:latest \

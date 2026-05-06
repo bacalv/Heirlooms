@@ -1,22 +1,12 @@
-FROM eclipse-temurin:21-jdk AS builder
-WORKDIR /build
-
-COPY gradlew .
-COPY gradle/ gradle/
-COPY build.gradle.kts settings.gradle.kts ./
-
-RUN GRADLE_OPTS="-Dorg.gradle.native=false" ./gradlew dependencies --no-daemon -q 2>/dev/null || true
-
-COPY src/ src/
-RUN GRADLE_OPTS="-Dorg.gradle.native=false" ./gradlew shadowJar --no-daemon -q
-
+# Build the JAR locally first: ./gradlew shadowJar
+# Then: docker build ...
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
 RUN groupadd -r heirloom && useradd -r -g heirloom heirloom
 USER heirloom
 
-COPY --from=builder /build/build/libs/HeirloomsServer-*-all.jar app.jar
+COPY build/libs/HeirloomsServer-*-all.jar app.jar
 
 EXPOSE 8080
 
