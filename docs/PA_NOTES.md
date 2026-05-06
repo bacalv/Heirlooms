@@ -11,7 +11,7 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Prefers IntelliJ IDEA Community Edition over Android Studio for this project
 - Uses IntelliJ's built-in Git UI for commits; does all pushes manually as a
   deliberate human checkpoint before code enters the remote repo
-- Dislikes the macOS Finder file picker — use `Cmd+Shift+G` to navigate by path
+- Dislikes the macOS Finder file picker — use Cmd+Shift+G to navigate by path
 - Prefers the Claude Code plugin for hands-on fixes; uses claude.ai for architecture
   and product thinking
 - Tends to work in focused sessions and likes a clean summary at the end of each one
@@ -21,126 +21,153 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 
 ## Things to always remember
 
-- **Package name:** `digital.heirlooms` (not `com.heirloom` — that was the old name)
-- **Domain:** `heirlooms.digital` (registered 30 April 2026)
-- **GitHub:** `github.com/bacalv/Heirlooms` (capital H)
-- **Current version:** v0.3.0 (tagged on main)
-- **One-time machine setup required:** `~/.testcontainers.properties` with
-  `docker.raw.sock` path — see PROMPT_LOG.md for details
+- Package name: digital.heirlooms (not com.heirloom — that was the old name)
+- Domain: heirlooms.digital (registered 30 April 2026)
+- GitHub: github.com/bacalv/Heirlooms (capital H)
+- Current version: v0.9.0 (6 May 2026)
+- One-time machine setup required: ~/.testcontainers.properties with
+  docker.raw.sock path — see PROMPT_LOG.md for details
 
 ---
 
 ## Pending decisions / next actions
 
-- **Milestone 3:** Self-hosted deployment — a `docker-compose.yml` for running the
-  full stack on a cheap VPS so the Android app has a real endpoint to point at
-- **heirlooms.com:** Currently parked on venture.com. Worth monitoring — only worth
-  acquiring if the project grows to consumer scale
-- **License:** Deliberately deferred. Revisit when deciding whether Heirlooms will
-  be open source, source-available, or strictly proprietary
+- Domain mapping: DNS records added to GoDaddy, awaiting SSL certificate
+  provisioning by Google (can take up to 1 hour)
+- heirlooms.com: Currently parked on venture.com. Worth monitoring
+- License: Deliberately deferred
+- Tags: Not yet in schema or UI — planned for Milestone 4 completion
 
 ---
 
 ## Things that tripped us up (don't repeat)
 
-- The `~/.testcontainers.properties` file must use `docker.raw.sock`, not
-  `docker.sock` or `docker-cli.sock` — the others return stub 400 responses on
-  macOS Docker Desktop
-- Zip files must be built fresh each time — `zip -r` with `--exclude` only works
-  on a clean build; updating an existing zip preserves entries that were already in it
-- `.idea/` must always be excluded from zips and commits — IntelliJ generates it
-  fresh on first open and stale paths cause import failures
-- `local.properties` in HeirloomsApp must point to the Android SDK:
-  `sdk.dir=/Users/bac/Library/Android/sdk`
+- ~/.testcontainers.properties must use docker.raw.sock not docker.sock
+- Zip files must be built fresh each time
+- .idea/ must always be excluded from zips and commits
+- local.properties in HeirloomsApp: sdk.dir=/Users/bac/Library/Android/sdk
+- GCP permissions must be granted via CLI, not the Console
+- Cloud Run domain-mappings only work in us-central1 — not europe-west2
+- CNAME value for GoDaddy: ghs.googlehosted.com (no trailing dot)
 
 ---
 
 ## Team reminders
 
-- The Software Engineer (Claude Code) creates commits but **Bret always pushes**
+- The Software Engineer creates commits but Bret always pushes
 - Ask the Software Engineer to update PROMPT_LOG.md after significant code changes
-- At the start of a new claude.ai session, paste both PROMPT_LOG.md and TEAM.md
-- PA_NOTES.md (this file) should also be pasted in if working memory is needed
+- At the start of a new claude.ai session, paste PROMPT_LOG.md, TEAM.md, PA_NOTES.md
+- Add IDEAS.md if discussing product direction
 
 ---
 
-## GCP Infrastructure (Milestone 3)
+## GCP Infrastructure
 
 | Resource | Value |
 |---|---|
-| Project ID | `heirlooms-495416` |
-| Region | `europe-west2` |
-| Cloud SQL instance | `heirlooms-db` |
-| Database name | `heirlooms` |
-| Database user | `heirlooms` |
-| Cloud Storage bucket | `heirlooms-uploads` |
-| Service account | `heirlooms-server` |
-| Artifact Registry | `heirlooms` |
-| Full image path | `europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server` |
+| Project ID | heirlooms-495416 |
+| Region (services) | us-central1 |
+| Region (Cloud SQL, GCS) | europe-west2 |
+| Cloud SQL instance | heirlooms-db |
+| Database name | heirlooms |
+| Database user | heirlooms |
+| Cloud Storage bucket | heirlooms-uploads |
+| Service account | heirlooms-server |
+| Artifact Registry | heirlooms (europe-west2) |
+| HeirloomsServer image | europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server |
+| HeirloomsWeb image | europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-web |
+| HeirloomsServer Cloud Run URL | https://heirlooms-server-340655233963.us-central1.run.app |
+| HeirloomsWeb Cloud Run URL | https://heirlooms-web-340655233963.us-central1.run.app |
+| Target domain (web) | https://heirlooms.digital (DNS added, cert pending) |
+| Target domain (server) | https://api.heirlooms.digital (DNS added, cert pending) |
 
-**Credentials:** Service account JSON key downloaded locally. DB password stored
+Credentials: Service account JSON key downloaded locally. DB password stored
 separately. Neither should ever be committed to GitHub.
 
 ---
 
-## GCP permissions — what actually worked (learned the hard way)
+## GCP permissions — what actually worked
 
-All permissions must be granted via CLI, not the Console — the Console UI did not
-reliably apply them. Use these commands:
+All permissions must be granted via CLI, not the Console:
 
-```bash
-# Cloud SQL access
 gcloud projects add-iam-policy-binding heirlooms-495416 \
-  --member="serviceAccount:heirlooms-server@heirlooms-495416.iam.gserviceaccount.com" \
-  --role="roles/cloudsql.client"
+--member="serviceAccount:heirlooms-server@heirlooms-495416.iam.gserviceaccount.com" \
+--role="roles/cloudsql.client"
 
-# Secret Manager access
 gcloud projects add-iam-policy-binding heirlooms-495416 \
-  --member="serviceAccount:heirlooms-server@heirlooms-495416.iam.gserviceaccount.com" \
-  --role="roles/secretmanager.secretAccessor"
+--member="serviceAccount:heirlooms-server@heirlooms-495416.iam.gserviceaccount.com" \
+--role="roles/secretmanager.secretAccessor"
 
-# GCS bucket access
 gcloud storage buckets add-iam-policy-binding gs://heirlooms-uploads \
-  --member="serviceAccount:heirlooms-server@heirlooms-495416.iam.gserviceaccount.com" \
-  --role="roles/storage.objectAdmin"
-```
+--member="serviceAccount:heirlooms-server@heirlooms-495416.iam.gserviceaccount.com" \
+--role="roles/storage.objectAdmin"
 
-## Cloud Run deploy command (current, working)
+---
 
-```bash
-gcloud run deploy heirlooms-server \
-  --image europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server:latest \
-  --region europe-west2 \
-  --platform managed \
-  --allow-unauthenticated \
-  --set-env-vars "STORAGE_BACKEND=GCS" \
-  --set-env-vars "GCS_BUCKET=heirlooms-uploads" \
-  --set-env-vars "DB_URL=jdbc:postgresql:///heirlooms?cloudSqlInstance=heirlooms-495416:europe-west2:heirlooms-db&socketFactory=com.google.cloud.sql.postgres.SocketFactory" \
-  --set-env-vars "DB_USER=heirlooms" \
-  --set-secrets "DB_PASSWORD=heirlooms-db-password:latest" \
-  --set-secrets "GCS_CREDENTIALS_JSON=heirlooms-gcs-credentials:latest" \
-  --set-secrets "API_KEY=heirlooms-api-key:latest" \
-  --service-account heirlooms-server@heirlooms-495416.iam.gserviceaccount.com \
-  --add-cloudsql-instances heirlooms-495416:europe-west2:heirlooms-db
-```
+## Cloud Run deploy commands (current, working)
 
-## Docker build and push command (for future deployments)
+NOTE: Services run in us-central1. Artifact Registry remains in europe-west2.
+Domain mappings only work in us-central1 — do not deploy to europe-west2.
 
-The Dockerfile no longer builds inside Docker (avoids Docker Desktop connection
-drops on macOS during long Gradle builds). Build the JAR locally first:
-
-```bash
+HeirloomsServer:
 cd ~/Downloads/Heirlooms/HeirloomsServer
 ./gradlew shadowJar --no-daemon
-docker build \
-  --platform linux/amd64 \
-  -t europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server:latest \
-  .
+docker build --platform linux/amd64 \
+-t europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server:latest .
 docker push europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server:latest
-```
+gcloud run deploy heirlooms-server \
+--image europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server:latest \
+--region us-central1 --platform managed --allow-unauthenticated \
+--set-env-vars "STORAGE_BACKEND=GCS,GCS_BUCKET=heirlooms-uploads,DB_USER=heirlooms" \
+--set-env-vars "DB_URL=jdbc:postgresql:///heirlooms?cloudSqlInstance=heirlooms-495416:europe-west2:heirlooms-db&socketFactory=com.google.cloud.sql.postgres.SocketFactory" \
+--set-secrets "DB_PASSWORD=heirlooms-db-password:latest" \
+--set-secrets "GCS_CREDENTIALS_JSON=heirlooms-gcs-credentials:latest" \
+--set-secrets "API_KEY=heirlooms-api-key:latest" \
+--service-account heirlooms-server@heirlooms-495416.iam.gserviceaccount.com \
+--add-cloudsql-instances heirlooms-495416:europe-west2:heirlooms-db
 
-## Current version
-v0.9.0 (6 May 2026)
+HeirloomsWeb:
+cd ~/Downloads/Heirlooms/HeirloomsWeb
+docker build --platform linux/amd64 \
+--build-arg VITE_API_URL=https://api.heirlooms.digital \
+-t europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-web:latest .
+docker push europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-web:latest
+gcloud run deploy heirlooms-web \
+--image europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-web:latest \
+--region us-central1 --platform managed --allow-unauthenticated --port 80
+
+---
+
+## Domain mapping commands (for reference)
+
+gcloud beta run domain-mappings create \
+--service heirlooms-web \
+--domain heirlooms.digital \
+--region us-central1
+
+gcloud beta run domain-mappings create \
+--service heirlooms-server \
+--domain api.heirlooms.digital \
+--region us-central1
+
+DNS records added to GoDaddy:
+heirlooms.digital    A     216.239.32.21
+heirlooms.digital    A     216.239.34.21
+heirlooms.digital    A     216.239.36.21
+heirlooms.digital    A     216.239.38.21
+heirlooms.digital    AAAA  2001:4860:4802:32::15
+heirlooms.digital    AAAA  2001:4860:4802:34::15
+heirlooms.digital    AAAA  2001:4860:4802:36::15
+heirlooms.digital    AAAA  2001:4860:4802:38::15
+api.heirlooms.digital CNAME ghs.googlehosted.com
+
+---
+
+## HeirloomsWeb authentication note
+
+API key entered at login, held in React state only. Cleared on every page reload,
+never persisted, never baked into the build. VITE_API_KEY removed — only
+VITE_API_URL is a build-time variable.
 
 ---
 
@@ -148,11 +175,10 @@ v0.9.0 (6 May 2026)
 
 | File | Purpose |
 |---|---|
-| `PROMPT_LOG.md` | Full history of decisions and what was built |
-| `TEAM.md` | Team structure and working practices |
-| `PA_NOTES.md` | This file — PA working memory and preferences |
-| `ROADMAP.md` | Milestone plan and product vision |
-| `IDEAS.md` | Product brainstorms not yet ready for the roadmap |
-
-**At the start of a new claude.ai session, paste:**
-`PROMPT_LOG.md`, `TEAM.md`, `PA_NOTES.md` — and `IDEAS.md` if discussing product direction.
+| PROMPT_LOG.md | Full history of decisions and what was built |
+| TEAM.md | Team structure and working practices |
+| PA_NOTES.md | This file — PA working memory and preferences |
+| SE_NOTES.md | Software Engineer working memory |
+| ROADMAP.md | Milestone plan and product vision |
+| IDEAS.md | Product brainstorms not yet ready for the roadmap |
+| VERSIONS.md | Version history |
