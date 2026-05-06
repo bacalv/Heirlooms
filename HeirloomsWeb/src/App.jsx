@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const API_URL = import.meta.env.VITE_API_URL ?? ''
 
@@ -157,6 +157,15 @@ function RotateIcon() {
   )
 }
 
+function TagIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a2 2 0 012-2h2z" />
+    </svg>
+  )
+}
+
 function Lightbox({ url, rotation = 0, onClose }) {
   const swapped = rotation === 90 || rotation === 270
   return (
@@ -201,12 +210,130 @@ function PinIcon({ latitude, longitude }) {
   )
 }
 
-function UploadCard({ upload, apiKey, onImageClick, onVideoClick, onRotate }) {
+function TagEditor({ currentTags, allTags, onSave, onCancel }) {
+  const [selected, setSelected] = useState([...currentTags])
+  const [input, setInput] = useState('')
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const inputRef = useRef(null)
+
+  useEffect(() => { inputRef.current?.focus() }, [])
+
+  const suggestions = allTags
+    .filter(t => !selected.includes(t))
+    .filter(t => !input || t.startsWith(input.toLowerCase()))
+
+  function addTag(tag) {
+    const t = tag.trim().toLowerCase()
+    if (t && !selected.includes(t)) setSelected(prev => [...prev, t])
+    setInput('')
+    setDropdownOpen(false)
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (input.trim()) addTag(input.trim())
+    } else if (e.key === 'Escape') {
+      if (dropdownOpen) setDropdownOpen(false)
+      else onCancel()
+    } else if (e.key === 'Backspace' && !input && selected.length > 0) {
+      setSelected(prev => prev.slice(0, -1))
+    }
+  }
+
+  async function handleSave() {
+    const pending = input.trim().toLowerCase()
+    const finalTags = pending && !selected.includes(pending)
+      ? [...selected, pending]
+      : selected
+    setSaving(true)
+    setError(null)
+    try {
+      await onSave(finalTags)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="pt-1">
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-1.5">
+          {selected.map(tag => (
+            <span key={tag} className="flex items-center gap-0.5 px-1.5 py-0.5 bg-gray-200 text-gray-700 rounded text-xs">
+              {tag}
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setSelected(prev => prev.filter(t => t !== tag))}
+                className="text-gray-400 hover:text-gray-700 leading-none ml-0.5"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <input
+        ref={inputRef}
+        value={input}
+        onChange={(e) => { setInput(e.target.value); setDropdownOpen(true) }}
+        onFocus={() => setDropdownOpen(true)}
+        onBlur={() => setDropdownOpen(false)}
+        onKeyDown={handleKeyDown}
+        placeholder="Add tag…"
+        autoComplete="off"
+        disabled={saving}
+        className="w-full text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-gray-400"
+      />
+      {dropdownOpen && suggestions.length > 0 && (
+        <div className="mt-0.5 border border-gray-200 rounded bg-white shadow-sm max-h-28 overflow-y-auto">
+          {suggestions.map(tag => (
+            <button
+              key={tag}
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); addTag(tag) }}
+              className="w-full text-left text-xs px-2 py-1 hover:bg-gray-50 text-gray-700"
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+      )}
+      {error && <p className="text-xs text-red-500 mt-0.5">{error}</p>}
+      <div className="flex gap-1 mt-1.5">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="text-xs px-2 py-0.5 bg-gray-800 text-white rounded hover:bg-gray-600 disabled:opacity-40 transition-colors"
+        >
+          {saving ? '…' : 'Save'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="text-xs px-2 py-0.5 text-gray-500 hover:text-gray-800 transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function UploadCard({ upload, apiKey, onImageClick, onVideoClick, onRotate, onUpdateTags, allTags }) {
   const fileUrl = `${API_URL}/api/content/uploads/${upload.id}/file`
   const displayUrl = upload.thumbnailKey
     ? `${API_URL}/api/content/uploads/${upload.id}/thumb`
     : fileUrl
   const [blobUrl, setBlobUrl] = useState(null)
+  const [editingTags, setEditingTags] = useState(false)
 
   // Pre-fetch image thumbnails on mount so they display in the grid.
   // Videos are fetched on demand when the user clicks, to avoid loading
@@ -229,8 +356,8 @@ function UploadCard({ upload, apiKey, onImageClick, onVideoClick, onRotate }) {
   }
 
   return (
-    <div className="relative bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-      <div className="bg-gray-50 h-48 flex items-center justify-center overflow-hidden">
+    <div className="relative bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col">
+      <div className="bg-gray-50 h-48 flex items-center justify-center overflow-hidden rounded-t-xl">
         {isImage(upload.mimeType) ? (
           blobUrl ? (
             <img
@@ -277,19 +404,46 @@ function UploadCard({ upload, apiKey, onImageClick, onVideoClick, onRotate }) {
           <p className="font-medium text-gray-800 truncate" title={upload.storageKey}>
             {upload.storageKey}
           </p>
-          {isImage(upload.mimeType) && onRotate && (
-            <button
-              onClick={() => onRotate(upload.id)}
-              title="Rotate 90°"
-              className="flex-shrink-0 text-gray-400 hover:text-gray-700 transition-colors p-0.5"
-            >
-              <RotateIcon />
-            </button>
-          )}
+          <div className="flex-shrink-0 flex items-center gap-0.5">
+            {isImage(upload.mimeType) && onRotate && (
+              <button
+                onClick={() => onRotate(upload.id)}
+                title="Rotate 90°"
+                className="text-gray-400 hover:text-gray-700 transition-colors p-0.5"
+              >
+                <RotateIcon />
+              </button>
+            )}
+            {onUpdateTags && (
+              <button
+                onClick={() => setEditingTags(true)}
+                title="Edit tags"
+                className={`p-0.5 transition-colors ${editingTags ? 'text-gray-700' : 'text-gray-400 hover:text-gray-700'}`}
+              >
+                <TagIcon />
+              </button>
+            )}
+          </div>
         </div>
         <p>{upload.mimeType}</p>
         <p>{formatBytes(upload.fileSize)}</p>
         <p className="text-gray-400 text-xs">{formatDate(upload.uploadedAt)}</p>
+        {editingTags ? (
+          <TagEditor
+            currentTags={upload.tags}
+            allTags={allTags}
+            onSave={async (tags) => { await onUpdateTags(upload.id, tags); setEditingTags(false) }}
+            onCancel={() => setEditingTags(false)}
+          />
+        ) : upload.tags.length > 0 ? (
+          <div className="flex flex-wrap gap-1 pt-1">
+            {upload.tags.map(tag => (
+              <span key={tag} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                {tag}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   )
@@ -303,6 +457,11 @@ function Gallery({ apiKey, onSignOut }) {
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [lightbox, setLightbox] = useState(null) // { url, rotation }
   const [videoPlayer, setVideoPlayer] = useState(null)
+
+  const allTags = useMemo(
+    () => [...new Set(uploads.flatMap(u => u.tags))].sort(),
+    [uploads]
+  )
 
   const fetchUploads = useCallback(async (showSpinner = false) => {
     if (showSpinner) setRefreshing(true)
@@ -337,6 +496,25 @@ function Gallery({ apiKey, onSignOut }) {
       }).catch(() => {})
       return { ...u, rotation: newRotation }
     }))
+  }
+
+  async function handleUpdateTags(uploadId, tags) {
+    const r = await fetch(`${API_URL}/api/content/uploads/${uploadId}/tags`, {
+      method: 'PATCH',
+      headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags }),
+    })
+    if (!r.ok) {
+      let msg = `HTTP ${r.status}`
+      try {
+        const body = await r.json()
+        if (body.tag && body.reason) msg = `"${body.tag}": ${body.reason}`
+        else if (body.error) msg = body.error
+      } catch {}
+      throw new Error(msg)
+    }
+    const updated = await r.json()
+    setUploads(prev => prev.map(u => u.id === uploadId ? updated : u))
   }
 
   async function handleVideoClick({ uploadId, mimeType, apiKey: key }) {
@@ -400,6 +578,8 @@ function Gallery({ apiKey, onSignOut }) {
                 onImageClick={(url, rotation) => setLightbox({ url, rotation })}
                 onVideoClick={handleVideoClick}
                 onRotate={handleRotate}
+                onUpdateTags={handleUpdateTags}
+                allTags={allTags}
               />
             ))}
           </div>

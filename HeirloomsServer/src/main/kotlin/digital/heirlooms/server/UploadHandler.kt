@@ -27,6 +27,7 @@ import org.http4k.core.Status.Companion.CONFLICT
 import org.http4k.core.Status.Companion.NOT_IMPLEMENTED
 import org.http4k.core.Status.Companion.OK
 import org.http4k.format.Jackson
+import org.http4k.format.Jackson.auto
 import org.http4k.lens.Path
 import org.http4k.lens.binary
 import org.http4k.lens.uuid
@@ -50,6 +51,8 @@ private fun sha256Hex(bytes: ByteArray): String {
 
 private fun UploadRecord.toJson(): String = buildString {
     append("""{"id":"$id","storageKey":"$storageKey","mimeType":"$mimeType","fileSize":$fileSize,"uploadedAt":"$uploadedAt","rotation":$rotation,"thumbnailKey":${if (thumbnailKey != null) "\"$thumbnailKey\"" else "null"}""")
+    val tagsJson = tags.joinToString(",") { "\"$it\"" }
+    append(""","tags":[$tagsJson]""")
     if (capturedAt != null) append(""","capturedAt":"$capturedAt"""")
     if (latitude != null) append(""","latitude":$latitude""")
     if (longitude != null) append(""","longitude":$longitude""")
@@ -94,6 +97,7 @@ fun buildApp(
             thumbProxyContractRoute(storage, database),
             readUrlContractRoute(directUpload, database),
             rotationContractRoute(database),
+            tagsContractRoute(database),
         )
     }
 
@@ -174,7 +178,7 @@ private fun uploadContractRoute(
 private fun listUploadsContractRoute(database: Database): ContractRoute =
     "/uploads" meta {
         summary = "List uploads"
-        description = "Returns all uploaded files as a JSON array with id, storageKey, mimeType, and fileSize fields."
+        description = "Returns all uploaded files as a JSON array. Optional query params: `tag` (include only uploads that have this tag), `exclude_tag` (omit uploads that have this tag). Both can be combined."
     } bindContract GET to listUploadsHandler(database)
 
 private fun uploadHandler(
@@ -233,9 +237,11 @@ private fun uploadHandler(
     }
 }
 
-private fun listUploadsHandler(database: Database): HttpHandler = {
+private fun listUploadsHandler(database: Database): HttpHandler = { request ->
     try {
-        val uploads = database.listUploads()
+        val tag = request.query("tag")?.takeIf { it.isNotBlank() }
+        val excludeTag = request.query("exclude_tag")?.takeIf { it.isNotBlank() }
+        val uploads = database.listUploads(tag = tag, excludeTag = excludeTag)
         val json = buildString {
             append("[")
             uploads.forEachIndexed { i, u ->
@@ -439,6 +445,12 @@ private fun fetchHeaderForMetadata(storageKey: String, mimeType: String, storage
     } catch (_: Exception) { null }
 }
 
+data class RotationRequest(val rotation: Int)
+data class TagsRequest(val tags: List<String>)
+
+private val rotationRequestLens = Body.auto<RotationRequest>().toLens()
+private val tagsRequestLens = Body.auto<TagsRequest>().toLens()
+
 private val VALID_ROTATIONS = setOf(0, 90, 180, 270)
 
 private fun rotationContractRoute(database: Database): ContractRoute {
@@ -446,22 +458,61 @@ private fun rotationContractRoute(database: Database): ContractRoute {
     return "/uploads" / id / "rotation" meta {
         summary = "Set image rotation"
         description = "Sets the display rotation for an image (0, 90, 180, or 270 degrees)."
+        receiving(rotationRequestLens to RotationRequest(rotation = 90))
     } bindContract PATCH to { uploadId: UUID, _: String ->
         { request: Request ->
             try {
-                val rotation = ObjectMapper().readTree(request.bodyString())?.get("rotation")?.asInt(-1) ?: -1
+                val body = try { rotationRequestLens(request) } catch (_: Exception) { null }
                 when {
-                    rotation !in VALID_ROTATIONS ->
+                    body == null ->
+                        Response(BAD_REQUEST).body("Malformed JSON")
+                    body.rotation !in VALID_ROTATIONS ->
                         Response(BAD_REQUEST).body("rotation must be 0, 90, 180, or 270")
                     database.getUploadById(uploadId) == null ->
                         Response(NOT_FOUND)
                     else -> {
-                        database.updateRotation(uploadId, rotation)
+                        database.updateRotation(uploadId, body.rotation)
                         Response(OK)
                     }
                 }
             } catch (e: Exception) {
                 Response(INTERNAL_SERVER_ERROR).body("Failed to update rotation: ${e.message}")
+            }
+        }
+    }
+}
+
+private fun tagsContractRoute(database: Database): ContractRoute {
+    val id = Path.uuid().of("id")
+    return "/uploads" / id / "tags" meta {
+        summary = "Set tags"
+        description = "Replaces all tags on an upload. Tags must be kebab-case (lowercase letters, numbers, hyphens, max 50 chars)."
+        receiving(tagsRequestLens to TagsRequest(tags = listOf("family", "2026-summer")))
+    } bindContract PATCH to { uploadId: UUID, _: String ->
+        { request: Request ->
+            try {
+                val body = try { tagsRequestLens(request) } catch (_: Exception) { null }
+                if (body == null) {
+                    Response(BAD_REQUEST).body("Malformed JSON")
+                } else {
+                    when (val result = validateTags(body.tags)) {
+                        is TagValidationResult.Invalid ->
+                            Response(BAD_REQUEST)
+                                .header("Content-Type", "application/json")
+                                .body("""{"error":"invalid tag","tag":"${result.tag}","reason":"${result.reason}"}""")
+                        is TagValidationResult.Valid ->
+                            if (!database.updateTags(uploadId, body.tags)) {
+                                Response(NOT_FOUND)
+                            } else {
+                                val record = database.getUploadById(uploadId)!!
+                                Response(OK)
+                                    .header("Content-Type", "application/json")
+                                    .body(record.toJson())
+                            }
+                    }
+                }
+            } catch (e: Exception) {
+                Response(INTERNAL_SERVER_ERROR).body("Failed to update tags: ${e.message}")
             }
         }
     }

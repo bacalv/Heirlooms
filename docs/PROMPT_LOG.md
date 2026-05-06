@@ -833,3 +833,70 @@ Samsung Gallery provides `intent.type = "image/*"` (wildcard) in the share inten
 - **5 new tests** in `UploadHandlerTest`: valid rotation returns 200 + verifies DB call, invalid rotation returns 400, upload not found returns 404, rotation field in list response, rotation defaults to 0
 
 **107 tests total, 106 passing, 1 skipped** (FFmpeg video thumbnail — passes in Docker).
+
+---
+
+## Session — 2026-05-06 (Tags — Increment 1: schema + write API)
+
+**Prompt:** Add tag support to HeirloomsServer. New Flyway V6 migration adds a `tags TEXT[] NOT NULL DEFAULT '{}'` column to the uploads table with a GIN index. New `PATCH /api/content/uploads/{id}/tags` endpoint accepts `{"tags":["family","2026-summer"]}` with full-replace semantics, validates each tag against `^[a-z0-9]+(-[a-z0-9]+)*$` with length 1–50, and returns 400 naming the offending tag on failure or 404 if the upload doesn't exist. Tags appear in all upload JSON responses (`POST /upload`, `GET /uploads`, `GET /uploads/{id}`) as a `tags` array, always present, empty when none. Mirror the existing rotation endpoint's structure (added in v0.15.0).
+
+**What was built:**
+
+- **`V6__add_tags.sql`** — `tags TEXT[] NOT NULL DEFAULT '{}'` on uploads table plus `CREATE INDEX idx_uploads_tags ON uploads USING GIN (tags)`
+- **`TagValidator.kt`** — `validateTags(tags)` enforces kebab-case (`^[a-z0-9]+(-[a-z0-9]+)*$`), length 1–50, with specific rejection reasons per tag; sealed `TagValidationResult` (Valid / Invalid(tag, reason))
+- **`Database.updateTags(id, tags): Boolean`** — UPDATE via JDBC `createArrayOf("text", ...)`, returns false if no row matched
+- **`tags` added to `UploadRecord`** — `List<String> = emptyList()`, all SELECT queries include the column, `toUploadRecord()` reads via `getArray("tags")`
+- **`PATCH /api/content/uploads/{id}/tags`** — full-replace semantics; 400 on malformed JSON or invalid tag (offending tag + reason in response body); 404 if upload not found; 200 with full updated UploadRecord JSON on success
+- **`UploadRecord.toJson()`** — `tags` always included, empty array when none
+- **14 new tests** in `TagValidatorTest` (unit), **8 new tests** in `UploadHandlerTest` (integration)
+
+**129 tests total, 128 passing, 1 skipped** (FFmpeg video thumbnail — passes in Docker).
+
+**Notes for future increments:**
+- Increment 2 (read API + filtering) will use the GIN index for `tag` and `exclude_tag` query params on `GET /uploads`
+- Increment 3 (web UI) will surface tags as chips and an inline editor
+- Tag rename, merge, colours, and Android tagging are all out of scope and remain parked in IDEAS.md
+
+**v0.16.0 not yet tagged** — releasing once all three increments land.
+
+---
+
+## Session — 2026-05-06 (Tags — Increment 2: read API + filtering)
+
+**Prompt:** Add `tag` and `exclude_tag` query parameters to `GET /uploads` so the list can be filtered by tag using the GIN index added in Increment 1.
+
+**What was built:**
+
+- **`Database.listUploads(tag, excludeTag)`** — optional parameters; builds a dynamic WHERE clause using `tags @> ARRAY[?]::text[]` (GIN-indexed) and `NOT (tags @> ARRAY[?]::text[])` for inclusion/exclusion; no WHERE clause when both are null (unchanged behaviour)
+- **`GET /uploads?tag=family`** — returns only uploads that have this tag
+- **`GET /uploads?exclude_tag=trash`** — omits uploads that have this tag
+- Both params can be combined in a single request
+- Updated `listUploadsContractRoute` description to document the new params
+- 5 new tests in `UploadHandlerTest` covering: tag filter, exclude_tag filter, both combined, unknown tag returns empty array, no params passes nulls
+
+**134 tests total, 133 passing, 1 skipped** (FFmpeg).
+
+**Cloud Run:** deployed as revision `heirlooms-server-00018-w2g`.
+
+**v0.16.0 not yet tagged** — releasing once Increment 3 (web UI) also lands.
+
+---
+
+## Session — 2026-05-06 (Tags — Increment 3: web UI)
+
+**Prompt:** Surface tags in the web gallery as chips on each card, with an inline editor backed by an autocomplete dropdown of previously used tags.
+
+**What was built:**
+
+- **`TagEditor` component** — removable chips per selected tag (× to remove, Backspace removes last), text input with autocomplete dropdown filtered from `allTags`, Enter or Save commits; pending input text is flushed into the tag list on Save so typing a tag and clicking Save directly works without pressing Enter first
+- **`allTags`** — derived in `Gallery` via `useMemo` over all uploads, sorted, passed down to each `UploadCard`; automatically includes newly saved tags after a successful PATCH
+- **Tag chips** — shown in display mode below card metadata; hidden when no tags
+- **`TagIcon` SVG** — added to card header row next to rotate button; highlighted when editor is open
+- **`overflow-hidden` fix** — moved from outer card div to image container (`rounded-t-xl overflow-hidden`) so the dropdown is not clipped by the card boundary
+- **OpenAPI body spec** — `RotationRequest` and `TagsRequest` data classes made non-private (were `private`, causing `IllegalAccessException` in Jackson schema generator and 500s on `/docs/api.json`); `receiving(lens to example)` added to both PATCH endpoints; spec endpoint test added as a permanent regression guard
+- **CORS/Swagger fix for example bodies** — examples surface in Swagger UI for both PATCH endpoints
+- **Tag filtering** (Increment 2 addition) — `GET /uploads?tag=X` and `GET /uploads?exclude_tag=X` use `tags @> ARRAY[?]::text[]` against the GIN index; `.env` updated to `https://api.heirlooms.digital`
+
+**Cloud Run:** latest revision `heirlooms-server-00021-fqb`.
+
+**v0.16.0 not yet tagged** — releasing once all three increments are confirmed working end-to-end.

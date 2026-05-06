@@ -24,6 +24,7 @@ data class UploadRecord(
     val deviceMake: String? = null,
     val deviceModel: String? = null,
     val rotation: Int = 0,
+    val tags: List<String> = emptyList(),
 )
 
 class Database(private val dataSource: DataSource) {
@@ -65,7 +66,7 @@ class Database(private val dataSource: DataSource) {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
-                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation
+                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags
                    FROM uploads WHERE content_hash = ? LIMIT 1"""
             ).use { stmt ->
                 stmt.setString(1, hash)
@@ -80,7 +81,7 @@ class Database(private val dataSource: DataSource) {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
-                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation
+                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags
                    FROM uploads WHERE id = ?"""
             ).use { stmt ->
                 stmt.setObject(1, id)
@@ -91,13 +92,20 @@ class Database(private val dataSource: DataSource) {
         }
     }
 
-    fun listUploads(): List<UploadRecord> {
+    fun listUploads(tag: String? = null, excludeTag: String? = null): List<UploadRecord> {
         dataSource.connection.use { conn: Connection ->
+            val conditions = mutableListOf<String>()
+            if (tag != null) conditions.add("tags @> ARRAY[?]::text[]")
+            if (excludeTag != null) conditions.add("NOT (tags @> ARRAY[?]::text[])")
+            val where = if (conditions.isEmpty()) "" else "WHERE ${conditions.joinToString(" AND ")}"
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
-                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation
-                   FROM uploads ORDER BY uploaded_at DESC"""
+                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags
+                   FROM uploads $where ORDER BY uploaded_at DESC"""
             ).use { stmt ->
+                var idx = 1
+                if (tag != null) stmt.setString(idx++, tag)
+                if (excludeTag != null) stmt.setString(idx, excludeTag)
                 val rs = stmt.executeQuery()
                 val results = mutableListOf<UploadRecord>()
                 while (rs.next()) results.add(rs.toUploadRecord())
@@ -112,6 +120,16 @@ class Database(private val dataSource: DataSource) {
                 stmt.setInt(1, rotation)
                 stmt.setObject(2, id)
                 stmt.executeUpdate()
+            }
+        }
+    }
+
+    fun updateTags(id: UUID, tags: List<String>): Boolean {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement("UPDATE uploads SET tags = ? WHERE id = ?").use { stmt ->
+                stmt.setArray(1, conn.createArrayOf("text", tags.toTypedArray()))
+                stmt.setObject(2, id)
+                return stmt.executeUpdate() > 0
             }
         }
     }
@@ -147,4 +165,5 @@ private fun java.sql.ResultSet.toUploadRecord() = UploadRecord(
     deviceMake = getString("device_make"),
     deviceModel = getString("device_model"),
     rotation = getInt("rotation"),
+    tags = getArray("tags")?.let { arr -> (arr.array as? Array<*>)?.filterIsInstance<String>() } ?: emptyList(),
 )

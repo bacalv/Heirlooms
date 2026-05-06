@@ -180,7 +180,7 @@ class UploadHandlerTest {
 
     @Test
     fun `GET uploads returns 200 with JSON`() {
-        every { mockDatabase.listUploads() } returns listOf(
+        every { mockDatabase.listUploads(null, null) } returns listOf(
             UploadRecord(UUID.randomUUID(), "some-uuid.jpg", "image/jpeg", 1024),
         )
 
@@ -193,7 +193,7 @@ class UploadHandlerTest {
 
     @Test
     fun `GET uploads returns empty array when no uploads`() {
-        every { mockDatabase.listUploads() } returns emptyList()
+        every { mockDatabase.listUploads(null, null) } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
@@ -208,6 +208,14 @@ class UploadHandlerTest {
     @Test
     fun `health endpoint returns 200`() {
         assertEquals(OK, app(Request(GET, "/health")).status)
+    }
+
+    @Test
+    fun `OpenAPI spec endpoint returns 200 with valid JSON`() {
+        every { mockDatabase.listUploads(null, null) } returns emptyList()
+        val response = app(Request(GET, "/docs/api.json"))
+        assertEquals(OK, response.status)
+        assertTrue(response.header("Content-Type")!!.contains("application/json"))
     }
 
     @Test
@@ -575,7 +583,7 @@ class UploadHandlerTest {
 
     @Test
     fun `thumbnailKey is null in list response for non-image uploads`() {
-        every { mockDatabase.listUploads() } returns listOf(
+        every { mockDatabase.listUploads(null, null) } returns listOf(
             UploadRecord(UUID.randomUUID(), "uuid.mp4", "video/mp4", 10000L),
         )
 
@@ -586,7 +594,7 @@ class UploadHandlerTest {
 
     @Test
     fun `thumbnailKey appears in list response when thumbnail exists`() {
-        every { mockDatabase.listUploads() } returns listOf(
+        every { mockDatabase.listUploads(null, null) } returns listOf(
             UploadRecord(UUID.randomUUID(), "uuid.jpg", "image/jpeg", 1024L, thumbnailKey = "uuid-thumb.jpg"),
         )
 
@@ -699,7 +707,7 @@ class UploadHandlerTest {
 
     @Test
     fun `rotation field appears in list response`() {
-        every { mockDatabase.listUploads() } returns listOf(
+        every { mockDatabase.listUploads(null, null) } returns listOf(
             UploadRecord(UUID.randomUUID(), "uuid.jpg", "image/jpeg", 1024L, rotation = 90),
         )
 
@@ -711,12 +719,176 @@ class UploadHandlerTest {
 
     @Test
     fun `rotation defaults to 0 in list response`() {
-        every { mockDatabase.listUploads() } returns listOf(
+        every { mockDatabase.listUploads(null, null) } returns listOf(
             UploadRecord(UUID.randomUUID(), "uuid.jpg", "image/jpeg", 1024L),
         )
 
         val response = app(Request(GET, "/api/content/uploads"))
 
         assertTrue(response.bodyString().contains(""""rotation":0"""))
+    }
+
+    // -------------------------------------------------------------------------
+    // Tags endpoint
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `PATCH valid tags returns 200 with updated tags in body`() {
+        val updated = knownRecord.copy(tags = listOf("family", "2026-summer"))
+        every { mockDatabase.updateTags(knownId, listOf("family", "2026-summer")) } returns true
+        every { mockDatabase.getUploadById(knownId) } returns updated
+
+        val response = app(
+            Request(PATCH, "/api/content/uploads/$knownId/tags")
+                .header("Content-Type", "application/json")
+                .body("""{"tags":["family","2026-summer"]}""")
+        )
+
+        assertEquals(OK, response.status)
+        assertTrue(response.bodyString().contains("family"))
+        assertTrue(response.bodyString().contains("2026-summer"))
+        verify { mockDatabase.updateTags(knownId, listOf("family", "2026-summer")) }
+    }
+
+    @Test
+    fun `PATCH empty tags array clears tags and shows empty array in response`() {
+        val updated = knownRecord.copy(tags = emptyList())
+        every { mockDatabase.updateTags(knownId, emptyList()) } returns true
+        every { mockDatabase.getUploadById(knownId) } returns updated
+
+        val response = app(
+            Request(PATCH, "/api/content/uploads/$knownId/tags")
+                .header("Content-Type", "application/json")
+                .body("""{"tags":[]}""")
+        )
+
+        assertEquals(OK, response.status)
+        assertTrue(response.bodyString().contains(""""tags":[]"""))
+    }
+
+    @Test
+    fun `PATCH invalid tag returns 400 with offending tag in body`() {
+        val response = app(
+            Request(PATCH, "/api/content/uploads/$knownId/tags")
+                .header("Content-Type", "application/json")
+                .body("""{"tags":["My Children"]}""")
+        )
+
+        assertEquals(BAD_REQUEST, response.status)
+        assertTrue(response.bodyString().contains("My Children"))
+    }
+
+    @Test
+    fun `PATCH multiple tags where one is invalid returns 400 naming that tag`() {
+        val response = app(
+            Request(PATCH, "/api/content/uploads/$knownId/tags")
+                .header("Content-Type", "application/json")
+                .body("""{"tags":["valid-tag","Invalid_Tag"]}""")
+        )
+
+        assertEquals(BAD_REQUEST, response.status)
+        assertTrue(response.bodyString().contains("Invalid_Tag"))
+    }
+
+    @Test
+    fun `PATCH non-existent upload returns 404`() {
+        every { mockDatabase.updateTags(knownId, any()) } returns false
+
+        val response = app(
+            Request(PATCH, "/api/content/uploads/$knownId/tags")
+                .header("Content-Type", "application/json")
+                .body("""{"tags":["family"]}""")
+        )
+
+        assertEquals(NOT_FOUND, response.status)
+    }
+
+    @Test
+    fun `PATCH malformed JSON returns 400`() {
+        val response = app(
+            Request(PATCH, "/api/content/uploads/$knownId/tags")
+                .header("Content-Type", "application/json")
+                .body("""not json""")
+        )
+
+        assertEquals(BAD_REQUEST, response.status)
+    }
+
+    @Test
+    fun `tags field present as empty array in list response for untagged upload`() {
+        every { mockDatabase.listUploads(null, null) } returns listOf(knownRecord)
+
+        val response = app(Request(GET, "/api/content/uploads"))
+
+        assertEquals(OK, response.status)
+        assertTrue(response.bodyString().contains(""""tags":[]"""))
+    }
+
+    @Test
+    fun `tags field present and populated after tagging`() {
+        val tagged = knownRecord.copy(tags = listOf("vacation"))
+        every { mockDatabase.listUploads(null, null) } returns listOf(tagged)
+
+        val response = app(Request(GET, "/api/content/uploads"))
+
+        assertEquals(OK, response.status)
+        assertTrue(response.bodyString().contains(""""tags":["vacation"]"""))
+    }
+
+    // -------------------------------------------------------------------------
+    // Tag filtering — GET /uploads?tag= and ?exclude_tag=
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `GET uploads with tag param passes tag to database`() {
+        val tagged = knownRecord.copy(tags = listOf("family"))
+        every { mockDatabase.listUploads(tag = "family", excludeTag = null) } returns listOf(tagged)
+
+        val response = app(Request(GET, "/api/content/uploads?tag=family"))
+
+        assertEquals(OK, response.status)
+        assertTrue(response.bodyString().contains("family"))
+        verify { mockDatabase.listUploads(tag = "family", excludeTag = null) }
+    }
+
+    @Test
+    fun `GET uploads with exclude_tag param passes excludeTag to database`() {
+        every { mockDatabase.listUploads(tag = null, excludeTag = "trash") } returns listOf(knownRecord)
+
+        val response = app(Request(GET, "/api/content/uploads?exclude_tag=trash"))
+
+        assertEquals(OK, response.status)
+        verify { mockDatabase.listUploads(tag = null, excludeTag = "trash") }
+    }
+
+    @Test
+    fun `GET uploads with both tag and exclude_tag passes both to database`() {
+        val tagged = knownRecord.copy(tags = listOf("family"))
+        every { mockDatabase.listUploads(tag = "family", excludeTag = "trash") } returns listOf(tagged)
+
+        val response = app(Request(GET, "/api/content/uploads?tag=family&exclude_tag=trash"))
+
+        assertEquals(OK, response.status)
+        verify { mockDatabase.listUploads(tag = "family", excludeTag = "trash") }
+    }
+
+    @Test
+    fun `GET uploads with unknown tag returns empty array`() {
+        every { mockDatabase.listUploads(tag = "nonexistent", excludeTag = null) } returns emptyList()
+
+        val response = app(Request(GET, "/api/content/uploads?tag=nonexistent"))
+
+        assertEquals(OK, response.status)
+        assertEquals("[]", response.bodyString())
+    }
+
+    @Test
+    fun `GET uploads with no params passes nulls to database`() {
+        every { mockDatabase.listUploads(null, null) } returns listOf(knownRecord)
+
+        val response = app(Request(GET, "/api/content/uploads"))
+
+        assertEquals(OK, response.status)
+        verify { mockDatabase.listUploads(null, null) }
     }
 }
