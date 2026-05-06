@@ -370,3 +370,32 @@ Timestamps are not available and are marked as `[unknown]`.
 - `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/ShareActivity.kt`
 - `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/SettingsActivity.kt`
 - `HeirloomsApp/app/src/main/res/values/strings.xml`
+
+---
+
+## Session — 2026-05-06 (multi-file sharing, WorkManager background uploads, queue visibility)
+
+**What was built:**
+
+- **Multi-file sharing via `ACTION_SEND_MULTIPLE`**: `ShareActivity` now handles both `ACTION_SEND` and `ACTION_SEND_MULTIPLE`. Each URI is streamed into a temp cache file via `copyToTempFile()` / `openStream()` helper (with nested try/catch to handle `SecurityException` from `setRequireOriginal` without losing the plain-URI fallback).
+- **Background uploads via WorkManager**: Replaced foreground coroutine upload with `OneTimeWorkRequestBuilder<UploadWorker>`. `UploadWorker` (new file) reads file paths and MIME types from `inputData`, uploads sequentially via `Uploader.uploadViaSigned()`, deletes temp files, shows a result notification. File bytes cannot be passed via `inputData` (10 KB limit) so temp files in `cacheDir` are used.
+- **WiFi-only setting**: `EndpointStore` gained `getWifiOnly()` / `setWifiOnly()`. `ShareActivity` passes `NetworkType.UNMETERED` constraint when enabled. `SettingsActivity` shows a WiFi-only checkbox.
+- **Queue visibility screen**: Settings screen extended with a live "Upload queue" section. `observeUploadQueue()` uses `getWorkInfosByTagLiveData(UploadWorker.TAG)` to show active work items. Each row shows file count (stored as work tag `"count:N"`) and state (uploading/queued) with an individual Cancel button. A "Cancel all" button calls `cancelAllWorkByTag`. File count stored as a tag because `WorkInfo` does not expose `inputData`.
+- **Scrollable settings layout**: `activity_settings.xml` rewritten as `ScrollView` to accommodate the queue section below the existing fields.
+- **"Could not read files" fix**: `SecurityException` from `openInputStream(requireOriginalUri)` was caught by the outer try block, preventing fallback to the plain URI. Fixed by extracting `openStream()` as a separate helper with its own nested try/catch.
+
+**Key gotchas:**
+- WorkManager `inputData` has a 10 KB limit — cannot pass file bytes directly. Use temp files in `cacheDir` instead.
+- `WorkInfo` does not expose `inputData` at query time — store display metadata as work tags (e.g. `"count:N"`).
+- `SecurityException` from `setRequireOriginal` bypasses `catch (_: IOException)` — must catch `Exception` or use a separate try/catch.
+- WorkManager result notification needs `IMPORTANCE_HIGH` channel (`heirloom_upload_v2`) — created in `UploadWorker.ensureChannels()`.
+
+**Files changed:**
+- `HeirloomsApp/app/src/main/AndroidManifest.xml`
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/ShareActivity.kt`
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/UploadWorker.kt` (new)
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/EndpointStore.kt`
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/SettingsActivity.kt`
+- `HeirloomsApp/app/src/main/res/layout/activity_settings.xml`
+- `HeirloomsApp/app/src/main/res/values/strings.xml`
+- `HeirloomsApp/app/build.gradle.kts` (added `androidx.work:work-runtime-ktx:2.9.0`)
