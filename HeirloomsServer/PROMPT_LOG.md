@@ -372,7 +372,9 @@ PA_NOTES.md (Things that tripped us up) and SE_NOTES.md.
 
 - **`UploadHandlerTest.kt`** — renamed `no thumbnail generated for unsupported MIME type` to `no thumbnail stored when video bytes are invalid` (video/mp4 is now a supported type; the test still passes because fake bytes cause FFmpeg extraction to fail and return null)
 
-**Test result:** 97 tests, 0 failures, 1 skipped (`valid MP4 produces non-null thumbnail` skipped locally — FFmpeg not installed; will run in Docker)
+**Test result:** 97 tests, 0 failures, 1 skipped (`valid MP4 produces non-null thumbnail` skipped locally — FFmpeg not installed; runs in Docker)
+
+**Deployed:** Cloud Run revision `heirlooms-server-00009-gdv`. Tagged as **v0.13.0**.
 
 **Files changed:**
 - `HeirloomsServer/Dockerfile`

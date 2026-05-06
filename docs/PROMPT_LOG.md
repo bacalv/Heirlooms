@@ -734,4 +734,4 @@ header added to the 201 response. All 95 tests still passing.
 
 **Result:** 97 tests, 0 failures, 1 skipped locally (valid-MP4 test runs in Docker where FFmpeg is installed).
 
-**Do not deploy** — PA handles deployment.
+**Deployed:** Cloud Run revision `heirlooms-server-00009-gdv`. Health check confirmed `ok`. Tagged as **v0.13.0**.

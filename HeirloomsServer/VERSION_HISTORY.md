@@ -2,6 +2,39 @@
 
 ---
 
+### 0.13.0 — 6 May 2026
+
+- Video thumbnail extraction via FFmpeg (Phase 2)
+- `generateThumbnail` now supports `video/mp4`, `video/quicktime`, `video/x-msvideo`,
+  `video/webm` — extracts the first frame via `ffmpeg -vframes 1 -f image2`, scales
+  to 400×400, returns JPEG; all failures return null gracefully
+- `Dockerfile` updated to install FFmpeg via `apt-get` at image build time
+- `THUMBNAIL_SUPPORTED_MIME_TYPES` extended to include video types so the confirm-flow
+  (`POST /uploads/confirm`) also generates thumbnails for video uploads
+- 2 new tests; 97 tests total, 0 failures
+- Deployed: Cloud Run revision `heirlooms-server-00009-gdv`
+
+---
+
+### 0.12.0 — 6 May 2026
+
+- Image thumbnail generation at upload time (Phase 1)
+- `ThumbnailGenerator.kt` — new top-level function using `javax.imageio.ImageIO`;
+  scales to fit a 400×400 bounding box preserving aspect ratio, outputs JPEG;
+  supports `image/jpeg`, `image/png`, `image/gif`, `image/webp`
+- `FileStore.saveWithKey(bytes, key, mimeType)` added to interface and all
+  implementations (`LocalFileStore`, `S3FileStore`, `GcsFileStore`)
+- Flyway V3 migration: nullable `thumbnail_key VARCHAR(512)` column on uploads table
+- `UploadRecord` gains `thumbnailKey: String?`
+- Both upload paths (`POST /upload` and `POST /uploads/confirm`) generate and store
+  thumbnails; failures never block the upload response
+- `GET /api/content/uploads/{id}/thumb` — new endpoint; returns thumbnail if
+  `thumbnailKey` is set, falls back to the full file
+- `POST /upload` 201 response returns a full JSON object (not a raw storage key)
+- 8 new `ThumbnailGeneratorTest` tests; 11 new `UploadHandlerTest` tests
+
+---
+
 ### 0.11.0 — 6 May 2026
 
 - SHA-256 duplicate detection on all upload paths
