@@ -6,6 +6,45 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-08 (v0.18.2 — Capsule visual mechanic added to BRAND.md)
+
+**PA brief:** SE Brief — Capsule Visual Mechanic (BRAND.md update).
+
+**What was done:**
+- `BRAND.md` status line updated to reflect both the v0.17.0 foundation and the
+  v0.18.2 capsule-mechanic addition.
+- Voice section: *sealed* verb added between *planted* and *bloomed* — reserved
+  for the capsule mechanic, not routine affordances.
+- Motion language section: two new states added (*sealing*, ~700ms olive forms
+  in corner; *delivering*, ~2.5s olive grows to fill + parchment-to-bloom wash,
+  Milestone 6 territory), with a separator note distinguishing capsule-state
+  transitions from arrival-animation phases.
+- New "Capsule states" section added in full: the wax-seal olive (form, colour,
+  sizes, reference SVG, distinction from brand mark); state visual treatments
+  (open=forest, sealed=forest+olive, delivered=bloom-tinted, cancelled=earth-tinted);
+  capsule card and detail view specs; Start/Seal button hierarchy; photo detail
+  "in N capsules" line; visibility rule for cancelled capsules; sealing and
+  delivery animations; reduced-motion fallback.
+- "What is NOT in this document" — capsule visual mechanic line removed.
+
+**Key decisions:**
+- Capsule states map onto the existing forest/bloom/earth signal vocabulary.
+  No new palette tokens.
+- The bloom colour earns two appearances in a capsule's lifecycle: the small
+  wax-seal olive at sealing (promise) and the full ripened state at delivery
+  (fulfilment). The two appearances are causally linked by design.
+- Capsule message typography shifts from system serif (open, draft) to italic
+  Georgia (sealed/delivered, committed brand voice). Sealing promotes the
+  message from draft to delivery-bound.
+- The wax-seal olive is a new brand element, distinct from the brand mark's
+  apex olive — simpler form, no stem, more geometric. Keep the two assets
+  separate in the codebase.
+
+**No code changes.** The rendering work lives in Increment 2 (web UI) and
+Increment 3 (Android), which will reference this spec.
+
+---
+
 ## Session — 2026-05-08 (v0.18.1 — Documentation sweep + reverse-lookup path fix)
 
 **PA brief:** SE Brief — Post-v0.18.0 Documentation Sweep.

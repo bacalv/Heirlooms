@@ -2,6 +2,32 @@
 
 ---
 
+## v0.18.2 — Capsule visual mechanic added to BRAND.md (8 May 2026)
+
+Doc-only patch. No code changes. No behaviour change.
+
+Closes the brand gap deferred in BRAND.md since v0.17.0. The capsule
+mechanic now has a complete visual language:
+
+- Capsule states map onto the existing forest/bloom/earth signal vocabulary:
+  open=forest (in-progress), delivered=bloom (the ripened olive),
+  cancelled=earth (didn't take). Sealed adds a new motif — the wax-seal
+  olive — a small bloom-coloured ovoid marking committed contents.
+- The bloom colour appears twice in a capsule's lifecycle: as the small
+  olive at sealing (promise), and as the full ripened state at delivery
+  (fulfilment). The two appearances are causally linked by design.
+- Capsule message typography shifts from system serif (open, draft) to
+  italic Georgia (sealed/delivered, committed brand voice).
+- Two new motion states scoped: sealing (~700ms, olive forms in corner),
+  delivering (~2.5s, olive grows to fill, parchment washes to bloom).
+  Reserved for Milestone 6.
+- New brand element: the wax-seal olive, distinct from the brand mark's
+  apex olive. Reference SVG in BRAND.md.
+
+Test counts unchanged.
+
+---
+
 ## v0.18.1 — Documentation sweep + reverse-lookup path fix (8 May 2026)
 
 Patch increment. No behaviour change beyond the route move.
