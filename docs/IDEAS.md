@@ -40,6 +40,28 @@ if any user accumulates more than ~50 capsules and the list becomes slow.
 
 ---
 
+## Android daily-use gallery (8 May 2026)
+
+**Planned for ~v0.19.0.** The Android app currently does only share-sheet uploads;
+everything else lives on web. After Milestone 5's web UI lands and before Milestone 6
+starts, add read-only Gallery and Capsules views to Android. This is a developer-tool
+increment — same single-user/API-key auth model as today, just a richer UI for Bret's
+own use. Not the family-facing app (which is a Milestone 7 conversation, possibly built
+fresh rather than evolved from the developer tool).
+
+Three reasons for the timing:
+- By then the capsule schema is settled (one Android pass, not two).
+- The brand work is fresh in the codebase (extending the design language is easier than
+  remembering it).
+- Milestone 6's delivery design will assume both surfaces exist as places a recipient
+  might encounter a bloomed capsule.
+
+The orientation-change fix in v0.17.1 (`android:configChanges`) is tactical — the proper
+ViewModel + SavedStateHandle migration is scoped for this increment, when there will be
+meaningfully more state worth preserving.
+
+---
+
 ## Multi-user and family sharing (5 May 2026)
 
 ### Context

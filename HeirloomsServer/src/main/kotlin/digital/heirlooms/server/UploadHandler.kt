@@ -85,6 +85,7 @@ fun buildApp(
             readUrlContractRoute(directUpload, database),
             rotationContractRoute(database),
             tagsContractRoute(database),
+            capsuleReverseLookupRoute(database),
         )
     }
 

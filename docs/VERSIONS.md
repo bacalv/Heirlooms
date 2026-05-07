@@ -2,6 +2,25 @@
 
 ---
 
+## v0.18.1 — Documentation sweep + reverse-lookup path fix (8 May 2026)
+
+Patch increment. No behaviour change beyond the route move.
+
+- `PA_NOTES.md`: current version updated; seven accumulated gotchas added from
+  v0.17.0/v0.17.1/v0.18.0 (Android orientation handling, FlowRow opt-in, upload-confirm
+  tag contract, Coil pinning, `withTransaction` rollback pattern, `UploadRecord.toJson()`
+  canonical serialisation, OpenAPI spec contract-block merge).
+- `ROADMAP.md`: Milestone 5 expanded to full increment plan.
+- `IDEAS.md`: Android daily-use gallery entry added.
+- API: `GET /api/uploads/{id}/capsules` moved to `GET /api/content/uploads/{id}/capsules`
+  for consistency with the existing upload resource path. No client uses this endpoint yet.
+- Integration tests for the reverse-lookup endpoint updated to the new path.
+
+Test counts unchanged: 135 HeirloomsServer unit tests (134 passing, 1 skipped);
+49 HeirloomsTest integration tests.
+
+---
+
 ## v0.18.0 — Capsules: schema and backend API (8 May 2026)
 
 Milestone 5, Increment 1. Backend-only — no web UI, no Android changes.
@@ -15,7 +34,7 @@ Milestone 5, Increment 1. Backend-only — no web UI, no Android changes.
   - `PATCH /api/capsules/{id}` — update editable fields
   - `POST /api/capsules/{id}/seal` — seal an open capsule
   - `POST /api/capsules/{id}/cancel` — cancel a capsule
-  - `GET /api/uploads/{id}/capsules` — reverse lookup (which capsules contain this photo)
+  - `GET /api/uploads/{id}/capsules` — reverse lookup (moved to `/api/content/uploads/{id}/capsules` in v0.18.1)
 - Capsule state machine: `open → sealed/delivered/cancelled`; sealed capsules block
   content edits but allow message, recipients, and unlock_at changes.
 - Message versioning: each edit inserts a new `capsule_messages` row; identical body

@@ -6,6 +6,32 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-08 (v0.18.1 — Documentation sweep + reverse-lookup path fix)
+
+**PA brief:** SE Brief — Post-v0.18.0 Documentation Sweep.
+
+**What was done:**
+- `PA_NOTES.md` — current version updated to v0.18.1. Added seven accumulated gotchas
+  from v0.17.0–v0.18.0: Android orientation change mid-upload, `@ExperimentalLayoutApi`
+  opt-in for `FlowRow`, upload-confirm tag contract, Coil 2.5.0 pinning,
+  `withTransaction` rollback pattern, `UploadRecord.toJson()` canonical serialisation,
+  OpenAPI spec contract-block merge.
+- `ROADMAP.md` — Milestone 5 expanded from one-line description to full increment plan
+  (Increment 1 shipped, Increment 2 web UI planned, brand follow-up, Increment 3
+  Android, Android Daily-Use Increment).
+- `IDEAS.md` — Android daily-use gallery entry added.
+- API — moved capsule reverse-lookup from `GET /api/uploads/{id}/capsules` to
+  `GET /api/content/uploads/{id}/capsules` for consistency with the existing upload
+  resource path (`/api/content/uploads/{id}`). The endpoint was moved from the capsule
+  contract block (bound at `/api`) to the content contract block (bound at
+  `/api/content`). Handler logic unchanged. No client uses this endpoint yet; safe move.
+- Integration tests for the reverse-lookup endpoint updated to the new path.
+
+**Test count:** unchanged. 135 HeirloomsServer unit tests (134 passing, 1 skipped —
+FFmpeg); 49 HeirloomsTest integration tests.
+
+---
+
 ## Session — 2026-05-08 (v0.18.0 — Capsules: Schema and Backend API)
 
 **PA brief:** SE Brief — Capsules, Increment 1: Schema and Backend API.

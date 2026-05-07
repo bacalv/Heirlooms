@@ -592,7 +592,7 @@ class CapsuleApiTest {
         val resp = postCapsule("""{"shape":"open","unlock_at":"2042-05-14T08:00:00Z","recipients":["A"],"upload_ids":["$uploadId"]}""")
         val capsuleId = JSONObject(resp.body!!.string()).getString("id")
 
-        val r = client.newCall(Request.Builder().url("$base/api/uploads/$uploadId/capsules").get().build()).execute()
+        val r = client.newCall(Request.Builder().url("$base/api/content/uploads/$uploadId/capsules").get().build()).execute()
         assertThat(r.code).isEqualTo(200)
         val capsules = JSONObject(r.body!!.string()).getJSONArray("capsules")
         val ids = (0 until capsules.length()).map { capsules.getJSONObject(it).getString("id") }
@@ -606,7 +606,7 @@ class CapsuleApiTest {
         val capsuleId = JSONObject(resp.body!!.string()).getString("id")
         cancelCapsule(capsuleId)
 
-        val r = client.newCall(Request.Builder().url("$base/api/uploads/$uploadId/capsules").get().build()).execute()
+        val r = client.newCall(Request.Builder().url("$base/api/content/uploads/$uploadId/capsules").get().build()).execute()
         assertThat(r.code).isEqualTo(200)
         val capsules = JSONObject(r.body!!.string()).getJSONArray("capsules")
         val ids = (0 until capsules.length()).map { capsules.getJSONObject(it).getString("id") }
@@ -616,7 +616,7 @@ class CapsuleApiTest {
     @Test
     fun `GET uploads-id-capsules returns empty array when upload exists but not in any capsules`() {
         val uploadId = createUploadId()
-        val r = client.newCall(Request.Builder().url("$base/api/uploads/$uploadId/capsules").get().build()).execute()
+        val r = client.newCall(Request.Builder().url("$base/api/content/uploads/$uploadId/capsules").get().build()).execute()
 
         assertThat(r.code).isEqualTo(200)
         val capsules = JSONObject(r.body!!.string()).getJSONArray("capsules")
@@ -626,7 +626,7 @@ class CapsuleApiTest {
     @Test
     fun `GET uploads-id-capsules returns 404 when upload does not exist`() {
         val r = client.newCall(
-            Request.Builder().url("$base/api/uploads/00000000-0000-0000-0000-000000000000/capsules").get().build()
+            Request.Builder().url("$base/api/content/uploads/00000000-0000-0000-0000-000000000000/capsules").get().build()
         ).execute()
         assertThat(r.code).isEqualTo(404)
     }
@@ -639,7 +639,7 @@ class CapsuleApiTest {
             JSONObject(resp.body!!.string()).getString("id")
         }
 
-        val r = client.newCall(Request.Builder().url("$base/api/uploads/$uploadId/capsules").get().build()).execute()
+        val r = client.newCall(Request.Builder().url("$base/api/content/uploads/$uploadId/capsules").get().build()).execute()
         assertThat(r.code).isEqualTo(200)
         val capsules = JSONObject(r.body!!.string()).getJSONArray("capsules")
         val returnedIds = (0 until capsules.length()).map { capsules.getJSONObject(it).getString("id") }

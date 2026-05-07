@@ -24,7 +24,9 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.16.1 (7 May 2026) — video upload OOM fix, tag dropdown UX fix
+- Current version: v0.18.1 (8 May 2026) — brand foundation (v0.17.0), share-sheet idle
+  state (v0.17.1), capsule backend (v0.18.0), doc sweep + route fix (v0.18.1).
+  Web UI for capsules (Milestone 5 Increment 2) and Android daily-use gallery are next.
 - One-time machine setup required: ~/.testcontainers.properties with
   docker.raw.sock path — see PROMPT_LOG.md for details
 
@@ -68,6 +70,49 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
   201 MB heap limit) this leaves no room for OkHttp's Okio buffers, causing a silent
   `OutOfMemoryError` mid-upload (`Error`, not `Exception`, so `catch (_: Exception)`
   misses it). Always stream from a `File` or `InputStream` directly. Fixed in v0.16.1.
+- **Android orientation change mid-upload (v0.17.1).** `ShareActivity` was being recreated
+  on device rotation during an upload, destroying upload state and producing a confused UI.
+  Fixed for v1 by adding `android:configChanges="orientation|screenSize|keyboardHidden"` to
+  `ShareActivity`'s manifest entry — the activity handles the change itself rather than being
+  recreated. Tactical fix only; the proper long-term answer is ViewModel + SavedStateHandle
+  so upload state survives recreation regardless of cause. Worth migrating when the Android
+  app gains a gallery and capsule view (the daily-use increment), because by then there will
+  be more state worth preserving than just upload progress.
+- **`@ExperimentalLayoutApi` opt-in for `FlowRow` (v0.17.1).** The tag-chip layout uses
+  `androidx.compose.foundation.layout.FlowRow`, which is still annotated experimental at
+  the Compose version we're on. Build fails without an opt-in. Add
+  `@OptIn(ExperimentalLayoutApi::class)` at the function or file level. If a future Compose
+  upgrade promotes `FlowRow` to stable, the opt-in can be removed.
+- **Upload-confirm contract: tags now travel in the confirm body (v0.17.1).** From v0.17.1
+  the confirm body carries the user's chosen tags, and the server validates them (kebab-case,
+  length 1–50, regex `^[a-z0-9]+(-[a-z0-9]+)*$`) before persisting. Any future client that
+  talks to `POST /api/content/uploads/confirm` needs to know it can send tags in the body.
+- **Coil 2.5.0 added as an Android dependency (v0.17.1).** The share-sheet idle screen
+  renders a grid of selected photo thumbnails. Coil handles bitmap loading and caching.
+  Pinned at 2.5.0 — newer Coil versions occasionally break API surface in minor ways, so
+  upgrade deliberately rather than reflexively.
+- **Transaction rollback safety with non-local returns (v0.18.0).** The `withTransaction`
+  helper uses an explicit `committed` flag tracked in a `try/finally`. The reason for the
+  explicit flag rather than "set committed = true at the end of try" is that a **non-local
+  return from inside the lambda** (e.g. `return@handler` from a validation failure halfway
+  through) jumps past the rest of the try block but still runs the finally. Without the
+  flag, that path silently commits a transaction the caller intended to abandon. Pattern:
+  `var committed = false; try { ... block(); committed = true; conn.commit() } finally { if
+  (!committed) conn.rollback() }`. Follow this pattern for any new transaction code —
+  Kotlin's non-local return semantics will bite you if you don't.
+- **`UploadRecord.toJson()` is the canonical upload serialisation (v0.18.0).** Capsule
+  detail responses include full upload objects for each photo. Rather than build a
+  capsule-specific upload serialiser, the existing `toJson()` was promoted from `private`
+  in `UploadHandler.kt` to `internal` in `Database.kt` and reused. Future endpoints that
+  include uploads in their response should use `UploadRecord.toJson()` — single source of
+  truth for what "an upload, viewed from the API" looks like.
+- **OpenAPI spec is two contract blocks, merged (v0.18.0).** The server exposes its API
+  spec at `/docs/api.json` as a single document, but internally it's two http4k contract
+  blocks: content routes bound at `/api/content` and capsule routes bound at `/api`. The
+  merge happens at the routing layer in `mergedSpecWithApiKeyAuth`. If adding a new feature
+  surface, create a third contract block at its own prefix rather than mixing into the
+  existing two. Keep contract blocks separable — the spec generator handles the merge cleanly
+  when each block has a consistent path prefix.
 
 ---
 

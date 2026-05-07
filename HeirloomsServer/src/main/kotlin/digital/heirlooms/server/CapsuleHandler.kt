@@ -48,7 +48,6 @@ fun capsuleRoutes(database: Database): List<ContractRoute> = listOf(
     patchCapsuleRoute(database),
     sealCapsuleRoute(database),
     cancelCapsuleRoute(database),
-    capsuleReverseLookupRoute(database),
 )
 
 private fun createCapsuleRoute(database: Database): ContractRoute =
@@ -103,7 +102,7 @@ private fun cancelCapsuleRoute(database: Database): ContractRoute {
     }
 }
 
-private fun capsuleReverseLookupRoute(database: Database): ContractRoute {
+internal fun capsuleReverseLookupRoute(database: Database): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id / "capsules" meta {
         summary = "Capsules containing an upload"
@@ -290,7 +289,7 @@ private fun cancelCapsuleHandler(database: Database, capsuleId: UUID): Response 
             Response(CONFLICT).body("""{"error":"capsule is already in a terminal state"}""")
     }
 
-private fun capsuleReverseLookupHandler(database: Database, uploadId: UUID): Response {
+internal fun capsuleReverseLookupHandler(database: Database, uploadId: UUID): Response {
     val capsules = database.getCapsulesForUpload(uploadId)
         ?: return Response(NOT_FOUND)
     val json = buildString {
@@ -334,7 +333,7 @@ private fun CapsuleSummary.toSummaryJson(): String = buildString {
     append("}")
 }
 
-private fun CapsuleSummary.toReverseLookupJson(): String = buildString {
+internal fun CapsuleSummary.toReverseLookupJson(): String = buildString {
     val r = record
     append("""{"id":"${r.id}","shape":"${r.shape.name.lowercase()}","state":"${r.state.name.lowercase()}""")
     append(""","unlock_at":"${r.unlockAt}","recipients":${recipients.toJsonArray()}""")

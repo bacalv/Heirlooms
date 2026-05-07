@@ -149,9 +149,25 @@ Tag-based organisation of uploads (v0.16.0). Simple web UI to browse uploads
 (v0.7.0). Tag rename, merge, colours/descriptions, exclude-filter UI, and
 Android tagging are deferred — see IDEAS.md.
 
-**Milestone 5 — The capsule mechanic**
-The ability to mark a set of uploads as a named capsule with access rules:
-who can see it, and when. Time-locked delivery. Trusted contact designation.
+**Milestone 5 — Capsules**
+A user can plant photos and a message for someone, to be opened on a chosen date.
+A capsule has a shape (open: contents editable until delivery; sealed: contents frozen
+at sealing) and a state (open, sealed, delivered, cancelled). Recipients are free-text
+in v1, becoming connections at Milestone 7.
+
+- **Increment 1 (v0.18.0, shipped 8 May 2026).** Schema and backend API. Four tables,
+  seven endpoints, message versioning, state-machine validation, ~49 integration tests.
+- **Increment 2 (planned).** Web UI: Capsules screen, capsule detail view, create/edit
+  forms, photo picker modal, photo detail view's "in N capsules" line and "Add to capsule"
+  action.
+- **Brand follow-up (planned).** Visual mechanic for capsule states (sealed/open/delivered).
+  Currently deferred in BRAND.md. Sized as a smaller-scope brand exploration in its own
+  session, between Increments 2 and 3.
+- **Increment 3 (planned).** Android: extend the share-sheet flow with "+ start a capsule"
+  as an alternative to plain upload. Capsule creation on Android.
+- **Android Daily-Use Increment (planned, ~v0.19.0).** Read-only Gallery and Capsules
+  views on Android. Solves the phone/web switching friction. Editing stays on web for now.
+- **Closes Milestone 5.**
 
 **Milestone 6 — Milestone delivery**
 Scheduled delivery of a capsule on a specific date — a child's 18th birthday,
