@@ -1052,6 +1052,28 @@ Samsung Gallery provides `intent.type = "image/*"` (wildcard) in the share inten
 
 ---
 
+## Session — 2026-05-08 (v0.17.1 — share-sheet Idle state)
+
+Added pre-upload Idle state to the Android share-sheet receive screen. When
+`ShareActivity` receives a share intent it now lands in `ReceiveState.Idle`
+(a new data class carrying the photo URIs, in-progress tags, current tag
+input, and recent-tag list) instead of jumping straight to *Uploading*.
+
+`IdleScreen.kt` renders: *Heirlooms* wordmark header, photo grid (1–6) or
+thumbnail strip + count (7+), tag input with kebab-case validation (Earth
+underline + inline italic message for invalid input, no glyphs), recent-tag
+chips backed by `RecentTagsStore` (SharedPreferences, last 12 tags, updated
+only on successful upload), forest *plant* pill button, ghost *cancel* button.
+
+Tags wired through to the server: `UploadWorker` reads them from work data,
+`Uploader.uploadViaSigned(file)` includes them in the confirm body, and
+`confirmUploadHandler` validates and records them via `database.updateTags`.
+
+6 new tests (4 `IdleScreenTest` Compose UI + 2 `TagValidationTest` unit).
+Coil 2.5.0 added for photo preview rendering.
+
+---
+
 ## Session — 2026-05-07 (v0.16.1 — video upload OOM fix + tag dropdown UX)
 
 **Android: video upload OOM fix**

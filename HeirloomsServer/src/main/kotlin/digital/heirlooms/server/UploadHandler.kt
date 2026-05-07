@@ -385,9 +385,18 @@ private fun confirmUploadHandler(
         val mimeType = node?.get("mimeType")?.asText()
         val fileSize = node?.get("fileSize")?.asLong()
         val contentHash = node?.get("contentHash")?.asText()?.takeIf { it.isNotBlank() }
+        val tags = node?.get("tags")?.takeIf { it.isArray }
+            ?.map { it.asText() }
+            ?.filter { it.isNotBlank() }
+            ?: emptyList()
 
+        val tagValidation = validateTags(tags)
         if (storageKey.isNullOrBlank() || mimeType.isNullOrBlank() || fileSize == null) {
             Response(BAD_REQUEST).body("Missing storageKey, mimeType, or fileSize in request body")
+        } else if (tagValidation is TagValidationResult.Invalid) {
+            Response(BAD_REQUEST)
+                .header("Content-Type", "application/json")
+                .body("""{"error":"invalid tag","tag":"${tagValidation.tag}","reason":"${tagValidation.reason}"}""")
         } else {
             val existing = if (contentHash != null) database.findByContentHash(contentHash) else null
             if (existing != null) {
@@ -401,9 +410,10 @@ private fun confirmUploadHandler(
                 val metadata = if (metaBytes != null) {
                     try { metadataExtractor(metaBytes, mimeType) } catch (_: Exception) { MediaMetadata() }
                 } else MediaMetadata()
+                val id = UUID.randomUUID()
                 database.recordUpload(
                     UploadRecord(
-                        id = UUID.randomUUID(),
+                        id = id,
                         storageKey = storageKey,
                         mimeType = mimeType,
                         fileSize = fileSize,
@@ -417,6 +427,7 @@ private fun confirmUploadHandler(
                         deviceModel = metadata.deviceModel,
                     )
                 )
+                if (tags.isNotEmpty()) database.updateTags(id, tags)
                 Response(CREATED)
             }
         }

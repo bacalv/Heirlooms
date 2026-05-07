@@ -58,6 +58,8 @@ dependencies {
     implementation("androidx.compose.animation:animation")
     // activity-compose needed when an Activity hosts Compose content.
     implementation("androidx.activity:activity-compose:1.8.2")
+    // Coil — image loading for photo previews in the share-sheet Idle screen.
+    implementation("io.coil-kt:coil-compose:2.5.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")

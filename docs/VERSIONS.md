@@ -2,6 +2,35 @@
 
 ---
 
+## v0.17.1 — Share-sheet Idle state: photo previews and tag input (8 May 2026)
+
+Closes the share-flow gap from v0.17.0. The share-sheet receive screen now has a
+pre-upload *Idle* state where users see what they're about to share and can
+optionally tag it before planting.
+
+- `ReceiveState.Idle` data class added as the new entry point for `ShareActivity`.
+  The activity now lands here (instead of jumping straight to *Uploading*) after
+  parsing the share intent.
+- `IdleScreen` Composable (`ui/share/IdleScreen.kt`): parchment background,
+  *Heirlooms* wordmark header, photo grid for 1–6 photos (1-, 2-, or 3-column
+  depending on count) or a horizontally-scrolling thumbnail strip + count label
+  for 7+, kebab-case tag input, recent-tag chips, forest *plant* pill button,
+  ghost *cancel* button.
+- Tag validation (`ui/share/TagValidation.kt`): mirrors the server-side regex
+  `^[a-z0-9]+(-[a-z0-9]+)*$`, length 1–50. Invalid input shows earth-coloured
+  underline and inline italic message; no warning glyphs.
+- Recent-tag persistence (`ui/share/RecentTagsStore.kt`): SharedPreferences store,
+  last 12 tags used, newest-first, deduplicated, updated only on successful upload.
+- Tags wired through to the upload request: `UploadWorker` passes the tag list to
+  `Uploader.uploadViaSigned`, which includes `tags` in the confirm body sent to
+  `POST /api/content/uploads/confirm`.
+- Server: `confirmUploadHandler` now accepts an optional `tags` array in the
+  confirm body, validates them, and calls `database.updateTags` if non-empty.
+- 6 new tests: 4 `IdleScreenTest` Compose UI tests + 2 `TagValidationTest` unit
+  tests. Total: 113 tests.
+
+---
+
 ## v0.17.0 — Brand foundation, web animations, Android brand (7 May 2026)
 
 The full Heirlooms brand milestone. Five commits, single tag. Parchment/forest/bloom/earth

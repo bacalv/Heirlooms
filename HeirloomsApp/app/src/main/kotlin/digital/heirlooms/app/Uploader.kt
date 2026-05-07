@@ -211,6 +211,7 @@ class Uploader(
         file: File,
         mimeType: String,
         apiKey: String? = null,
+        tags: List<String> = emptyList(),
         onProgress: ((Int) -> Unit)? = null,
         onConfirming: (() -> Unit)? = null,
     ): UploadResult {
@@ -260,9 +261,10 @@ class Uploader(
 
         onConfirming?.invoke()
         val contentHash = sha256Hex(file)
+        val tagsJson = if (tags.isEmpty()) "" else ""","tags":[${tags.joinToString(",") { "\"$it\"" }}]"""
         val confirmRequest = Request.Builder()
             .url("$base/api/content/uploads/confirm")
-            .post("""{"storageKey":"$storageKey","mimeType":"$mimeType","fileSize":${file.length()},"contentHash":"$contentHash"}"""
+            .post("""{"storageKey":"$storageKey","mimeType":"$mimeType","fileSize":${file.length()},"contentHash":"$contentHash"$tagsJson}"""
                 .toRequestBody("application/json".toMediaType()))
             .apply { if (!apiKey.isNullOrBlank()) header("X-Api-Key", apiKey) }
             .build()

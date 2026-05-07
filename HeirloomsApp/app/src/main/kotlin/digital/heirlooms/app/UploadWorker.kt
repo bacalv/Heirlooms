@@ -29,6 +29,7 @@ class UploadWorker(
         val filePaths = inputData.getStringArray(KEY_FILE_PATHS) ?: return Result.failure()
         val mimeTypes = inputData.getStringArray(KEY_MIME_TYPES) ?: return Result.failure()
         val apiKey = inputData.getString(KEY_API_KEY)
+        val tags = inputData.getStringArray(KEY_TAGS)?.toList() ?: emptyList()
 
         var succeeded = 0
         var failed = 0
@@ -38,7 +39,7 @@ class UploadWorker(
             val file = File(path)
             if (!file.exists()) { failed++; return@forEach }
             try {
-                val result = uploader.uploadViaSigned(BASE_URL, file, mimeType, apiKey)
+                val result = uploader.uploadViaSigned(BASE_URL, file, mimeType, apiKey, tags = tags)
                 if (result is Uploader.UploadResult.Success) succeeded++ else failed++
             } catch (_: Exception) {
                 failed++
@@ -90,6 +91,7 @@ class UploadWorker(
         const val KEY_FILE_PATHS = "file_paths"
         const val KEY_MIME_TYPES = "mime_types"
         const val KEY_API_KEY = "api_key"
+        const val KEY_TAGS = "tags"
         const val TAG = "heirloom_upload"
         const val TAG_COUNT_PREFIX = "count:"
 

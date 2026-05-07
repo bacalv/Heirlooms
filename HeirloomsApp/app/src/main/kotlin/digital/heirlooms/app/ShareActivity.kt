@@ -28,7 +28,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,6 +43,9 @@ import digital.heirlooms.ui.brand.OliveBranchArrival
 import digital.heirlooms.ui.brand.OliveBranchDidntTake
 import digital.heirlooms.ui.brand.WorkingDots
 import digital.heirlooms.ui.brand.WorkingDotsSize
+import digital.heirlooms.ui.share.IdleScreen
+import digital.heirlooms.ui.share.RecentTagsStore
+import digital.heirlooms.ui.share.isValidTag
 import digital.heirlooms.ui.theme.Earth
 import digital.heirlooms.ui.theme.Forest
 import digital.heirlooms.ui.theme.HeirloomsSerifItalic
@@ -60,7 +62,12 @@ import java.util.UUID
 import kotlin.coroutines.resume
 
 sealed class ReceiveState {
-    object Idle : ReceiveState()
+    data class Idle(
+        val photos: List<Uri>,
+        val tagsInProgress: List<String> = emptyList(),
+        val currentTagInput: String = "",
+        val recentTags: List<String> = emptyList(),
+    ) : ReceiveState()
     object Uploading : ReceiveState()
     data class Arriving(val photoCount: Int) : ReceiveState()
     data class Arrived(val photoCount: Int) : ReceiveState()
@@ -70,30 +77,80 @@ sealed class ReceiveState {
 
 class ShareActivity : ComponentActivity() {
 
-    private var screenState by mutableStateOf<ReceiveState>(ReceiveState.Idle)
+    private var screenState by mutableStateOf<ReceiveState>(ReceiveState.Uploading)
     private var pendingUris: List<Uri> = emptyList()
+    private var pendingTags: List<String> = emptyList()
     private var uploadPhotoCount: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        setContent {
-            HeirloomsTheme {
-                ReceiveScreenContent(
-                    state = screenState,
-                    onArrivalComplete = { screenState = ReceiveState.Arrived(uploadPhotoCount) },
-                    onFailureAnimationComplete = { screenState = ReceiveState.Failed },
-                    onDone = { finish() },
-                    onViewGarden = { openGarden() },
-                    onRetry = { startUpload() },
-                    onDismiss = { finish() },
-                )
-            }
-        }
-
         pendingUris = resolveUris()
         if (pendingUris.isEmpty()) { finish(); return }
-        startUpload()
+
+        val recentTags = RecentTagsStore(applicationContext).load()
+        screenState = ReceiveState.Idle(pendingUris, recentTags = recentTags)
+
+        setContent {
+            HeirloomsTheme {
+                val s = screenState
+                if (s is ReceiveState.Idle) {
+                    Box(Modifier.fillMaxSize().background(Parchment)) {
+                        IdleScreen(
+                            state = s,
+                            onTagInputChanged = { input ->
+                                (screenState as? ReceiveState.Idle)?.let {
+                                    screenState = it.copy(currentTagInput = input)
+                                }
+                            },
+                            onTagCommit = { tag ->
+                                (screenState as? ReceiveState.Idle)?.let {
+                                    screenState = it.copy(
+                                        tagsInProgress = it.tagsInProgress + tag,
+                                        currentTagInput = "",
+                                    )
+                                }
+                            },
+                            onTagRemoved = { tag ->
+                                (screenState as? ReceiveState.Idle)?.let {
+                                    screenState = it.copy(tagsInProgress = it.tagsInProgress - tag)
+                                }
+                            },
+                            onRecentTagTapped = { tag ->
+                                (screenState as? ReceiveState.Idle)?.let {
+                                    screenState = it.copy(
+                                        tagsInProgress = it.tagsInProgress + tag,
+                                        recentTags = it.recentTags - tag,
+                                    )
+                                }
+                            },
+                            onPlant = {
+                                (screenState as? ReceiveState.Idle)?.let { idle ->
+                                    val input = idle.currentTagInput.trim()
+                                    pendingTags = if (input.isNotEmpty() && isValidTag(input)) {
+                                        idle.tagsInProgress + input
+                                    } else {
+                                        idle.tagsInProgress
+                                    }
+                                    startUpload()
+                                }
+                            },
+                            onCancel = { finish() },
+                        )
+                    }
+                } else {
+                    ReceiveScreenContent(
+                        state = screenState,
+                        onArrivalComplete = { screenState = ReceiveState.Arrived(uploadPhotoCount) },
+                        onFailureAnimationComplete = { screenState = ReceiveState.Failed },
+                        onDone = { finish() },
+                        onViewGarden = { openGarden() },
+                        onRetry = { startUpload() },
+                        onDismiss = { finish() },
+                    )
+                }
+            }
+        }
     }
 
     private fun startUpload() {
@@ -118,6 +175,7 @@ class ShareActivity : ComponentActivity() {
                 UploadWorker.KEY_FILE_PATHS to tempFiles.map { it.first }.toTypedArray(),
                 UploadWorker.KEY_MIME_TYPES to tempFiles.map { it.second }.toTypedArray(),
                 UploadWorker.KEY_API_KEY to (apiKey ?: ""),
+                UploadWorker.KEY_TAGS to pendingTags.toTypedArray(),
             )
             val constraints = Constraints.Builder()
                 .apply { if (wifiOnly) setRequiredNetworkType(NetworkType.UNMETERED) }
@@ -153,10 +211,11 @@ class ShareActivity : ComponentActivity() {
                 cont.invokeOnCancellation { liveData.removeObserver(observer) }
             }
         }
-        screenState = if (result.state == WorkInfo.State.SUCCEEDED) {
-            ReceiveState.Arriving(uploadPhotoCount)
+        if (result.state == WorkInfo.State.SUCCEEDED) {
+            RecentTagsStore(applicationContext).record(pendingTags)
+            screenState = ReceiveState.Arriving(uploadPhotoCount)
         } else {
-            ReceiveState.FailedAnimating
+            screenState = ReceiveState.FailedAnimating
         }
     }
 
@@ -232,7 +291,6 @@ private fun ReceiveScreenContent(
         contentAlignment = Alignment.Center,
     ) {
         when (state) {
-            is ReceiveState.Idle,
             is ReceiveState.Uploading -> {
                 WorkingDots(
                     size = WorkingDotsSize.Large,
@@ -342,6 +400,8 @@ private fun ReceiveScreenContent(
                     }
                 }
             }
+
+            else -> { /* Idle is handled before ReceiveScreenContent is called */ }
         }
     }
 }
