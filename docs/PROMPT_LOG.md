@@ -6,6 +6,18 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-10 (v0.20.2 — Coil 3.x migration prerequisite)
+
+**v0.20.2 (10 May 2026) — Coil 3.x migration prerequisite.** Migrated the Android app's
+Coil dependency from 2.5.0 to Coil 3.x ahead of the combined Android Increment 3 +
+Daily-Use, which will substantially expand image-loading surfaces. ShareActivity's
+idle-screen photo grid verified end-to-end. Drive-by: fixed two stale
+`~/Downloads/Heirlooms/` path references in PA_NOTES.md's Cloud Run deploy commands (the
+SE_NOTES.md correction in v0.20.1 caught one location; this fixes the others). PA_NOTES.md's
+Coil-version gotcha updated to reflect the migration.
+
+---
+
 ## Session — 2026-05-09 (v0.20.1 — No-flash fix + documentation sweep)
 
 **v0.20.1 (9 May 2026) — No-flash fix on compost + post-v0.20.0 documentation sweep.**

@@ -24,10 +24,10 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.20.1 (9 May 2026) — brand foundation (v0.17.0), share-sheet idle
+- Current version: v0.20.2 (10 May 2026) — brand foundation (v0.17.0), share-sheet idle
   state (v0.17.1), capsule backend (v0.18.0), doc sweeps (v0.18.1, v0.19.6, v0.20.1),
   brand visual mechanic (v0.18.2), capsule web UI (v0.19.0–v0.19.5), compost heap
-  (v0.20.0), no-flash fix (v0.20.1). Combined Android Increment 3 + Daily-Use is next.
+  (v0.20.0), Coil 3.x migration (v0.20.2). Combined Android Increment 3 + Daily-Use is next.
 - One-time machine setup required: ~/.testcontainers.properties with
   docker.raw.sock path — see PROMPT_LOG.md for details
 
@@ -88,10 +88,15 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
   the confirm body carries the user's chosen tags, and the server validates them (kebab-case,
   length 1–50, regex `^[a-z0-9]+(-[a-z0-9]+)*$`) before persisting. Any future client that
   talks to `POST /api/content/uploads/confirm` needs to know it can send tags in the body.
-- **Coil 2.5.0 added as an Android dependency (v0.17.1).** The share-sheet idle screen
-  renders a grid of selected photo thumbnails. Coil handles bitmap loading and caching.
-  Pinned at 2.5.0 — newer Coil versions occasionally break API surface in minor ways, so
-  upgrade deliberately rather than reflexively.
+- **Coil migrated to 3.x (v0.20.2).** Originally added at 2.5.0 in v0.17.1 for the
+  share-sheet idle screen's photo grid. Migrated to Coil 3.x as a prerequisite for the
+  combined Android Increment 3 + Daily-Use, which substantially expands image-loading
+  surfaces (Garden thumbnails, Capsules thumbnails, photo detail, heap rows). Coil 3.x's
+  package changed from `coil` to `coil3`; artifact changed to
+  `io.coil-kt.coil3:coil-compose`. Pinned at 3.0.4 — Coil 3.1.x+ pulls in JetBrains
+  Compose 1.8.x+ which requires compileSdk 35 and AGP 8.6.0+; 3.0.4 is the highest
+  compatible with the current compileSdk 34 + AGP 8.3.0 build config. Upgrade 3.0.4 →
+  latest deliberately when the build toolchain is also upgraded.
 - **Transaction rollback safety with non-local returns (v0.18.0).** The `withTransaction`
   helper uses an explicit `committed` flag tracked in a `try/finally`. The reason for the
   explicit flag rather than "set committed = true at the end of try" is that a **non-local
@@ -266,7 +271,7 @@ NOTE: Services run in us-central1. Artifact Registry remains in europe-west2.
 Domain mappings only work in us-central1 — do not deploy to europe-west2.
 
 HeirloomsServer:
-cd ~/Downloads/Heirlooms/HeirloomsServer
+cd ~/IdeaProjects/Heirlooms/HeirloomsServer
 ./gradlew clean shadowJar --no-daemon
 docker build --platform linux/amd64 \
 -t europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server:latest .
@@ -284,7 +289,7 @@ gcloud run deploy heirlooms-server \
 --add-cloudsql-instances heirlooms-495416:europe-west2:heirlooms-db
 
 HeirloomsWeb:
-cd ~/Downloads/Heirlooms/HeirloomsWeb
+cd ~/IdeaProjects/Heirlooms/HeirloomsWeb
 docker build --platform linux/amd64 \
 --build-arg VITE_API_URL=https://api.heirlooms.digital \
 -t europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-web:latest .

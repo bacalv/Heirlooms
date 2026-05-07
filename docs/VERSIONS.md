@@ -2,6 +2,29 @@
 
 ---
 
+## v0.20.2 — Coil 3.x migration prerequisite (10 May 2026)
+
+Patch increment. Dependency upgrade only; no behaviour change.
+
+- `HeirloomsApp/app/build.gradle.kts`: Coil dependency updated from
+  `io.coil-kt:coil-compose:2.5.0` to `io.coil-kt.coil3:coil-compose:3.0.4`. Pinned at
+  3.0.4 — Coil 3.1.x and later pull in JetBrains Compose 1.8.x+ which requires
+  compileSdk 35 and AGP 8.6.0+; 3.0.4 (JetBrains Compose 1.7.0, AndroidX Compose 1.7.x)
+  is the latest compatible with the current compileSdk 34 + AGP 8.3.0 build config.
+- `IdleScreen.kt`: import updated from `coil.compose.AsyncImage` to
+  `coil3.compose.AsyncImage`. No call-site changes needed — `AsyncImage`'s API
+  surface (`model`, `contentDescription`, `contentScale`, `modifier`) is unchanged.
+- `PA_NOTES.md`: fixed two stale `~/Downloads/Heirlooms/` path references in the
+  Cloud Run deploy-commands block (now `~/IdeaProjects/Heirlooms/`); Coil-version
+  gotcha updated; current-version line bumped.
+- `PROMPT_LOG.md`: v0.20.2 entry added.
+
+Test counts unchanged: ~149 backend integration tests; ~40 web tests. ShareActivity
+verified manually: 1-photo, 4-photo, and 8-photo cases all render thumbnails correctly;
+rotation during idle screen retains thumbnails; upload completes end-to-end.
+
+---
+
 ## v0.20.1 — No-flash fix on compost + post-v0.20.0 documentation sweep (9 May 2026)
 
 Patch increment. One code fix, no behaviour change beyond removing the flash.

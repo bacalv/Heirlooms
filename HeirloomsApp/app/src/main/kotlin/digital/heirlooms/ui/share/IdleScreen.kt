@@ -44,7 +44,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import digital.heirlooms.app.R
 import digital.heirlooms.app.ReceiveState
 import digital.heirlooms.ui.theme.Earth
