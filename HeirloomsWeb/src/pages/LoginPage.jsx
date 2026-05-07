@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { OliveBranchIcon } from '../brand/OliveBranchIcon'
 import { API_URL } from '../api'
 
@@ -7,6 +8,9 @@ export function LoginPage({ onLogin }) {
   const [error, setError] = useState(null)
   const [checking, setChecking] = useState(false)
   const inputRef = useRef(null)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const from = location.state?.from ?? '/'
 
   useEffect(() => { inputRef.current?.focus() }, [])
 
@@ -20,7 +24,7 @@ export function LoginPage({ onLogin }) {
       const r = await fetch(`${API_URL}/api/content/uploads`, { headers: { 'X-Api-Key': key } })
       if (r.status === 401) setError('Incorrect API key.')
       else if (!r.ok) setError(`Server error (${r.status}).`)
-      else onLogin(key)
+      else { onLogin(key); navigate(from, { replace: true }) }
     } catch {
       setError('Could not reach the server.')
     } finally {
