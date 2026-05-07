@@ -6,6 +6,48 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-08 (v0.18.0 — Capsules: Schema and Backend API)
+
+**PA brief:** SE Brief — Capsules, Increment 1: Schema and Backend API.
+
+**What was built:**
+- `V7__capsules.sql` — four new tables: `capsules`, `capsule_contents`,
+  `capsule_recipients`, `capsule_messages` with five indexes and
+  `ON DELETE CASCADE` constraints on both FK columns of `capsule_contents`.
+- `Database.kt` extended — `CapsuleShape`, `CapsuleState` enums;
+  `CapsuleRecord`, `CapsuleSummary`, `CapsuleDetail` data classes;
+  `createCapsule`, `getCapsuleById`, `listCapsules`, `updateCapsule`,
+  `sealCapsule`, `cancelCapsule`, `getCapsulesForUpload`, `uploadExists`
+  methods; inline `withTransaction` with committed-flag rollback safety.
+- `CapsuleHandler.kt` — seven ContractRoute handlers wired via
+  `capsuleRoutes(database)`.
+- `UploadHandler.kt` — replaced single `apiContract` with `contentContract`
+  (at `/api/content`) + `capsuleContract` (at `/api`); `mergedSpecWithApiKeyAuth`
+  combines both OpenAPI specs with absolute path prefixes and server `"/"`.
+- `UploadRecord.toJson()` moved from private in `UploadHandler.kt` to internal
+  in `Database.kt` so `CapsuleHandler.kt` can reuse it for detail responses.
+- 49 integration tests in `HeirloomsTest/capsule/CapsuleApiTest.kt` covering
+  create/read/list/update/seal/cancel/reverse-lookup flows, all rejection paths,
+  message versioning, and the spec-generation canary.
+
+**Key decisions:**
+- `withTransaction` is `inline` so non-local returns work from within the lambda.
+  A `committed` flag in `finally` ensures rollback when the lambda exits early via
+  non-local return (all early exits in practice happen before any DB modification).
+- Second capsule contract at `/api` (not `/api/content`) matches the brief's URL
+  spec; OpenAPI spec merged at `/docs/api.json` by prefixing content paths with
+  `/api/content` and capsule paths with `/api`, server set to `"/"`.
+- `UploadRecord.toJson()` made `internal` rather than duplicated.
+- `unlock_at` read from Postgres as `OffsetDateTime` (returns UTC offset) per the
+  brief's type guidance; all other timestamps use `Instant`.
+- `created_by_user` is the placeholder `"api-user"` — Milestone 7 will wire real
+  user identity once the auth model exists.
+
+**Test count:** 135 HeirloomsServer unit tests (134 passing, 1 skipped — FFmpeg);
+49 new HeirloomsTest integration tests (run against Docker build).
+
+---
+
 ## Session — 2026-05-07 (v0.17.0 — Brand, Increment 3b)
 
 **PA brief:** SE Brief — Brand, Increment 3b: Android Animation Components.

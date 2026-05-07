@@ -49,19 +49,6 @@ private fun sha256Hex(bytes: ByteArray): String {
     return digest.digest(bytes).joinToString("") { "%02x".format(it) }
 }
 
-private fun UploadRecord.toJson(): String = buildString {
-    append("""{"id":"$id","storageKey":"$storageKey","mimeType":"$mimeType","fileSize":$fileSize,"uploadedAt":"$uploadedAt","rotation":$rotation,"thumbnailKey":${if (thumbnailKey != null) "\"$thumbnailKey\"" else "null"}""")
-    val tagsJson = tags.joinToString(",") { "\"$it\"" }
-    append(""","tags":[$tagsJson]""")
-    if (capturedAt != null) append(""","capturedAt":"$capturedAt"""")
-    if (latitude != null) append(""","latitude":$latitude""")
-    if (longitude != null) append(""","longitude":$longitude""")
-    if (altitude != null) append(""","altitude":$altitude""")
-    if (deviceMake != null) append(""","deviceMake":"$deviceMake"""")
-    if (deviceModel != null) append(""","deviceModel":"$deviceModel"""")
-    append("}")
-}
-
 private val swaggerInitializerJs = """
 window.onload = function() {
   window.ui = SwaggerUIBundle({
@@ -85,7 +72,7 @@ fun buildApp(
 ): HttpHandler {
     val directUpload = storage as? DirectUploadSupport
 
-    val apiContract = contract {
+    val contentContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
         descriptionPath = "/openapi.json"
         routes += listOf(
@@ -101,10 +88,17 @@ fun buildApp(
         )
     }
 
+    val capsuleContract = contract {
+        renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
+        descriptionPath = "/openapi.json"
+        routes += capsuleRoutes(database)
+    }
+
     return routes(
-        "/api/content" bind apiContract,
+        "/api/content" bind contentContract,
+        "/api" bind capsuleContract,
         "/health" bind GET to { Response(OK).body("ok") },
-        "/docs/api.json" bind GET to { specWithApiKeyAuth(apiContract) },
+        "/docs/api.json" bind GET to { mergedSpecWithApiKeyAuth(contentContract, capsuleContract) },
         "/docs" bind GET to { Response(FOUND).header("Location", "/docs/index.html") },
         "/docs/swagger-initializer.js" bind GET to {
             Response(OK).header("Content-Type", "application/javascript").body(swaggerInitializerJs)
@@ -113,40 +107,60 @@ fun buildApp(
     )
 }
 
-private fun specWithApiKeyAuth(apiContract: HttpHandler): Response {
-    val specResponse = apiContract(Request(GET, "/openapi.json"))
+private fun mergedSpecWithApiKeyAuth(contentContract: HttpHandler, capsuleContract: HttpHandler): Response {
+    val mapper = ObjectMapper()
     val factory = JsonNodeFactory.instance
-    val spec = ObjectMapper().readTree(specResponse.bodyString()) as? ObjectNode
-        ?: return specResponse
+
+    val contentSpec = mapper.readTree(
+        contentContract(Request(GET, "/openapi.json")).bodyString()
+    ) as? ObjectNode ?: return Response(INTERNAL_SERVER_ERROR).body("Failed to generate content spec")
+
+    val capsuleSpec = mapper.readTree(
+        capsuleContract(Request(GET, "/openapi.json")).bodyString()
+    ) as? ObjectNode ?: return Response(INTERNAL_SERVER_ERROR).body("Failed to generate capsule spec")
+
+    // Merge paths: prefix content paths with /api/content, capsule paths with /api
+    val mergedPaths = factory.objectNode()
+    (contentSpec.get("paths") as? ObjectNode)?.fields()?.forEach { (path, item) ->
+        mergedPaths.set<ObjectNode>("/api/content$path", item)
+    }
+    (capsuleSpec.get("paths") as? ObjectNode)?.fields()?.forEach { (path, item) ->
+        mergedPaths.set<ObjectNode>("/api$path", item)
+    }
+    contentSpec.set<ObjectNode>("paths", mergedPaths)
+
+    // Merge component schemas
+    val contentComponents = contentSpec.get("components") as? ObjectNode ?: factory.objectNode()
+    val contentSchemas = contentComponents.get("schemas") as? ObjectNode ?: factory.objectNode()
+    (capsuleSpec.get("components") as? ObjectNode)?.get("schemas")?.fields()?.forEach { (name, schema) ->
+        contentSchemas.set<ObjectNode>(name, schema)
+    }
+    contentComponents.set<ObjectNode>("schemas", contentSchemas)
 
     val apiKeyScheme = factory.objectNode().apply {
         put("type", "apiKey")
         put("in", "header")
         put("name", "X-Api-Key")
     }
-    val components = (spec.get("components") as? ObjectNode ?: factory.objectNode()).apply {
-        set<ObjectNode>("securitySchemes", factory.objectNode().apply {
-            set<ObjectNode>("ApiKeyAuth", apiKeyScheme)
-        })
-    }
-    spec.set<ObjectNode>("components", components)
-    spec.set<ArrayNode>("security", factory.arrayNode().add(
+    contentComponents.set<ObjectNode>("securitySchemes", factory.objectNode().apply {
+        set<ObjectNode>("ApiKeyAuth", apiKeyScheme)
+    })
+    contentSpec.set<ObjectNode>("components", contentComponents)
+    contentSpec.set<ArrayNode>("security", factory.arrayNode().add(
         factory.objectNode().apply { set<ArrayNode>("ApiKeyAuth", factory.arrayNode()) }
     ))
-    spec.set<ArrayNode>("servers", factory.arrayNode().add(
-        factory.objectNode().apply { put("url", "/api/content") }
+    contentSpec.set<ArrayNode>("servers", factory.arrayNode().add(
+        factory.objectNode().apply { put("url", "/") }
     ))
 
-    // Remove per-operation "security": [] entries — an empty array means "no auth"
-    // and overrides the global security block, so Swagger UI won't send the key.
-    val paths = spec.get("paths") as? ObjectNode
-    paths?.fields()?.forEach { (_, pathItem) ->
+    // Remove per-operation "security": [] entries — empty array overrides global security block.
+    (contentSpec.get("paths") as? ObjectNode)?.fields()?.forEach { (_, pathItem) ->
         (pathItem as? ObjectNode)?.fields()?.forEach { (_, operation) ->
             (operation as? ObjectNode)?.remove("security")
         }
     }
 
-    return Response(OK).header("Content-Type", "application/json").body(spec.toString())
+    return Response(OK).header("Content-Type", "application/json").body(contentSpec.toString())
 }
 
 private fun uploadContractRoute(

@@ -2,6 +2,32 @@
 
 ---
 
+## v0.18.0 — Capsules: schema and backend API (8 May 2026)
+
+Milestone 5, Increment 1. Backend-only — no web UI, no Android changes.
+
+- Flyway V7 migration: `capsules`, `capsule_contents`, `capsule_recipients`,
+  `capsule_messages` tables with indexes and `ON DELETE CASCADE` constraints.
+- Seven HTTP endpoints:
+  - `POST /api/capsules` — create
+  - `GET /api/capsules` — list (state filter, order by updated_at or unlock_at)
+  - `GET /api/capsules/{id}` — read (full detail: uploads, recipients, current message)
+  - `PATCH /api/capsules/{id}` — update editable fields
+  - `POST /api/capsules/{id}/seal` — seal an open capsule
+  - `POST /api/capsules/{id}/cancel` — cancel a capsule
+  - `GET /api/uploads/{id}/capsules` — reverse lookup (which capsules contain this photo)
+- Capsule state machine: `open → sealed/delivered/cancelled`; sealed capsules block
+  content edits but allow message, recipients, and unlock_at changes.
+- Message versioning: each edit inserts a new `capsule_messages` row; identical body
+  is a no-op. API always returns the current (highest-version) message.
+- OpenAPI spec merged: `GET /docs/api.json` now includes both content and capsule routes.
+- 49 new integration tests in HeirloomsTest covering all flows and rejection paths.
+- HeirloomsServer unit test count: 135 passing, 1 skipped (FFmpeg thumbnail).
+
+Web UI (increment 2) and Android (increment 3) follow in later sessions.
+
+---
+
 ## v0.17.1 — Share-sheet Idle state: photo previews and tag input (8 May 2026)
 
 Closes the share-flow gap from v0.17.0. The share-sheet receive screen now has a
