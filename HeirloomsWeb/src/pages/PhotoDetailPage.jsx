@@ -80,9 +80,9 @@ export function PhotoDetailPage() {
       const r = await apiFetch(`/api/content/uploads/${upload.id}/compost`, apiKey, { method: 'POST' })
       if (!r.ok) throw new Error('failed')
       navigate('/', { state: { composted: true } })
+      // composting stays true — component unmounts via navigation, no re-render needed
     } catch {
       setCompostError("didn't take. Try again.")
-    } finally {
       setComposting(false)
     }
   }
