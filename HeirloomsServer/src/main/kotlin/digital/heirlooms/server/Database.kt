@@ -59,6 +59,7 @@ data class UploadRecord(
     val deviceModel: String? = null,
     val rotation: Int = 0,
     val tags: List<String> = emptyList(),
+    val compostedAt: Instant? = null,
 )
 
 class Database(private val dataSource: DataSource) {
@@ -100,7 +101,8 @@ class Database(private val dataSource: DataSource) {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
-                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags
+                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
+                          composted_at
                    FROM uploads WHERE content_hash = ? LIMIT 1"""
             ).use { stmt ->
                 stmt.setString(1, hash)
@@ -115,7 +117,8 @@ class Database(private val dataSource: DataSource) {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
-                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags
+                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
+                          composted_at
                    FROM uploads WHERE id = ?"""
             ).use { stmt ->
                 stmt.setObject(1, id)
@@ -128,13 +131,14 @@ class Database(private val dataSource: DataSource) {
 
     fun listUploads(tag: String? = null, excludeTag: String? = null): List<UploadRecord> {
         dataSource.connection.use { conn: Connection ->
-            val conditions = mutableListOf<String>()
+            val conditions = mutableListOf("composted_at IS NULL")
             if (tag != null) conditions.add("tags @> ARRAY[?]::text[]")
             if (excludeTag != null) conditions.add("NOT (tags @> ARRAY[?]::text[])")
-            val where = if (conditions.isEmpty()) "" else "WHERE ${conditions.joinToString(" AND ")}"
+            val where = "WHERE ${conditions.joinToString(" AND ")}"
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
-                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags
+                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
+                          composted_at
                    FROM uploads $where ORDER BY uploaded_at DESC"""
             ).use { stmt ->
                 var idx = 1
@@ -146,6 +150,127 @@ class Database(private val dataSource: DataSource) {
                 return results
             }
         }
+    }
+
+    fun listCompostedUploads(): List<UploadRecord> {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
+                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
+                          composted_at
+                   FROM uploads WHERE composted_at IS NOT NULL ORDER BY composted_at DESC"""
+            ).use { stmt ->
+                val rs = stmt.executeQuery()
+                val results = mutableListOf<UploadRecord>()
+                while (rs.next()) results.add(rs.toUploadRecord())
+                return results
+            }
+        }
+    }
+
+    sealed class CompostResult {
+        data class Success(val record: UploadRecord) : CompostResult()
+        object NotFound : CompostResult()
+        object AlreadyComposted : CompostResult()
+        object PreconditionFailed : CompostResult()
+    }
+
+    fun compostUpload(id: UUID): CompostResult {
+        withTransaction { conn ->
+            conn.prepareStatement(
+                """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
+                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
+                          composted_at
+                   FROM uploads WHERE id = ? FOR UPDATE"""
+            ).use { stmt ->
+                stmt.setObject(1, id)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return CompostResult.NotFound
+                val record = rs.toUploadRecord()
+                if (record.compostedAt != null) return CompostResult.AlreadyComposted
+                if (!canCompost(id, conn)) return CompostResult.PreconditionFailed
+            }
+            conn.prepareStatement("UPDATE uploads SET composted_at = NOW() WHERE id = ?").use { stmt ->
+                stmt.setObject(1, id)
+                stmt.executeUpdate()
+            }
+        }
+        return getUploadById(id)?.let { CompostResult.Success(it) } ?: CompostResult.NotFound
+    }
+
+    sealed class RestoreResult {
+        data class Success(val record: UploadRecord) : RestoreResult()
+        object NotFound : RestoreResult()
+        object NotComposted : RestoreResult()
+    }
+
+    fun restoreUpload(id: UUID): RestoreResult {
+        withTransaction { conn ->
+            conn.prepareStatement(
+                "SELECT composted_at FROM uploads WHERE id = ? FOR UPDATE"
+            ).use { stmt ->
+                stmt.setObject(1, id)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return RestoreResult.NotFound
+                val compostedAt = rs.getTimestamp("composted_at")
+                if (compostedAt == null) return RestoreResult.NotComposted
+            }
+            conn.prepareStatement("UPDATE uploads SET composted_at = NULL WHERE id = ?").use { stmt ->
+                stmt.setObject(1, id)
+                stmt.executeUpdate()
+            }
+        }
+        return getUploadById(id)?.let { RestoreResult.Success(it) } ?: RestoreResult.NotFound
+    }
+
+    fun fetchExpiredCompostedUploads(): List<UploadRecord> {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
+                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
+                          composted_at
+                   FROM uploads WHERE composted_at < NOW() - INTERVAL '90 days'"""
+            ).use { stmt ->
+                val rs = stmt.executeQuery()
+                val results = mutableListOf<UploadRecord>()
+                while (rs.next()) results.add(rs.toUploadRecord())
+                return results
+            }
+        }
+    }
+
+    fun hardDeleteUpload(id: UUID) {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement("DELETE FROM uploads WHERE id = ?").use { stmt ->
+                stmt.setObject(1, id)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    internal fun canCompost(uploadId: UUID, conn: Connection): Boolean {
+        val hasTags = conn.prepareStatement(
+            "SELECT tags FROM uploads WHERE id = ?"
+        ).use { stmt ->
+            stmt.setObject(1, uploadId)
+            val rs = stmt.executeQuery()
+            if (!rs.next()) return false
+            val arr = rs.getArray("tags")
+            val tags = arr?.let { (it.array as? Array<*>)?.filterIsInstance<String>() } ?: emptyList()
+            tags.isNotEmpty()
+        }
+        if (hasTags) return false
+        val inActiveCapsule = conn.prepareStatement(
+            """SELECT EXISTS(
+                SELECT 1 FROM capsule_contents cc
+                JOIN capsules c ON c.id = cc.capsule_id
+                WHERE cc.upload_id = ? AND c.state IN ('open', 'sealed')
+               )"""
+        ).use { stmt ->
+            stmt.setObject(1, uploadId)
+            stmt.executeQuery().let { rs -> rs.next(); rs.getBoolean(1) }
+        }
+        return !inActiveCapsule
     }
 
     fun updateRotation(id: UUID, rotation: Int) {
@@ -520,7 +645,7 @@ class Database(private val dataSource: DataSource) {
         conn.prepareStatement(
             """SELECT u.id, u.storage_key, u.mime_type, u.file_size, u.uploaded_at, u.content_hash,
                       u.thumbnail_key, u.captured_at, u.latitude, u.longitude, u.altitude,
-                      u.device_make, u.device_model, u.rotation, u.tags
+                      u.device_make, u.device_model, u.rotation, u.tags, u.composted_at
                FROM uploads u
                JOIN capsule_contents cc ON u.id = cc.upload_id
                WHERE cc.capsule_id = ?
@@ -594,17 +719,25 @@ class Database(private val dataSource: DataSource) {
     }
 }
 
-internal fun UploadRecord.toJson(): String = buildString {
-    append("""{"id":"$id","storageKey":"$storageKey","mimeType":"$mimeType","fileSize":$fileSize,"uploadedAt":"$uploadedAt","rotation":$rotation,"thumbnailKey":${if (thumbnailKey != null) "\"$thumbnailKey\"" else "null"}""")
-    val tagsJson = tags.joinToString(",") { "\"$it\"" }
-    append(""","tags":[$tagsJson]""")
-    if (capturedAt != null) append(""","capturedAt":"$capturedAt"""")
-    if (latitude != null) append(""","latitude":$latitude""")
-    if (longitude != null) append(""","longitude":$longitude""")
-    if (altitude != null) append(""","altitude":$altitude""")
-    if (deviceMake != null) append(""","deviceMake":"$deviceMake"""")
-    if (deviceModel != null) append(""","deviceModel":"$deviceModel"""")
-    append("}")
+internal fun UploadRecord.toJson(): String {
+    val node = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode()
+    node.put("id", id.toString())
+    node.put("storageKey", storageKey)
+    node.put("mimeType", mimeType)
+    node.put("fileSize", fileSize)
+    node.put("uploadedAt", uploadedAt.toString())
+    node.put("rotation", rotation)
+    if (thumbnailKey != null) node.put("thumbnailKey", thumbnailKey) else node.putNull("thumbnailKey")
+    val tagsNode = node.putArray("tags")
+    tags.forEach { tagsNode.add(it) }
+    if (capturedAt != null) node.put("capturedAt", capturedAt.toString())
+    if (latitude != null) node.put("latitude", latitude)
+    if (longitude != null) node.put("longitude", longitude)
+    if (altitude != null) node.put("altitude", altitude)
+    if (deviceMake != null) node.put("deviceMake", deviceMake)
+    if (deviceModel != null) node.put("deviceModel", deviceModel)
+    if (compostedAt != null) node.put("compostedAt", compostedAt.toString()) else node.putNull("compostedAt")
+    return node.toString()
 }
 
 private fun java.sql.ResultSet.toCapsuleRecord() = CapsuleRecord(
@@ -635,4 +768,5 @@ private fun java.sql.ResultSet.toUploadRecord() = UploadRecord(
     deviceModel = getString("device_model"),
     rotation = getInt("rotation"),
     tags = getArray("tags")?.let { arr -> (arr.array as? Array<*>)?.filterIsInstance<String>() } ?: emptyList(),
+    compostedAt = getTimestamp("composted_at")?.toInstant(),
 )

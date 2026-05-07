@@ -7,6 +7,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.assertj.core.api.Assertions.assertThat
 import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.jupiter.api.Test
 
 /**
@@ -30,10 +31,11 @@ class UploadJourneyTest {
                 .build()
         ).execute()
 
-        val storageKey = uploadResponse.body?.string() ?: ""
+        val responseBody = uploadResponse.body?.string() ?: ""
         assertThat(uploadResponse.code)
-            .withFailMessage("Upload should return 201 but got ${uploadResponse.code}: $storageKey")
+            .withFailMessage("Upload should return 201 but got ${uploadResponse.code}: $responseBody")
             .isEqualTo(201)
+        val storageKey = JSONObject(responseBody).getString("storageKey")
         assertThat(storageKey).isNotBlank()
 
         val listResponse = client.newCall(
@@ -59,17 +61,18 @@ class UploadJourneyTest {
         )
 
         val uploadedKeys = uploads.map { (mimeType, _) ->
+            val bytes = ByteArray(256).also { java.util.Random().nextBytes(it) }
             val response = client.newCall(
                 Request.Builder()
                     .url("$base/api/content/upload")
-                    .post(ByteArray(256).toRequestBody(mimeType.toMediaType()))
+                    .post(bytes.toRequestBody(mimeType.toMediaType()))
                     .build()
             ).execute()
             val body = response.body?.string() ?: ""
             assertThat(response.code)
                 .withFailMessage("Expected 201 but got ${response.code}: $body")
                 .isEqualTo(201)
-            body
+            JSONObject(body).getString("storageKey")
         }
 
         val listResponse = client.newCall(

@@ -8,6 +8,7 @@ import { PhotoDetailPage } from './pages/PhotoDetailPage'
 import { CapsulesListPage } from './pages/capsules/CapsulesListPage'
 import { CapsuleDetailPage } from './pages/capsules/CapsuleDetailPage'
 import { CapsuleCreatePage } from './pages/capsules/CapsuleCreatePage'
+import { CompostHeapPage } from './pages/CompostHeapPage'
 
 function RequireAuth() {
   const { apiKey } = useAuth()
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="capsules" element={<CapsulesListPage />} />
             <Route path="capsules/new" element={<CapsuleCreatePage />} />
             <Route path="capsules/:id" element={<CapsuleDetailPage />} />
+            <Route path="compost" element={<CompostHeapPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

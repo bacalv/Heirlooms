@@ -44,4 +44,10 @@ interface FileStore {
      * Default implementation falls back to [get] — override for efficiency.
      */
     fun getFirst(key: StorageKey, maxBytes: Int): ByteArray = get(key)
+
+    /**
+     * Deletes the object stored under [key]. No-op if the object does not exist.
+     * Used by the compost lazy-cleanup path.
+     */
+    fun delete(key: StorageKey)
 }

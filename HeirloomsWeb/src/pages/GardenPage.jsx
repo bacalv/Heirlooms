@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
 import { API_URL, apiFetch } from '../api'
 import { WorkingDots } from '../brand/WorkingDots'
@@ -294,6 +294,7 @@ function UploadCard({ upload, apiKey, onRotate, onUpdateTags, allTags, isNew }) 
 
 export function GardenPage() {
   const { apiKey } = useAuth()
+  const location = useLocation()
   const [uploads, setUploads] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -301,6 +302,8 @@ export function GardenPage() {
   const [autoRefresh, setAutoRefresh] = useState(false)
   const seenIdsRef = useRef(null)
   const [newUploadIds, setNewUploadIds] = useState(new Set())
+  const [compostCount, setCompostCount] = useState(0)
+  const [showCompostedMsg] = useState(() => !!location.state?.composted)
 
   const allTags = useMemo(() => [...new Set(uploads.flatMap((u) => u.tags))].sort(), [uploads])
 
@@ -330,7 +333,15 @@ export function GardenPage() {
   useEffect(() => {
     document.title = 'Garden · Heirlooms'
     fetchUploads()
+    if (showCompostedMsg) window.history.replaceState({}, document.title, location.pathname)
   }, [fetchUploads])
+
+  useEffect(() => {
+    apiFetch('/api/content/uploads/composted', apiKey)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((data) => setCompostCount(data.uploads?.length ?? 0))
+      .catch(() => {})
+  }, [apiKey])
 
   useEffect(() => {
     if (!autoRefresh) return
@@ -385,6 +396,11 @@ export function GardenPage() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
+        {showCompostedMsg && (
+          <p className="font-serif italic text-forest text-sm mb-6">
+            Composted. Find it in the compost heap below.
+          </p>
+        )}
         {loading && <div className="flex justify-center py-20"><WorkingDots size="lg" label="uploading…" /></div>}
         {error && <p className="text-center text-earth font-serif italic py-20">Something went wrong — {error}</p>}
         {!loading && !error && uploads.length === 0 && <EmptyGarden />}
@@ -395,6 +411,16 @@ export function GardenPage() {
                 isNew={newUploadIds.has(upload.id)}
                 onRotate={handleRotate} onUpdateTags={handleUpdateTags} allTags={allTags} />
             ))}
+          </div>
+        )}
+        {!loading && (
+          <div className="mt-12">
+            <Link
+              to="/compost"
+              className={`text-sm font-sans hover:text-forest transition-colors ${compostCount === 0 ? 'text-text-muted opacity-60' : 'text-text-muted'}`}
+            >
+              Compost heap ({compostCount})
+            </Link>
           </div>
         )}
       </main>

@@ -2,6 +2,52 @@
 
 ---
 
+## v0.20.0 — Compost heap (soft-delete with 90-day auto-purge) (9 May 2026)
+
+The first user-facing removal mechanism in the product. Composting is soft and
+considered: a photo can only be composted if it has no tags and no active capsule
+memberships. The 90-day window is the safety net. No public hard-delete endpoint
+is added — the only path to true hard-delete is the system-driven lazy cleanup.
+
+**Schema:** Flyway V8 migration adds `composted_at TIMESTAMPTZ` (nullable) to
+`uploads` with a partial index on non-null values. Null = active; non-null =
+composted. Purely additive — no data migration needed.
+
+**Backend (HeirloomsServer):**
+- Three new endpoints: `POST /api/content/uploads/:id/compost`,
+  `POST /api/content/uploads/:id/restore`,
+  `GET /api/content/uploads/composted`.
+- New `GET /api/content/uploads/:id` endpoint (returns upload regardless of
+  composted state — needed for heap → detail navigation).
+- `GET /api/content/uploads` (active list) now filters out composted items.
+  Lazy cleanup fires on every active-list call: a daemon thread hard-deletes
+  items past their 90-day window (GCS object first, then DB row; retry-safe).
+- `canCompost` helper wraps the precondition check (no tags, no active capsule
+  memberships) in a `withTransaction` lock to prevent races.
+- `UploadRecord.toJson()` extended with `compostedAt` field.
+
+**Web UI (HeirloomsWeb):**
+- *Compost* button on photo detail view: earth ghost style, disabled (with
+  helper text) when tags or active capsule memberships are present.
+- Successful compost navigates to Garden with a transient italic confirmation:
+  *Composted. Find it in the compost heap below.*
+- Composted photo detail: faded/desaturated image, countdown metadata, *Restore*
+  replacing *Compost*, no other affordances.
+- Garden footer: quiet *Compost heap (N)* link, shown even when count is zero.
+- New `/compost` route: list view with thumbnail, upload date, composted date,
+  days-remaining metadata, and inline *Restore*. Empty state randomises per
+  session from a pool of five brand-voice lines (`brandStrings.js`).
+
+**Tests:** ~16 new backend integration tests (`CompostApiTest.kt`); ~10 new
+Vitest tests (`compost.test.jsx`). ~149 backend tests total; ~40 web tests total.
+
+**Documentation:** IDEAS.md cascade-warning entry removed (resolved by compost
+preconditions). PA_NOTES.md updated with two new gotchas (lazy-cleanup scaling,
+hard-delete-is-system-only). BRAND.md voice section gets the *compost* verb and
+a reference to the empty-state pool.
+
+---
+
 ## v0.19.6 — Post-v0.19.5 documentation sweep (9 May 2026)
 
 Doc-only patch. No code changes. No behaviour change. Test counts unchanged.

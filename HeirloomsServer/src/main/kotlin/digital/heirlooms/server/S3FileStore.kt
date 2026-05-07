@@ -6,6 +6,7 @@ import software.amazon.awssdk.core.async.AsyncRequestBody
 import software.amazon.awssdk.core.async.AsyncResponseTransformer
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3AsyncClient
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
 import software.amazon.awssdk.services.s3.model.GetObjectRequest
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import java.net.URI
@@ -55,6 +56,15 @@ class S3FileStore(
             client.putObject(request, AsyncRequestBody.fromBytes(bytes)).get()
         } catch (e: ExecutionException) {
             throw RuntimeException("S3 upload failed for key '${key.value}': ${e.cause?.message}", e.cause)
+        }
+    }
+
+    override fun delete(key: StorageKey) {
+        val request = DeleteObjectRequest.builder().bucket(bucket).key(key.value).build()
+        try {
+            client.deleteObject(request).get()
+        } catch (e: ExecutionException) {
+            throw RuntimeException("S3 delete failed for key '${key.value}': ${e.cause?.message}", e.cause)
         }
     }
 

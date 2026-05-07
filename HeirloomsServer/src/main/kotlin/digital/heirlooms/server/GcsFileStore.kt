@@ -44,6 +44,10 @@ class GcsFileStore(
 
     override fun get(key: StorageKey): ByteArray = storage.readAllBytes(BlobId.of(bucket, key.value))
 
+    override fun delete(key: StorageKey) {
+        storage.delete(BlobId.of(bucket, key.value))
+    }
+
     override fun getFirst(key: StorageKey, maxBytes: Int): ByteArray {
         val buf = ByteBuffer.allocate(maxBytes)
         storage.reader(bucket, key.value).use { channel ->

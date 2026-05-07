@@ -122,3 +122,15 @@ body {
     animation: none;
   }
 }
+
+/* Generic fade-in */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [class*="animate-[fade-in"] {
+    animation: none;
+  }
+}

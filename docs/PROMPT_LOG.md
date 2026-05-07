@@ -6,6 +6,73 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-09 (v0.20.0 — Compost heap)
+
+**v0.20.0 (9 May 2026) — Compost heap: soft-delete with 90-day auto-purge.**
+Introduces composting as the first user-facing removal mechanism. The product is
+slow and considered about removal: composting requires no tags and no active
+capsule memberships, the 90-day window is the safety net, and the only path to
+true hard-delete is the system-driven lazy cleanup. No public hard-delete endpoint
+is added.
+
+**Schema:** Flyway V8 migration — `ALTER TABLE uploads ADD COLUMN composted_at
+TIMESTAMP WITH TIME ZONE`. Partial index `uploads_composted_at_idx WHERE
+composted_at IS NOT NULL` covers heap-list and cleanup queries. Purely additive;
+existing uploads default to `composted_at = NULL` (active).
+
+**Backend:**
+- `Database.compostUpload(id)`: wraps the precondition check and `SET composted_at
+  = NOW()` in a `withTransaction` lock; returns a sealed `CompostResult` (Success /
+  NotFound / AlreadyComposted / PreconditionFailed).
+- `Database.restoreUpload(id)`: clears `composted_at`; returns `RestoreResult`.
+- `Database.listCompostedUploads()`: `WHERE composted_at IS NOT NULL ORDER BY
+  composted_at DESC`.
+- `Database.canCompost(uploadId, conn)`: checks `tags IS EMPTY` and no active
+  (`open` / `sealed`) capsule membership. Called inside the compost transaction.
+- `Database.fetchExpiredCompostedUploads()` + `Database.hardDeleteUpload(id)`:
+  support the lazy cleanup.
+- `Database.listUploads()` extended with `composted_at IS NULL` filter; all
+  existing callers now return only active items by default.
+- `UploadRecord.toJson()` extended with `compostedAt` (null-safe).
+- `UploadHandler`: three new contract routes (`POST /compost`, `POST /restore`,
+  `GET /uploads/composted`); new `GET /uploads/:id` returning the upload regardless
+  of composted state; `launchCompostCleanup()` fires on every active-list call as
+  a daemon thread (GCS delete → DB delete, retry-safe).
+
+**Web:**
+- `api.js`: added `formatCompactDate` (compact en-GB date, year omitted for
+  current year) and `daysUntilPurge` (days until 90-day window closes).
+- `PhotoDetailPage.jsx`: fallback fetch updated to use `GET /uploads/:id` (finds
+  composted photos too); compost/restore button with earth-ghost / forest-fill
+  styling; disabled state with helper text when preconditions unmet; composted
+  state renders faded image, countdown metadata, `Restore` replacing `Compost`.
+- `GardenPage.jsx`: transient italic confirmation message on `location.state.composted`
+  (clears browser history state on mount); `GET /uploads/composted` count fetch;
+  quiet `Compost heap (N)` link below the grid.
+- `CompostHeapPage.jsx`: new page at `/compost` — list view with thumbnail, dates,
+  days-remaining, inline `Restore`; empty state randomised from a pool of five
+  brand-voice lines (`brandStrings.js`).
+- `brandStrings.js`: new module in `src/brand/` holding the empty-state pool.
+  Pool expansion requires PA review (noted in a comment and in BRAND.md).
+- `App.jsx`: `/compost` route added.
+
+**Tests:**
+- `CompostApiTest.kt` (new): ~16 integration tests via Testcontainers covering
+  compost preconditions, restore, list filtering, GET-by-id on composted items,
+  lazy-cleanup non-expiry (HTTP-only; expiry path verified by logic inspection).
+- `compost.test.jsx` (new): ~10 Vitest tests covering `PhotoDetailPage` compost
+  button states, `GardenPage` compost heap link + transient message, and
+  `CompostHeapPage` render, restore, and empty state.
+
+**Documentation:** IDEAS.md cascade-warning entry removed (compost preconditions
+resolve the problem). PA_NOTES.md bumped to v0.20.0; two new gotchas: lazy-cleanup
+doesn't scale to multi-user (Milestone 7: Cloud Scheduler), hard-delete is
+system-only by design. BRAND.md voice section: *compost* verb added; canonical
+strings: empty-state pool reference. VERSIONS.md: v0.20.0 entry. PROMPT_LOG.md:
+this entry.
+
+---
+
 ## Session — 2026-05-09 (v0.19.6 — Post-v0.19.5 documentation sweep)
 
 **v0.19.6 (9 May 2026) — Post-v0.19.5 documentation sweep.** Captured the v0.19.x

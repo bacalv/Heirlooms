@@ -35,6 +35,10 @@ class LocalFileStore(
 
     override fun get(key: StorageKey): ByteArray = Files.readAllBytes(storageDir.resolve(key.value))
 
+    override fun delete(key: StorageKey) {
+        Files.deleteIfExists(storageDir.resolve(key.value))
+    }
+
     companion object {
         fun create(storageDir: String): LocalFileStore =
             LocalFileStore(Paths.get(storageDir))

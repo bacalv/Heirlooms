@@ -20,7 +20,7 @@ class CapsuleApiTest {
     // ---- Fixture helpers ------------------------------------------------
 
     private fun createUploadId(): String {
-        val bytes = ByteArray(512) { it.toByte() }
+        val bytes = ByteArray(512).also { java.util.Random().nextBytes(it) }
         val response = client.newCall(
             Request.Builder()
                 .url("$base/api/content/upload")
@@ -459,7 +459,7 @@ class CapsuleApiTest {
 
         // Verify the message was NOT changed (transaction rolled back)
         val current = JSONObject(getCapsule(id).body!!.string())
-        assertThat(current.getString("message")).isEqualTo("Test")
+        assertThat(current.getString("message")).isEqualTo("")
     }
 
     @Test

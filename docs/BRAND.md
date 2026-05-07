@@ -116,6 +116,12 @@ Do **not** use it for:
   reserved for the capsule mechanic.
 - *bloomed* — reserved for milestone delivery (capsule unlock). Do not use
   for routine uploads.
+- *compost* — meaning verb at the moment of removal. A photo that is no longer
+  needed in the garden goes to the compost heap, where it sits quietly until it
+  is gone for good (90 days). Used in the *Compost* affordance and in metadata
+  copy ("Composted 9 May"). Not a destructive verb — *compost* says *this isn't
+  useful to me anymore, but it isn't garbage either; it's part of what becomes
+  the garden's future*.
 - *didn't take* — failure language for upload/save failures. Earth-coloured.
 
 ### Canonical strings
@@ -127,6 +133,9 @@ Do **not** use it for:
 - Upload complete sub: "{n} photos saved to your garden."
 - Upload failed: "didn't take"
 - Milestone delivery (future, Milestone 6): "Something has bloomed for you."
+- Compost-heap empty state (randomised per session): see the `compostHeapEmptyState`
+  array in `HeirloomsWeb/src/brand/brandStrings.js`. Five lines; pool can be
+  expanded with PA review.
 
 ## Motion language
 

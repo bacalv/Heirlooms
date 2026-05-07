@@ -26,6 +26,7 @@ import org.http4k.core.Status.Companion.NOT_FOUND
 import org.http4k.core.Status.Companion.CONFLICT
 import org.http4k.core.Status.Companion.NOT_IMPLEMENTED
 import org.http4k.core.Status.Companion.OK
+import org.http4k.core.Status.Companion.UNPROCESSABLE_ENTITY
 import org.http4k.format.Jackson
 import org.http4k.format.Jackson.auto
 import org.http4k.lens.Path
@@ -77,7 +78,9 @@ fun buildApp(
         descriptionPath = "/openapi.json"
         routes += listOf(
             uploadContractRoute(storage, database, thumbnailGenerator, metadataExtractor),
-            listUploadsContractRoute(database),
+            listUploadsContractRoute(storage, database),
+            listCompostedUploadsContractRoute(database),
+            getUploadByIdContractRoute(database),
             prepareUploadContractRoute(directUpload),
             confirmUploadContractRoute(storage, database, thumbnailGenerator, metadataExtractor),
             fileProxyContractRoute(storage, database),
@@ -86,6 +89,8 @@ fun buildApp(
             rotationContractRoute(database),
             tagsContractRoute(database),
             capsuleReverseLookupRoute(database),
+            compostUploadContractRoute(database),
+            restoreUploadContractRoute(database),
         )
     }
 
@@ -190,11 +195,31 @@ private fun uploadContractRoute(
         receiving(Body.binary(ContentType("application/octet-stream")).toLens())
     } bindContract POST to uploadHandler(storage, database, thumbnailGenerator, metadataExtractor)
 
-private fun listUploadsContractRoute(database: Database): ContractRoute =
+private fun listUploadsContractRoute(storage: FileStore, database: Database): ContractRoute =
     "/uploads" meta {
         summary = "List uploads"
-        description = "Returns all uploaded files as a JSON array. Optional query params: `tag` (include only uploads that have this tag), `exclude_tag` (omit uploads that have this tag). Both can be combined."
-    } bindContract GET to listUploadsHandler(database)
+        description = "Returns all active (non-composted) uploaded files as a JSON array. Optional query params: `tag` (include only uploads that have this tag), `exclude_tag` (omit uploads that have this tag). Both can be combined."
+    } bindContract GET to listUploadsHandler(storage, database)
+
+private fun getUploadByIdContractRoute(database: Database): ContractRoute {
+    val id = Path.uuid().of("id")
+    return "/uploads" / id meta {
+        summary = "Get upload by ID"
+        description = "Returns a single upload by ID regardless of composted state. Returns 404 if not found."
+    } bindContract GET to { uploadId: UUID ->
+        { _: Request ->
+            val record = database.getUploadById(uploadId)
+            if (record == null) Response(NOT_FOUND)
+            else Response(OK).header("Content-Type", "application/json").body(record.toJson())
+        }
+    }
+}
+
+private fun listCompostedUploadsContractRoute(database: Database): ContractRoute =
+    "/uploads/composted" meta {
+        summary = "List composted uploads"
+        description = "Returns all uploads in the compost heap, ordered by composted_at descending."
+    } bindContract GET to listCompostedUploadsHandler(database)
 
 private fun uploadHandler(
     storage: FileStore,
@@ -252,7 +277,7 @@ private fun uploadHandler(
     }
 }
 
-private fun listUploadsHandler(database: Database): HttpHandler = { request ->
+private fun listUploadsHandler(storage: FileStore, database: Database): HttpHandler = { request ->
     try {
         val tag = request.query("tag")?.takeIf { it.isNotBlank() }
         val excludeTag = request.query("exclude_tag")?.takeIf { it.isNotBlank() }
@@ -265,9 +290,103 @@ private fun listUploadsHandler(database: Database): HttpHandler = { request ->
             }
             append("]")
         }
-        Response(OK).header("Content-Type", "application/json").body(json)
+        val response = Response(OK).header("Content-Type", "application/json").body(json)
+        launchCompostCleanup(storage, database)
+        response
     } catch (e: Exception) {
         Response(INTERNAL_SERVER_ERROR).body("Failed to list uploads: ${e.message}")
+    }
+}
+
+private fun listCompostedUploadsHandler(database: Database): HttpHandler = { _ ->
+    try {
+        val uploads = database.listCompostedUploads()
+        val json = buildString {
+            append("{\"uploads\":[")
+            uploads.forEachIndexed { i, u ->
+                if (i > 0) append(",")
+                append(u.toJson())
+            }
+            append("]}")
+        }
+        Response(OK).header("Content-Type", "application/json").body(json)
+    } catch (e: Exception) {
+        Response(INTERNAL_SERVER_ERROR).body("Failed to list composted uploads: ${e.message}")
+    }
+}
+
+private fun launchCompostCleanup(storage: FileStore, database: Database) {
+    Thread {
+        try {
+            val expired = database.fetchExpiredCompostedUploads()
+            for (record in expired) {
+                try {
+                    storage.delete(StorageKey(record.storageKey))
+                    if (record.thumbnailKey != null) {
+                        try { storage.delete(StorageKey(record.thumbnailKey)) } catch (e: Exception) {
+                            println("[compost-cleanup] WARNING: failed to delete thumbnail ${record.thumbnailKey}: ${e.message}")
+                        }
+                    }
+                    database.hardDeleteUpload(record.id)
+                    println("[compost-cleanup] INFO: hard-deleted upload ${record.id} (composted ${record.compostedAt})")
+                } catch (e: Exception) {
+                    println("[compost-cleanup] WARNING: failed to hard-delete upload ${record.id}: ${e.message}")
+                }
+            }
+        } catch (e: Exception) {
+            println("[compost-cleanup] ERROR: cleanup failed: ${e.message}")
+        }
+    }.also { it.isDaemon = true }.start()
+}
+
+private fun compostUploadContractRoute(database: Database): ContractRoute {
+    val id = Path.uuid().of("id")
+    return "/uploads" / id / "compost" meta {
+        summary = "Compost an upload"
+        description = "Soft-deletes an upload. Requires no tags and no active capsule memberships."
+    } bindContract POST to { uploadId: UUID, _: String ->
+        { _: Request ->
+            try {
+                when (val result = database.compostUpload(uploadId)) {
+                    is Database.CompostResult.Success ->
+                        Response(OK).header("Content-Type", "application/json").body(result.record.toJson())
+                    is Database.CompostResult.NotFound ->
+                        Response(NOT_FOUND)
+                    is Database.CompostResult.AlreadyComposted ->
+                        Response(CONFLICT).header("Content-Type", "application/json")
+                            .body("""{"error":"Upload is already composted"}""")
+                    is Database.CompostResult.PreconditionFailed ->
+                        Response(UNPROCESSABLE_ENTITY).header("Content-Type", "application/json")
+                            .body("""{"error":"Cannot compost: upload has tags or is in active capsules"}""")
+                }
+            } catch (e: Exception) {
+                Response(INTERNAL_SERVER_ERROR).body("Failed to compost upload: ${e.message}")
+            }
+        }
+    }
+}
+
+private fun restoreUploadContractRoute(database: Database): ContractRoute {
+    val id = Path.uuid().of("id")
+    return "/uploads" / id / "restore" meta {
+        summary = "Restore a composted upload"
+        description = "Removes composted_at from an upload, returning it to the active garden."
+    } bindContract POST to { uploadId: UUID, _: String ->
+        { _: Request ->
+            try {
+                when (val result = database.restoreUpload(uploadId)) {
+                    is Database.RestoreResult.Success ->
+                        Response(OK).header("Content-Type", "application/json").body(result.record.toJson())
+                    is Database.RestoreResult.NotFound ->
+                        Response(NOT_FOUND)
+                    is Database.RestoreResult.NotComposted ->
+                        Response(CONFLICT).header("Content-Type", "application/json")
+                            .body("""{"error":"Upload is not composted"}""")
+                }
+            } catch (e: Exception) {
+                Response(INTERNAL_SERVER_ERROR).body("Failed to restore upload: ${e.message}")
+            }
+        }
     }
 }
 

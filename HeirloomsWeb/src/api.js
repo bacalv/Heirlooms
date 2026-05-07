@@ -37,6 +37,18 @@ export function capsuleTitle(recipients) {
   return `For ${joinRecipients(recipients)}`
 }
 
+export function formatCompactDate(isoString) {
+  const d = new Date(isoString)
+  const opts = { day: 'numeric', month: 'short' }
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric'
+  return d.toLocaleDateString('en-GB', opts)
+}
+
+export function daysUntilPurge(compostedAtIso) {
+  const purgeAt = new Date(new Date(compostedAtIso).getTime() + 90 * 24 * 60 * 60 * 1000)
+  return Math.max(0, Math.ceil((purgeAt - Date.now()) / (24 * 60 * 60 * 1000)))
+}
+
 export function buildUnlockAt(day, month, year) {
   const monthNum = String(month).padStart(2, '0')
   const dayNum = String(day).padStart(2, '0')

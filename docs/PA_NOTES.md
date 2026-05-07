@@ -24,10 +24,10 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.19.6 (9 May 2026) — brand foundation (v0.17.0), share-sheet idle
-  state (v0.17.1), capsule backend (v0.18.0), doc sweep (v0.18.1), brand visual mechanic
-  (v0.18.2), capsule web UI (v0.19.0–v0.19.5), post-v0.19.5 doc sweep (v0.19.6).
-  Milestone 5 Increment 3 — Android capsule creation — is next.
+- Current version: v0.20.0 (9 May 2026) — brand foundation (v0.17.0), share-sheet idle
+  state (v0.17.1), capsule backend (v0.18.0), doc sweeps (v0.18.1, v0.19.6), brand visual
+  mechanic (v0.18.2), capsule web UI (v0.19.0–v0.19.5), compost heap (v0.20.0).
+  Combined Android Increment 3 + Daily-Use is next.
 - One-time machine setup required: ~/.testcontainers.properties with
   docker.raw.sock path — see PROMPT_LOG.md for details
 
@@ -158,6 +158,24 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
   with cookie-based server-side sessions when proper auth lands (probably during Milestone 7's
   multi-user work). Future Milestone 7 work should expect to revisit and replace this pattern,
   not extend it. Keywords: `auth`, `RequireAuth`, `state.from`, `redirect`, `interim`.
+- **Lazy cleanup of composted uploads doesn't scale to multi-user (v0.20.0).** The compost
+  heap increment uses lazy cleanup — every active-list query triggers a background thread
+  that hard-deletes items past their 90-day window (GCS object first, then DB row). At v1
+  with a single user this works fine: queries are frequent, items past the window are few.
+  At multi-user scale, users who go inactive could leave composted GCS objects sitting
+  indefinitely, accumulating storage cost. Milestone 7 should revisit with a scheduled
+  cleanup job (Cloud Scheduler hitting an internal endpoint, weekly or daily). The lazy
+  approach was a deliberate v1 choice for simplicity. Keywords: `compost`, `lazy cleanup`,
+  `Cloud Scheduler`, `multi-user`, `GCS storage`.
+- **Hard-delete is system-only by design (v0.20.0).** When compost was added in v0.20.0 as
+  the first removal mechanism, no public hard-delete endpoint was added alongside it. The
+  only path to true hard-delete is the lazy cleanup of items past their compost window. This
+  is a deliberate brand and product choice — the 90-day compost window is the safety net
+  that lets the rest of the design avoid confirmation dialogs. If a future increment needs a
+  true hard-delete path (admin tool, account deletion, etc.), it must be either a new
+  internal mechanism or a deliberate decision to add a public endpoint with appropriate
+  safeguards. Don't add a parallel hard-delete path without careful consideration. Keywords:
+  `hard delete`, `compost`, `system-only`, `90-day window`.
 
 ---
 
