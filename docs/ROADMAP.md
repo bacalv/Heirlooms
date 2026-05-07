@@ -157,18 +157,30 @@ in v1, becoming connections at Milestone 7.
 
 - **Increment 1 (v0.18.0, shipped 8 May 2026).** Schema and backend API. Four tables,
   seven endpoints, message versioning, state-machine validation, ~49 integration tests.
-- **Increment 2 (planned).** Web UI: Capsules screen, capsule detail view, create/edit
-  forms, photo picker modal, photo detail view's "in N capsules" line and "Add to capsule"
-  action.
-- **Brand follow-up (planned).** Visual mechanic for capsule states (sealed/open/delivered).
-  Currently deferred in BRAND.md. Sized as a smaller-scope brand exploration in its own
-  session, between Increments 2 and 3.
-- **Increment 3 (planned).** Android: extend the share-sheet flow with "+ start a capsule"
-  as an alternative to plain upload. Capsule creation on Android.
-- **Android Daily-Use Increment (planned, after Increment 3).** Read-only Gallery and
-  Capsules views on Android. Solves the phone/web switching friction. Editing stays on
+- **Brand follow-up (v0.18.2, shipped 8 May 2026).** Visual mechanic for capsule states
+  (sealed/open/delivered) added to BRAND.md. Shipped between Increments 1 and 2 — earlier
+  than the original plan (between 2 and 3) — to give the web UI a complete visual spec to
+  build against.
+- **Increment 2 (v0.19.0–v0.19.5, shipped 9 May 2026).** Web UI: Capsules list, capsule
+  detail view (four state variants), create form, shared photo picker modal, photo detail
+  page's "in N capsules" line and "Add to capsule" flow, confirmation dialogs, sealing
+  animation, navigation guard. Bug fixes through v0.19.5; documentation sweep at v0.19.6.
+- **Increment 3 (planned, combined with Android Daily-Use).** Android: extend the
+  share-sheet flow with "+ start a capsule" as an alternative to plain upload. Capsule
+  creation on Android. Planned to ship together with the Daily-Use increment below.
+- **Android Daily-Use Increment (planned, combined with Increment 3).** Read-only Gallery
+  and Capsules views on Android. Solves the phone/web switching friction. The
+  orientation-change fix in v0.17.1 (`android:configChanges`) is tactical; the proper
+  ViewModel + SavedStateHandle migration is scoped for this increment. Editing stays on
   web for now.
 - **Closes Milestone 5.**
+
+**v0.20.x — Compost heap (shipped 9 May 2026)**
+A non-milestone increment between Milestone 5 and 6: the first user-facing removal
+mechanism. Composting is soft and considered — a photo can only be composted if it has
+no tags and no active capsule memberships. The 90-day window is the safety net; no public
+hard-delete endpoint exists. Removal in Heirlooms is not a trash can: it is the product's
+considered way of returning something to the earth.
 
 **Milestone 6 — Milestone delivery**
 Scheduled delivery of a capsule on a specific date — a child's 18th birthday,

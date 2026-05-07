@@ -6,6 +6,37 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-09 (v0.20.1 — No-flash fix + documentation sweep)
+
+**v0.20.1 (9 May 2026) — No-flash fix on compost + post-v0.20.0 documentation sweep.**
+
+**Code fix:** `PhotoDetailPage.jsx` had a `finally` block that reset the `composting`
+React state to `false` after a successful compost. On success the component is about to
+unmount (navigation fires immediately after the POST succeeds), so the state reset caused
+a re-render in the non-composted state before the component disappeared — a brief, visible
+flash of the file detail view. Removing the reset from `finally` into the `catch` block
+only (where it still belongs on failure) eliminates the flash. One-line change.
+
+**Documentation sweep:**
+- `VERSIONS.md`: v0.20.1 entry added.
+- `ROADMAP.md`: Increment 2 and Brand follow-up updated from "(planned)" to "(shipped)".
+  Brand follow-up note revised — it shipped before Increment 2, not after. Compost heap
+  added as a non-milestone interstitial between Milestone 5 and 6. Android Daily-Use and
+  Increment 3 noted as combined. `~v0.19.0` timing estimate removed; replaced with
+  positional language (after v0.20.1).
+- `PA_NOTES.md`: current version bumped to v0.20.1.
+- `IDEAS.md`: stale "Planned for ~v0.19.0" timing on Android daily-use updated to
+  "combined Android Increment 3 + Daily-Use increment (after v0.20.1)"; noted that both
+  the capsule web UI and compost heap are now shipped, so the Android increment builds
+  against a settled schema.
+- `BRAND.md`: status line updated to record *compost* verb addition at v0.20.0.
+- `SE_NOTES.md`: project path corrected from `~/Downloads/Heirlooms/` to
+  `~/IdeaProjects/Heirlooms/`; memory store path corrected to match.
+
+No new tests. No behaviour change beyond the flash fix.
+
+---
+
 ## Session — 2026-05-09 (v0.20.0 — Compost heap)
 
 **v0.20.0 (9 May 2026) — Compost heap: soft-delete with 90-day auto-purge.**

@@ -35,12 +35,15 @@ if any user accumulates more than ~50 capsules and the list becomes slow.
 
 ## Android daily-use gallery (8 May 2026)
 
-**Planned for ~v0.19.0.** The Android app currently does only share-sheet uploads;
-everything else lives on web. After Milestone 5's web UI lands and before Milestone 6
-starts, add read-only Gallery and Capsules views to Android. This is a developer-tool
-increment — same single-user/API-key auth model as today, just a richer UI for Bret's
-own use. Not the family-facing app (which is a Milestone 7 conversation, possibly built
-fresh rather than evolved from the developer tool).
+**Planned as part of the combined Android Increment 3 + Daily-Use increment (after v0.20.1).**
+The Android app currently does only share-sheet uploads; everything else lives on web.
+Add read-only Gallery and Capsules views to Android together with the Android capsule
+share-sheet extension. This is a developer-tool increment — same single-user/API-key auth
+model as today, just a richer UI for Bret's own use. Not the family-facing app (which is
+a Milestone 7 conversation, possibly built fresh rather than evolved from the developer
+tool). Capsule web UI (Milestone 5 Increment 2) and compost heap (v0.20.0) both shipped
+before this increment, which is the right sequencing — the Android UI will be built against
+a settled schema and feature set.
 
 Three reasons for the timing:
 - By then the capsule schema is settled (one Android pass, not two).

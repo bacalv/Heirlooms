@@ -2,6 +2,29 @@
 
 ---
 
+## v0.20.1 — No-flash fix on compost + post-v0.20.0 documentation sweep (9 May 2026)
+
+Patch increment. One code fix, no behaviour change beyond removing the flash.
+
+- `PhotoDetailPage.jsx`: removed the `finally` block that reset `composting` state to
+  `false` after a successful compost. The reset triggered a re-render in the
+  non-composted state immediately before navigation unmounted the component, causing a
+  brief visible flash of the file detail view. On success the component is about to
+  unmount — resetting state is unnecessary. On failure the `catch` block still resets
+  correctly. Symptom: brief white/non-composted flash visible during the navigate-to-garden
+  transition after clicking *Compost*.
+- `ROADMAP.md`: Increment 2 and Brand follow-up updated from "(planned)" to "(shipped)".
+  Compost heap added as a non-milestone interstitial between Milestone 5 and 6. Android
+  Daily-Use noted as combined with Increment 3.
+- `PA_NOTES.md`: current version bumped to v0.20.1.
+- `IDEAS.md`: stale "Planned for ~v0.19.0" timing on Android daily-use updated.
+- `BRAND.md`: status line updated to mention compost verb addition at v0.20.0.
+- `SE_NOTES.md`: project path corrected from `~/Downloads/` to `~/IdeaProjects/`.
+
+Test counts unchanged: ~149 backend integration tests; ~40 web tests.
+
+---
+
 ## v0.20.0 — Compost heap (soft-delete with 90-day auto-purge) (9 May 2026)
 
 The first user-facing removal mechanism in the product. Composting is soft and

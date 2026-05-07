@@ -1,7 +1,8 @@
 # Heirlooms — Brand
 
 **Status:** foundation locked at v0.17.0, 7 May 2026; capsule visual
-mechanic added at v0.18.2, 8 May 2026.
+mechanic added at v0.18.2, 8 May 2026; *compost* verb and empty-state
+pool reference added at v0.20.0, 9 May 2026.
 **Source of truth:** this document. If `tailwind.config.js`, `src/index.css`,
 or any component disagrees with what's written here, the discrepancy is a bug
 in the code, not in the brand.

@@ -12,7 +12,7 @@ tasks. For larger or architectural work, also reference `@TEAM.md` and
 `@PA_NOTES.md`. I will read them before doing anything.
 
 I also maintain a persistent memory store that survives between sessions:
-`~/.claude/projects/-Users-bac-Downloads-Heirlooms/memory/`
+`~/.claude/projects/-Users-bac-IdeaProjects-Heirlooms/memory/`
 This is loaded automatically — Bret does not need to paste it in.
 
 ---
@@ -29,7 +29,7 @@ This is loaded automatically — Bret does not need to paste it in.
 
 ## Project structure
 
-Three Gradle subprojects under `/Users/bac/Downloads/Heirlooms/`:
+Three Gradle subprojects under `/Users/bac/IdeaProjects/Heirlooms/`:
 
 | Subproject | Package | Purpose |
 |---|---|---|
