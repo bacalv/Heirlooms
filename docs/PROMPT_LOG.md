@@ -6,6 +6,50 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-07 (v0.17.0 — Brand, Increment 3a)
+
+**PA brief:** SE Brief — Brand, Increment 3a: Android Static Brand (Icon + Resources + Receive Screen).
+
+**What was built:**
+- App icon: VectorDrawable foreground (`ic_launcher_foreground.xml`, ellipses converted to arc paths
+  with `<group>` rotations), adaptive icon XML at `mipmap-anydpi-v26/` with `<monochrome>` for
+  Android 13+ themed icons, legacy PNGs at all five densities generated via sharp-cli from the
+  favicon SVG, Play Store icon at 512×512.
+- `res/values/colors.xml` — full brand palette + tints + text shades.
+- `ui/theme/Color.kt`, `Type.kt`, `Theme.kt` — Compose brand theme. `HeirloomsTheme { }` ready
+  to wrap Activity content.
+- `ui/brand/WorkingDots.kt` — Compose three-dot pulse component. `rememberInfiniteTransition`
+  called unconditionally inside `repeat(3)` to satisfy Rules of Compose; `reduceMotion` only
+  affects which value is used, not whether the composable is called.
+- `build.gradle.kts` updated: Compose BOM 2024.01.00, Compose Compiler 1.5.8, JVM 11,
+  `buildFeatures { compose = true }`.
+- `strings.xml` — full garden voice string set.
+- `UploadWorker` — notifications use R.string brand strings; small icon changed from
+  `android.R.drawable.ic_menu_upload` to `R.drawable.ic_launcher_foreground`.
+- `ShareActivity` — toast messages updated to brand voice ("uploading…" / "Waiting for WiFi
+  to plant your photos.").
+
+**Flagged gap — receive screen:**
+The current `ShareActivity` has no visible UI. It is a transparent Activity that immediately copies
+files, enqueues WorkManager, shows a Toast, and finishes. The brief's "receive-screen Composable"
+does not exist. Building a full branded receive screen (photo previews, tag chips, "plant" button)
+requires a new Compose Activity — scoped to a follow-up, not a restyling of existing code.
+
+**Key decisions:**
+- VectorDrawable ellipse conversion: each SVG ellipse with a rotation transform became a
+  `<path>` with arc commands (`M cx-rx,cy A rx,ry 0 1 0 cx+rx,cy A rx,ry 0 1 0 cx-rx,cy Z`)
+  inside a `<group android:rotation="..." android:pivotX="..." android:pivotY="...">`. This is
+  the standard VectorDrawable pattern since VectorDrawable has no `<ellipse>` element.
+- JVM target bumped 1.8 → 11 (Compose minimum). No existing code uses Java 8-only APIs that
+  would break at JVM 11.
+- Notification small icon changed to `ic_launcher_foreground` (our VectorDrawable). On Android 8+
+  notification icons must be monochromatic; the parchment-on-transparent foreground renders as
+  white on the system's accent colour, which is correct behaviour.
+- Compose UI tests deferred: no emulator/device CI runner configured. Existing JUnit tests
+  (135 Kotlin) are unaffected by Compose dependency additions.
+
+---
+
 ## Session — 2026-05-07 (v0.17.0 — Brand, Increment 2)
 
 **PA brief:** SE Brief — Brand, Increment 2: Web Arrival and Didn't-Take Animations.

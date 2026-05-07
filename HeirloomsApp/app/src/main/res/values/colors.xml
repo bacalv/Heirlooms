@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Heirlooms brand palette — locked at v0.17.0. See docs/BRAND.md. -->
+    <color name="parchment">#F2EEDF</color>
+    <color name="forest">#3F4F33</color>
+    <color name="bloom">#D89B85</color>
+    <color name="earth">#B5694B</color>
+    <color name="new_leaf">#7DA363</color>
+    <color name="ink">#2C2A26</color>
+
+    <!-- Forest tints. ARGB: 0xAARRGGBB. -->
+    <color name="forest_04">#0A3F4F33</color>
+    <color name="forest_08">#143F4F33</color>
+    <color name="forest_15">#263F4F33</color>
+    <color name="forest_25">#403F4F33</color>
+
+    <!-- Text shades. -->
+    <color name="text_primary">#2C2A26</color>
+    <color name="text_body">#5A5A52</color>
+    <color name="text_muted">#6B7559</color>
+
+    <!-- Adaptive icon background. -->
+    <color name="ic_launcher_background">#3F4F33</color>
+</resources>

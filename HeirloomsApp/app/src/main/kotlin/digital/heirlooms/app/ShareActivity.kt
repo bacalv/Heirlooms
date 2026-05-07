@@ -72,9 +72,12 @@ class ShareActivity : Activity() {
                     .build())
 
             val count = tempFiles.size
-            val queued = if (count == 1) "Upload queued." else "$count uploads queued."
-            val waiting = if (count == 1) "Queued — waiting for WiFi." else "$count files queued — waiting for WiFi."
-            val msg = if (wifiOnly && !isOnWifi()) waiting else queued
+            val msg = if (wifiOnly && !isOnWifi()) {
+                if (count == 1) "Waiting for WiFi to plant your photo."
+                else "Waiting for WiFi to plant $count photos."
+            } else {
+                getString(R.string.upload_in_progress)
+            }
             Toast.makeText(applicationContext, msg, Toast.LENGTH_SHORT).show()
             finish()
         }

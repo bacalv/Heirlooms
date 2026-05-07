@@ -2,6 +2,64 @@
 
 ---
 
+## v0.17.0 — Android static brand: icon, resources, receive screen (7 May 2026)
+
+Increment 3a of 3 for the Heirlooms brand milestone. Animation components (OliveBranchArrival,
+OliveBranchDidntTake) and their wiring follow in Increment 3b.
+
+**App icon:**
+- `ic_launcher_foreground.xml` — VectorDrawable foreground: parchment olive branch on transparent
+  ground, 108×108dp canvas. Ellipses converted to closed arc paths; rotations via `<group>` elements.
+- `mipmap-anydpi-v26/ic_launcher.xml` and `ic_launcher_round.xml` — adaptive icon with forest
+  background and parchment foreground. `<monochrome>` layer enables themed icons on Android 13+.
+- Legacy PNGs at all five densities (mdpi 48→xxxhdpi 192) plus round variants — generated from
+  `HeirloomsWeb/public/favicon.svg` (forest rounded-square + parchment olive branch).
+- `playstore/playstore-icon-512.png` — 512×512 Play Store icon.
+- `AndroidManifest.xml` updated: `@mipmap/ic_launcher` + `@mipmap/ic_launcher_round`.
+  `@android:drawable/ic_menu_upload` removed.
+
+**Brand resources:**
+- `res/values/colors.xml` — full palette (parchment, forest, bloom, earth, new_leaf, ink),
+  forest tints (04/08/15/25), text shades, `ic_launcher_background`.
+- `ui/theme/Color.kt` — Compose Color constants matching colors.xml.
+- `ui/theme/Type.kt` — `HeirloomsTypography` (serif italic for headlines, sans for body/labels);
+  `HeirloomsSerifItalic` TextStyle exported for direct use.
+- `ui/theme/Theme.kt` — `HeirloomsTheme { }` wrapping `MaterialTheme` with brand colour scheme.
+  No dark-mode variant (deliberate; see BRAND.md).
+- `app/build.gradle.kts` — Compose added: BOM 2024.01.00, Compose Compiler 1.5.8 (Kotlin 1.9.22
+  compatible), `buildFeatures { compose = true }`, JVM target bumped 1.8 → 11.
+
+**WorkingDots Compose component:**
+- `ui/brand/WorkingDots.kt` — three forest dots, 1.4s pulse, 0.2s stagger via
+  `rememberInfiniteTransition`. Reduced-motion: reads `Settings.Global.ANIMATOR_DURATION_SCALE`;
+  static 0.6f opacity when scale == 0. Always creates transitions unconditionally (Rules of Compose).
+
+**Garden voice in strings.xml:**
+- Full set of brand voice strings: share_screen_title, share_save_button ("plant"),
+  upload_in_progress ("uploading…"), upload_success ("Something has been planted."),
+  upload_failed ("didn't take"), upload_retry, upload_dismiss, notif_* strings.
+- Settings title updated "Heirloom settings" → "Settings". settings_export added.
+
+**Notification copy (UploadWorker):**
+- Uses R.string.notif_planted / notif_didnt_take / upload_success_one / upload_success_many.
+- Small icon changed from system `ic_menu_upload` to `R.drawable.ic_launcher_foreground`.
+- Channel name driven from `R.string.notif_channel_uploads`.
+
+**ShareActivity toast:**
+- Now shows "uploading…" (brand voice) or "Waiting for WiFi to plant your photos."
+
+**Receive screen:**
+- The current `ShareActivity` is a transparent fire-and-forget Activity (no visible UI — it copies
+  files, enqueues WorkManager, shows a Toast, and finishes immediately). There is no receive-screen
+  Composable to restyle. Building a full branded receive screen (photo previews, tag input, "plant"
+  button) is scoped to a follow-up brief — it requires a new Compose Activity, not a restyling.
+
+No new tests added; existing 135 Kotlin tests unchanged. Compose UI tests deferred (need
+emulator/device; no CI runner configured for instrumentation tests). 143 total, 142 passing,
+1 skipped.
+
+---
+
 ## v0.17.0 — Brand arrival and didn't-take animations (7 May 2026)
 
 Increment 2 of 3 for the Heirlooms brand milestone.

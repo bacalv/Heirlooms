@@ -53,16 +53,18 @@ class UploadWorker(
 
     private fun notifyResult(succeeded: Int, failed: Int, total: Int) {
         ensureChannels()
-        val title = if (failed == 0) "Upload complete" else "Upload partially complete"
-        val text = when {
-            total == 1 && failed == 0 -> "File uploaded successfully."
-            total == 1 -> "Upload failed."
-            failed == 0 -> "$total files uploaded."
-            succeeded == 0 -> "All $total uploads failed."
-            else -> "$succeeded of $total files uploaded."
+        val (title, text) = when {
+            failed == 0 && total == 1 -> context.getString(R.string.notif_planted) to
+                context.getString(R.string.upload_success_one)
+            failed == 0 -> context.getString(R.string.notif_planted) to
+                context.getString(R.string.upload_success_many, total)
+            succeeded == 0 -> context.getString(R.string.notif_didnt_take) to
+                context.getString(R.string.upload_failed)
+            else -> context.getString(R.string.notif_planted) to
+                context.getString(R.string.upload_success_many, succeeded)
         }
         val n = NotificationCompat.Builder(context, CHANNEL_RESULT)
-            .setSmallIcon(android.R.drawable.ic_menu_upload)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(title)
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -75,7 +77,11 @@ class UploadWorker(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = context.getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_RESULT, "Upload result", NotificationManager.IMPORTANCE_HIGH)
+                NotificationChannel(
+                    CHANNEL_RESULT,
+                    context.getString(R.string.notif_channel_uploads),
+                    NotificationManager.IMPORTANCE_HIGH,
+                )
             )
         }
     }

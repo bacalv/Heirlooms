@@ -1,10 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Share sheet label -->
     <string name="app_name">Heirlooms</string>
 
+    <!-- Share-sheet receive screen -->
+    <string name="share_screen_title">Save to your garden</string>
+    <string name="share_save_button">plant</string>
+    <string name="share_cancel_button">cancel</string>
+    <string name="share_tag_placeholder">+ tag</string>
+    <string name="share_tag_invalid">Tags can only use lowercase letters, numbers, and dashes.</string>
+
+    <!-- Upload status -->
+    <string name="upload_in_progress">uploading…</string>
+    <string name="upload_success">Something has been planted.</string>
+    <string name="upload_success_one">1 photo saved to your garden.</string>
+    <string name="upload_success_many">%1$d photos saved to your garden.</string>
+    <string name="upload_failed">didn\'t take</string>
+    <string name="upload_retry">try again</string>
+    <string name="upload_dismiss">dismiss</string>
+
+    <!-- Notifications -->
+    <string name="notif_channel_uploads">Uploads</string>
+    <string name="notif_uploading">Planting your photos…</string>
+    <string name="notif_planted">Something has been planted.</string>
+    <string name="notif_didnt_take">didn\'t take</string>
+
     <!-- Settings screen -->
-    <string name="settings_title">Heirloom settings</string>
+    <string name="settings_title">Settings</string>
     <string name="settings_api_key_label">API Key</string>
     <string name="settings_api_key_hint">Enter your API key</string>
     <string name="settings_wifi_only">Upload on WiFi only</string>
@@ -14,4 +35,5 @@
     <string name="settings_queue_cancel_all">Cancel all</string>
     <string name="settings_save">Save</string>
     <string name="settings_saved">Settings saved</string>
+    <string name="settings_export">Export your garden</string>
 </resources>
