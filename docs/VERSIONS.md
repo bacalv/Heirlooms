@@ -2,6 +2,111 @@
 
 ---
 
+## v0.19.0 — Capsule web UI (Milestone 5, Increment 2) (9 May 2026)
+
+Web UI for the capsule mechanic. After this increment, capsules are a real feature
+on heirlooms.digital — browsing, creating, editing, sealing, cancelling, and adding
+photos to capsules from the gallery.
+
+**Navigation:**
+- Top-level nav bar on all authenticated pages: Heirlooms wordmark (left), Garden and
+  Capsules peer links (centre), Log out (right). Active page underlined in earth (#B5694B).
+- Mobile hamburger panel (slide-in from right, ~80% wide, parchment background).
+- React Router v6 added; app now uses proper client-side routing throughout.
+
+**New routes:**
+- `/capsules` — Capsules list screen
+- `/capsules/new` — Create form (with optional `?include=uuid` preselection)
+- `/capsules/:id` — Capsule detail view (four state variants)
+- `/photos/:id` — Gallery photo detail view (replaces lightbox modal)
+
+**Capsules list screen:**
+- Card grid (3 cols desktop / 2 tablet / 1 mobile), state filter and sort dropdowns,
+  soonest-unlock-first default sort. Client-side sort for `created_at` (no server change).
+- Sealed cards show wax-seal olive (top-left). Delivered: bloom-tinted. Cancelled: earth-tinted.
+- Brand-voice empty state ("A garden grows things to keep. / A capsule grows things to give."),
+  loading skeletons (no shimmer), and error state with retry.
+
+**Capsule detail view (four state variants):**
+- Open: fully editable with inline edit affordances (message, recipients, date modal, photo
+  picker modal). Seal and Cancel capsule actions.
+- Sealed: ceremonial wax-seal olive at full size (~56px) beside identity block. Photo contents
+  frozen (no add/remove affordance). Message and recipients editable. Cancel action.
+- Delivered: bloom-tinted page background, backdrop-size olive (140px, 25% opacity), read-only.
+- Cancelled: earth-tinted (CSS filter: saturate(0.6)), read-only, shows Cancelled date.
+- Loading skeleton and error state (general error + 404 handling).
+
+**Inline edit affordances:**
+- Message, recipients, unlock date (opens modal with three-dropdown date picker), photos
+  (opens picker modal). Auto-save on context-switch; navigation guard with Discard dialog
+  for unsaved changes.
+- Save failure shows "didn't take" inline. Working dots during save.
+- State machine: idle | editing | saving | error per field.
+
+**Create form (`/capsules/new`):**
+- Brand-voice opening line "Plant something for someone." in italic Georgia.
+- Fields: For (multi-recipient, + add another), To open on (three-dropdown), Include
+  (photo picker, scrollable thumbnail strip), Message (textarea, recipient-aware placeholder).
+- Both commit paths: Start capsule (open) and Seal capsule (sealed, secondary with wax-seal
+  olive on button). Sealing animation triggers on resulting detail view.
+- `?include=uuid` query parameter pre-populates Include field (comma-separated multi-UUID
+  format supported; v1 only generates single-UUID URLs).
+- Client-side validation: inline brand-voice errors beneath offending fields.
+
+**Shared photo picker modal:**
+- Used by create form (empty-initial) and capsule detail edit-photos (pre-populated).
+- Tag filter chips, newest-first, corner-mark selection with bloom colour + thumbnail darken.
+- Footer: live count, Cancel, Done(N).
+
+**Photo detail page (`/photos/:id`):**
+- Replaces lightbox — proper navigable route. Garden thumbnails now link to `/photos/:id`.
+- "In capsules:" line with sealed-capsule wax-seal olives and links to each capsule.
+- "Add this to a capsule" button opens a small modal listing open capsules (sorted
+  soonest-first, sealed excluded). Already-in rows shown but disabled.
+- Empty add-to-capsule state shows brand-voice copy and "Start a capsule with this" CTA
+  (navigates to `/capsules/new?include=<uuid>`).
+- Add success: toast with italic Georgia copy ("Added to For Sophie."), +3s auto-dismiss.
+  In-capsules line updates immediately.
+
+**Confirmation dialogs:**
+- Seal: italic Georgia title, body explains frozen contents, seal button with wax-seal olive.
+- Cancel: italic Georgia title, recipient name in body ("Sophie won't receive it."), earth button.
+- Discard changes: plain sans title (routine guard), field-specific body copy.
+- ESC and backdrop-click close all dialogs; focus management per brand spec (safer default
+  focused for destructive primaries).
+
+**Sealing animation:**
+- Wax-seal olive forms in ~700ms (scale 0→1, opacity 0→1, ease-out) on both create-then-seal
+  and seal-existing paths. URL query param `?sealed=1` triggers animation on detail page load.
+- `prefers-reduced-motion: reduce` shows olive immediately at full state, no transition.
+
+**New brand components:**
+- `WaxSealOlive` — reusable SVG component, three render sizes (list/inline/ceremonial),
+  uses `currentColor` to inherit bloom from container. From `docs/BRAND.md` reference SVG.
+
+**Tailwind additions:**
+- `forest-75`, `bloom-15`, `bloom-25`, `earth-10`, `earth-20` tokens added to config.
+
+**Typography decision (held-lightly):**
+- Sealed/delivered capsule messages render in italic Georgia per the PA brief spec.
+  Reviewed at first render alongside open state (system sans); the shift reads clearly
+  at message-body length. No revision needed. Recorded here per brief instructions.
+
+**Content-type neutral copy:**
+- "items" for counts, "Contents" and "Include" for fields throughout. "Photos" survives
+  only on the photo detail page itself (genuinely photo-specific for now).
+
+**Tests:**
+- 48 new tests across 4 test files (3 existing + 1 new capsules.test.jsx).
+  Component tests for all four capsule states, list filtering/sorting, inline edit flows
+  (message/recipients/date), create form validation and submission, photo picker modal,
+  add-to-capsule modal, confirmation dialogs, and the discard navigation guard.
+- Total web test count: 48 (up from 8 brand animation tests).
+
+No backend changes. All API endpoints consumed in this increment existed in v0.18.0.
+
+---
+
 ## v0.18.2 — Capsule visual mechanic added to BRAND.md (8 May 2026)
 
 Doc-only patch. No code changes. No behaviour change.

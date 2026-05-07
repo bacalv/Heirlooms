@@ -24,9 +24,9 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.18.1 (8 May 2026) — brand foundation (v0.17.0), share-sheet idle
-  state (v0.17.1), capsule backend (v0.18.0), doc sweep + route fix (v0.18.1).
-  Web UI for capsules (Milestone 5 Increment 2) and Android daily-use gallery are next.
+- Current version: v0.19.0 (9 May 2026) — brand foundation (v0.17.0), share-sheet idle
+  state (v0.17.1), capsule backend (v0.18.0), doc sweep (v0.18.1), brand visual mechanic
+  (v0.18.2), capsule web UI (v0.19.0). Android daily-use gallery is next.
 - One-time machine setup required: ~/.testcontainers.properties with
   docker.raw.sock path — see PROMPT_LOG.md for details
 

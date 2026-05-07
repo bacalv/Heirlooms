@@ -6,6 +6,76 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-09 (v0.19.0 — Capsule web UI, Milestone 5 Increment 2)
+
+**PA brief:** SE Brief — Capsules, Increment 2: Web UI. Nine sub-areas covering
+routing, list view, detail view, create form, photo picker modal, inline edits,
+photo-detail integration, confirmation dialogs, and sealing animation.
+
+**What was done:**
+- Installed `react-router-dom` v6; restructured App.jsx from single-page to routed
+  app with BrowserRouter, AuthContext, and AuthLayout (outlet pattern).
+- Four new routes: `/`, `/photos/:id`, `/capsules`, `/capsules/new`, `/capsules/:id`.
+- Extracted all existing Gallery code into `GardenPage.jsx` (nav removed from component,
+  thumbnails link to `/photos/:id` rather than opening lightbox).
+- `PhotoDetailPage.jsx`: new proper route replacing the lightbox modal. Fetches upload
+  from router state (passed by Gallery) or falls back to the full list. Includes "In
+  capsules:" line, "Add this to a capsule" button with `AddToCapsuleModal`, and toast
+  on add success.
+- `Nav.jsx`: top-of-page nav bar with earth-coloured active underline, mobile hamburger
+  slide-in panel.
+- `WaxSealOlive.jsx`: reusable SVG brand component, `currentColor` fill.
+- `CapsulesListPage.jsx`: card grid with filter/sort dropdowns (client-side sort for
+  `created_at` since server only supports `updated_at`/`unlock_at`). All four card state
+  treatments. Empty states (never-had-capsules vs filter-excludes-all). Skeletons, error.
+- `CapsuleDetailPage.jsx`: four state variants sharing structural shape. Inline edit state
+  machine (field/phase enum: idle|editing|saving|error). Auto-save on context-switch.
+  Date edit opens `BrandModal` with `DatePickerDropdowns`. Photo edit opens
+  `PhotoPickerModal` in edit mode. Navigation guard with `ConfirmDialog`.
+  Sealing animation via `?sealed=1` query param on arrival from create form.
+- `CapsuleCreatePage.jsx`: brand-voice opening line, all four fields, three-dropdown date
+  picker, `IncludeStrip` component (horizontal thumbnail strip), recipient-aware message
+  placeholder (updates on every For-field keystroke). Both Start and Seal commit paths.
+  `?include=uuid` preselection. Discard confirmation.
+- `PhotoPickerModal.jsx`: shared component (create + edit modes), tag filter chips,
+  corner-mark + darken selection treatment, live count in Done button.
+- `AddToCapsuleModal.jsx`: lists open capsules soonest-first, disabled rows for
+  already-in capsules, empty state with "Start a capsule with this" CTA.
+- `ConfirmDialog.jsx`: seal (italic Georgia title, bloom-seal button), cancel (recipient
+  name in body, earth primary), discard (plain sans, routine guard).
+- `Toast.jsx`: italic Georgia, parchment bg, top-centre, 3s auto-dismiss, slide-in animation.
+- `DatePickerDropdowns.jsx`: day/month/year selects, auto-bounds day count by month/year.
+- `BrandModal.jsx`: parchment-background brand dialog (distinct from the dark lightbox Modal).
+- `api.js`: shared fetch helper, `formatUnlockDate`, `capsuleTitle`, `joinRecipients`,
+  `buildUnlockAt` (8am local time convention).
+- Tailwind config: added `forest-75`, `bloom-15`, `bloom-25`, `earth-10`, `earth-20`.
+- `index.css`: `toast-in` keyframe animation.
+- 48 new vitest tests covering all four capsule states, inline edit flows (message,
+  recipients, date, discard guard), create form validation and submission, picker modal
+  selection, add-to-capsule modal, and confirmation dialogs.
+
+**Key decisions:**
+- **Sealed message typography (held-lightly decision):** italic Georgia renders cleanly
+  at message-body length. No revision needed — confirmed at first render alongside open
+  state. Recorded here per PA brief instructions.
+- **Client-side `created_at` sort:** server's `listCapsulesHandler` only accepts
+  `updated_at`/`unlock_at` as order params. `created_at` sort is done client-side after
+  fetching. Acceptable at v1 (no pagination).
+- **Photo detail as a real route:** the existing lightbox modal was replaced with a proper
+  `/photos/:id` page. Garden thumbnails now navigate to it. This enables the capsule
+  photo→detail→capsule navigation loop specified in the brief.
+- **Sealing animation via query param:** `?sealed=1` on the detail route URL is the
+  handshake between the create form and the detail page for the post-create sealing
+  animation. The param is removed from history immediately on mount.
+- **Garden page header:** the old Gallery had an inner header with auth controls. This
+  was removed (nav handles auth now). A slim toolbar row remains for auto-refresh and
+  the refresh icon.
+- **`AddToCapsuleModal` fetch strategy:** uses GET-then-PATCH (fetch current upload IDs
+  from capsule detail, append new one, PATCH full replacement) as specified in the PA
+  brief. One extra round-trip per add, acceptable at v1.
+
+---
+
 ## Session — 2026-05-08 (v0.18.2 — Capsule visual mechanic added to BRAND.md)
 
 **PA brief:** SE Brief — Capsule Visual Mechanic (BRAND.md update).
