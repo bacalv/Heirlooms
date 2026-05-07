@@ -24,9 +24,10 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.19.5 (9 May 2026) — brand foundation (v0.17.0), share-sheet idle
+- Current version: v0.19.6 (9 May 2026) — brand foundation (v0.17.0), share-sheet idle
   state (v0.17.1), capsule backend (v0.18.0), doc sweep (v0.18.1), brand visual mechanic
-  (v0.18.2), capsule web UI (v0.19.0–v0.19.5). Android daily-use gallery is next.
+  (v0.18.2), capsule web UI (v0.19.0–v0.19.5), post-v0.19.5 doc sweep (v0.19.6).
+  Milestone 5 Increment 3 — Android capsule creation — is next.
 - One-time machine setup required: ~/.testcontainers.properties with
   docker.raw.sock path — see PROMPT_LOG.md for details
 
@@ -113,6 +114,79 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
   surface, create a third contract block at its own prefix rather than mixing into the
   existing two. Keep contract blocks separable — the spec generator handles the merge cleanly
   when each block has a consistent path prefix.
+- **Manual JSON serialisation in Kotlin is brittle (v0.19.2/v0.19.5).** Three capsule
+  serialisers (`toDetailJson`, `toSummaryJson`, `toReverseLookupJson`) were originally
+  written by manual string concatenation using Kotlin's triple-quoted (`"""..."""`) strings.
+  A quoting bug — the closing `"""` consumed the trailing `"` meant to close the `state`
+  field's value — produced malformed output like `"state":"open,"created_at":...`, with the
+  comma leaking into the string value. Browsers' strict `JSON.parse` rejected this; users
+  got *didn't take* on every capsule list and create. Worse, **all 49 integration tests
+  passed** because Jackson's `ObjectMapper.readTree()` (the test client's parser) is lenient
+  by default and accepted `open,` as a string value. Fix in v0.19.5: rewrite all three
+  serialisers using Jackson's `ObjectNode` API (`mapper.createObjectNode()`, `putArray()`,
+  `writeValueAsString()`) and add 13 unit tests with strict round-trip parsing as a
+  regression guard. The general principle: prefer `ObjectNode` or data-class serialisation
+  over manual string building for any non-trivial JSON. If manual building is genuinely
+  necessary, write strict round-trip parse tests at the unit level. Keywords:
+  `triple-quoted`, `manual JSON`, `serialisation`, `Jackson`, `lenient parsing`, `regression`.
+- **Integration tests with permissive parsers can hide field-value bugs (v0.19.2).** A
+  consequence of the previous entry, but generalisable beyond JSON: integration tests that
+  round-trip data through a permissive parser (Jackson by default, many JSON-RPC clients,
+  protobuf-with-unknown-fields-ignored, etc.) won't notice field-shape bugs that strict
+  consumers reject. The 49 integration tests for the capsule API all passed because Jackson
+  smoothed over the malformed JSON. The bug only surfaced in the browser. Lesson: integration
+  tests catch endpoint-shape and status-code regressions well, but field-value correctness
+  is better verified by unit tests with strict assertions on the exact serialised output.
+  Adding `mapper.readTree(json).toString()` round-trips with explicit type checks is the
+  cheap fix when the codebase relies on integration testing alone. Keywords: `lenient`,
+  `strict`, `Jackson`, `regression guard`, `unit test`.
+- **SPA routing requires nginx `try_files` fallback (v0.19.3).** When deploying a
+  single-page app behind nginx (as HeirloomsWeb is), deep links and page refreshes return
+  404 unless nginx is told to fall back to `index.html` for unrecognised paths. The fix:
+  an `nginx.conf` with `try_files $uri $uri/ /index.html;` inside the relevant `location`
+  block, COPYed into the Dockerfile. Without this, `/capsules/some-uuid` works only when
+  the user navigates from within the app — direct URL entry or refresh produces 404.
+  Standard SPA-on-nginx pattern; worth recording so deploy-pipeline work doesn't repeat
+  the discovery. Keywords: `SPA`, `nginx`, `try_files`, `404`, `deep link`, `refresh`.
+- **Post-login redirect: capture the intended destination (v0.19.4).** HeirloomsWeb holds
+  auth state in React memory only — page refresh clears it. The original `<Navigate to="/login">`
+  redirected unauthenticated users to the login screen but didn't preserve where they were
+  trying to go; after login, they always landed at `/`, losing the link they actually wanted.
+  Fix: a `RequireAuth` wrapper component that passes `location.pathname + location.search`
+  as `state.from` in the redirect, and a `LoginPage` that calls `navigate(from, { replace: true })`
+  after successful login. **Interim pattern only** — Bret has noted this should be replaced
+  with cookie-based server-side sessions when proper auth lands (probably during Milestone 7's
+  multi-user work). Future Milestone 7 work should expect to revisit and replace this pattern,
+  not extend it. Keywords: `auth`, `RequireAuth`, `state.from`, `redirect`, `interim`.
+
+---
+
+## Architectural notes worth remembering
+
+- **Photo detail is a real route, not a modal (v0.19.0).** The original Gallery had a
+  lightbox modal for full-size photo viewing. Increment 2 replaced it with a proper
+  `/photos/:id` route, because the capsule detail view's photo-grid → photo-detail →
+  capsule-name navigation loop required photos to have URLs. Future work that touches photo
+  detail should treat it as a routed page (with `useParams`, route state, etc.) — the modal
+  pattern is gone. Component: `PhotoDetailPage.jsx` at `/photos/:id`. Gallery thumbnails
+  navigate via `useNavigate`, passing the upload as router state for fast first paint with
+  a fallback to the full-list fetch.
+- **Post-action transition animations: the `?sealed=1` query-param handshake (v0.19.0).**
+  When the user clicks *Seal capsule* in the create form, the page POSTs the capsule, then
+  navigates to the new capsule's detail view. The detail view needs to know it should run
+  the sealing animation rather than render the static sealed state. The handshake: the create
+  form navigates to `/capsules/{id}?sealed=1`; the detail page reads the param on mount, runs
+  the animation, then removes the param from history with `history.replaceState` so a refresh
+  doesn't re-trigger the animation. This pattern is reusable for any future post-action
+  transition animation — Milestone 6's delivery animation, recipient-side opening, etc. The
+  URL is the message, then it cleans up after itself. Component: `CapsuleDetailPage.jsx`
+  mount handler; the animation trigger flag derived from `searchParams.get('sealed')`.
+- **The held-lightly typography decision landed (v0.19.0).** The capsule message body's
+  typography shift from system serif (open) to italic Georgia (sealed/delivered) was flagged
+  in the PA brief as *held-lightly* — the SE was authorised to revise without a new brief if
+  it didn't read well in implementation. At first render, italic Georgia at message-body length
+  read cleanly; no revision was needed. The decision is now locked. Future work should treat
+  the typography shift as a real piece of the brand spec, not as something to revisit.
 
 ---
 

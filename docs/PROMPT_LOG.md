@@ -6,6 +6,31 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-09 (v0.19.6 — Post-v0.19.5 documentation sweep)
+
+**v0.19.6 (9 May 2026) — Post-v0.19.5 documentation sweep.** Captured the v0.19.x
+series' substantive lessons in PA_NOTES.md: manual JSON serialisation in Kotlin (the
+v0.19.2 quoting bug — triple-quoted string delimiter consumed the trailing quote on the
+`state` field value, producing `"state":"open,"` with the comma leaking into the string);
+integration tests with permissive parsers hiding field-value bugs (all 49 integration
+tests passed because Jackson's `ObjectMapper.readTree()` accepted the malformed JSON
+while the browser's strict `JSON.parse` rejected it); SPA routing requires nginx
+`try_files $uri $uri/ /index.html` fallback (v0.19.3); the post-login auth-redirect
+interim pattern (`RequireAuth` + `state.from` → `navigate(from, { replace: true })`,
+to be replaced with cookie-based sessions during Milestone 7 multi-user work, v0.19.4).
+Added a new "Architectural notes worth remembering" section to PA_NOTES.md covering:
+the photo detail route migration (lightbox modal replaced with a real `/photos/:id` route,
+v0.19.0); the `?sealed=1` query-param handshake pattern for post-action transition
+animations (v0.19.0); the confirmation that the held-lightly capsule-message typography
+decision (italic Georgia for sealed/delivered) landed cleanly at first render (v0.19.0).
+Documented the five derived Tailwind tokens (`forest-75`, `bloom-15`, `bloom-25`,
+`earth-10`, `earth-20`) in BRAND.md as a derived-tokens sub-table, with code-verified
+usages; updated the palette discipline line to distinguish primary colours from derived
+tokens. Loosened the Android Daily-Use Increment's stale `~v0.19.0` version estimate in
+ROADMAP.md to positional language (after Increment 3). No code changes.
+
+---
+
 ## Session — 2026-05-09 (v0.19.1–v0.19.5 — Bug fixes and hardening)
 
 **Context:** Post-deploy testing of the v0.19.0 capsule web UI revealed four bugs

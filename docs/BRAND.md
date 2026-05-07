@@ -24,7 +24,8 @@ the wordmark belongs to "save space," and don't shrink the wordmark below
 
 ## Palette
 
-Six colours. No others without a deliberate decision recorded back in this
+Six primary colours plus a small set of derived tokens (see below). No
+new primary colours without a deliberate decision recorded back in this
 document.
 
 | Token        | Hex      | Role                                          |
@@ -35,6 +36,28 @@ document.
 | `earth`      | #B5694B  | Didn't-take. The seed that fell. Failure states. Also avatar/accent colour. |
 | `new-leaf`   | #7DA363  | Secondary vegetation accent. Used in illustrations and the occasional pop of plant green. |
 | `ink`        | #2C2A26  | Deepest text. Use sparingly — `forest` is preferred for body text on parchment. |
+
+### Derived tokens
+
+Five tokens derived from the primary palette via opacity, used where a
+softer or layered version of a primary colour is needed. These are not
+new colours — they're alpha-blended versions of the six primary tokens,
+documented here so the codebase's Tailwind config matches what BRAND.md
+prescribes.
+
+| Token        | Derived from              | Used for                              |
+| ------------ | ------------------------- | ------------------------------------- |
+| `forest-75`  | forest at 75% opacity     | Inactive navigation link text — muted version of full-forest for non-active nav items. |
+| `bloom-15`   | bloom at 15% opacity      | Delivered capsule card background in list view (the parchment-bloom wash). |
+| `bloom-25`   | bloom at 25% opacity      | Defined in config; not yet applied to any component. Reserved for bloom-tinted surfaces at higher intensity than bloom-15. |
+| `earth-10`   | earth at 10% opacity      | Cancelled capsule card background in list view; hover background on earth-style action buttons; "didn't take" error banner background in the create form. |
+| `earth-20`   | earth at 20% opacity      | Defined in config; not yet applied to any component. Reserved for earth-tinted surfaces at higher intensity than earth-10. |
+
+The discipline above the primary table — *no new primary colours without a
+deliberate decision* — applies to *new hex values*. Derived tokens
+(opacity-blended versions of the primary palette) are acceptable as
+needed, and should be documented in this sub-table when they enter the
+codebase.
 
 ## The three signal colours
 

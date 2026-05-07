@@ -165,8 +165,9 @@ in v1, becoming connections at Milestone 7.
   session, between Increments 2 and 3.
 - **Increment 3 (planned).** Android: extend the share-sheet flow with "+ start a capsule"
   as an alternative to plain upload. Capsule creation on Android.
-- **Android Daily-Use Increment (planned, ~v0.19.0).** Read-only Gallery and Capsules
-  views on Android. Solves the phone/web switching friction. Editing stays on web for now.
+- **Android Daily-Use Increment (planned, after Increment 3).** Read-only Gallery and
+  Capsules views on Android. Solves the phone/web switching friction. Editing stays on
+  web for now.
 - **Closes Milestone 5.**
 
 **Milestone 6 — Milestone delivery**

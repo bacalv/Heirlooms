@@ -2,6 +2,25 @@
 
 ---
 
+## v0.19.6 — Post-v0.19.5 documentation sweep (9 May 2026)
+
+Doc-only patch. No code changes. No behaviour change. Test counts unchanged.
+
+- `PA_NOTES.md`: current-version line bumped. Four new gotchas added: manual JSON
+  serialisation in Kotlin (`triple-quoted` string quoting bug; v0.19.2/v0.19.5);
+  permissive-parser integration tests hiding field-value bugs (Jackson lenient parsing;
+  v0.19.2); SPA nginx `try_files` fallback (v0.19.3); post-login auth-redirect interim
+  pattern (`RequireAuth` + `state.from`; v0.19.4). New "Architectural notes worth
+  remembering" section: photo detail as a real route (v0.19.0); `?sealed=1` query-param
+  handshake for post-action animations (v0.19.0); held-lightly typography decision
+  confirmed (v0.19.0).
+- `BRAND.md`: palette discipline line updated; new "Derived tokens" sub-table documenting
+  `forest-75`, `bloom-15`, `bloom-25`, `earth-10`, `earth-20` with code-verified usages.
+- `ROADMAP.md`: Android Daily-Use Increment version estimate changed from `~v0.19.0` to
+  positional language (after Increment 3).
+
+---
+
 ## v0.19.0 — Capsule web UI (Milestone 5, Increment 2) (9 May 2026)
 
 Web UI for the capsule mechanic. After this increment, capsules are a real feature
