@@ -6,6 +6,43 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-07 (v0.17.0 — Brand, Increment 3b)
+
+**PA brief:** SE Brief — Brand, Increment 3b: Android Animation Components.
+
+**What was built:**
+- `AccessibilityHelpers.kt` — `rememberReducedMotion()` reading `Settings.Global.ANIMATOR_DURATION_SCALE`.
+  `WorkingDots` refactored to call it (removing the inline Settings.Global read).
+- `OliveBranchArrival.kt` — Compose `Animatable<Float>` 0→1 over 3s (`LinearEasing` — phase ranges
+  assume constant-rate progress; FastOutSlowInEasing would shift the visual beats). Canvas rendering
+  via `PathMeasure.getSegment` for branch reveal, `withTransform { rotate; scale }` for leaf grow-in,
+  `lerp(Forest, Bloom, t)` for olive ripening. `withWordmark` param; `LaunchedEffect` snaps to 1f
+  under reduced motion and fires `onComplete` immediately.
+- `OliveBranchDidntTake.kt` — same pattern, 2s; partial branch + leaf pair + pause + earth seed +
+  "didn't take" text. Shares `internal` helpers from `OliveBranchArrival.kt` (same module, same package).
+- `ShareActivity` — full rewrite as `ComponentActivity` with `setContent { HeirloomsTheme { ... } }`.
+  Sealed `ReceiveState` class drives the Compose UI. Upload is enqueued via WorkManager;
+  `observeWorkToCompletion(id)` uses `suspendCancellableCoroutine` + `LiveData.observeForever` to
+  await terminal state without explicit `lifecycle-livedata-ktx` dependency.
+  `Arriving` → `Arrived` and `FailedAnimating` → `Failed` transitions driven by animation `onComplete`.
+- `styles.xml` — `Theme.Heirlooms.Share` added; ShareActivity manifest theme updated.
+- 5 Compose instrumentation tests in `androidTest/kotlin/...`.
+
+**Key decisions:**
+- `scale` in `DrawTransform` takes `scaleX`/`scaleY`, not a single `scale` param — caught at first
+  compile; brief's pseudocode used a non-existent named param. Fixed to `scale(scaleX = p, scaleY = p, pivot = pivot)`.
+- `observeWorkToCompletion` uses `suspendCancellableCoroutine` + `observeForever` rather than
+  `LiveData.asFlow()` to avoid needing an explicit import of the ktx extension; cleaner given that
+  `lifecycle-livedata-ktx` is transitive but not declared.
+- `photoCountString` is `@Composable` because it calls `stringResource` — called inline within the
+  composable `when` branches, not from a non-composable context.
+- Instrumentation tests use `reduceMotion = true` to exercise the fast-path without mocking
+  `Settings.Global` or dealing with animation timing in tests.
+
+**Test count:** 148 total (135 Kotlin + 8 web + 5 Android instrumented), 147 passing, 1 skipped.
+
+---
+
 ## Session — 2026-05-07 (v0.17.0 — Brand, Increment 3a)
 
 **PA brief:** SE Brief — Brand, Increment 3a: Android Static Brand (Icon + Resources + Receive Screen).

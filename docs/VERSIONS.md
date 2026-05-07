@@ -2,154 +2,73 @@
 
 ---
 
-## v0.17.0 — Android static brand: icon, resources, receive screen (7 May 2026)
+## v0.17.0 — Brand foundation, web animations, Android brand (7 May 2026)
 
-Increment 3a of 3 for the Heirlooms brand milestone. Animation components (OliveBranchArrival,
-OliveBranchDidntTake) and their wiring follow in Increment 3b.
+The full Heirlooms brand milestone. Five commits, single tag. Parchment/forest/bloom/earth
+palette, olive branch identity, and garden voice applied across HeirloomsWeb and HeirloomsApp.
 
-**App icon:**
-- `ic_launcher_foreground.xml` — VectorDrawable foreground: parchment olive branch on transparent
-  ground, 108×108dp canvas. Ellipses converted to closed arc paths; rotations via `<group>` elements.
-- `mipmap-anydpi-v26/ic_launcher.xml` and `ic_launcher_round.xml` — adaptive icon with forest
-  background and parchment foreground. `<monochrome>` layer enables themed icons on Android 13+.
-- Legacy PNGs at all five densities (mdpi 48→xxxhdpi 192) plus round variants — generated from
-  `HeirloomsWeb/public/favicon.svg` (forest rounded-square + parchment olive branch).
-- `playstore/playstore-icon-512.png` — 512×512 Play Store icon.
-- `AndroidManifest.xml` updated: `@mipmap/ic_launcher` + `@mipmap/ic_launcher_round`.
-  `@android:drawable/ic_menu_upload` removed.
+### Summary across all five brand commits
 
-**Brand resources:**
-- `res/values/colors.xml` — full palette (parchment, forest, bloom, earth, new_leaf, ink),
-  forest tints (04/08/15/25), text shades, `ic_launcher_background`.
-- `ui/theme/Color.kt` — Compose Color constants matching colors.xml.
-- `ui/theme/Type.kt` — `HeirloomsTypography` (serif italic for headlines, sans for body/labels);
-  `HeirloomsSerifItalic` TextStyle exported for direct use.
-- `ui/theme/Theme.kt` — `HeirloomsTheme { }` wrapping `MaterialTheme` with brand colour scheme.
-  No dark-mode variant (deliberate; see BRAND.md).
-- `app/build.gradle.kts` — Compose added: BOM 2024.01.00, Compose Compiler 1.5.8 (Kotlin 1.9.22
-  compatible), `buildFeatures { compose = true }`, JVM target bumped 1.8 → 11.
+**1. Web brand foundation (Increment 1)**
+- `docs/BRAND.md` — canonical brand reference: palette, identity system, typography, voice, motion.
+- Design tokens in `tailwind.config.js` and `src/index.css` (`--hl-*` custom properties).
+- SVG brand components: `OliveBranchMark`, `OliveBranchIcon`, `WorkingDots`, `EmptyGarden`.
+- Site header: olive branch icon + italic Georgia wordmark; parchment background.
+- Tag chips: `bg-forest-08 text-forest rounded-chip`.
+- Empty gallery: garden voice copy ("A garden begins with a single seed.").
+- Three-colour signal discipline: all `text-red-500` → `text-earth font-serif italic`.
+  No green checkmarks, red X-marks, or warning icons remain in the web codebase.
+- Browser tab title → "Heirlooms — your garden".
+- `vitest` + `@testing-library/react` frontend test infrastructure added.
 
-**WorkingDots Compose component:**
-- `ui/brand/WorkingDots.kt` — three forest dots, 1.4s pulse, 0.2s stagger via
-  `rememberInfiniteTransition`. Reduced-motion: reads `Settings.Global.ANIMATOR_DURATION_SCALE`;
-  static 0.6f opacity when scale == 0. Always creates transitions unconditionally (Rules of Compose).
+**2. Favicon and browser-tab brand assets (post-Increment-1 fix)**
+- `public/favicon.svg` — forest rounded-square + parchment olive branch, no fixed width/height.
+- `public/apple-touch-icon.png` — 180×180, generated from the favicon SVG.
+- `index.html` — favicon link, apple-touch-icon link, `theme-color` meta (#3F4F33 forest).
 
-**Garden voice in strings.xml:**
-- Full set of brand voice strings: share_screen_title, share_save_button ("plant"),
-  upload_in_progress ("uploading…"), upload_success ("Something has been planted."),
-  upload_failed ("didn't take"), upload_retry, upload_dismiss, notif_* strings.
-- Settings title updated "Heirloom settings" → "Settings". settings_export added.
+**3. Web arrival and didn't-take animations (Increment 2)**
+- `src/brand/animations.js` — `lerp`, `interpolateHexColour`, `prefersReducedMotion` helpers.
+- `src/brand/OliveBranchArrival.jsx` — 3s rAF, six phases: branch draws, three leaf pairs emerge
+  base-to-tip, olive forms in forest, ripens to bloom, optional wordmark settles.
+- `src/brand/OliveBranchDidntTake.jsx` — 2s rAF: partial branch, one leaf pair, pause, earth
+  seed, "didn't take" text. Both honour `prefers-reduced-motion`.
+- Gallery tile state machine: `loading → arriving → arrived` / `loading → error-animating → failed`.
+  `seenIdsRef` ensures animations only play for newly-seen uploads (auto-refresh arrivals).
+- `FailedTile` with *try again* / *dismiss* controls.
 
-**Notification copy (UploadWorker):**
-- Uses R.string.notif_planted / notif_didnt_take / upload_success_one / upload_success_many.
-- Small icon changed from system `ic_menu_upload` to `R.drawable.ic_launcher_foreground`.
-- Channel name driven from `R.string.notif_channel_uploads`.
+**4. Android static brand (Increment 3a)**
+- App icon: adaptive (`mipmap-anydpi-v26/`, VectorDrawable foreground + forest background,
+  `<monochrome>` for Android 13+ themed icons), legacy PNGs at all five densities, round variants,
+  512×512 Play Store icon. `@android:drawable/ic_menu_upload` removed from manifest.
+- `res/values/colors.xml` — full palette + tints + text shades.
+- Compose theme: `Color.kt`, `Type.kt`, `Theme.kt` (`HeirloomsTheme { }`).
+  Compose BOM 2024.01.00, Compiler 1.5.8, JVM 11.
+- `WorkingDots.kt` — Compose three-dot pulse; uses `rememberReducedMotion()`.
+- `strings.xml` — garden voice strings (upload_success, upload_failed, share_save_button, etc.).
+- `UploadWorker` — notifications use brand strings; `ic_launcher_foreground` as small icon.
 
-**ShareActivity toast:**
-- Now shows "uploading…" (brand voice) or "Waiting for WiFi to plant your photos."
+**5. Android arrival and didn't-take animations (Increment 3b)**
+- `AccessibilityHelpers.kt` — `rememberReducedMotion()` reading `ANIMATOR_DURATION_SCALE`.
+  `WorkingDots` refactored to call it.
+- `OliveBranchArrival.kt` — Compose, 3s `Animatable<Float>` driven by `LaunchedEffect`,
+  Canvas render via `PathMeasure` (branch), `withTransform` (leaf scale+rotate), `lerp` (olive
+  ripening). `LinearEasing` required — phase ranges assume constant-rate progress.
+- `OliveBranchDidntTake.kt` — Compose, 2s, same pattern. Shares internal helpers with Arrival.
+- `ShareActivity` rewritten as `ComponentActivity` with `setContent { HeirloomsTheme { ... } }`.
+  State machine: `Idle → Uploading → Arriving → Arrived` / `→ FailedAnimating → Failed`.
+  Arrival and failure transitions driven by `onComplete` callbacks, not fixed timers.
+  `observeWorkToCompletion()` uses `suspendCancellableCoroutine` + `observeForever` to await
+  the WorkManager terminal state without pulling in `lifecycle-livedata-ktx` explicitly.
+  Arrived state: "Something has been planted." + photo count + *view garden* / *done*.
+  Failed state: "didn't take" earth + *try again* / *dismiss*.
+- `styles.xml` — `Theme.Heirlooms.Share` (parchment windowBackground, no action bar).
+- 5 Compose instrumentation tests in `androidTest/` (require device/emulator): arrival renders
+  wordmark, omits wordmark when asked, fires onComplete under reduced motion; didn't-take renders
+  text, fires onComplete under reduced motion.
 
-**Receive screen:**
-- The current `ShareActivity` is a transparent fire-and-forget Activity (no visible UI — it copies
-  files, enqueues WorkManager, shows a Toast, and finishes immediately). There is no receive-screen
-  Composable to restyle. Building a full branded receive screen (photo previews, tag input, "plant"
-  button) is scoped to a follow-up brief — it requires a new Compose Activity, not a restyling.
-
-No new tests added; existing 135 Kotlin tests unchanged. Compose UI tests deferred (need
-emulator/device; no CI runner configured for instrumentation tests). 143 total, 142 passing,
-1 skipped.
-
----
-
-## v0.17.0 — Brand arrival and didn't-take animations (7 May 2026)
-
-Increment 2 of 3 for the Heirlooms brand milestone.
-
-**`src/brand/animations.js`:**
-- `lerp(t, start, end)` — clamped linear interpolation over a phase window
-- `interpolateHexColour(a, b, t)` — hex → RGB lerp for olive ripening
-- `prefersReducedMotion()` — matchMedia check with safe fallback
-
-**`src/brand/OliveBranchArrival.jsx`:**
-- 3-second rAF animation; six phases: branch draws (0–30%), leaf pairs emerge base-to-tip (22–72%), olive forms in forest (70–84%), ripens to bloom (84–92%), optional wordmark settles (88–100%)
-- `withWordmark` prop (default true); set false for in-tile use
-- `prefers-reduced-motion` snaps to end state and fires `onComplete` on next tick
-
-**`src/brand/OliveBranchDidntTake.jsx`:**
-- 2-second rAF animation; partial branch + one leaf pair + pause beat + earth-coloured seed + "didn't take" text
-- Same reduced-motion behaviour
-
-**Gallery tile state machine (UploadCard):**
-- States: `loading → arriving → arrived` and `loading → error-animating → failed`
-- `arriving`: mounts `OliveBranchArrival` (withWordmark=false); on `onComplete` swaps to photo
-- `error-animating`: mounts `OliveBranchDidntTake`; on `onComplete` shows `FailedTile`
-- `FailedTile`: earth "didn't take" text + forest *try again* + muted *dismiss*; retry re-fetches, dismiss shows static icon
-- Animation only plays once — `animateArrivalRef` is cleared after first use so retry never re-animates
-- Blob URLs properly revoked on unmount and on retry
-
-**New-item detection (Gallery):**
-- `seenIdsRef` tracks all upload IDs seen in this browser session
-- First fetch: all IDs marked seen, no animations play (existing garden loads quietly)
-- Subsequent auto-refresh fetches: newly seen IDs passed as `isNew=true` to UploadCard, triggering arrival animation
-
-**CSS (`src/index.css`):**
-- `.gallery-tile--animating` — flex centred, forest-15 bg, `svg { width: 70%; height: auto }`
-- `.gallery-tile--failed` — same bg, flex-col centred
-- `.gallery-tile--arrived-fading-in` — optional 200ms opacity cross-fade after animation completes (defined; not currently applied)
-
-No new tests beyond the 5 added here; 8 web tests total (3 from Increment 1 + 5 new).
-143 total (135 Kotlin + 8 frontend), 142 passing, 1 skipped.
-
----
-
-## v0.17.0 — Brand foundation: tokens, BRAND.md, static web application (7 May 2026)
-
-Increment 1 of 3 for the Heirlooms brand milestone. The production site at `heirlooms.digital`
-is fully rebranded for static use. Animations and Android brand application follow in Increments 2 and 3.
-
-**Design tokens:**
-- Brand palette (parchment, forest, bloom, earth, new-leaf, ink) added to `tailwind.config.js` and as CSS custom properties (`--hl-*`) in `src/index.css`
-- Forest tints (04/08/15/25 opacity levels), text shades (primary/body/muted), motion timings, and border radii also tokenised
-- `body` background set to parchment; base text to `--hl-text-body`
-
-**Brand documentation:**
-- `docs/BRAND.md` created as canonical reference for palette, identity system, typography, voice, and motion language
-
-**SVG brand components (`src/brand/`):**
-- `OliveBranchMark.jsx` — 140×200 viewBox mark, `state` prop switches apex olive between forest (in-progress) and bloom (arrived); used at ≥80px
-- `OliveBranchIcon.jsx` — 30×30 simplified icon for header and small contexts; always aria-hidden (decorative)
-- `WorkingDots.jsx` — three forest-green dots, 1.4s pulse with 0.2s stagger, `prefers-reduced-motion` falls back to static; `role="status"` + `aria-live="polite"` + `.sr-only` fallback label for screen readers
-- `EmptyGarden.jsx` — empty gallery state with olive branch mark, brand voice copy, and optional CTA
-
-**Site header:**
-- Replaced `<h1>Heirlooms</h1>` with `OliveBranchIcon` (22px) + italic Georgia wordmark
-- Header background: parchment with 1px `forest-15` bottom border
-- Login screen updated to match
-
-**Tag chips:**
-- Gallery card chips and TagEditor chips restyled: `bg-forest-08 text-forest rounded-chip`, 11px
-- TagEditor dropdown adopts `forest-04`/`forest-15`/`forest-25` borders and hover states
-
-**Working state:**
-- `WorkingDots` replaces spinner in gallery card tile (image/video thumbnail loading), and used for gallery initial load state
-
-**Empty gallery:**
-- Replaced "No uploads yet." with `EmptyGarden`: brand voice copy ("A garden begins with a single seed."), olive branch mark, sub-copy, and "plant your first" CTA
-
-**Three-colour signal discipline:**
-- All `text-red-500` error states (login, gallery, tag editor) replaced with `text-earth font-serif italic`
-- No utility icons (checkmarks, X-marks, exclamation glyphs) remain in the codebase
-
-**Voice — garden as noun:**
-- Browser tab title: `Heirlooms — your garden`
-- Loading state: WorkingDots with label `uploading…`
-- Gallery error: earth-coloured, serif italic
-
-**Frontend test infrastructure:**
-- `vitest` + `@testing-library/react` + `@testing-library/jest-dom` added as devDependencies
-- `npm run test` script added; `vite.config.js` configured with jsdom environment
-- `src/brand/OliveBranchMark.test.jsx` — 3 smoke tests: SVG renders, state=forest apex fill, state=bloomed apex fill
-
-3 new tests; 138 total (135 server-side Kotlin + 3 frontend), 137 passing, 1 skipped (FFmpeg video thumbnail — runs in Docker).
+**Test totals:** 148 total (135 Kotlin + 8 web vitest + 5 Android instrumented), 147 passing,
+1 skipped (FFmpeg thumbnail — Docker only). Android instrumentation tests require a connected
+device or emulator; not included in local `./gradlew test` run.
 
 ---
 

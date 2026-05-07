@@ -62,4 +62,11 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+
+    // Compose UI tests (instrumented — require device or emulator).
+    androidTestImplementation(platform("androidx.compose:compose-bom:2024.01.00"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    // Adds the test activity required by createComposeRule() to the debug APK manifest.
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
