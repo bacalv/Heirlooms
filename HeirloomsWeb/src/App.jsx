@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { OliveBranchIcon } from './brand/OliveBranchIcon'
+import { WorkingDots } from './brand/WorkingDots'
+import { EmptyGarden } from './brand/EmptyGarden'
 
 const API_URL = import.meta.env.VITE_API_URL ?? ''
 
@@ -24,13 +27,9 @@ function isVideo(mimeType) {
   return mimeType.startsWith('video/')
 }
 
-function Spinner() {
-  return <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
-}
-
 function FileIcon() {
   return (
-    <svg className="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="w-16 h-16 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
         d="M15.172 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V8.828a2 2 0 00-.586-1.414l-3.828-3.828A2 2 0 0015.172 3z" />
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 3v5a1 1 0 001 1h5" />
@@ -40,7 +39,7 @@ function FileIcon() {
 
 function VideoIcon() {
   return (
-    <svg className="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="w-16 h-16 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
         d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
     </svg>
@@ -96,10 +95,13 @@ function LoginScreen({ onLogin }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 w-full max-w-sm">
-        <h1 className="text-xl font-semibold text-gray-900 mb-1">Heirlooms</h1>
-        <p className="text-sm text-gray-500 mb-6">Enter your API key to continue.</p>
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="bg-white rounded-card shadow-sm border border-forest-08 p-8 w-full max-w-sm">
+        <div className="flex items-center gap-2 mb-1">
+          <OliveBranchIcon width={20} />
+          <span className="font-serif italic text-[17px] text-forest">Heirlooms</span>
+        </div>
+        <p className="text-sm text-text-muted mb-6">Enter your API key to continue.</p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             ref={inputRef}
@@ -107,13 +109,13 @@ function LoginScreen({ onLogin }) {
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder="API key"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+            className="w-full px-3 py-2 border border-forest-15 rounded-button text-sm focus:outline-none focus:ring-2 focus:ring-forest-25"
           />
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && <p className="text-sm text-earth font-serif italic">{error}</p>}
           <button
             type="submit"
             disabled={checking || !value.trim()}
-            className="w-full bg-gray-900 text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-700 disabled:opacity-40 transition-colors"
+            className="w-full bg-forest text-parchment py-2 rounded-button text-sm font-medium hover:opacity-90 disabled:opacity-40 transition-opacity"
           >
             {checking ? 'Checking…' : 'Sign in'}
           </button>
@@ -267,13 +269,13 @@ function TagEditor({ currentTags, allTags, onSave, onCancel }) {
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-1.5">
           {selected.map(tag => (
-            <span key={tag} className="flex items-center gap-0.5 px-1.5 py-0.5 bg-gray-200 text-gray-700 rounded text-xs">
+            <span key={tag} className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-chip bg-forest-08 text-forest text-[11px]">
               {tag}
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setSelected(prev => prev.filter(t => t !== tag))}
-                className="text-gray-400 hover:text-gray-700 leading-none ml-0.5"
+                className="text-text-muted text-[13px] leading-none ml-0.5"
               >
                 ×
               </button>
@@ -293,11 +295,11 @@ function TagEditor({ currentTags, allTags, onSave, onCancel }) {
         placeholder="Add tag…"
         autoComplete="off"
         disabled={saving}
-        className="w-full text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-gray-400"
+        className="w-full text-xs border border-forest-15 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-forest-25 bg-transparent"
       />
       {dropdownOpen && suggestions.length > 0 && (
         <div
-          className="mt-0.5 border border-gray-200 rounded bg-white shadow-sm max-h-28 overflow-y-auto"
+          className="mt-0.5 border border-forest-15 rounded bg-white shadow-sm max-h-28 overflow-y-auto"
           onMouseDown={() => { suppressBlurRef.current = true }}
           onMouseUp={() => { suppressBlurRef.current = false }}
         >
@@ -306,20 +308,20 @@ function TagEditor({ currentTags, allTags, onSave, onCancel }) {
               key={tag}
               type="button"
               onClick={() => addTag(tag)}
-              className="w-full text-left text-xs px-2 py-1 hover:bg-gray-50 text-gray-700"
+              className="w-full text-left text-xs px-2 py-1 hover:bg-forest-04 text-forest"
             >
               {tag}
             </button>
           ))}
         </div>
       )}
-      {error && <p className="text-xs text-red-500 mt-0.5">{error}</p>}
+      {error && <p className="text-xs text-earth font-serif italic mt-0.5">{error}</p>}
       <div className="flex gap-1 mt-1.5">
         <button
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="text-xs px-2 py-0.5 bg-gray-800 text-white rounded hover:bg-gray-600 disabled:opacity-40 transition-colors"
+          className="text-xs px-2 py-0.5 bg-forest text-parchment rounded-button hover:opacity-90 disabled:opacity-40 transition-opacity"
         >
           {saving ? '…' : 'Save'}
         </button>
@@ -327,7 +329,7 @@ function TagEditor({ currentTags, allTags, onSave, onCancel }) {
           type="button"
           onClick={onCancel}
           disabled={saving}
-          className="text-xs px-2 py-0.5 text-gray-500 hover:text-gray-800 transition-colors"
+          className="text-xs px-2 py-0.5 text-text-muted hover:text-forest transition-colors"
         >
           Cancel
         </button>
@@ -365,8 +367,8 @@ function UploadCard({ upload, apiKey, onImageClick, onVideoClick, onRotate, onUp
   }
 
   return (
-    <div className="relative bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col">
-      <div className="bg-gray-50 h-48 flex items-center justify-center overflow-hidden rounded-t-xl">
+    <div className="relative bg-white rounded-card shadow-sm border border-forest-08 flex flex-col">
+      <div className={`h-48 flex items-center justify-center overflow-hidden rounded-t-card ${blobUrl ? 'bg-forest-04' : 'bg-forest-15'}`}>
         {isImage(upload.mimeType) ? (
           blobUrl ? (
             <img
@@ -377,7 +379,7 @@ function UploadCard({ upload, apiKey, onImageClick, onVideoClick, onRotate, onUp
               onClick={() => onImageClick(blobUrl, upload.rotation ?? 0)}
             />
           ) : (
-            <Spinner />
+            <WorkingDots size="md" />
           )
         ) : isVideo(upload.mimeType) && blobUrl ? (
           <div
@@ -398,8 +400,8 @@ function UploadCard({ upload, apiKey, onImageClick, onVideoClick, onRotate, onUp
             className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity cursor-pointer"
             onClick={handleVideoClick}
           >
-            {upload.thumbnailKey ? <Spinner /> : <VideoIcon />}
-            {!upload.thumbnailKey && <span className="text-xs text-gray-400">Click to play</span>}
+            {upload.thumbnailKey ? <WorkingDots size="md" /> : <VideoIcon />}
+            {!upload.thumbnailKey && <span className="text-xs text-text-muted">Click to play</span>}
           </button>
         ) : (
           <FileIcon />
@@ -408,9 +410,9 @@ function UploadCard({ upload, apiKey, onImageClick, onVideoClick, onRotate, onUp
       {upload.latitude != null && upload.longitude != null && (
         <PinIcon latitude={upload.latitude} longitude={upload.longitude} />
       )}
-      <div className="p-3 space-y-1 text-sm text-gray-600">
+      <div className="p-3 space-y-1 text-sm text-text-body">
         <div className="flex items-start justify-between gap-1">
-          <p className="font-medium text-gray-800 truncate" title={upload.storageKey}>
+          <p className="font-medium text-forest truncate" title={upload.storageKey}>
             {upload.storageKey}
           </p>
           <div className="flex-shrink-0 flex items-center gap-0.5">
@@ -418,7 +420,7 @@ function UploadCard({ upload, apiKey, onImageClick, onVideoClick, onRotate, onUp
               <button
                 onClick={() => onRotate(upload.id)}
                 title="Rotate 90°"
-                className="text-gray-400 hover:text-gray-700 transition-colors p-0.5"
+                className="text-text-muted hover:text-forest transition-colors p-0.5"
               >
                 <RotateIcon />
               </button>
@@ -427,16 +429,16 @@ function UploadCard({ upload, apiKey, onImageClick, onVideoClick, onRotate, onUp
               <button
                 onClick={() => setEditingTags(true)}
                 title="Edit tags"
-                className={`p-0.5 transition-colors ${editingTags ? 'text-gray-700' : 'text-gray-400 hover:text-gray-700'}`}
+                className={`p-0.5 transition-colors ${editingTags ? 'text-forest' : 'text-text-muted hover:text-forest'}`}
               >
                 <TagIcon />
               </button>
             )}
           </div>
         </div>
-        <p>{upload.mimeType}</p>
-        <p>{formatBytes(upload.fileSize)}</p>
-        <p className="text-gray-400 text-xs">{formatDate(upload.uploadedAt)}</p>
+        <p className="text-text-muted text-xs">{upload.mimeType}</p>
+        <p className="text-text-muted text-xs">{formatBytes(upload.fileSize)}</p>
+        <p className="text-text-muted text-xs">{formatDate(upload.uploadedAt)}</p>
         {editingTags ? (
           <TagEditor
             currentTags={upload.tags}
@@ -447,7 +449,7 @@ function UploadCard({ upload, apiKey, onImageClick, onVideoClick, onRotate, onUp
         ) : upload.tags.length > 0 ? (
           <div className="flex flex-wrap gap-1 pt-1">
             {upload.tags.map(tag => (
-              <span key={tag} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+              <span key={tag} className="inline-flex items-center px-[9px] py-[3px] rounded-chip bg-forest-08 text-forest text-[11px]">
                 {tag}
               </span>
             ))}
@@ -544,11 +546,14 @@ function Gallery({ apiKey, onSignOut }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-900">Heirlooms</h1>
+    <div className="min-h-screen">
+      <header className="bg-parchment border-b border-forest-15 px-6 py-4 flex items-center justify-between">
+        <a href="/" className="flex items-center gap-2 no-underline">
+          <OliveBranchIcon width={22} />
+          <span className="font-serif italic text-[17px] text-forest">Heirlooms</span>
+        </a>
         <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer select-none">
+          <label className="flex items-center gap-2 text-sm text-text-muted cursor-pointer select-none">
             <input
               type="checkbox"
               checked={autoRefresh}
@@ -561,21 +566,29 @@ function Gallery({ apiKey, onSignOut }) {
             onClick={() => fetchUploads(true)}
             disabled={refreshing}
             title="Refresh"
-            className="text-gray-500 hover:text-gray-800 transition-colors disabled:opacity-40"
+            className="text-text-muted hover:text-forest transition-colors disabled:opacity-40"
           >
             <RefreshIcon spinning={refreshing} />
           </button>
-          <button onClick={onSignOut} className="text-sm text-gray-500 hover:text-gray-800 transition-colors">
+          <button onClick={onSignOut} className="text-sm text-text-muted hover:text-forest transition-colors">
             Sign out
           </button>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
-        {loading && <p className="text-center text-gray-500 py-20">Loading uploads…</p>}
-        {error && <p className="text-center text-red-500 py-20">Error: {error}</p>}
+        {loading && (
+          <div className="flex justify-center py-20">
+            <WorkingDots size="lg" label="uploading…" />
+          </div>
+        )}
+        {error && (
+          <p className="text-center text-earth font-serif italic py-20">
+            Something went wrong — {error}
+          </p>
+        )}
         {!loading && !error && uploads.length === 0 && (
-          <p className="text-center text-gray-400 py-20">No uploads yet.</p>
+          <EmptyGarden />
         )}
         {!loading && !error && uploads.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">

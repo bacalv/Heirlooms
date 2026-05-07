@@ -6,6 +6,33 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-07 (v0.17.0 — Brand, Increment 1)
+
+**PA brief:** SE Brief — Brand, Increment 1: Tokens + BRAND.md + Static Web Application.
+
+**Prompt:** Apply the new Heirlooms brand foundation to HeirloomsWeb. Add design tokens, create BRAND.md, add SVG brand components, restyle header/tags/empty state/working indicator, apply three-colour signal discipline, update garden copy.
+
+**What was built:**
+- `docs/BRAND.md` — canonical brand reference: palette, identity system, typography, voice, motion language
+- Design tokens in `tailwind.config.js` (theme extension) and `src/index.css` (CSS custom properties on `:root`); body background/text updated to parchment/text-body
+- `src/brand/OliveBranchMark.jsx` — 140×200 SVG mark with `state` prop (forest/bloomed apex olive)
+- `src/brand/OliveBranchIcon.jsx` — 30×30 simplified icon for header/small contexts
+- `src/brand/WorkingDots.jsx` — three-dot pulse animation, `prefers-reduced-motion`, accessible `role="status"` + live region
+- `src/brand/EmptyGarden.jsx` — empty gallery state with brand voice copy
+- `src/App.jsx` — header replaced with OliveBranchIcon + italic Georgia wordmark; tag chips restyled to forest-08/rounded-chip; Spinner replaced with WorkingDots in card tiles and loading state; EmptyGarden replaces "No uploads yet."; all `text-red-500` replaced with `text-earth font-serif italic`; `index.html` title updated to "Heirlooms — your garden"
+- `vitest` + `@testing-library/react` test infrastructure added; 3 smoke tests for OliveBranchMark
+
+**Key decisions:**
+- JSX (not TSX) throughout to match project convention; relative imports (no `@/` alias) to match existing `./App` convention
+- `EmptyGarden` takes optional `onUpload` prop (no web upload yet, so button is hidden when prop is absent — avoids a dead CTA)
+- Tag chips use Tailwind arbitrary values (`text-[11px]`, `px-[9px]`, `py-[3px]`) per brief; these match the brief's specified sizes
+- `WorkingDots` replaces `Spinner` for image/video thumbnail loading tiles (the closest existing analogue to "upload-in-progress tile"); `Spinner` component removed as no longer needed
+- Forest tints (`forest-04`, `forest-08`, etc.) defined as named Tailwind colors so opacity values stay enumerable and don't drift from the CSS variables
+
+**Test count:** 138 total (135 Kotlin + 3 frontend), 137 passing, 1 skipped.
+
+---
+
 ## Session — 2026-05-07 (post-v0.16.1 doc follow-ups)
 
 **PA brief:** Refresh Cloud Run revision identifiers in PA_NOTES.md and add an explicit test count to the v0.16.1 entry in VERSIONS.md.

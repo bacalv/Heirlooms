@@ -1,3 +1,67 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  /* Palette */
+  --hl-parchment: #F2EEDF;
+  --hl-forest:    #3F4F33;
+  --hl-bloom:     #D89B85;
+  --hl-earth:     #B5694B;
+  --hl-new-leaf:  #7DA363;
+  --hl-ink:       #2C2A26;
+
+  /* Forest tints */
+  --hl-forest-04: rgba(63, 79, 51, 0.04);
+  --hl-forest-08: rgba(63, 79, 51, 0.08);
+  --hl-forest-15: rgba(63, 79, 51, 0.15);
+  --hl-forest-25: rgba(63, 79, 51, 0.25);
+
+  /* Text */
+  --hl-text-primary: #2C2A26;
+  --hl-text-body:    #5A5A52;
+  --hl-text-muted:   #6B7559;
+
+  /* Type */
+  --hl-font-serif: Georgia, 'Times New Roman', serif;
+  --hl-font-sans:  -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+  --hl-font-mono:  ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Motion (used by Increment 2; defined now for completeness) */
+  --hl-motion-pulse:           1.4s;
+  --hl-motion-pulse-stagger:   0.2s;
+  --hl-motion-arrival-total:   3000ms;
+  --hl-motion-easing-natural:  cubic-bezier(0.4, 0.0, 0.2, 1);
+
+  /* Radii */
+  --hl-radius-chip:   12px;
+  --hl-radius-card:   10px;
+  --hl-radius-button: 6px;
+}
+
+body {
+  background: var(--hl-parchment);
+  color: var(--hl-text-body);
+  font-family: var(--hl-font-sans);
+}
+
+/* Working dots animation */
+.hl-dot {
+  display: inline-block;
+  border-radius: 50%;
+  background: var(--hl-forest);
+  opacity: 0.25;
+  animation: hl-pulse var(--hl-motion-pulse) ease-in-out infinite;
+}
+
+@keyframes hl-pulse {
+  0%, 100% { opacity: 0.25; }
+  50%      { opacity: 1;    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hl-dot {
+    animation: none;
+    opacity: 0.6;
+  }
+}

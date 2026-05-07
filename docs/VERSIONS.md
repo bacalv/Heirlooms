@@ -2,6 +2,58 @@
 
 ---
 
+## v0.17.0 — Brand foundation: tokens, BRAND.md, static web application (7 May 2026)
+
+Increment 1 of 3 for the Heirlooms brand milestone. The production site at `heirlooms.digital`
+is fully rebranded for static use. Animations and Android brand application follow in Increments 2 and 3.
+
+**Design tokens:**
+- Brand palette (parchment, forest, bloom, earth, new-leaf, ink) added to `tailwind.config.js` and as CSS custom properties (`--hl-*`) in `src/index.css`
+- Forest tints (04/08/15/25 opacity levels), text shades (primary/body/muted), motion timings, and border radii also tokenised
+- `body` background set to parchment; base text to `--hl-text-body`
+
+**Brand documentation:**
+- `docs/BRAND.md` created as canonical reference for palette, identity system, typography, voice, and motion language
+
+**SVG brand components (`src/brand/`):**
+- `OliveBranchMark.jsx` — 140×200 viewBox mark, `state` prop switches apex olive between forest (in-progress) and bloom (arrived); used at ≥80px
+- `OliveBranchIcon.jsx` — 30×30 simplified icon for header and small contexts; always aria-hidden (decorative)
+- `WorkingDots.jsx` — three forest-green dots, 1.4s pulse with 0.2s stagger, `prefers-reduced-motion` falls back to static; `role="status"` + `aria-live="polite"` + `.sr-only` fallback label for screen readers
+- `EmptyGarden.jsx` — empty gallery state with olive branch mark, brand voice copy, and optional CTA
+
+**Site header:**
+- Replaced `<h1>Heirlooms</h1>` with `OliveBranchIcon` (22px) + italic Georgia wordmark
+- Header background: parchment with 1px `forest-15` bottom border
+- Login screen updated to match
+
+**Tag chips:**
+- Gallery card chips and TagEditor chips restyled: `bg-forest-08 text-forest rounded-chip`, 11px
+- TagEditor dropdown adopts `forest-04`/`forest-15`/`forest-25` borders and hover states
+
+**Working state:**
+- `WorkingDots` replaces spinner in gallery card tile (image/video thumbnail loading), and used for gallery initial load state
+
+**Empty gallery:**
+- Replaced "No uploads yet." with `EmptyGarden`: brand voice copy ("A garden begins with a single seed."), olive branch mark, sub-copy, and "plant your first" CTA
+
+**Three-colour signal discipline:**
+- All `text-red-500` error states (login, gallery, tag editor) replaced with `text-earth font-serif italic`
+- No utility icons (checkmarks, X-marks, exclamation glyphs) remain in the codebase
+
+**Voice — garden as noun:**
+- Browser tab title: `Heirlooms — your garden`
+- Loading state: WorkingDots with label `uploading…`
+- Gallery error: earth-coloured, serif italic
+
+**Frontend test infrastructure:**
+- `vitest` + `@testing-library/react` + `@testing-library/jest-dom` added as devDependencies
+- `npm run test` script added; `vite.config.js` configured with jsdom environment
+- `src/brand/OliveBranchMark.test.jsx` — 3 smoke tests: SVG renders, state=forest apex fill, state=bloomed apex fill
+
+3 new tests; 138 total (135 server-side Kotlin + 3 frontend), 137 passing, 1 skipped (FFmpeg video thumbnail — runs in Docker).
+
+---
+
 ## v0.16.1 — Bug fixes (7 May 2026)
 
 **Android: video upload OOM fix**
