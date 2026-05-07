@@ -304,44 +304,53 @@ internal fun capsuleReverseLookupHandler(database: Database, uploadId: UUID): Re
 }
 
 // ---- JSON serialisation helpers -----------------------------------------
+//
+// All three functions use Jackson's ObjectNode API rather than string
+// interpolation. Manual string building is fragile (triple-quoted string
+// quoting rules are easy to get wrong) and requires hand-rolled escaping.
+// Jackson handles both correctly and is already a compile dependency.
 
-private fun CapsuleDetail.toDetailJson(): String = buildString {
+internal fun CapsuleDetail.toDetailJson(): String {
     val r = record
-    append("""{"id":"${r.id}","shape":"${r.shape.name.lowercase()}","state":"${r.state.name.lowercase()}"""")
-    append(""","created_at":"${r.createdAt}","updated_at":"${r.updatedAt}","unlock_at":"${r.unlockAt}"""")
-    append(""","recipients":${recipients.toJsonArray()}""")
-    append(""","uploads":[""")
-    uploads.forEachIndexed { i, u ->
-        if (i > 0) append(",")
-        append(u.toJson())
-    }
-    append("]")
-    append(""","message":${jsonString(message)}""")
-    append(""","cancelled_at":${r.cancelledAt?.let { "\"$it\"" } ?: "null"}""")
-    append(""","delivered_at":${r.deliveredAt?.let { "\"$it\"" } ?: "null"}""")
-    append("}")
+    val node = mapper.createObjectNode()
+    node.put("id", r.id.toString())
+    node.put("shape", r.shape.name.lowercase())
+    node.put("state", r.state.name.lowercase())
+    node.put("created_at", r.createdAt.toString())
+    node.put("updated_at", r.updatedAt.toString())
+    node.put("unlock_at", r.unlockAt.toString())
+    node.putArray("recipients").also { arr -> recipients.forEach { arr.add(it) } }
+    node.putArray("uploads").also { arr -> uploads.forEach { arr.add(mapper.readTree(it.toJson())) } }
+    node.put("message", message)
+    if (r.cancelledAt != null) node.put("cancelled_at", r.cancelledAt.toString()) else node.putNull("cancelled_at")
+    if (r.deliveredAt != null) node.put("delivered_at", r.deliveredAt.toString()) else node.putNull("delivered_at")
+    return mapper.writeValueAsString(node)
 }
 
-private fun CapsuleSummary.toSummaryJson(): String = buildString {
+internal fun CapsuleSummary.toSummaryJson(): String {
     val r = record
-    append("""{"id":"${r.id}","shape":"${r.shape.name.lowercase()}","state":"${r.state.name.lowercase()}"""")
-    append(""","created_at":"${r.createdAt}","updated_at":"${r.updatedAt}","unlock_at":"${r.unlockAt}"""")
-    append(""","recipients":${recipients.toJsonArray()}""")
-    append(""","upload_count":$uploadCount,"has_message":$hasMessage""")
-    append(""","cancelled_at":${r.cancelledAt?.let { "\"$it\"" } ?: "null"}""")
-    append(""","delivered_at":${r.deliveredAt?.let { "\"$it\"" } ?: "null"}""")
-    append("}")
+    val node = mapper.createObjectNode()
+    node.put("id", r.id.toString())
+    node.put("shape", r.shape.name.lowercase())
+    node.put("state", r.state.name.lowercase())
+    node.put("created_at", r.createdAt.toString())
+    node.put("updated_at", r.updatedAt.toString())
+    node.put("unlock_at", r.unlockAt.toString())
+    node.putArray("recipients").also { arr -> recipients.forEach { arr.add(it) } }
+    node.put("upload_count", uploadCount)
+    node.put("has_message", hasMessage)
+    if (r.cancelledAt != null) node.put("cancelled_at", r.cancelledAt.toString()) else node.putNull("cancelled_at")
+    if (r.deliveredAt != null) node.put("delivered_at", r.deliveredAt.toString()) else node.putNull("delivered_at")
+    return mapper.writeValueAsString(node)
 }
 
-internal fun CapsuleSummary.toReverseLookupJson(): String = buildString {
+internal fun CapsuleSummary.toReverseLookupJson(): String {
     val r = record
-    append("""{"id":"${r.id}","shape":"${r.shape.name.lowercase()}","state":"${r.state.name.lowercase()}"""")
-    append(""","unlock_at":"${r.unlockAt}","recipients":${recipients.toJsonArray()}""")
-    append("}")
+    val node = mapper.createObjectNode()
+    node.put("id", r.id.toString())
+    node.put("shape", r.shape.name.lowercase())
+    node.put("state", r.state.name.lowercase())
+    node.put("unlock_at", r.unlockAt.toString())
+    node.putArray("recipients").also { arr -> recipients.forEach { arr.add(it) } }
+    return mapper.writeValueAsString(node)
 }
-
-private fun List<String>.toJsonArray(): String =
-    "[${joinToString(",") { jsonString(it) }}]"
-
-private fun jsonString(s: String): String =
-    "\"${s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")}\""
