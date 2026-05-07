@@ -28,7 +28,8 @@
         <activity
             android:name=".ShareActivity"
             android:exported="true"
-            android:theme="@style/Theme.Heirlooms.Share">
+            android:theme="@style/Theme.Heirlooms.Share"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize">
 
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
