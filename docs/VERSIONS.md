@@ -2,6 +2,47 @@
 
 ---
 
+## v0.17.0 — Brand arrival and didn't-take animations (7 May 2026)
+
+Increment 2 of 3 for the Heirlooms brand milestone.
+
+**`src/brand/animations.js`:**
+- `lerp(t, start, end)` — clamped linear interpolation over a phase window
+- `interpolateHexColour(a, b, t)` — hex → RGB lerp for olive ripening
+- `prefersReducedMotion()` — matchMedia check with safe fallback
+
+**`src/brand/OliveBranchArrival.jsx`:**
+- 3-second rAF animation; six phases: branch draws (0–30%), leaf pairs emerge base-to-tip (22–72%), olive forms in forest (70–84%), ripens to bloom (84–92%), optional wordmark settles (88–100%)
+- `withWordmark` prop (default true); set false for in-tile use
+- `prefers-reduced-motion` snaps to end state and fires `onComplete` on next tick
+
+**`src/brand/OliveBranchDidntTake.jsx`:**
+- 2-second rAF animation; partial branch + one leaf pair + pause beat + earth-coloured seed + "didn't take" text
+- Same reduced-motion behaviour
+
+**Gallery tile state machine (UploadCard):**
+- States: `loading → arriving → arrived` and `loading → error-animating → failed`
+- `arriving`: mounts `OliveBranchArrival` (withWordmark=false); on `onComplete` swaps to photo
+- `error-animating`: mounts `OliveBranchDidntTake`; on `onComplete` shows `FailedTile`
+- `FailedTile`: earth "didn't take" text + forest *try again* + muted *dismiss*; retry re-fetches, dismiss shows static icon
+- Animation only plays once — `animateArrivalRef` is cleared after first use so retry never re-animates
+- Blob URLs properly revoked on unmount and on retry
+
+**New-item detection (Gallery):**
+- `seenIdsRef` tracks all upload IDs seen in this browser session
+- First fetch: all IDs marked seen, no animations play (existing garden loads quietly)
+- Subsequent auto-refresh fetches: newly seen IDs passed as `isNew=true` to UploadCard, triggering arrival animation
+
+**CSS (`src/index.css`):**
+- `.gallery-tile--animating` — flex centred, forest-15 bg, `svg { width: 70%; height: auto }`
+- `.gallery-tile--failed` — same bg, flex-col centred
+- `.gallery-tile--arrived-fading-in` — optional 200ms opacity cross-fade after animation completes (defined; not currently applied)
+
+No new tests beyond the 5 added here; 8 web tests total (3 from Increment 1 + 5 new).
+143 total (135 Kotlin + 8 frontend), 142 passing, 1 skipped.
+
+---
+
 ## v0.17.0 — Brand foundation: tokens, BRAND.md, static web application (7 May 2026)
 
 Increment 1 of 3 for the Heirlooms brand milestone. The production site at `heirlooms.digital`

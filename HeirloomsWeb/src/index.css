@@ -65,3 +65,48 @@ body {
     opacity: 0.6;
   }
 }
+
+/* Animation tile — used while OliveBranchArrival / OliveBranchDidntTake play */
+.gallery-tile--animating {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--hl-forest-15);
+  width: 100%;
+  height: 100%;
+  border-radius: var(--hl-radius-card);
+}
+
+.gallery-tile--animating svg {
+  width: 70%;
+  height: auto;
+}
+
+/* Failed tile */
+.gallery-tile--failed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--hl-forest-15);
+  width: 100%;
+  height: 100%;
+  border-radius: var(--hl-radius-card);
+}
+
+/* Optional cross-fade when arriving → arrived swap happens */
+.gallery-tile--arrived-fading-in {
+  animation: hl-tile-fade-in 200ms var(--hl-motion-easing-natural) both;
+}
+
+@keyframes hl-tile-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gallery-tile--arrived-fading-in {
+    animation: none;
+    opacity: 1;
+  }
+}

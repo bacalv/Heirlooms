@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { OliveBranchIcon } from './brand/OliveBranchIcon'
 import { WorkingDots } from './brand/WorkingDots'
 import { EmptyGarden } from './brand/EmptyGarden'
+import { OliveBranchArrival } from './brand/OliveBranchArrival'
+import { OliveBranchDidntTake } from './brand/OliveBranchDidntTake'
 
 const API_URL = import.meta.env.VITE_API_URL ?? ''
 
@@ -64,6 +66,28 @@ function PlayIcon() {
       <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
         <path d="M8 5v14l11-7z" />
       </svg>
+    </div>
+  )
+}
+
+function FailedTile({ onRetry, onDismiss }) {
+  return (
+    <div className="gallery-tile--failed">
+      <p className="font-serif italic text-earth text-[12px]">didn't take</p>
+      <div className="flex gap-2 mt-2">
+        <button
+          onClick={onRetry}
+          className="px-2 py-1 bg-forest text-parchment rounded-button font-serif italic text-[10px]"
+        >
+          try again
+        </button>
+        <button
+          onClick={onDismiss}
+          className="px-2 py-1 text-text-muted text-[10px] font-serif italic"
+        >
+          dismiss
+        </button>
+      </div>
     </div>
   )
 }
@@ -338,39 +362,105 @@ function TagEditor({ currentTags, allTags, onSave, onCancel }) {
   )
 }
 
-function UploadCard({ upload, apiKey, onImageClick, onVideoClick, onRotate, onUpdateTags, allTags }) {
+// Tile state machine:
+//   loading → arriving (isNew=true) → arrived
+//   loading → arrived  (isNew=false, skip animation)
+//   loading → error-animating → failed
+//   failed  → loading  (retry)
+//   failed  → dismissed (show static icon fallback)
+function UploadCard({ upload, apiKey, onImageClick, onVideoClick, onRotate, onUpdateTags, allTags, isNew }) {
   const fileUrl = `${API_URL}/api/content/uploads/${upload.id}/file`
   const displayUrl = upload.thumbnailKey
     ? `${API_URL}/api/content/uploads/${upload.id}/thumb`
     : fileUrl
+  const needsFetch = isImage(upload.mimeType) || !!upload.thumbnailKey
+  const [tileState, setTileState] = useState(needsFetch ? 'loading' : 'arrived')
   const [blobUrl, setBlobUrl] = useState(null)
+  const [fetchAttempt, setFetchAttempt] = useState(0)
   const [editingTags, setEditingTags] = useState(false)
+  // Capture isNew at mount — don't animate on retry or subsequent renders.
+  const animateArrivalRef = useRef(isNew)
+  const blobUrlRef = useRef(null)
 
-  // Pre-fetch image thumbnails on mount so they display in the grid.
-  // Videos are fetched on demand when the user clicks, to avoid loading
-  // large files until they're actually wanted.
   useEffect(() => {
-    if (!isImage(upload.mimeType) && !upload.thumbnailKey) return
+    if (!needsFetch) return
+    // Revoke any previous blob before fetching a new one.
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current)
+      blobUrlRef.current = null
+    }
+    setTileState('loading')
     let cancelled = false
     fetch(displayUrl, { headers: { 'X-Api-Key': apiKey } })
-      .then((r) => r.ok ? r.blob() : null)
-      .then((blob) => { if (!cancelled && blob) setBlobUrl(URL.createObjectURL(blob)) })
-      .catch(() => {})
+      .then((r) => r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then((blob) => {
+        if (cancelled) return
+        const url = URL.createObjectURL(blob)
+        blobUrlRef.current = url
+        setBlobUrl(url)
+        // Only animate once — clear the flag so retry doesn't re-animate.
+        const shouldAnimate = animateArrivalRef.current
+        animateArrivalRef.current = false
+        setTileState(shouldAnimate ? 'arriving' : 'arrived')
+      })
+      .catch(() => {
+        if (!cancelled) setTileState('error-animating')
+      })
     return () => {
       cancelled = true
-      if (blobUrl) URL.revokeObjectURL(blobUrl)
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current)
+        blobUrlRef.current = null
+      }
     }
-  }, [displayUrl, apiKey])
+  }, [displayUrl, apiKey, fetchAttempt])
+
+  function handleRetry() {
+    setFetchAttempt(n => n + 1)
+  }
 
   function handleVideoClick() {
     onVideoClick({ uploadId: upload.id, mimeType: upload.mimeType, apiKey })
   }
 
-  return (
-    <div className="relative bg-white rounded-card shadow-sm border border-forest-08 flex flex-col">
-      <div className={`h-48 flex items-center justify-center overflow-hidden rounded-t-card ${blobUrl ? 'bg-forest-04' : 'bg-forest-15'}`}>
-        {isImage(upload.mimeType) ? (
-          blobUrl ? (
+  function renderTileContent() {
+    switch (tileState) {
+      case 'loading':
+        return <WorkingDots size="md" />
+
+      case 'arriving':
+        return (
+          <div className="gallery-tile--animating">
+            <OliveBranchArrival
+              withWordmark={false}
+              onComplete={() => setTileState('arrived')}
+            />
+          </div>
+        )
+
+      case 'error-animating':
+        return (
+          <div className="gallery-tile--animating">
+            <OliveBranchDidntTake
+              onComplete={() => setTileState('failed')}
+            />
+          </div>
+        )
+
+      case 'failed':
+        return (
+          <FailedTile
+            onRetry={handleRetry}
+            onDismiss={() => setTileState('dismissed')}
+          />
+        )
+
+      case 'dismissed':
+        return isVideo(upload.mimeType) ? <VideoIcon /> : <FileIcon />
+
+      default: // 'arrived'
+        if (isImage(upload.mimeType) && blobUrl) {
+          return (
             <img
               src={blobUrl}
               alt={upload.storageKey}
@@ -378,34 +468,38 @@ function UploadCard({ upload, apiKey, onImageClick, onVideoClick, onRotate, onUp
               style={upload.rotation ? { transform: `rotate(${upload.rotation}deg)`, transition: 'transform 0.2s' } : {}}
               onClick={() => onImageClick(blobUrl, upload.rotation ?? 0)}
             />
-          ) : (
-            <WorkingDots size="md" />
           )
-        ) : isVideo(upload.mimeType) && blobUrl ? (
-          <div
-            className="relative w-full h-full cursor-pointer group"
-            onClick={handleVideoClick}
-          >
-            <img
-              src={blobUrl}
-              alt={upload.storageKey}
-              className="object-cover w-full h-full"
-            />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
-              <PlayIcon />
+        }
+        if (isVideo(upload.mimeType) && blobUrl) {
+          return (
+            <div className="relative w-full h-full cursor-pointer group" onClick={handleVideoClick}>
+              <img src={blobUrl} alt={upload.storageKey} className="object-cover w-full h-full" />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
+                <PlayIcon />
+              </div>
             </div>
-          </div>
-        ) : isVideo(upload.mimeType) ? (
-          <button
-            className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity cursor-pointer"
-            onClick={handleVideoClick}
-          >
-            {upload.thumbnailKey ? <WorkingDots size="md" /> : <VideoIcon />}
-            {!upload.thumbnailKey && <span className="text-xs text-text-muted">Click to play</span>}
-          </button>
-        ) : (
-          <FileIcon />
-        )}
+          )
+        }
+        if (isVideo(upload.mimeType)) {
+          return (
+            <button
+              className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity cursor-pointer"
+              onClick={handleVideoClick}
+            >
+              <VideoIcon />
+              <span className="text-xs text-text-muted">Click to play</span>
+            </button>
+          )
+        }
+        return <FileIcon />
+    }
+  }
+
+  const showPhoto = tileState === 'arrived' && blobUrl
+  return (
+    <div className="relative bg-white rounded-card shadow-sm border border-forest-08 flex flex-col">
+      <div className={`h-48 flex items-center justify-center overflow-hidden rounded-t-card ${showPhoto ? 'bg-forest-04' : 'bg-forest-15'}`}>
+        {renderTileContent()}
       </div>
       {upload.latitude != null && upload.longitude != null && (
         <PinIcon latitude={upload.latitude} longitude={upload.longitude} />
@@ -468,6 +562,11 @@ function Gallery({ apiKey, onSignOut }) {
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [lightbox, setLightbox] = useState(null) // { url, rotation }
   const [videoPlayer, setVideoPlayer] = useState(null)
+  // IDs seen in this session. null = first fetch not yet complete.
+  // On first fetch all IDs are marked seen (no animation).
+  // On subsequent fetches, newly seen IDs play the arrival animation.
+  const seenIdsRef = useRef(null)
+  const [newUploadIds, setNewUploadIds] = useState(new Set())
 
   const allTags = useMemo(
     () => [...new Set(uploads.flatMap(u => u.tags))].sort(),
@@ -479,7 +578,19 @@ function Gallery({ apiKey, onSignOut }) {
     try {
       const r = await fetch(`${API_URL}/api/content/uploads`, { headers: { 'X-Api-Key': apiKey } })
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      setUploads(await r.json())
+      const data = await r.json()
+
+      let newIds = new Set()
+      if (seenIdsRef.current === null) {
+        // First load — mark all as already arrived, no animations.
+        seenIdsRef.current = new Set(data.map(u => u.id))
+      } else {
+        // Subsequent fetches — anything not yet seen is a new arrival.
+        newIds = new Set(data.filter(u => !seenIdsRef.current.has(u.id)).map(u => u.id))
+        newIds.forEach(id => seenIdsRef.current.add(id))
+      }
+      setUploads(data)
+      setNewUploadIds(newIds)
     } catch (e) {
       if (showSpinner) setError(e.message)
     } finally {
@@ -541,10 +652,6 @@ function Gallery({ apiKey, onSignOut }) {
     }
   }
 
-  function closeVideoPlayer() {
-    setVideoPlayer(null)
-  }
-
   return (
     <div className="min-h-screen">
       <header className="bg-parchment border-b border-forest-15 px-6 py-4 flex items-center justify-between">
@@ -597,6 +704,7 @@ function Gallery({ apiKey, onSignOut }) {
                 key={upload.id}
                 upload={upload}
                 apiKey={apiKey}
+                isNew={newUploadIds.has(upload.id)}
                 onImageClick={(url, rotation) => setLightbox({ url, rotation })}
                 onVideoClick={handleVideoClick}
                 onRotate={handleRotate}
@@ -613,7 +721,7 @@ function Gallery({ apiKey, onSignOut }) {
         <VideoPlayer
           url={videoPlayer.url}
           mimeType={videoPlayer.mimeType}
-          onClose={closeVideoPlayer}
+          onClose={() => setVideoPlayer(null)}
         />
       )}
     </div>

@@ -6,6 +6,29 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-07 (v0.17.0 — Brand, Increment 2)
+
+**PA brief:** SE Brief — Brand, Increment 2: Web Arrival and Didn't-Take Animations.
+
+**What was built:**
+- `src/brand/animations.js` — `lerp`, `interpolateHexColour`, `prefersReducedMotion` pure helpers
+- `src/brand/OliveBranchArrival.jsx` — 3s rAF animation, six phases, `withWordmark` prop, reduced-motion fast-path
+- `src/brand/OliveBranchDidntTake.jsx` — 2s rAF animation, partial branch + pause + earth seed + "didn't take" text, reduced-motion fast-path
+- `src/brand/OliveBranchArrival.test.jsx` and `OliveBranchDidntTake.test.jsx` — 5 smoke tests (render, withWordmark, reduced-motion onComplete)
+- `src/test/setup.js` updated — `Element.prototype.getTotalLength` stub (JSDOM 29 doesn't implement it; `window.SVGPathElement.prototype` patching silently failed because JSDOM 29 exposes SVG constructors on `window`, not as bare globals)
+- `src/App.jsx` — `UploadCard` rewritten with 6-state tile machine (`loading/arriving/arrived/error-animating/failed/dismissed`); `FailedTile` component added; `Gallery` tracks `seenIdsRef` to only animate newly-appeared uploads (first load is silent; auto-refresh arrivals animate)
+- `src/index.css` — tile animation CSS classes added
+
+**Key decisions:**
+- "New" upload = first time an ID is seen in this browser session. First page load → all items skip animation (quiet); auto-refresh → new items animate. This is the right semantic — "moment of arrival" is when the upload is detected by the web client for the first time, not every page load.
+- `animateArrivalRef` captured at mount and cleared after first successful use — retry never re-plays the arrival animation.
+- Blob URLs revoked properly via `blobUrlRef` (the original code captured `blobUrl` in the closure at effect creation time when it was null, so revocation never ran; fixed here).
+- `gallery-tile--arrived-fading-in` CSS is defined but not applied — kept for Increment 3 review or PA follow-up if the hard-cut feels abrupt in production.
+
+**Test count:** 143 total (135 Kotlin + 8 frontend), 142 passing, 1 skipped.
+
+---
+
 ## Session — 2026-05-07 (v0.17.0 — Brand, Increment 1)
 
 **PA brief:** SE Brief — Brand, Increment 1: Tokens + BRAND.md + Static Web Application.
