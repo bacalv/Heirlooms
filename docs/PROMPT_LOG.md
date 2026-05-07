@@ -6,6 +6,74 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-09 (v0.19.1–v0.19.5 — Bug fixes and hardening)
+
+**Context:** Post-deploy testing of the v0.19.0 capsule web UI revealed four bugs
+and two improvement opportunities. All were addressed in the same session.
+
+**Bugs found and fixed:**
+
+1. **Photo rotation not applied in picker/capsule grids (v0.19.1).**
+   `PhotoGrid.jsx`'s `Thumb` component rendered images with no CSS transform.
+   The `upload.rotation` property existed but was never applied. One-line fix.
+
+2. **"Start Capsule" and capsule list both returning "didn't take" (v0.19.2).**
+   Root cause: all three capsule JSON serialisers (`toDetailJson`, `toSummaryJson`,
+   `toReverseLookupJson`) had a Kotlin triple-quoted string quoting bug. The closing
+   `"""` delimiter consumed the `"` that was meant to close the `state` field value,
+   producing `"state":"open,"created_at":...` — the comma leaked into the string value.
+   JavaScript's `JSON.parse` is strict and rejected this at position 88. Jackson
+   (used by the integration tests' HTTP client) is lenient and parsed `open,` as a
+   valid string value, so all 49 integration tests passed undetected. Fixed in the
+   same commit by adding one `"` to each serialiser (`}"""` → `}""""`).
+
+3. **Deep-link 404 on page refresh (v0.19.3).**
+   nginx was serving the static build without a SPA fallback. Navigating to
+   `/capsules` directly or refreshing returned 404 because nginx looked for a real
+   file at that path. Fixed by adding `nginx.conf` with `try_files $uri $uri/ /index.html`
+   and COPYing it into the Dockerfile.
+
+4. **Post-login redirect always went to `/` rather than the intended page (v0.19.4).**
+   Auth state is held in React memory, so refresh clears it. The old `<Navigate to="/login">` didn't
+   carry the intended destination. Fixed by introducing a `RequireAuth` component that
+   passes `location.pathname + location.search` as `state.from` in the redirect, and
+   updating `LoginPage` to `navigate(from, { replace: true })` after successful login.
+   Noted by Bret as a temporary workaround until proper cookie-based server auth is in place.
+
+**Improvements made:**
+
+5. **Jackson for capsule JSON serialisation (v0.19.5).**
+   Prompted by the v0.19.2 bug: manual string building is the wrong tool for JSON.
+   Jackson was already a compile dependency (used for request parsing). All three
+   serialisers were rewritten to use `mapper.createObjectNode()` / `putArray()` /
+   `writeValueAsString()`. The private helpers `jsonString()` and `toJsonArray()` were
+   removed. Functions changed from `private` to `internal` to allow direct unit testing.
+
+6. **Serialiser unit tests added (v0.19.5).**
+   `CapsuleHandlerTest.kt`: 13 new tests, one per serialiser × state variant + field
+   type checks. Key test: `state field is a bare string value` for each of the three
+   serialisers — this is the regression guard that would have caught the v0.19.2 bug
+   at unit-test time. Unit test count: 135 → 148 passing.
+
+**Why integration tests missed the bug:**
+Jackson's `ObjectMapper.readTree()` (used in integration tests to parse responses)
+is lenient by default. It parsed `"state":"open,` as the string value `open,` and
+continued. The tests apparently checked HTTP status codes and high-level structure
+but not exact field values with strict type checking. Lesson: serialiser unit tests
+with a strict round-trip parse are cheaper and faster to catch this class of bug
+than relying on the integration test layer.
+
+**Key decisions:**
+- Auth state remains in React memory (per existing design). The return-URL pattern
+  (`state.from`) is the right interim fix. Proper cookie-based session tokens are the
+  long-term solution (Bret noted this explicitly).
+- Jackson ObjectNode API preferred over data class serialisation for the capsule
+  responses, because the response shapes embed `UploadRecord.toJson()` (which is
+  still manual for now). A full migration to Jackson data class serialisation would
+  be a wider refactor and was deferred.
+
+---
+
 ## Session — 2026-05-09 (v0.19.0 — Capsule web UI, Milestone 5 Increment 2)
 
 **PA brief:** SE Brief — Capsules, Increment 2: Web UI. Nine sub-areas covering
