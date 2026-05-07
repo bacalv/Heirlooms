@@ -27,7 +27,12 @@ function Thumb({ upload, apiKey, selected, onSelect, linkTo }) {
   }, [displayUrl, apiKey, needsFetch])
 
   const inner = blobUrl ? (
-    <img src={blobUrl} alt="" className="w-full h-full object-cover" />
+    <img
+      src={blobUrl}
+      alt=""
+      className="w-full h-full object-cover"
+      style={upload.rotation ? { transform: `rotate(${upload.rotation}deg)` } : undefined}
+    />
   ) : (
     <div className="w-full h-full bg-forest-08 flex items-center justify-center">
       <span className="text-text-muted text-xs">…</span>
