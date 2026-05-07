@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package digital.heirlooms.ui.share
 
 import android.net.Uri
