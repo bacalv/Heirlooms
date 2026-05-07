@@ -104,31 +104,25 @@ export function CapsuleCreatePage() {
     setSubmitError(null)
     setSubmitting(true)
     try {
-      const unlockAt = buildUnlockAt(date.day, date.month, date.year)
-      const body = {
-        shape,
-        unlock_at: unlockAt,
-        recipients: recipients.filter((r) => r.trim()),
-        upload_ids: uploadIds,
-        message,
-      }
       const r = await apiFetch('/api/capsules', apiKey, {
         method: 'POST',
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          shape,
+          unlock_at: buildUnlockAt(date.day, date.month, date.year),
+          recipients: recipients.filter((r) => r.trim()),
+          upload_ids: uploadIds,
+          message,
+        }),
       })
-      if (!r.ok) {
-        const text = await r.text().catch(() => '')
-        console.error('POST /api/capsules failed', r.status, text)
-        throw new Error(`${r.status}: ${text}`)
-      }
+      if (!r.ok) throw new Error()
       const data = await r.json()
       if (shape === 'sealed') {
         navigate(`/capsules/${data.id}?sealed=1`)
       } else {
         navigate(`/capsules/${data.id}`)
       }
-    } catch (err) {
-      setSubmitError(err.message || true)
+    } catch {
+      setSubmitError(true)
     } finally {
       setSubmitting(false)
     }
@@ -218,10 +212,7 @@ export function CapsuleCreatePage() {
         <div className="mt-6 p-4 rounded-card border border-earth/30 bg-earth-10 text-center space-y-2">
           <p className="font-serif italic text-earth">didn't take</p>
           <p className="text-sm text-text-body">Your capsule wasn't started.</p>
-          {typeof submitError === 'string' && (
-            <p className="text-xs text-text-muted font-mono break-all">{submitError}</p>
-          )}
-          <button onClick={() => { setSubmitError(null) }}
+          <button onClick={() => setSubmitError(null)}
             className="text-sm text-forest underline">Try again</button>
         </div>
       )}

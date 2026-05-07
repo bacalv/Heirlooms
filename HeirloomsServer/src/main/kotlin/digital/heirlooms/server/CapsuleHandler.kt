@@ -307,7 +307,7 @@ internal fun capsuleReverseLookupHandler(database: Database, uploadId: UUID): Re
 
 private fun CapsuleDetail.toDetailJson(): String = buildString {
     val r = record
-    append("""{"id":"${r.id}","shape":"${r.shape.name.lowercase()}","state":"${r.state.name.lowercase()}""")
+    append("""{"id":"${r.id}","shape":"${r.shape.name.lowercase()}","state":"${r.state.name.lowercase()}"""")
     append(""","created_at":"${r.createdAt}","updated_at":"${r.updatedAt}","unlock_at":"${r.unlockAt}"""")
     append(""","recipients":${recipients.toJsonArray()}""")
     append(""","uploads":[""")
@@ -324,7 +324,7 @@ private fun CapsuleDetail.toDetailJson(): String = buildString {
 
 private fun CapsuleSummary.toSummaryJson(): String = buildString {
     val r = record
-    append("""{"id":"${r.id}","shape":"${r.shape.name.lowercase()}","state":"${r.state.name.lowercase()}""")
+    append("""{"id":"${r.id}","shape":"${r.shape.name.lowercase()}","state":"${r.state.name.lowercase()}"""")
     append(""","created_at":"${r.createdAt}","updated_at":"${r.updatedAt}","unlock_at":"${r.unlockAt}"""")
     append(""","recipients":${recipients.toJsonArray()}""")
     append(""","upload_count":$uploadCount,"has_message":$hasMessage""")
@@ -335,7 +335,7 @@ private fun CapsuleSummary.toSummaryJson(): String = buildString {
 
 internal fun CapsuleSummary.toReverseLookupJson(): String = buildString {
     val r = record
-    append("""{"id":"${r.id}","shape":"${r.shape.name.lowercase()}","state":"${r.state.name.lowercase()}""")
+    append("""{"id":"${r.id}","shape":"${r.shape.name.lowercase()}","state":"${r.state.name.lowercase()}"""")
     append(""","unlock_at":"${r.unlockAt}","recipients":${recipients.toJsonArray()}""")
     append("}")
 }
