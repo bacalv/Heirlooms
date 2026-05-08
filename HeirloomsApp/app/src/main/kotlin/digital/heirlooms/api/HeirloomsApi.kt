@@ -63,6 +63,8 @@ class HeirloomsApi(
 
     // ── Upload list ──────────────────────────────────────────────────────────
 
+    // ── Upload list ──────────────────────────────────────────────────────────
+
     suspend fun listUploadsPage(
         cursor: String? = null,
         limit: Int = 20,
@@ -92,7 +94,7 @@ class HeirloomsApi(
     }
 
     suspend fun listCompostedUploads(): List<Upload> =
-        JSONObject(get("/api/content/uploads/composted")).getJSONArray("uploads").toUploadList()
+        JSONObject(get("/api/content/uploads/composted")).getJSONArray("items").toUploadList()
 
     suspend fun getUpload(id: String): Upload =
         JSONObject(get("/api/content/uploads/$id")).toUpload()
@@ -116,7 +118,7 @@ class HeirloomsApi(
     }
 
     suspend fun listTags(): List<String> =
-        JSONObject(get("/api/content/uploads/tags")).getJSONArray("tags")
+        JSONArray(get("/api/content/uploads/tags"))
             .let { arr -> (0 until arr.length()).map { arr.getString(it) } }
 
     suspend fun getCapsulesForUpload(id: String): List<CapsuleRef> =
@@ -125,7 +127,7 @@ class HeirloomsApi(
     // ── Plots ────────────────────────────────────────────────────────────────
 
     suspend fun listPlots(): List<Plot> =
-        JSONObject(get("/api/plots")).getJSONArray("plots").toPlotList()
+        JSONArray(get("/api/plots")).toPlotList()
 
     // ── Capsules ─────────────────────────────────────────────────────────────
 
@@ -163,7 +165,7 @@ class HeirloomsApi(
     // ── JSON → model helpers ─────────────────────────────────────────────────
 
     private fun JSONObject.toUploadPage() = UploadPage(
-        uploads = getJSONArray("uploads").toUploadList(),
+        uploads = getJSONArray("items").toUploadList(),
         nextCursor = optString("next_cursor").takeIf { it.isNotEmpty() && it != "null" },
     )
 

@@ -7,6 +7,7 @@ import digital.heirlooms.api.HeirloomsApi
 import digital.heirlooms.api.Plot
 import digital.heirlooms.api.Upload
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -40,11 +41,11 @@ class GardenViewModel(
         viewModelScope.launch {
             _state.value = GardenLoadState.Loading
             try {
-                val plotsDeferred = async { api.listPlots() }
-                val justArrivedDeferred = async { api.listUploadsPage(justArrived = true) }
-
-                val plots = plotsDeferred.await()
-                val justArrived = justArrivedDeferred.await()
+                val (plots, justArrived) = coroutineScope {
+                    val plotsDeferred = async { api.listPlots() }
+                    val justArrivedDeferred = async { api.listUploadsPage(justArrived = true) }
+                    Pair(plotsDeferred.await(), justArrivedDeferred.await())
+                }
 
                 val rows = buildList {
                     add(PlotRowState(
