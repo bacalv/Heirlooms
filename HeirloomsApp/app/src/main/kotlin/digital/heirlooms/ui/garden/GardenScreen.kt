@@ -29,6 +29,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -273,6 +274,18 @@ private fun PlotRowSection(
                                 modifier = Modifier.fillMaxSize(),
                                 rotation = upload.rotation,
                             )
+                            if (upload.isVideo) {
+                                Icon(
+                                    imageVector = Icons.Filled.PlayArrow,
+                                    contentDescription = null,
+                                    tint = Parchment,
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .background(Forest.copy(alpha = 0.65f), RoundedCornerShape(topStart = 4.dp))
+                                        .padding(2.dp)
+                                        .size(14.dp),
+                                )
+                            }
                         }
                         // Per-tile arrival animation for newly landed items.
                         if (upload.id in newlyArrivedIds) {

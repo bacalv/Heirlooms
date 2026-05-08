@@ -24,7 +24,10 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -271,6 +274,18 @@ private fun UploadThumbnail(upload: Upload, showNoDateBadge: Boolean, onClick: (
                     .align(Alignment.BottomStart)
                     .background(Forest.copy(alpha = 0.65f), RoundedCornerShape(topEnd = 4.dp))
                     .padding(horizontal = 4.dp, vertical = 2.dp),
+            )
+        }
+        if (upload.isVideo) {
+            Icon(
+                imageVector = Icons.Filled.PlayArrow,
+                contentDescription = null,
+                tint = Parchment,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .background(Forest.copy(alpha = 0.65f), RoundedCornerShape(topStart = 4.dp))
+                    .padding(2.dp)
+                    .size(14.dp),
             )
         }
     }

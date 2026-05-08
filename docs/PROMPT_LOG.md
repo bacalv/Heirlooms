@@ -6,6 +6,18 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-08 — v0.25.8–v0.25.9: Explore filter tags + video badges
+
+**v0.25.9 — Video indicator badge on thumbnails.**
+Both the Garden plot-row tiles and the Explore grid tiles now show a small
+`PlayArrow` icon badge (14dp, Forest/65% alpha background, bottom-right corner,
+`RoundedCornerShape(topStart=4.dp)`) whenever `upload.isVideo` is true.
+`Upload.isVideo` was already defined in `Models.kt` as `mimeType.startsWith("video/")`.
+`Icons.Filled.PlayArrow` is available via `material-icons-extended` (already a dep).
+No model or API changes needed.
+
+---
+
 ## Session — 2026-05-08 — v0.25.8: Explore filter tags
 
 **Tags multi-select in Explore filter sheet.**
