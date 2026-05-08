@@ -18,6 +18,18 @@ vary significantly by country.
 The personal angle — photos and videos for next of kin — emerged as the most
 emotionally powerful entry point into the problem.
 
+A note on framing, added retroactively in May 2026 after a brainstorm
+session: the founding session's emphasis on death, inheritance, and
+posthumous delivery captured the most emotionally powerful entry point into
+the problem, but it isn't the whole product. Heirlooms is more accurately
+about *time* — the gap between now and a future moment when something will
+mean more. Death is one shape that gap takes. A video to a daughter on her
+18th birthday, sealed when she's 8, lives in the same product as a
+posthumous letter, and most users will reach for the former more often than
+the latter. The brand voice is solemn and dignified; what users do with
+that voice is up to them. See IDEAS.md, "Heirlooms is about time, not just
+death," for the full reframing.
+
 ---
 
 ## Concepts explored
@@ -220,11 +232,13 @@ correctness property.
 After M7 ships, the first non-Bret human (a friend tester) is onboarded.
 
 **Milestone 8 — Milestone delivery**
-Scheduled delivery of a capsule on a specific date — a child's 18th birthday,
-a graduation, a wedding. The feature that makes this more than cloud storage.
-Designed against real recipient accounts that exist post-M7, including a
-resolution UI for capsules sealed with free-text recipients before M7 (see
-IDEAS.md).
+Scheduled delivery of a capsule on a specific date. The feature that makes this
+more than cloud storage. Designed against real recipient accounts that exist
+post-M7, including a resolution UI for capsules sealed with free-text recipients
+before M7 (see IDEAS.md). Email is the baseline notification channel; in-app
+delivery is the canonical surface; print-on-delivery and other physical-world
+integrations are recorded as a second wave (see IDEAS.md, "Third-party delivery
+integrations").
 
 ---
 

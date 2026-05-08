@@ -6,6 +6,110 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-08 (post-D4 brainstorm + doc sweep)
+
+A brainstorming session held after Android D4 shipped, before the M7 brief
+was drafted. Output: a doc sweep across IDEAS.md, IDIOMS.md, ROADMAP.md,
+PA_NOTES.md, and PROMPT_LOG.md, all applied in a single commit.
+
+### Topics explored
+
+1. **iOS strategy.** Concluded with the *minimal iOS app* shape (Option 4
+   in the IDEAS.md entry): web is the primary surface as a PWA; iOS app
+   exists only to register a Share Extension, with a three-screen host app
+   wrapping it. Android stays as-is through M6/M7. Decision recorded but
+   not committed; this is post-M7 work.
+
+2. **Gamification.** Considered and rejected. Trophies, ranks, persona,
+   levels, XP, streaks — all rejected as fundamentally incompatible with
+   the brand register. The *gardener's notebook* / *year in the garden*
+   surface recorded as a possible alternative direction for the underlying
+   feature-discovery problem.
+
+3. **Tokens and monetisation.** Tokens as in-app currency rejected, with
+   the per-currency pricing complexity accepted as the cost. Pricing tiers
+   to be named in brand voice (illustrative: *steward* subscription, *long
+   capsules* one-time fees) and tied to real underlying costs. Gift
+   mechanic recorded as separate future feature.
+
+4. **Trust posture and encryption.** Sealed-from-host recorded as the
+   *eventual default*, not a paid feature. Engineering realities flagged
+   (key management, no server-side processing, capsule delivery
+   complications). M12+ horizon; recorded now to shape near-term
+   architectural decisions.
+
+5. **Third-party delivery integrations.** Recorded as M8+ second wave;
+   email delivery flagged as the actual M8 baseline. Print-on-delivery
+   (Moonpig, etc.) as the most brand-aligned integration but with a high
+   reliability bar.
+
+6. **Engagement without gamification.** Recorded as a feature space
+   distinct from the gamification rejection. *The garden remembers you*,
+   not the other way around. Existing schema columns (`uploaded_at`,
+   `unlock_at`, `last_viewed_at`) flagged as the engineering hooks.
+
+7. **The death/life recalibration.** The most significant outcome of the
+   session. The PA had been calibrating the brand register toward
+   *grief-product*, which is narrower than the product actually is.
+   Heirlooms is about *time* — the gap between now and a future moment when
+   something will mean more. Death is one shape that gap takes; most
+   capsules will not involve death at all. The brand voice stays solemn
+   and dignified; the *content* of what users put into the product is up
+   to them, including humour and lightness. New IDEAS.md entry *Heirlooms
+   is about time, not just death* captures the recalibration; new
+   IDIOMS.md sub-section *The voice is solemn; the room belongs to the
+   user* captures the discipline.
+
+### The four-catch pattern
+
+A meta-observation worth recording: this is the fourth time in recent
+sessions that Bret has corrected a PA instinct that pulls the brand in a
+particular direction. The pattern in chronological order:
+
+1. *Didn't take* (v0.20.3) — the PA had introduced a brand verb for
+   errors. Bret pointed out it was opaque to first-time readers; the
+   brand-vocabulary-for-errors decision was reversed.
+2. *Plant a seed for someone* (v0.20.3) — original capsule create form
+   opening line. Bret caught the unwanted reproductive composition before
+   it shipped.
+3. *Productivity-app shelf-layout instinct* (Milestone 6 planning) — the
+   PA initially proposed an inbox/recent/tag shelf layout for Garden,
+   importing the *getting-behind/zero-as-achievement* register. Bret
+   reframed to plots-and-explore.
+4. *Over-solemnification of the brand register* (this session) — the PA
+   had been treating Heirlooms as a grief product. Bret reframed to *time,
+   not just death*.
+
+The pattern is real: the PA's productive-by-default instinct extends
+metaphors, surfaces, and emotional registers; Bret's discipline restrains
+them. Both directions of restraint are now visible — *don't make it fun*
+(catches 1 and 2) and *don't make it grim* (catch 4) — and they're sibling
+disciplines, not opposing ones. The brand voice is dignified; the user's
+use of it is theirs. Captured in IDIOMS.md.
+
+### Roadmap renumbering
+
+Decided in this session: M7 = multi-user, M8 = milestone delivery (the
+inverse of the prior renumbering recorded on 2026-05-10). Reasoning:
+delivery should be designed against real recipient accounts, which means
+multi-user has to land first. Friend-tester onboarding sequencing also
+only makes sense under this numbering. ROADMAP.md, PA_NOTES.md, and the
+relevant IDEAS.md entries updated accordingly.
+
+### Output artefacts
+
+- `docs/IDEAS.md` — eight new entries appended; three existing entries
+  edited for renumbering.
+- `docs/IDIOMS.md` — one new sub-section.
+- `docs/ROADMAP.md` — *Origin* section augmented; M7 and M8 sections
+  rewritten.
+- `docs/PA_NOTES.md` — three small edits per renumbering.
+- `docs/PROMPT_LOG.md` — this entry.
+
+No code changes.
+
+---
+
 ## Session — 2026-05-08 (evening) — v0.25.0/v0.25.1: M6 D4 Android adoption + post-ship fixes
 
 **D4 brief delivered and executed.** Closes Milestone 6. Android picks up the

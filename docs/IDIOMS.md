@@ -395,6 +395,30 @@ existing verbs and recipient constructions. If any combination reads as
 out-of-register or inappropriate, the vocabulary doesn't fit — even if it's
 safe in isolation.
 
+### The voice is solemn; the room belongs to the user
+
+The brand voice stays dignified at all times — the product never cracks
+wise, never softens its register to seem fun, never adds emoji or
+exclamation marks to feel approachable. *Compost* doesn't get a smiley face.
+
+But the brand voice does not constrain what the *user* puts into the
+product. A capsule of cursed photos for a daughter's wedding day gets the
+same care from the product as a deathbed letter, because both are gifts.
+The waiter at a good restaurant doesn't tell jokes — but if the diners are
+laughing, the waiter doesn't shush them. The room is theirs.
+
+The discipline cuts in both directions:
+
+- **Don't make the voice fun.** Heirlooms is not a casino app, a productivity
+  app, or a social media app. The dignity is load-bearing — it's what makes
+  the product trustworthy for the moments that matter.
+- **Don't make the voice grim.** Heirlooms is not a grief product. It is a
+  product about time, and most uses of it have nothing to do with death.
+  Copy that assumes solemnity in the user's *content* (rather than the
+  product's *voice*) is over-correcting.
+
+When in doubt: the voice is the waiter, not the diner.
+
 ---
 
 ## The naming discipline
