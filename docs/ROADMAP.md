@@ -194,7 +194,7 @@ no tags and no active capsule memberships. The 90-day window is the safety net; 
 hard-delete endpoint exists. Removal in Heirlooms is not a trash can: it is the product's
 considered way of returning something to the earth.
 
-**Milestone 6 — Garden / Explore restructure**
+**Milestone 6 — Garden / Explore restructure (done)**
 A re-architecting of the main browsing surfaces before delivery work begins. The single
 flat Garden tab becomes two: a *Garden* (work surface — the *Just arrived* plot plus
 user-defined plots) and an *Explore* (leisure surface — paginated, filterable, where
@@ -213,6 +213,14 @@ pagination, plot schema), new web surfaces, and Android adoption. See
   reorder. Garden redesigned as plot rows with DnD + gear menu + inline Add form. Explore
   filter chrome + sort. PhotoDetail ?from=garden|explore variants with negative-action
   button separation. IDIOMS.md: Plot, Just arrived, Negative-action button separation.
+- **D4 — Android adoption (done, v0.25.0/v0.25.1).** ViewModel + SavedStateHandle migration
+  across all seven screens. Four-tab bottom nav (Garden | Explore | Capsules | Burger).
+  Explore tab with filter bottom sheet and 4-column grid. Garden plot rows (LazyRow in
+  LazyColumn) with interactive titles, long-press actions, and Just arrived 30-second poll
+  with OliveBranchArrival animation. PhotoDetail ?from=garden|explore|compost flavours.
+  Upload progress screen (one WorkManager job per file, byte-level progress, retry).
+  Post-ship fixes: API response key corrections, coroutineScope exception propagation,
+  system plot filtering, Garden staleness, Just arrived scroll drift.
 
 The work nips several decisions in the bud: brand register on a workflow-vs-leisure
 surface; loading-time issues that compound as the dataset grows; multi-user

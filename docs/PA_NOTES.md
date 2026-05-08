@@ -24,9 +24,11 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.23.0 (8 May 2026) — M6 D2 (Backend + Explore basic). Previous:
+- Current version: v0.25.1 (8 May 2026) — M6 D4 post-ship fixes (upload progress screen,
+  Garden staleness, API key corrections). v0.25.0 = M6 D4 Android adoption (closes M6).
+  Previous: v0.24.0 (M6 D3 Web complete), v0.23.0 (M6 D2 Backend + Explore basic),
   v0.22.0 (M6 D1 re-import), v0.21.0 (Android M5 + Daily-Use), v0.20.x (compost,
-  brand vocabulary). M6 D3 (Web complete — plots UI, Explore filters) is next.
+  brand vocabulary). M7 (multi-user) is next.
 - One-time machine setup required: ~/.testcontainers.properties with
   docker.raw.sock path — see PROMPT_LOG.md for details
 
