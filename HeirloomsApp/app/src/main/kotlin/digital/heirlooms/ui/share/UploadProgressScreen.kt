@@ -97,7 +97,7 @@ private fun InProgressState(
     )
     Spacer(Modifier.height(4.dp))
     Text(
-        "${session.activeCount} of ${session.files.size} in progress · ${session.overallPercent}% overall",
+        "${session.activeCount} uploading · ${session.overallPercent}% overall",
         style = MaterialTheme.typography.bodySmall,
         color = TextMuted,
     )
