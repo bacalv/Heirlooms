@@ -80,6 +80,7 @@ fun ExploreScreen(
 ) {
     val api = LocalHeirloomsApi.current
     val state by vm.state.collectAsState()
+    val availableTags by vm.availableTags.collectAsState()
 
     // Apply incoming route filters only on first composition (avoids overwriting
     // the user's edits when they navigate back and the screen recomposes).
@@ -222,6 +223,7 @@ fun ExploreScreen(
     if (showFilterSheet) {
         FilterSheet(
             filters = filters,
+            availableTags = availableTags,
             sheetState = filterSheetState,
             onDismiss = { showFilterSheet = false },
             onApply = { newFilters ->
@@ -278,6 +280,7 @@ private fun UploadThumbnail(upload: Upload, showNoDateBadge: Boolean, onClick: (
 @Composable
 private fun FilterSheet(
     filters: ExploreFilters,
+    availableTags: List<String>,
     sheetState: androidx.compose.material3.SheetState,
     onDismiss: () -> Unit,
     onApply: (ExploreFilters) -> Unit,
@@ -319,6 +322,33 @@ private fun FilterSheet(
                                 selectedLabelColor = Parchment,
                             ),
                         )
+                    }
+                }
+            }
+
+            // Tags
+            if (availableTags.isNotEmpty()) {
+                FilterSection("Tags") {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        availableTags.forEach { tag ->
+                            val selected = tag in draft.tags
+                            FilterChip(
+                                selected = selected,
+                                onClick = {
+                                    draft = draft.copy(
+                                        tags = if (selected) draft.tags - tag else draft.tags + tag
+                                    )
+                                },
+                                label = { Text(tag, style = MaterialTheme.typography.bodySmall) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Forest,
+                                    selectedLabelColor = Parchment,
+                                ),
+                            )
+                        }
                     }
                 }
             }

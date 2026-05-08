@@ -31,6 +31,9 @@ class ExploreViewModel(private val savedState: SavedStateHandle) : ViewModel() {
     private val _state = MutableStateFlow<ExploreState>(ExploreState.Loading)
     val state: StateFlow<ExploreState> = _state
 
+    private val _availableTags = MutableStateFlow<List<String>>(emptyList())
+    val availableTags: StateFlow<List<String>> = _availableTags
+
     // Filters survive configuration changes and process death.
     var filters: ExploreFilters
         get() = ExploreFilters(
@@ -81,6 +84,9 @@ class ExploreViewModel(private val savedState: SavedStateHandle) : ViewModel() {
             } catch (e: Exception) {
                 _state.value = ExploreState.Error(e.message ?: "Couldn't load")
             }
+        }
+        viewModelScope.launch {
+            try { _availableTags.value = api.listTags() } catch (_: Exception) {}
         }
     }
 

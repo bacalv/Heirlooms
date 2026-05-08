@@ -6,6 +6,23 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-08 — v0.25.8: Explore filter tags
+
+**Tags multi-select in Explore filter sheet.**
+The Filters bottom sheet had no tag section — tag filters could only be applied
+programmatically (e.g. via plot row title navigation) but not through the UI.
+
+`ExploreViewModel` gains `availableTags: StateFlow<List<String>>` populated by a
+silent parallel coroutine in `load()` (failure is swallowed — tags section simply
+stays hidden). `FilterSheet` accepts `availableTags: List<String>` and renders a
+"Tags" `FilterSection` as a `FlowRow` of `FilterChip`s between Sort and Capsule.
+Selected tags fill Forest/Parchment; toggling adds/removes from `draft.tags`.
+The section is omitted entirely when the tag list is empty, so new accounts see
+no visual gap. The existing `draft.tags` → `filters.tags` → `listUploadsPage(tag=…)`
+pipeline was already wired; no API layer changes needed.
+
+---
+
 ## Session — 2026-05-08 — v0.25.4–v0.25.7: Android bugfix round (continued)
 
 Hands-on device testing session on Samsung Galaxy A02s. All fixes driven by live observation.
