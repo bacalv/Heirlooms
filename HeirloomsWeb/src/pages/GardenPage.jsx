@@ -317,17 +317,18 @@ export function GardenPage() {
   const fetchUploads = useCallback(async (showSpinner = false) => {
     if (showSpinner) setRefreshing(true)
     try {
-      const r = await apiFetch('/api/content/uploads', apiKey)
+      const r = await apiFetch('/api/content/uploads?limit=10000', apiKey)
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
       const data = await r.json()
+      const items = data.items ?? []
       let newIds = new Set()
       if (seenIdsRef.current === null) {
-        seenIdsRef.current = new Set(data.map((u) => u.id))
+        seenIdsRef.current = new Set(items.map((u) => u.id))
       } else {
-        newIds = new Set(data.filter((u) => !seenIdsRef.current.has(u.id)).map((u) => u.id))
+        newIds = new Set(items.filter((u) => !seenIdsRef.current.has(u.id)).map((u) => u.id))
         newIds.forEach((id) => seenIdsRef.current.add(id))
       }
-      setUploads(data)
+      setUploads(items)
       setNewUploadIds(newIds)
     } catch (e) {
       if (showSpinner) setError(e.message)
@@ -344,9 +345,9 @@ export function GardenPage() {
   }, [fetchUploads])
 
   useEffect(() => {
-    apiFetch('/api/content/uploads/composted', apiKey)
+    apiFetch('/api/content/uploads/composted?limit=10000', apiKey)
       .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((data) => setCompostCount(data.uploads?.length ?? 0))
+      .then((data) => setCompostCount(data.items?.length ?? 0))
       .catch(() => {})
   }, [apiKey])
 

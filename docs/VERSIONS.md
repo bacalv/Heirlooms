@@ -2,6 +2,33 @@
 
 ---
 
+## v0.23.0 — Milestone 6 D2: backend + Explore basic (8 May 2026)
+
+Minor bump — D2 of Milestone 6. Schema foundations, cursor pagination, and /explore.
+
+**Schema (V9 + V10):**
+- V9: `exif_processed_at TIMESTAMPTZ` column on `uploads`. Partial index on pending rows. All pre-D2 rows marked done at migration time.
+- V10: `plots` and `plot_tag_criteria` tables. System-defined *Just arrived* plot seeded with sentinel name `__just_arrived__` (sort_order -1000, is_system_defined = TRUE). `owner_user_id` nullable for v1 (FK + NOT NULL added at M8).
+
+**EXIF recovery service:** `ExifExtractionService` runs on server startup, queries `WHERE exif_processed_at IS NULL`, and re-processes any stranded rows via background coroutine. Inline extraction in upload handlers sets `exif_processed_at = NOW()` at insert time.
+
+**Cursor pagination:** `GET /api/content/uploads` and `GET /api/content/uploads/composted` now return `{"items":[...],"next_cursor":"..."|null}`. Cursor encodes `(uploadedAt, id)` as URL-safe base64. Default limit 50, max 200. Old un-paginated response format is gone; existing callers (Garden, CompostHeap) updated to use `?limit=10000` for unchanged single-page behaviour during D2.
+
+**Plot CRUD endpoints:**
+- `GET /api/plots` — list ordered by sort_order
+- `POST /api/plots` — create user-defined plot
+- `PUT /api/plots/:id` — update name/sort_order/tag_criteria; 403 on system plots
+- `DELETE /api/plots/:id` — delete user-defined plot; 403 on system plots
+
+**Web — Explore:**
+- New `/explore` route and `ExplorePage` component. Cursor-paginated photo grid (50/page), *Load more* button, empty state.
+- Top nav: Garden | Explore | Capsules (desktop + mobile drawer).
+- Garden and CompostHeap updated for new paginated response format.
+
+**Tests:** 21 new backend (8 pagination, 13 plot); 6 new web (explore); 3 compost tests updated for new response format. All passing: 169 backend, 65 web.
+
+---
+
 ## v0.22.0 — Milestone 6 D1: re-import utility (8 May 2026)
 
 Minor bump — first Milestone 6 deliverable. Standalone Gradle tool under `tools/reimport/`.

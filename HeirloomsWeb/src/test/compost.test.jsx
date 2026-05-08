@@ -129,10 +129,10 @@ describe('GardenPage — compost heap link', () => {
 
   it('shows Compost heap link with correct count', async () => {
     global.fetch
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([mockUpload()]) }) // active list
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [mockUpload()], next_cursor: null }) }) // active list
       .mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ uploads: [mockUpload({ id: 'c1', compostedAt: '2026-05-01T10:00:00Z' })] }),
+        json: () => Promise.resolve({ items: [mockUpload({ id: 'c1', compostedAt: '2026-05-01T10:00:00Z' })], next_cursor: null }),
       }) // composted list
       .mockResolvedValue({ ok: false }) // thumbnail fetches fail gracefully
 
@@ -142,8 +142,8 @@ describe('GardenPage — compost heap link', () => {
 
   it('shows Compost heap (0) link when heap is empty', async () => {
     global.fetch
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([mockUpload()]) })
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ uploads: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [mockUpload()], next_cursor: null }) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [], next_cursor: null }) })
       .mockResolvedValue({ ok: false }) // thumbnail fetches
 
     render(<Wrapper><GardenPage /></Wrapper>)
@@ -152,8 +152,8 @@ describe('GardenPage — compost heap link', () => {
 
   it('shows transient composted message when navigated from compost', async () => {
     global.fetch
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) })
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ uploads: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [], next_cursor: null }) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [], next_cursor: null }) })
       .mockResolvedValue({ ok: false })
 
     render(
@@ -178,10 +178,11 @@ describe('CompostHeapPage', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
-          uploads: [
+          items: [
             mockUpload({ id: 'c1', compostedAt: '2026-05-01T10:00:00Z' }),
             mockUpload({ id: 'c2', storageKey: 'xyz.jpg', compostedAt: '2026-04-20T10:00:00Z' }),
           ],
+          next_cursor: null,
         }),
       })
       .mockResolvedValue({ ok: false }) // thumb fetches fail gracefully
@@ -195,7 +196,7 @@ describe('CompostHeapPage', () => {
     global.fetch
       .mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ uploads: [mockUpload({ id: 'c1', compostedAt: '2026-05-01T10:00:00Z' })] }),
+        json: () => Promise.resolve({ items: [mockUpload({ id: 'c1', compostedAt: '2026-05-01T10:00:00Z' })], next_cursor: null }),
       })
       .mockResolvedValueOnce({ ok: false }) // thumb
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockUpload({ id: 'c1' })) }) // restore
@@ -211,7 +212,7 @@ describe('CompostHeapPage', () => {
   })
 
   it('empty heap renders one of the five brand-voice lines', async () => {
-    global.fetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ uploads: [] }) })
+    global.fetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [], next_cursor: null }) })
 
     render(<Wrapper><CompostHeapPage /></Wrapper>)
     await waitFor(() => {

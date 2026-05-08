@@ -1,5 +1,9 @@
 package digital.heirlooms.server
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import org.http4k.core.then
 import org.http4k.server.Netty
 import org.http4k.server.asServer
@@ -42,6 +46,10 @@ fun main() {
         }
     }
 
+    val exifScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    val exifService = ExifExtractionService(database, storage, exifScope)
+    exifService.recoverPending()
+
     val app = buildApp(storage, database)
     val server = corsFilter().then(
         if (config.apiKey.isNotEmpty()) {
@@ -55,6 +63,7 @@ fun main() {
 
     Runtime.getRuntime().addShutdownHook(Thread {
         println("Shutting down...")
+        exifScope.cancel()
         server.stop()
     })
 }

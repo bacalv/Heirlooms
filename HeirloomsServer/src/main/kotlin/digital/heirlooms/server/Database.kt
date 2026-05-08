@@ -7,6 +7,7 @@ import java.sql.Connection
 import java.sql.Timestamp
 import java.time.Instant
 import java.time.OffsetDateTime
+import java.util.Base64
 import java.util.UUID
 import javax.sql.DataSource
 
@@ -60,6 +61,22 @@ data class UploadRecord(
     val rotation: Int = 0,
     val tags: List<String> = emptyList(),
     val compostedAt: Instant? = null,
+    val exifProcessedAt: Instant? = null,
+)
+
+data class UploadPage(val items: List<UploadRecord>, val nextCursor: String?)
+
+// ---- Plot domain model -----------------------------------------------
+
+data class PlotRecord(
+    val id: UUID,
+    val ownerUserId: UUID?,
+    val name: String,
+    val sortOrder: Int,
+    val isSystemDefined: Boolean,
+    val createdAt: Instant,
+    val updatedAt: Instant,
+    val tagCriteria: List<String>,
 )
 
 class Database(private val dataSource: DataSource) {
@@ -77,8 +94,9 @@ class Database(private val dataSource: DataSource) {
             conn.prepareStatement(
                 """INSERT INTO uploads
                    (id, storage_key, mime_type, file_size, content_hash, thumbnail_key,
-                    captured_at, latitude, longitude, altitude, device_make, device_model)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+                    captured_at, latitude, longitude, altitude, device_make, device_model,
+                    exif_processed_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
             ).use { stmt ->
                 stmt.setObject(1, record.id)
                 stmt.setString(2, record.storageKey)
@@ -92,6 +110,7 @@ class Database(private val dataSource: DataSource) {
                 stmt.setObject(10, record.altitude)
                 stmt.setString(11, record.deviceMake)
                 stmt.setString(12, record.deviceModel)
+                stmt.setTimestamp(13, Timestamp.from(Instant.now()))
                 stmt.executeUpdate()
             }
         }
@@ -683,6 +702,297 @@ class Database(private val dataSource: DataSource) {
             stmt.executeQuery().let { rs -> rs.next(); rs.getBoolean(1) }
         }
 
+    // ---- Pagination -------------------------------------------------------
+
+    fun listUploadsPaginated(
+        cursor: String? = null,
+        limit: Int = 50,
+        tag: String? = null,
+        excludeTag: String? = null,
+    ): UploadPage {
+        val effectiveLimit = limit.coerceIn(1, 200)
+        val decoded = cursor?.let { decodeCursor(it) }
+        dataSource.connection.use { conn: Connection ->
+            val conditions = mutableListOf("composted_at IS NULL")
+            if (decoded != null) conditions.add(
+                "(uploaded_at < ? OR (uploaded_at = ? AND id < ?::uuid))"
+            )
+            if (tag != null) conditions.add("tags @> ARRAY[?]::text[]")
+            if (excludeTag != null) conditions.add("NOT (tags @> ARRAY[?]::text[])")
+            val where = "WHERE ${conditions.joinToString(" AND ")}"
+            conn.prepareStatement(
+                """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash,
+                          thumbnail_key, captured_at, latitude, longitude, altitude,
+                          device_make, device_model, rotation, tags, composted_at, exif_processed_at
+                   FROM uploads $where
+                   ORDER BY uploaded_at DESC, id DESC
+                   LIMIT ?"""
+            ).use { stmt ->
+                var idx = 1
+                if (decoded != null) {
+                    stmt.setTimestamp(idx++, Timestamp.from(decoded.first))
+                    stmt.setTimestamp(idx++, Timestamp.from(decoded.first))
+                    stmt.setString(idx++, decoded.second.toString())
+                }
+                if (tag != null) stmt.setString(idx++, tag)
+                if (excludeTag != null) stmt.setString(idx++, excludeTag)
+                stmt.setInt(idx, effectiveLimit + 1)
+                val rs = stmt.executeQuery()
+                val results = mutableListOf<UploadRecord>()
+                while (rs.next()) results.add(rs.toUploadRecord())
+                val hasMore = results.size > effectiveLimit
+                val items = if (hasMore) results.dropLast(1) else results
+                val nextCursor = if (hasMore) encodeCursor(items.last()) else null
+                return UploadPage(items, nextCursor)
+            }
+        }
+    }
+
+    fun listCompostedUploadsPaginated(cursor: String? = null, limit: Int = 50): UploadPage {
+        val effectiveLimit = limit.coerceIn(1, 200)
+        val decoded = cursor?.let { decodeCursor(it) }
+        dataSource.connection.use { conn: Connection ->
+            val where = if (decoded != null)
+                "WHERE composted_at IS NOT NULL AND (composted_at < ? OR (composted_at = ? AND id < ?::uuid))"
+            else
+                "WHERE composted_at IS NOT NULL"
+            conn.prepareStatement(
+                """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash,
+                          thumbnail_key, captured_at, latitude, longitude, altitude,
+                          device_make, device_model, rotation, tags, composted_at, exif_processed_at
+                   FROM uploads $where
+                   ORDER BY composted_at DESC, id DESC
+                   LIMIT ?"""
+            ).use { stmt ->
+                var idx = 1
+                if (decoded != null) {
+                    stmt.setTimestamp(idx++, Timestamp.from(decoded.first))
+                    stmt.setTimestamp(idx++, Timestamp.from(decoded.first))
+                    stmt.setString(idx++, decoded.second.toString())
+                }
+                stmt.setInt(idx, effectiveLimit + 1)
+                val rs = stmt.executeQuery()
+                val results = mutableListOf<UploadRecord>()
+                while (rs.next()) results.add(rs.toUploadRecord())
+                val hasMore = results.size > effectiveLimit
+                val items = if (hasMore) results.dropLast(1) else results
+                val nextCursor = if (hasMore) encodeCursor(items.last()) else null
+                return UploadPage(items, nextCursor)
+            }
+        }
+    }
+
+    // ---- EXIF recovery ----------------------------------------------------
+
+    fun listPendingExifIds(): List<UUID> {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                "SELECT id FROM uploads WHERE exif_processed_at IS NULL ORDER BY uploaded_at"
+            ).use { stmt ->
+                val rs = stmt.executeQuery()
+                val ids = mutableListOf<UUID>()
+                while (rs.next()) ids.add(rs.getObject("id", UUID::class.java))
+                return ids
+            }
+        }
+    }
+
+    fun updateExif(
+        id: UUID,
+        capturedAt: Instant?,
+        latitude: Double?,
+        longitude: Double?,
+        altitude: Double?,
+        deviceMake: String?,
+        deviceModel: String?,
+    ) {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                """UPDATE uploads
+                   SET captured_at = ?, latitude = ?, longitude = ?, altitude = ?,
+                       device_make = ?, device_model = ?, exif_processed_at = NOW()
+                   WHERE id = ?"""
+            ).use { stmt ->
+                stmt.setTimestamp(1, capturedAt?.let { Timestamp.from(it) })
+                stmt.setObject(2, latitude)
+                stmt.setObject(3, longitude)
+                stmt.setObject(4, altitude)
+                stmt.setString(5, deviceMake)
+                stmt.setString(6, deviceModel)
+                stmt.setObject(7, id)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    // ---- Plot operations --------------------------------------------------
+
+    fun listPlots(): List<PlotRecord> {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                """SELECT p.id, p.owner_user_id, p.name, p.sort_order, p.is_system_defined,
+                          p.created_at, p.updated_at
+                   FROM plots p
+                   WHERE p.owner_user_id IS NULL
+                   ORDER BY p.sort_order ASC, p.created_at ASC"""
+            ).use { stmt ->
+                val rs = stmt.executeQuery()
+                val results = mutableListOf<PlotRecord>()
+                while (rs.next()) {
+                    val id = rs.getObject("id", UUID::class.java)
+                    results.add(PlotRecord(
+                        id = id,
+                        ownerUserId = rs.getObject("owner_user_id", UUID::class.java),
+                        name = rs.getString("name"),
+                        sortOrder = rs.getInt("sort_order"),
+                        isSystemDefined = rs.getBoolean("is_system_defined"),
+                        createdAt = rs.getTimestamp("created_at").toInstant(),
+                        updatedAt = rs.getTimestamp("updated_at").toInstant(),
+                        tagCriteria = queryPlotTagCriteria(conn, id),
+                    ))
+                }
+                return results
+            }
+        }
+    }
+
+    fun getPlotById(id: UUID): PlotRecord? {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                """SELECT id, owner_user_id, name, sort_order, is_system_defined, created_at, updated_at
+                   FROM plots WHERE id = ?"""
+            ).use { stmt ->
+                stmt.setObject(1, id)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return null
+                return PlotRecord(
+                    id = id,
+                    ownerUserId = rs.getObject("owner_user_id", UUID::class.java),
+                    name = rs.getString("name"),
+                    sortOrder = rs.getInt("sort_order"),
+                    isSystemDefined = rs.getBoolean("is_system_defined"),
+                    createdAt = rs.getTimestamp("created_at").toInstant(),
+                    updatedAt = rs.getTimestamp("updated_at").toInstant(),
+                    tagCriteria = queryPlotTagCriteria(conn, id),
+                )
+            }
+        }
+    }
+
+    fun createPlot(name: String, tagCriteria: List<String>): PlotRecord {
+        val id = UUID.randomUUID()
+        val now = Instant.now()
+        withTransaction { conn ->
+            conn.prepareStatement(
+                "INSERT INTO plots (id, owner_user_id, name, created_at, updated_at) VALUES (?, NULL, ?, ?, ?)"
+            ).use { stmt ->
+                stmt.setObject(1, id)
+                stmt.setString(2, name.trim())
+                stmt.setTimestamp(3, Timestamp.from(now))
+                stmt.setTimestamp(4, Timestamp.from(now))
+                stmt.executeUpdate()
+            }
+            replacePlotTagCriteria(conn, id, tagCriteria)
+        }
+        return getPlotById(id)!!
+    }
+
+    sealed class PlotUpdateResult {
+        data class Success(val plot: PlotRecord) : PlotUpdateResult()
+        object NotFound : PlotUpdateResult()
+        object SystemDefined : PlotUpdateResult()
+    }
+
+    fun updatePlot(id: UUID, name: String?, sortOrder: Int?, tagCriteria: List<String>?): PlotUpdateResult {
+        withTransaction { conn ->
+            val (isSystemDefined) = conn.prepareStatement(
+                "SELECT is_system_defined FROM plots WHERE id = ? FOR UPDATE"
+            ).use { stmt ->
+                stmt.setObject(1, id)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return PlotUpdateResult.NotFound
+                listOf(rs.getBoolean("is_system_defined"))
+            }
+            if (isSystemDefined) return PlotUpdateResult.SystemDefined
+
+            val setClauses = mutableListOf("updated_at = ?")
+            if (name != null) setClauses.add("name = ?")
+            if (sortOrder != null) setClauses.add("sort_order = ?")
+            conn.prepareStatement("UPDATE plots SET ${setClauses.joinToString(", ")} WHERE id = ?").use { stmt ->
+                var idx = 1
+                stmt.setTimestamp(idx++, Timestamp.from(Instant.now()))
+                if (name != null) stmt.setString(idx++, name.trim())
+                if (sortOrder != null) stmt.setInt(idx++, sortOrder)
+                stmt.setObject(idx, id)
+                stmt.executeUpdate()
+            }
+            if (tagCriteria != null) replacePlotTagCriteria(conn, id, tagCriteria)
+        }
+        return getPlotById(id)?.let { PlotUpdateResult.Success(it) } ?: PlotUpdateResult.NotFound
+    }
+
+    sealed class PlotDeleteResult {
+        object Success : PlotDeleteResult()
+        object NotFound : PlotDeleteResult()
+        object SystemDefined : PlotDeleteResult()
+    }
+
+    fun deletePlot(id: UUID): PlotDeleteResult {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement("SELECT is_system_defined FROM plots WHERE id = ?").use { stmt ->
+                stmt.setObject(1, id)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return PlotDeleteResult.NotFound
+                if (rs.getBoolean("is_system_defined")) return PlotDeleteResult.SystemDefined
+            }
+            conn.prepareStatement("DELETE FROM plots WHERE id = ?").use { stmt ->
+                stmt.setObject(1, id)
+                stmt.executeUpdate()
+            }
+        }
+        return PlotDeleteResult.Success
+    }
+
+    private fun queryPlotTagCriteria(conn: Connection, plotId: UUID): List<String> =
+        conn.prepareStatement("SELECT tag FROM plot_tag_criteria WHERE plot_id = ? ORDER BY tag").use { stmt ->
+            stmt.setObject(1, plotId)
+            val rs = stmt.executeQuery()
+            val tags = mutableListOf<String>()
+            while (rs.next()) tags.add(rs.getString("tag"))
+            tags
+        }
+
+    private fun replacePlotTagCriteria(conn: Connection, plotId: UUID, tags: List<String>) {
+        conn.prepareStatement("DELETE FROM plot_tag_criteria WHERE plot_id = ?").use { stmt ->
+            stmt.setObject(1, plotId)
+            stmt.executeUpdate()
+        }
+        for (tag in tags) {
+            conn.prepareStatement("INSERT INTO plot_tag_criteria (plot_id, tag) VALUES (?, ?)").use { stmt ->
+                stmt.setObject(1, plotId)
+                stmt.setString(2, tag.trim())
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    // ---- Cursor helpers ---------------------------------------------------
+
+    private fun encodeCursor(record: UploadRecord): String {
+        val raw = "${record.uploadedAt.toEpochMilli()}:${record.id}"
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(raw.toByteArray())
+    }
+
+    private fun decodeCursor(cursor: String): Pair<Instant, UUID>? = try {
+        val raw = String(Base64.getUrlDecoder().decode(cursor))
+        val colon = raw.lastIndexOf(':')
+        if (colon < 0) null else {
+            val epochMs = raw.substring(0, colon).toLong()
+            val uuid = UUID.fromString(raw.substring(colon + 1))
+            Instant.ofEpochMilli(epochMs) to uuid
+        }
+    } catch (_: Exception) { null }
+
     private inline fun <T> withTransaction(block: (Connection) -> T): T {
         val conn = dataSource.connection
         conn.autoCommit = false
@@ -769,4 +1079,5 @@ private fun java.sql.ResultSet.toUploadRecord() = UploadRecord(
     rotation = getInt("rotation"),
     tags = getArray("tags")?.let { arr -> (arr.array as? Array<*>)?.filterIsInstance<String>() } ?: emptyList(),
     compostedAt = getTimestamp("composted_at")?.toInstant(),
+    exifProcessedAt = try { getTimestamp("exif_processed_at")?.toInstant() } catch (_: Exception) { null },
 )

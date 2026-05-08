@@ -180,9 +180,10 @@ class FinUploadHandlerTest {
 
     @Test
     fun `GET uploads returns 200 with JSON`() {
-        every { mockDatabase.listUploads(null, null) } returns listOf(
+        every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(listOf(
             UploadRecord(UUID.randomUUID(), "some-uuid.jpg", "image/jpeg", 1024),
-        )
+        ), null)
+        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
@@ -192,13 +193,14 @@ class FinUploadHandlerTest {
     }
 
     @Test
-    fun `GET uploads returns empty array when no uploads`() {
-        every { mockDatabase.listUploads(null, null) } returns emptyList()
+    fun `GET uploads returns empty items when no uploads`() {
+        every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(emptyList(), null)
+        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
         assertEquals(OK, response.status)
-        assertEquals("[]", response.bodyString())
+        assertTrue(response.bodyString().contains("\"items\":[]"))
     }
 
     // -------------------------------------------------------------------------
@@ -212,7 +214,6 @@ class FinUploadHandlerTest {
 
     @Test
     fun `OpenAPI spec endpoint returns 200 with valid JSON`() {
-        every { mockDatabase.listUploads(null, null) } returns emptyList()
         val response = app(Request(GET, "/docs/api.json"))
         assertEquals(OK, response.status)
         assertTrue(response.header("Content-Type")!!.contains("application/json"))
@@ -583,9 +584,10 @@ class FinUploadHandlerTest {
 
     @Test
     fun `thumbnailKey is null in list response for non-image uploads`() {
-        every { mockDatabase.listUploads(null, null) } returns listOf(
+        every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(listOf(
             UploadRecord(UUID.randomUUID(), "uuid.mp4", "video/mp4", 10000L),
-        )
+        ), null)
+        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
@@ -594,9 +596,10 @@ class FinUploadHandlerTest {
 
     @Test
     fun `thumbnailKey appears in list response when thumbnail exists`() {
-        every { mockDatabase.listUploads(null, null) } returns listOf(
+        every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(listOf(
             UploadRecord(UUID.randomUUID(), "uuid.jpg", "image/jpeg", 1024L, thumbnailKey = "uuid-thumb.jpg"),
-        )
+        ), null)
+        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
@@ -707,9 +710,10 @@ class FinUploadHandlerTest {
 
     @Test
     fun `rotation field appears in list response`() {
-        every { mockDatabase.listUploads(null, null) } returns listOf(
+        every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(listOf(
             UploadRecord(UUID.randomUUID(), "uuid.jpg", "image/jpeg", 1024L, rotation = 90),
-        )
+        ), null)
+        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
@@ -719,9 +723,10 @@ class FinUploadHandlerTest {
 
     @Test
     fun `rotation defaults to 0 in list response`() {
-        every { mockDatabase.listUploads(null, null) } returns listOf(
+        every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(listOf(
             UploadRecord(UUID.randomUUID(), "uuid.jpg", "image/jpeg", 1024L),
-        )
+        ), null)
+        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
@@ -816,7 +821,8 @@ class FinUploadHandlerTest {
 
     @Test
     fun `tags field present as empty array in list response for untagged upload`() {
-        every { mockDatabase.listUploads(null, null) } returns listOf(knownRecord)
+        every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(listOf(knownRecord), null)
+        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
@@ -827,7 +833,8 @@ class FinUploadHandlerTest {
     @Test
     fun `tags field present and populated after tagging`() {
         val tagged = knownRecord.copy(tags = listOf("vacation"))
-        every { mockDatabase.listUploads(null, null) } returns listOf(tagged)
+        every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(listOf(tagged), null)
+        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
@@ -842,53 +849,58 @@ class FinUploadHandlerTest {
     @Test
     fun `GET uploads with tag param passes tag to database`() {
         val tagged = knownRecord.copy(tags = listOf("family"))
-        every { mockDatabase.listUploads(tag = "family", excludeTag = null) } returns listOf(tagged)
+        every { mockDatabase.listUploadsPaginated(any(), any(), tag = "family", excludeTag = null) } returns UploadPage(listOf(tagged), null)
+        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads?tag=family"))
 
         assertEquals(OK, response.status)
         assertTrue(response.bodyString().contains("family"))
-        verify { mockDatabase.listUploads(tag = "family", excludeTag = null) }
+        verify { mockDatabase.listUploadsPaginated(any(), any(), tag = "family", excludeTag = null) }
     }
 
     @Test
     fun `GET uploads with exclude_tag param passes excludeTag to database`() {
-        every { mockDatabase.listUploads(tag = null, excludeTag = "trash") } returns listOf(knownRecord)
+        every { mockDatabase.listUploadsPaginated(any(), any(), tag = null, excludeTag = "trash") } returns UploadPage(listOf(knownRecord), null)
+        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads?exclude_tag=trash"))
 
         assertEquals(OK, response.status)
-        verify { mockDatabase.listUploads(tag = null, excludeTag = "trash") }
+        verify { mockDatabase.listUploadsPaginated(any(), any(), tag = null, excludeTag = "trash") }
     }
 
     @Test
     fun `GET uploads with both tag and exclude_tag passes both to database`() {
         val tagged = knownRecord.copy(tags = listOf("family"))
-        every { mockDatabase.listUploads(tag = "family", excludeTag = "trash") } returns listOf(tagged)
+        every { mockDatabase.listUploadsPaginated(any(), any(), tag = "family", excludeTag = "trash") } returns UploadPage(listOf(tagged), null)
+        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads?tag=family&exclude_tag=trash"))
 
         assertEquals(OK, response.status)
-        verify { mockDatabase.listUploads(tag = "family", excludeTag = "trash") }
+        verify { mockDatabase.listUploadsPaginated(any(), any(), tag = "family", excludeTag = "trash") }
     }
 
     @Test
-    fun `GET uploads with unknown tag returns empty array`() {
-        every { mockDatabase.listUploads(tag = "nonexistent", excludeTag = null) } returns emptyList()
+    fun `GET uploads with unknown tag returns empty items`() {
+        every { mockDatabase.listUploadsPaginated(any(), any(), tag = "nonexistent", excludeTag = null) } returns UploadPage(emptyList(), null)
+        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads?tag=nonexistent"))
 
         assertEquals(OK, response.status)
-        assertEquals("[]", response.bodyString())
+        assertTrue(response.bodyString().contains("\"items\":[]"))
     }
 
     @Test
-    fun `GET uploads with no params passes nulls to database`() {
-        every { mockDatabase.listUploads(null, null) } returns listOf(knownRecord)
+    fun `GET uploads with no params uses default pagination`() {
+        every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(listOf(knownRecord), null)
+        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
         assertEquals(OK, response.status)
-        verify { mockDatabase.listUploads(null, null) }
+        assertTrue(response.bodyString().contains(knownRecord.storageKey))
     }
 }

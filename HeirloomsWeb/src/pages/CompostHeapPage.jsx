@@ -44,9 +44,9 @@ export function CompostHeapPage() {
 
   useEffect(() => {
     document.title = 'Compost heap · Heirlooms'
-    apiFetch('/api/content/uploads/composted', apiKey)
+    apiFetch('/api/content/uploads/composted?limit=10000', apiKey)
       .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then((data) => { setUploads(data.uploads ?? []); setLoading(false) })
+      .then((data) => { setUploads(data.items ?? []); setLoading(false) })
       .catch((e) => { setError(e.message); setLoading(false) })
   }, [apiKey])
 

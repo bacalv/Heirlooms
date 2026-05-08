@@ -24,12 +24,9 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.22.0 (8 May 2026) — brand foundation (v0.17.0), share-sheet idle
-  state (v0.17.1), capsule backend (v0.18.0), doc sweeps (v0.18.1, v0.19.6, v0.20.1),
-  brand visual mechanic (v0.18.2), capsule web UI (v0.19.0–v0.19.5), compost heap
-  (v0.20.0), Coil 3.x migration (v0.20.2), combined Android Increment 3 + Daily-Use
-  (v0.21.0), brand vocabulary (v0.20.3), M6 D1 re-import utility (v0.22.0).
-  M6 D2 (Backend + Explore basic) is next.
+- Current version: v0.23.0 (8 May 2026) — M6 D2 (Backend + Explore basic). Previous:
+  v0.22.0 (M6 D1 re-import), v0.21.0 (Android M5 + Daily-Use), v0.20.x (compost,
+  brand vocabulary). M6 D3 (Web complete — plots UI, Explore filters) is next.
 - One-time machine setup required: ~/.testcontainers.properties with
   docker.raw.sock path — see PROMPT_LOG.md for details
 
@@ -269,6 +266,19 @@ re-run; the script is idempotent so successfully imported rows are skipped on re
   cleanup job (Cloud Scheduler hitting an internal endpoint, weekly or daily). The lazy
   approach was a deliberate v1 choice for simplicity. Keywords: `compost`, `lazy cleanup`,
   `Cloud Scheduler`, `multi-user`, `GCS storage`.
+- **EXIF extraction is in-process, startup-recovery pattern (v0.23.0).** The
+  `ExifExtractionService` runs on server startup and re-queues any `uploads` rows where
+  `exif_processed_at IS NULL`. New uploads set `exif_processed_at = NOW()` at INSERT time
+  (inline extraction). Recovery is a safety net for crashes. Suitable for a single-instance
+  workload; revisit if multi-instance Cloud Run becomes a real configuration (two instances
+  would both query the same pending rows).
+
+- **`owner_user_id = NULL` is the v1 single-user sentinel for plots (v0.23.0).** All plots
+  in v1 have `owner_user_id = NULL`. At M8, this column becomes NOT NULL with a FK to the
+  `users` table; plot endpoints filter to the authenticated user's UUID. Search for
+  `owner_user_id` when implementing M8 — all write paths need to switch from NULL to the
+  user's UUID.
+
 - **Hard-delete is system-only by design (v0.20.0).** When compost was added in v0.20.0 as
   the first removal mechanism, no public hard-delete endpoint was added alongside it. The
   only path to true hard-delete is the lazy cleanup of items past their compost window. This

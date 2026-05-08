@@ -43,6 +43,15 @@ import java.util.UUID
 
 private const val SWAGGER_UI_VERSION = "5.11.8"
 
+private fun UploadPage.toJson(): String {
+    val mapper = ObjectMapper()
+    val node = mapper.createObjectNode()
+    val arr = node.putArray("items")
+    items.forEach { arr.add(mapper.readTree(it.toJson())) }
+    if (nextCursor != null) node.put("next_cursor", nextCursor) else node.putNull("next_cursor")
+    return node.toString()
+}
+
 private val PROCESSING_SUPPORTED_MIME_TYPES = THUMBNAIL_SUPPORTED_MIME_TYPES + METADATA_SUPPORTED_MIME_TYPES
 
 private fun sha256Hex(bytes: ByteArray): String {
@@ -97,7 +106,7 @@ fun buildApp(
     val capsuleContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
         descriptionPath = "/openapi.json"
-        routes += capsuleRoutes(database)
+        routes += capsuleRoutes(database) + plotRoutes(database)
     }
 
     return routes(
@@ -198,7 +207,7 @@ private fun uploadContractRoute(
 private fun listUploadsContractRoute(storage: FileStore, database: Database): ContractRoute =
     "/uploads" meta {
         summary = "List uploads"
-        description = "Returns all active (non-composted) uploaded files as a JSON array. Optional query params: `tag` (include only uploads that have this tag), `exclude_tag` (omit uploads that have this tag). Both can be combined."
+        description = "Returns active (non-composted) uploads as a cursor-paginated JSON object. Query params: `cursor` (opaque, from previous next_cursor), `limit` (1–200, default 50), `tag`, `exclude_tag`."
     } bindContract GET to listUploadsHandler(storage, database)
 
 private fun getUploadByIdContractRoute(database: Database): ContractRoute {
@@ -218,7 +227,7 @@ private fun getUploadByIdContractRoute(database: Database): ContractRoute {
 private fun listCompostedUploadsContractRoute(database: Database): ContractRoute =
     "/uploads/composted" meta {
         summary = "List composted uploads"
-        description = "Returns all uploads in the compost heap, ordered by composted_at descending."
+        description = "Returns composted uploads as a cursor-paginated JSON object. Query params: `cursor`, `limit` (1–200, default 50)."
     } bindContract GET to listCompostedUploadsHandler(database)
 
 private fun uploadHandler(
@@ -279,18 +288,12 @@ private fun uploadHandler(
 
 private fun listUploadsHandler(storage: FileStore, database: Database): HttpHandler = { request ->
     try {
+        val cursor = request.query("cursor")?.takeIf { it.isNotBlank() }
+        val limit = request.query("limit")?.toIntOrNull()?.coerceIn(1, 200) ?: 50
         val tag = request.query("tag")?.takeIf { it.isNotBlank() }
         val excludeTag = request.query("exclude_tag")?.takeIf { it.isNotBlank() }
-        val uploads = database.listUploads(tag = tag, excludeTag = excludeTag)
-        val json = buildString {
-            append("[")
-            uploads.forEachIndexed { i, u ->
-                if (i > 0) append(",")
-                append(u.toJson())
-            }
-            append("]")
-        }
-        val response = Response(OK).header("Content-Type", "application/json").body(json)
+        val page = database.listUploadsPaginated(cursor = cursor, limit = limit, tag = tag, excludeTag = excludeTag)
+        val response = Response(OK).header("Content-Type", "application/json").body(page.toJson())
         launchCompostCleanup(storage, database)
         response
     } catch (e: Exception) {
@@ -298,18 +301,12 @@ private fun listUploadsHandler(storage: FileStore, database: Database): HttpHand
     }
 }
 
-private fun listCompostedUploadsHandler(database: Database): HttpHandler = { _ ->
+private fun listCompostedUploadsHandler(database: Database): HttpHandler = { request ->
     try {
-        val uploads = database.listCompostedUploads()
-        val json = buildString {
-            append("{\"uploads\":[")
-            uploads.forEachIndexed { i, u ->
-                if (i > 0) append(",")
-                append(u.toJson())
-            }
-            append("]}")
-        }
-        Response(OK).header("Content-Type", "application/json").body(json)
+        val cursor = request.query("cursor")?.takeIf { it.isNotBlank() }
+        val limit = request.query("limit")?.toIntOrNull()?.coerceIn(1, 200) ?: 50
+        val page = database.listCompostedUploadsPaginated(cursor = cursor, limit = limit)
+        Response(OK).header("Content-Type", "application/json").body(page.toJson())
     } catch (e: Exception) {
         Response(INTERNAL_SERVER_ERROR).body("Failed to list composted uploads: ${e.message}")
     }

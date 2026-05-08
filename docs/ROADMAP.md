@@ -193,6 +193,9 @@ pagination, plot schema), new web surfaces, and Android adoption. See
 - **D1 — Tools: re-import utility (done, v0.22.0).** Standalone `tools/reimport/`
   Gradle project. Scans GCS bucket, recreates `uploads` rows for any objects missing
   from the DB. Safety net for the rest of M6's destructive schema work.
+- **D2 — Backend + Explore basic (done, v0.23.0).** V9/V10 migrations (exif_processed_at,
+  plots schema + seed). ExifExtractionService recovery. Cursor pagination on list
+  endpoints. Plot CRUD (4 endpoints). `/explore` page + nav entry.
 
 The work nips several decisions in the bud: brand register on a workflow-vs-leisure
 surface; loading-time issues that compound as the dataset grows; multi-user

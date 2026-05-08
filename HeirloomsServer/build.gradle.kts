@@ -36,6 +36,9 @@ dependencies {
     // Cloud SQL socket factory — required for Unix socket connections on Cloud Run
     implementation("com.google.cloud.sql:postgres-socket-factory:1.19.0")
 
+    // Coroutines — background EXIF recovery service
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+
     // Database
     implementation("org.postgresql:postgresql:42.7.2")
     implementation("com.zaxxer:HikariCP:5.1.0")

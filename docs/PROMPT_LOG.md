@@ -1664,6 +1664,55 @@ The tag editor dropdown was closing after each selection, requiring the user to 
 
 ---
 
+## Session — 2026-05-08 (Milestone 6 D2 — backend + Explore basic)
+
+**What was built.** D2 of Milestone 6: schema foundations (V9/V10 migrations), EXIF
+recovery service, cursor pagination on list endpoints, plot CRUD (4 endpoints), and the
+/explore page with nav entry.
+
+**2A — EXIF recovery.** The server already extracted EXIF inline at upload time and
+stored it in the existing `captured_at`, `latitude`, `longitude` etc. columns. D2 adds
+a single new column: `exif_processed_at TIMESTAMPTZ`. Set to `NOW()` at INSERT time for
+new uploads. Migration marks all pre-existing rows as processed. `ExifExtractionService`
+is a Kotlin coroutine-based recovery service — on startup it queries `WHERE
+exif_processed_at IS NULL` and re-processes any stranded rows. In normal operation this
+should find nothing; it's a crash-recovery safety net. `kotlinx-coroutines-core:1.7.3`
+added as a dependency.
+
+**2B — Cursor pagination.** Both `GET /api/content/uploads` and `GET
+/api/content/uploads/composted` now return `{"items":[...],"next_cursor":"..."|null}`.
+Cursor encodes `(uploadedAt.epochMilli, id)` as URL-safe base64. The DB query uses a
+compound `(uploaded_at < ? OR (uploaded_at = ? AND id < ?::uuid))` predicate. Limit
+param: 1–200, default 50. Garden and CompostHeap updated to call `?limit=10000` and read
+`data.items` — unchanged single-page behaviour for D2, proper restructure in D3.
+
+**2C — Plot schema + CRUD.** V10 creates `plots` and `plot_tag_criteria` tables. System
+*Just arrived* plot seeded with sentinel name `__just_arrived__`, sort_order -1000,
+`is_system_defined = TRUE`. `owner_user_id = NULL` for all v1 plots (FK + NOT NULL at
+M8). Four endpoints: GET list, POST create, PUT update (403 on system plots), DELETE
+(403 on system plots). Routes added to the capsule contract block under `/api`.
+
+**Web — /explore.** `ExplorePage` renders a 5-column paginated photo grid via the
+existing `PhotoGrid` component. *Load more* button (not infinite scroll — simpler,
+sufficient for v1). Empty state. Nav updated: Garden | Explore | Capsules desktop + mobile.
+
+**Surprises / decisions:**
+- `MetadataExtractor` and all EXIF extraction was already complete from earlier milestones;
+  D2 just adds the tracking column and recovery service. No rewrite needed.
+- `listUploads(null, null)` mocks in UploadHandlerTest needed updating to
+  `listUploadsPaginated(any(), any(), any(), any())` returning `UploadPage(...)`. 13 mock
+  calls updated; verify calls updated to match paginated signature.
+- `capture()` with nullable `String?` type required `captureNullable(slot)` not
+  `capture(mutableListOf<String?>())` — mockk type inference issue with nullables.
+
+**Test counts:** 21 new backend (8 pagination, 13 plot); 6 new web (explore); 3 existing
+compost tests updated for new response format. All 169 backend + 65 web tests pass.
+
+**Docs:** VERSIONS.md (v0.23.0), ROADMAP.md (D2 marked done), PA_NOTES.md (two
+architectural notes: EXIF in-process pattern, owner_user_id sentinel), PROMPT_LOG.md.
+
+---
+
 ## Session — 2026-05-08 (Milestone 6 D1 — re-import utility)
 
 **What was built.** A standalone Gradle subproject at `tools/reimport/` implementing
