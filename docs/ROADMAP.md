@@ -190,6 +190,10 @@ you visit memories rather than process them). Adds backend foundations (EXIF ext
 pagination, plot schema), new web surfaces, and Android adoption. See
 `docs/presentations/Garden_Explore_Plan.pptx` for the phased plan.
 
+- **D1 — Tools: re-import utility (done, v0.22.0).** Standalone `tools/reimport/`
+  Gradle project. Scans GCS bucket, recreates `uploads` rows for any objects missing
+  from the DB. Safety net for the rest of M6's destructive schema work.
+
 The work nips several decisions in the bud: brand register on a workflow-vs-leisure
 surface; loading-time issues that compound as the dataset grows; multi-user
 implications for plot ownership and pagination that are easier to design correctly

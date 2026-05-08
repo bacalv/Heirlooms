@@ -2,6 +2,33 @@
 
 ---
 
+## v0.22.0 — Milestone 6 D1: re-import utility (8 May 2026)
+
+Minor bump — first Milestone 6 deliverable. Standalone Gradle tool under `tools/reimport/`.
+
+**New: `tools/reimport/` subproject.** A standalone Kotlin/Gradle project (separate from
+HeirloomsServer) that scans the configured GCS bucket and recreates `uploads` rows for
+any GCS objects that don't yet have a corresponding DB row. Serves as the M6 safety net:
+schema changes in later deliverables can be rolled back in minutes by nuking the DB and
+running this script.
+
+- Paginated GCS listing — never loads the full object list into memory.
+- Content-type filter — only `image/*` and `video/*` objects are imported.
+- Idempotent dedup — dedup key is `storage_key`; re-runs are a no-op.
+- SHA-256 hash computed during import (downloads each object); stored in `content_hash`.
+- Progress logging every 50 objects for long-running scans.
+- Verify phase after import: GCS↔DB count parity check + 5-object sample integrity check
+  (SHA-256 round-trip or existence-only if no hash stored).
+- Credentials: service account JSON (`GCS_CREDENTIALS_JSON`) or ADC fallback.
+- 16 tests: 8 unit (content-type filter, sha256Hex, ImportSummary counting) +
+  8 integration (Testcontainers Postgres).
+- Run: `cd tools/reimport && ./gradlew run` with `DB_URL`, `DB_USER`, `DB_PASSWORD`,
+  `GCS_BUCKET` set (plus optionally `GCS_CREDENTIALS_JSON`).
+
+**`docs/PA_NOTES.md`:** New *Recovering from a database wipe* runbook section.
+
+---
+
 ## v0.20.3 — Brand vocabulary cleanup (10 May 2026)
 
 Patch increment. Vocabulary-only changes; no functional behaviour change.

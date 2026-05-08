@@ -24,10 +24,12 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.20.2 (10 May 2026) — brand foundation (v0.17.0), share-sheet idle
+- Current version: v0.22.0 (8 May 2026) — brand foundation (v0.17.0), share-sheet idle
   state (v0.17.1), capsule backend (v0.18.0), doc sweeps (v0.18.1, v0.19.6, v0.20.1),
   brand visual mechanic (v0.18.2), capsule web UI (v0.19.0–v0.19.5), compost heap
-  (v0.20.0), Coil 3.x migration (v0.20.2). Combined Android Increment 3 + Daily-Use is next.
+  (v0.20.0), Coil 3.x migration (v0.20.2), combined Android Increment 3 + Daily-Use
+  (v0.21.0), brand vocabulary (v0.20.3), M6 D1 re-import utility (v0.22.0).
+  M6 D2 (Backend + Explore basic) is next.
 - One-time machine setup required: ~/.testcontainers.properties with
   docker.raw.sock path — see PROMPT_LOG.md for details
 
@@ -77,6 +79,65 @@ the pre-launch period.
 - heirlooms.com: Currently parked on venture.com. Worth monitoring
 - License: Deliberately deferred
 
+
+---
+
+## Recovering from a database wipe
+
+Use this procedure if the `uploads` table is lost due to DB corruption, a deliberate
+schema nuke during M6 development, or accidental data loss. The GCS bucket is the
+durable backup — as long as objects are in GCS, all `uploads` rows can be recreated.
+
+**What is recovered:** every media file stored in GCS gets a new `uploads` row. The
+`uploaded_at` timestamp is set from GCS object metadata (closest available approximation
+to the original upload time). Content hash (SHA-256) is computed fresh during import.
+
+**What is lost:** tags, rotation, thumbnail keys, capsule memberships, and compost state.
+Any item that was composted but still within its 90-day window will reappear as active.
+
+**Pre-flight (important)**
+1. Stop the running HeirloomsServer instance to prevent races with active uploads.
+2. Ensure the database schema exists (run `flyway migrate` or start HeirloomsServer once
+   so Flyway applies all migrations before the recovery script runs). The script INSERTs
+   data; it does not create the schema.
+3. Confirm you have credentials:
+   - `gcloud auth application-default login` for ADC (no `GCS_CREDENTIALS_JSON` needed), OR
+   - set `GCS_CREDENTIALS_JSON` to the service account JSON key string.
+
+**Run the recovery script**
+
+```
+cd /path/to/Heirlooms/tools/reimport
+
+export DB_URL="jdbc:postgresql://..."
+export DB_USER="heirlooms"
+export DB_PASSWORD="..."
+export GCS_BUCKET="heirlooms-uploads"
+# export GCS_CREDENTIALS_JSON="..."   # only if not using ADC
+
+./gradlew run
+```
+
+**Read the output**
+
+A successful recovery looks like:
+```
+[reimport] summary: scanned=N imported=N skippedExists=0 skippedContentType=M errored=0
+[reimport] count parity OK: N GCS media objects, N DB rows
+[reimport] sample integrity: checked=5 passed=5
+```
+
+If `count parity` reports a mismatch, the delta is logged — investigate before restarting
+the server. Common causes: composted items still in GCS (expected), or the script was run
+while uploads were in flight (run again after confirming the server is stopped).
+
+If `errored` is non-zero, individual error lines appear above the summary. Investigate and
+re-run; the script is idempotent so successfully imported rows are skipped on retry.
+
+**After recovery**
+1. Restart HeirloomsServer.
+2. Verify the Garden loads and item counts match expectations.
+3. Re-apply any tags, rotation adjustments, or capsule memberships manually if needed.
 
 ---
 

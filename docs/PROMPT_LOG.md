@@ -1661,3 +1661,50 @@ The tag editor dropdown was closing after each selection, requiring the user to 
 **Cloud Run:** `heirlooms-web-00008-9qv` (web), server unchanged at `heirlooms-server-00021-fqb`.
 
 **v0.16.1 not yet tagged** — Bret tags after push.
+
+---
+
+## Session — 2026-05-08 (Milestone 6 D1 — re-import utility)
+
+**What was built.** A standalone Gradle subproject at `tools/reimport/` implementing
+the M6 D1 re-import utility described in the D1 brief.
+
+**`tools/reimport/` subproject structure:**
+- `build.gradle.kts` / `settings.gradle.kts` — standalone Gradle project (Kotlin JVM 21,
+  same GCS/Postgres/HikariCP versions as HeirloomsServer).
+- `BucketReader.kt` — `BucketReader` interface + `GcsObject` data class. Thin abstraction
+  over the GCS listing API; makes unit/integration tests independent of the real GCS client.
+- `GcsBucketReader.kt` — real GCS implementation. Paginated listing via `storage.list()`.
+  Supports service account JSON (`GCS_CREDENTIALS_JSON`) or ADC fallback.
+- `Importer.kt` — core logic: import phase (scan, filter, dedup, insert) + verify phase
+  (count parity + sample integrity). SHA-256 computed by downloading each object during
+  import — correct for a small bucket; acceptable for recovery use.
+- `Main.kt` — entry point; wires config → GcsBucketReader → HikariDataSource → Importer;
+  prints final summary with warnings if parity or integrity checks fail.
+- `ReimportConfig.kt` — config loaded from `DB_URL`, `DB_USER`, `DB_PASSWORD`, `GCS_BUCKET`,
+  `GCS_CREDENTIALS_JSON` env vars.
+
+**Schema note.** The actual DB column is `storage_key` (not `gcs_key` as the brief draft
+called it). Dedup check and INSERT use `storage_key` throughout.
+
+**Test count: 16 tests** (8 unit, 8 integration). Unit tests cover content-type filter,
+sha256Hex, and ImportSummary counting via a fake BucketReader (no DB needed). Integration
+tests use Testcontainers Postgres and a fake BucketReader; they cover: image/video import,
+idempotency, non-media filtering, already-existing row skipping, metadata correctness
+(mime_type, file_size, content_hash, storage_key), count parity verify, mismatch detection,
+and sample integrity verify. The 8 unit tests pass; integration tests require Docker Desktop
+to be restarted (known requirement, see PA_NOTES.md — `docker.raw.sock`). Run
+`./gradlew test` from `tools/reimport/` after a Docker restart to confirm integration tests.
+
+**Surprises / decisions during implementation:**
+- Kotlin compiler required explicit `.invoke()` for nullable lambda property access
+  (`obj?.downloadContent?.invoke()`). Minor; fixed immediately.
+- GCS `Page.nextPage` typed cleanly as `Page<Blob>` — no unchecked cast needed with the
+  nullable-while-loop pattern (`page = if (page.hasNextPage()) page.nextPage else null`).
+- The verify's sample integrity re-uses `reader.listObjects()` for the download path,
+  which re-scans the bucket for each sample. For 5 items against a small bucket this is
+  fine; for scale, a direct `storage.get(BlobId.of(bucket, key))` lookup would be better.
+  Not changed — acceptable for D1's scope.
+
+**Docs updated:** `PA_NOTES.md` (recovery runbook), `VERSIONS.md` (v0.22.0), `ROADMAP.md`
+(D1 marked done), `PROMPT_LOG.md` (this entry).
