@@ -165,15 +165,13 @@ in v1, becoming connections at Milestone 7.
   detail view (four state variants), create form, shared photo picker modal, photo detail
   page's "in N capsules" line and "Add to capsule" flow, confirmation dialogs, sealing
   animation, navigation guard. Bug fixes through v0.19.5; documentation sweep at v0.19.6.
-- **Increment 3 (planned, combined with Android Daily-Use).** Android: extend the
-  share-sheet flow with "+ start a capsule" as an alternative to plain upload. Capsule
-  creation on Android. Planned to ship together with the Daily-Use increment below.
-- **Android Daily-Use Increment (planned, combined with Increment 3).** Read-only Gallery
-  and Capsules views on Android. Solves the phone/web switching friction. The
-  orientation-change fix in v0.17.1 (`android:configChanges`) is tactical; the proper
-  ViewModel + SavedStateHandle migration is scoped for this increment. Editing stays on
-  web for now.
-- **Closes Milestone 5.**
+- **Increment 3 + Android Daily-Use (v0.21.0, shipped 10 May 2026).** New `MainActivity`
+  with three-tab bottom nav (Garden, Capsules, Settings). Read-only Gallery and Capsules
+  views; capsule create flow (Start + Seal paths); compost-aware behaviour throughout;
+  welcome screen. Toolchain upgraded: AGP 8.8.2, compileSdk 35, Kotlin 2.0.21, Compose
+  BOM 2024.12.01, Coil 3.1.0. Editing existing capsules stays on web for v1. ViewModel +
+  SavedStateHandle migration remains deferred.
+- **Milestone 5 closed (v0.21.0, 10 May 2026).**
 
 **v0.20.x — Compost heap (shipped 9 May 2026)**
 A non-milestone increment between Milestone 5 and 6: the first user-facing removal
@@ -182,7 +180,7 @@ no tags and no active capsule memberships. The 90-day window is the safety net; 
 hard-delete endpoint exists. Removal in Heirlooms is not a trash can: it is the product's
 considered way of returning something to the earth.
 
-**Milestone 6 — Milestone delivery**
+**Milestone 6 — Capsule delivery** ← *next active milestone*
 Scheduled delivery of a capsule on a specific date — a child's 18th birthday,
 a graduation, a wedding. The feature that makes this more than cloud storage.
 

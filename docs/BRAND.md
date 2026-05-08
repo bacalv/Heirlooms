@@ -50,9 +50,7 @@ prescribes.
 | ------------ | ------------------------- | ------------------------------------- |
 | `forest-75`  | forest at 75% opacity     | Inactive navigation link text — muted version of full-forest for non-active nav items. |
 | `bloom-15`   | bloom at 15% opacity      | Delivered capsule card background in list view (the parchment-bloom wash). |
-| `bloom-25`   | bloom at 25% opacity      | Defined in config; not yet applied to any component. Reserved for bloom-tinted surfaces at higher intensity than bloom-15. |
 | `earth-10`   | earth at 10% opacity      | Cancelled capsule card background in list view; hover background on earth-style action buttons; "didn't take" error banner background in the create form. |
-| `earth-20`   | earth at 20% opacity      | Defined in config; not yet applied to any component. Reserved for earth-tinted surfaces at higher intensity than earth-10. |
 
 The discipline above the primary table — *no new primary colours without a
 deliberate decision* — applies to *new hex values*. Derived tokens

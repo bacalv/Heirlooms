@@ -2,10 +2,13 @@
 <resources>
     <style name="Theme.Translucent" parent="android:Theme.Translucent.NoTitleBar" />
 
-    <!-- Receive screen: parchment background, no action bar. Used by ShareActivity. -->
-    <style name="Theme.Heirlooms.Share" parent="Theme.AppCompat.Light.NoActionBar">
+    <!-- Base Heirlooms theme: parchment background, no action bar. Used by MainActivity. -->
+    <style name="Theme.Heirlooms" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="android:windowBackground">@color/parchment</item>
         <item name="android:statusBarColor">@color/parchment</item>
         <item name="android:navigationBarColor">@color/parchment</item>
     </style>
+
+    <!-- Receive screen variant. Used by ShareActivity. -->
+    <style name="Theme.Heirlooms.Share" parent="Theme.Heirlooms" />
 </resources>

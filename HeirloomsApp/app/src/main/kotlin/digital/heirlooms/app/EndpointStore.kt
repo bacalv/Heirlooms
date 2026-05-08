@@ -43,9 +43,14 @@ class EndpointStore(private val store: PreferenceStore) {
     fun getWifiOnly(): Boolean = store.getString(KEY_WIFI_ONLY, "false") == "true"
     fun setWifiOnly(enabled: Boolean) = store.putString(KEY_WIFI_ONLY, if (enabled) "true" else "false")
 
+    // Tracks whether the first-launch welcome screen has been acknowledged (once per install).
+    fun getWelcomed(): Boolean = store.getString(KEY_WELCOMED, "false") == "true"
+    fun setWelcomed(value: Boolean) = store.putString(KEY_WELCOMED, if (value) "true" else "false")
+
     companion object {
         private const val KEY_API_KEY = "api_key"
         private const val KEY_WIFI_ONLY = "wifi_only"
+        private const val KEY_WELCOMED = "welcomed"
 
         /** Convenience factory for use in Activities and Services. */
         fun create(context: Context): EndpointStore =

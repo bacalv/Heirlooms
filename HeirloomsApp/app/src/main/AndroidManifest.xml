@@ -13,16 +13,24 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round">
 
-        <!-- Settings screen — has a launcher icon so the user can open it from the app drawer -->
+        <!-- Primary launcher — hosts the three-tab nav (Garden, Capsules, Settings). -->
         <activity
-            android:name=".SettingsActivity"
+            android:name=".MainActivity"
             android:exported="true"
-            android:label="@string/app_name">
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Heirlooms"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Legacy settings screen — no longer the launcher; kept for upload-queue management. -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:label="@string/app_name" />
 
         <!-- Transparent share-target activity — no launcher icon -->
         <activity

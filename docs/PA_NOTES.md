@@ -24,10 +24,11 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.20.2 (10 May 2026) — brand foundation (v0.17.0), share-sheet idle
-  state (v0.17.1), capsule backend (v0.18.0), doc sweeps (v0.18.1, v0.19.6, v0.20.1),
+- Current version: v0.21.0 (10 May 2026) — brand foundation (v0.17.0), share-sheet
+  idle state (v0.17.1), capsule backend (v0.18.0), doc sweeps (v0.18.1, v0.19.6, v0.20.1),
   brand visual mechanic (v0.18.2), capsule web UI (v0.19.0–v0.19.5), compost heap
-  (v0.20.0), Coil 3.x migration (v0.20.2). Combined Android Increment 3 + Daily-Use is next.
+  (v0.20.0), Coil 3.x migration (v0.20.2), combined Android Increment 3 + Daily-Use
+  (v0.21.0). Milestone 5 closed; Milestone 6 (delivery) is next.
 - One-time machine setup required: ~/.testcontainers.properties with
   docker.raw.sock path — see PROMPT_LOG.md for details
 
@@ -97,6 +98,23 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
   Compose 1.8.x+ which requires compileSdk 35 and AGP 8.6.0+; 3.0.4 is the highest
   compatible with the current compileSdk 34 + AGP 8.3.0 build config. Upgrade 3.0.4 →
   latest deliberately when the build toolchain is also upgraded.
+- **Kotlin 2.0 changes the Compose compiler setup (v0.21.0).** From Kotlin 2.0+, the
+  Compose compiler is bundled with the Kotlin plugin. In `app/build.gradle.kts`, drop the
+  `composeOptions { kotlinCompilerExtensionVersion = "..." }` block entirely and apply
+  `id("org.jetbrains.kotlin.plugin.compose")` in the root and app `build.gradle.kts`
+  instead. The `composeOptions` block is silently ignored (or errors) with K2.
+- **Coil 3.x remote images require an explicit network fetcher (v0.21.0).** Coil 3.x
+  doesn't include a network fetcher by default — add `coil-network-okhttp` alongside
+  `coil-compose`. For authenticated endpoints (all Heirlooms API images require
+  `X-Api-Key`), build a custom `ImageLoader` with an OkHttp interceptor and provide it
+  via `CompositionLocal`. AsyncImage calls must pass this loader explicitly or via Coil's
+  singleton factory.
+- **Navigation Compose `?param=` optionals need exact route string (v0.21.0).** When
+  using optional nav args like `"capsule_create?preSelectedId={preSelectedId}"`, the
+  route string used in `composable(...)` and in the `navigate(...)` call must match
+  exactly. Type-safe navigation (Navigation 2.8+) is the cleaner path but requires
+  `kotlin-serialization`; string-based routes work if the strings are kept as named
+  constants (see `Routes` object in `AppNavigation.kt`).
 - **Transaction rollback safety with non-local returns (v0.18.0).** The `withTransaction`
   helper uses an explicit `committed` flag tracked in a `try/finally`. The reason for the
   explicit flag rather than "set committed = true at the end of try" is that a **non-local

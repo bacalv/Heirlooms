@@ -2,6 +2,67 @@
 
 ---
 
+## v0.21.0 — Combined Android Increment 3 + Daily-Use (10 May 2026)
+
+Minor bump — substantial new feature surface. Closes Milestone 5.
+
+**Toolchain:**
+- AGP 8.3.0 → 8.8.2; compileSdk/targetSdk 34 → 35; Kotlin 1.9.22 → 2.0.21 (with
+  `kotlin.plugin.compose` replacing `kotlinCompilerExtensionVersion`); Compose BOM
+  2024.01.00 → 2024.12.01; Coil 3.0.4 → 3.1.0; JVM target 11 → 17.
+
+**New Android surface — `MainActivity`:**
+- Two-activity structure: `ShareActivity` (unchanged) handles share-sheet intents;
+  `MainActivity` is the new launcher icon entry point.
+- Three-tab bottom nav: Garden (simplified olive-branch icon), Capsules (wax-seal olive
+  icon), Settings (Material gear icon).
+- Welcome screen (once per install): single brand-voice line + *Get started* button.
+- API key entry screen on first launch or after Settings reset.
+
+**Garden tab:**
+- 2-column photo grid (revised from spec's 1-column; 2-col reads better on phone — see
+  PROMPT_LOG.md for rationale); tag filter chips; pull-to-refresh.
+- *Compost heap (N)* link below the grid; navigates to compost heap view.
+- Skeleton loading state; empty state with brand-voice copy; error state with retry.
+
+**Photo detail:**
+- Active state: full-width photo, tag chips with inline add, upload date, capsule
+  membership line, *Add this to a capsule* button, *Compost* button with precondition
+  disabled-state messaging.
+- Composted state: faded photo (saturation 0.6, alpha 0.85), countdown metadata, *Restore*.
+- *Add to a capsule* picker: lists open capsules, PATCHes upload list on selection.
+
+**Compost heap view:**
+- Restore-only list; tap on row body is a no-op; *Restore* per row; pull-to-refresh.
+- Empty state: randomised brand-voice line from a pool of five (stable per session).
+
+**Capsules tab:**
+- List with state filter (Active / Delivered / Cancelled / All); pull-to-refresh.
+- *+ Start a capsule* CTA; delivered/cancelled state-tinted card backgrounds.
+- Capsule detail (four state variants — open, sealed, delivered, cancelled); all
+  read-only except state transitions.
+- Cancel and Seal confirmation dialogs with recipient-aware copy.
+- Sealing animation: wax-seal olive forms over ~700ms ease-out; reduced-motion respects
+  `ANIMATOR_DURATION_SCALE`.
+- Capsule create flow: chip recipient input, native Material 3 date picker, full-screen
+  photo picker, recipient-aware message placeholder, *Start* primary + *Seal* overflow.
+- Photo picker: 4-column grid, tag filter, selection overlay, result returned via
+  `SavedStateHandle`.
+
+**Settings tab:**
+- Three items: API key reset (clears stored key, navigates to entry — welcome flag
+  preserved per "once per install" rule), app version (`BuildConfig.VERSION_NAME`),
+  Compost heap link.
+
+**Drive-by:**
+- Removed unused Tailwind tokens `bloom-25` and `earth-20` from
+  `HeirloomsWeb/tailwind.config.js` and the BRAND.md derived-tokens table.
+
+**Test counts:** Android testing remains manual; no new automated UI tests. Backend
+integration test count and web test count unchanged.
+
+---
+
 ## v0.20.2 — Coil 3.x migration prerequisite (10 May 2026)
 
 Patch increment. Dependency upgrade only; no behaviour change.

@@ -6,6 +6,65 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-10 (v0.21.0 — Combined Android Increment 3 + Daily-Use)
+
+**Prompt:** Implement the combined Android Increment 3 + Daily-Use per the SE Brief in
+`HeirloomsApp`. Upgrade the build toolchain (AGP 8.8.2, compileSdk 35, Compose BOM
+2024.12.01, Coil 3.1.0, Kotlin 2.0.21). Add a new `MainActivity` hosting a three-tab
+bottom nav (Garden, Capsules, Settings). Build the Garden tab, Capsules tab, Settings
+tab, Compost heap view, capsule create flow, welcome screen. Drive-by: remove unused
+Tailwind tokens `bloom-25` and `earth-20`.
+
+**What was built:**
+
+- **Toolchain upgraded.** AGP 8.3.0 → 8.8.2; compileSdk/targetSdk 34 → 35; Kotlin
+  1.9.22 → 2.0.21 with `kotlin.plugin.compose` (replaces `composeOptions`
+  `kotlinCompilerExtensionVersion`); Compose BOM 2024.01.00 → 2024.12.01; Coil 3.0.4 →
+  3.1.0 (`coil-network-okhttp` added); JVM target 11 → 17; Navigation Compose 2.8.5;
+  Lifecycle ViewModel + Runtime Compose 2.8.7; `material-icons-extended` added.
+
+- **Two-activity structure.** `MainActivity` (new launcher, pure Compose) +
+  `ShareActivity` (unchanged). `SettingsActivity` kept but removed from app drawer
+  (exported=false).
+
+- **API layer.** `HeirloomsApi` (OkHttp + `org.json`) wraps all endpoints used by the
+  new screens. `LocalHeirloomsApi` + `LocalImageLoader` CompositionLocals provide the
+  API and auth-bearing Coil ImageLoader to all composables.
+
+- **Welcome screen.** Shown once per install via `EndpointStore.getWelcomed()` flag.
+  API key reset does NOT reset the welcome flag.
+
+- **Garden tab.** 2-column grid (revised from spec's 1-column — see design decisions
+  below). Tag filter; pull-to-refresh; skeleton loading; Compost heap link.
+
+- **Photo detail.** Active and composted states. `ColorMatrix.setToSaturation(0.6f)` +
+  `alpha(0.85f)` for composted rendering. Add-to-capsule dialog patches upload list.
+
+- **Compost heap.** Restore-only rows; 5-line randomised empty-state pool.
+
+- **Capsules tab + detail.** Four state variants; 2-col FlowRow photo grid; 700ms
+  ease-out sealing animation with reduced-motion fallback; cancel/seal dialogs.
+
+- **Capsule create flow.** Chip recipient input; native Material3 `DatePickerDialog`;
+  photo picker result via `SavedStateHandle`; `unlock_at` as 8am local timezone.
+
+- **Photo picker.** 4-column grid; bloom selection overlay; result returned to create
+  form via `savedStateHandle`.
+
+- **Settings tab.** Three items: API key reset, app version (`BuildConfig.VERSION_NAME`),
+  compost heap link.
+
+- **Bottom nav icons.** Canvas-drawn `OliveBranchIcon` and `WaxSealOliveIcon`.
+
+- **Drive-by.** `bloom-25` and `earth-20` removed from `tailwind.config.js` and BRAND.md.
+
+**Design decisions recorded:**
+- **2-column Garden grid** (not spec's 1-column): single-column full-width photos feel
+  sparse for browsing on a phone screen. 2 columns improves density without approaching
+  the Instagram-density 3-column that would break the considered register.
+
+---
+
 ## Session — 2026-05-10 (v0.20.2 — Coil 3.x migration prerequisite)
 
 **v0.20.2 (10 May 2026) — Coil 3.x migration prerequisite.** Migrated the Android app's
