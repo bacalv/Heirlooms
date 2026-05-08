@@ -144,7 +144,7 @@ function TagEditor({ currentTags, allTags, onSave, onCancel }) {
           ))}
         </div>
       )}
-      {error && <p className="text-xs text-earth font-serif italic mt-0.5">{error}</p>}
+      {error && <p className="text-xs text-earth mt-0.5">{error}</p>}
       <div className="flex gap-1 mt-1.5">
         <button type="button" onClick={handleSave} disabled={saving}
           className="text-xs px-2 py-0.5 bg-forest text-parchment rounded-button hover:opacity-90 disabled:opacity-40 transition-opacity">
@@ -170,22 +170,30 @@ function FailedTile({ onRetry, onDismiss }) {
   )
 }
 
+// Session-level thumbnail cache — blob URLs survive navigation within the same page session.
+const thumbnailCache = new Map()
+
 function UploadCard({ upload, apiKey, onRotate, onUpdateTags, allTags, isNew }) {
   const fileUrl = `${API_URL}/api/content/uploads/${upload.id}/file`
   const displayUrl = upload.thumbnailKey
     ? `${API_URL}/api/content/uploads/${upload.id}/thumb`
     : fileUrl
   const needsFetch = isImage(upload.mimeType) || !!upload.thumbnailKey
-  const [tileState, setTileState] = useState(needsFetch ? 'loading' : 'arrived')
-  const [blobUrl, setBlobUrl] = useState(null)
+  const cached = needsFetch ? (thumbnailCache.get(upload.id) ?? null) : null
+  const [tileState, setTileState] = useState(needsFetch ? (cached ? 'arrived' : 'loading') : 'arrived')
+  const [blobUrl, setBlobUrl] = useState(cached)
   const [fetchAttempt, setFetchAttempt] = useState(0)
   const [editingTags, setEditingTags] = useState(false)
   const animateArrivalRef = useRef(isNew)
-  const blobUrlRef = useRef(null)
 
   useEffect(() => {
     if (!needsFetch) return
-    if (blobUrlRef.current) { URL.revokeObjectURL(blobUrlRef.current); blobUrlRef.current = null }
+    // Cache hit on initial load — skip network fetch entirely.
+    if (fetchAttempt === 0 && thumbnailCache.has(upload.id)) {
+      setBlobUrl(thumbnailCache.get(upload.id))
+      setTileState('arrived')
+      return
+    }
     setTileState('loading')
     let cancelled = false
     fetch(displayUrl, { headers: { 'X-Api-Key': apiKey } })
@@ -193,18 +201,17 @@ function UploadCard({ upload, apiKey, onRotate, onUpdateTags, allTags, isNew }) 
       .then((blob) => {
         if (cancelled) return
         const url = URL.createObjectURL(blob)
-        blobUrlRef.current = url
+        thumbnailCache.set(upload.id, url)
         setBlobUrl(url)
         const shouldAnimate = animateArrivalRef.current
         animateArrivalRef.current = false
         setTileState(shouldAnimate ? 'arriving' : 'arrived')
       })
       .catch(() => { if (!cancelled) setTileState('error-animating') })
-    return () => {
-      cancelled = true
-      if (blobUrlRef.current) { URL.revokeObjectURL(blobUrlRef.current); blobUrlRef.current = null }
-    }
-  }, [displayUrl, apiKey, fetchAttempt, needsFetch])
+    // Blob URLs are intentionally not revoked on unmount — they live in thumbnailCache
+    // so back-navigation is instant. The browser frees them when the session ends.
+    return () => { cancelled = true }
+  }, [displayUrl, apiKey, fetchAttempt, needsFetch, upload.id])
 
   function renderTileContent() {
     switch (tileState) {
@@ -401,7 +408,7 @@ export function GardenPage() {
             Composted. Find it in the compost heap below.
           </p>
         )}
-        {loading && <div className="flex justify-center py-20"><WorkingDots size="lg" label="uploading…" /></div>}
+        {loading && <div className="flex justify-center py-20"><WorkingDots size="lg" label="Loading…" /></div>}
         {error && <p className="text-center text-earth font-serif italic py-20">Something went wrong — {error}</p>}
         {!loading && !error && uploads.length === 0 && <EmptyGarden />}
         {!loading && !error && uploads.length > 0 && (
