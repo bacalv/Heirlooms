@@ -21,8 +21,11 @@ class SharedPreferenceStore(context: Context) : PreferenceStore {
     override fun getString(key: String, default: String): String =
         prefs.getString(key, default) ?: default
 
-    override fun putString(key: String, value: String) =
-        prefs.edit().putString(key, value).apply()
+    override fun putString(key: String, value: String) {
+        // commit() is synchronous so the write is guaranteed to reach disk before
+        // the caller returns — important for the API key, which must survive process death.
+        prefs.edit().putString(key, value).commit()
+    }
 
     companion object {
         private const val PREFS_NAME = "heirloom_prefs"

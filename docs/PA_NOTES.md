@@ -24,8 +24,10 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.25.1 (8 May 2026) — M6 D4 post-ship fixes (upload progress screen,
-  Garden staleness, API key corrections). v0.25.0 = M6 D4 Android adoption (closes M6).
+- Current version: v0.25.2 (8 May 2026) — Android bug fixes: login screen on Explore→detail
+  nav, Just arrived animation not firing for first item, thumbnail disk cache. v0.25.1 = M6
+  D4 post-ship fixes (upload progress screen, Garden staleness, API key corrections).
+  v0.25.0 = M6 D4 Android adoption (closes M6).
   Previous: v0.24.0 (M6 D3 Web complete), v0.23.0 (M6 D2 Backend + Explore basic),
   v0.22.0 (M6 D1 re-import), v0.21.0 (Android M5 + Daily-Use), v0.20.x (compost,
   brand vocabulary). M7 (multi-user) is next.

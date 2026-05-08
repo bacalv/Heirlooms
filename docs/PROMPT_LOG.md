@@ -6,6 +6,39 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-08 — v0.25.2: Android bug fixes (login, Just arrived, image cache)
+
+Three post-D4 Android bugs fixed:
+
+**Login screen appearing on Explore → photo detail navigation.**
+Root cause: `MainApp.kt` used `remember { mutableStateOf(store.getApiKey()) }` for the
+API key. On Activity recreation (rotation, or OS killing the process on the RAM-constrained
+A02s and restoring via saved instance state), `remember` resets its value by re-running the
+initialiser. The NavController back stack IS preserved (via `rememberNavController`'s built-in
+Bundle save — hence "ends up in the right place" after re-entry) but `apiKey` reset. Fixed by
+switching to `rememberSaveable`, which saves the value to the Activity's Bundle and survives
+recreation. SharedPreferences remains the authoritative store; `rememberSaveable` is a
+Belt-and-suspenders safety net. Also switched `SharedPreferenceStore.putString` from `apply()`
+(async disk write) to `commit()` (synchronous) so the key is guaranteed on disk before the
+caller returns — important on a device with historically full storage.
+
+**Just arrived arrival animation not firing when row was empty.**
+`GardenViewModel.refreshJustArrived()` guarded `newItemsArrived = true` with
+`knownJustArrivedIds.isNotEmpty() && genuinelyNew.isNotEmpty()`. If Just arrived had no items
+(knownJustArrivedIds was empty) and the first item arrived, the check short-circuited and the
+animation never fired. Removed the `isNotEmpty()` guard — `genuinelyNew.isNotEmpty()` alone is
+sufficient. The poll only fires after a 30s delay, so `load()` has always run and set
+`knownJustArrivedIds` before the first poll.
+
+**Thumbnail caching (disk cache).**
+The `ImageLoader` in `AppNavigation.kt` was configured without a disk cache, so thumbnails
+had to be re-fetched from the network on every app restart. Added a Coil `DiskCache` (50 MB,
+`context.cacheDir/image_cache`) and an explicit `MemoryCache` (20% of available heap).
+Thumbnails use stable non-signed URLs (`/api/content/uploads/:id/thumb`) with auth via
+`X-Api-Key` header, so cache keys are stable across sessions.
+
+---
+
 ## Session — 2026-05-08 (post-D4 brainstorm + doc sweep)
 
 A brainstorming session held after Android D4 shipped, before the M7 brief

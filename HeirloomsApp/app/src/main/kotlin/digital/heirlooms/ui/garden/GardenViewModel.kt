@@ -183,9 +183,10 @@ class GardenViewModel(
                 val page = api.listUploadsPage(justArrived = true)
                 val newIds = page.uploads.map { it.id }.toSet()
                 val genuinelyNew = newIds - knownJustArrivedIds
-                // Only trigger the animation if items appeared that weren't there before
-                // (not on the very first load when knownIds is empty).
-                if (knownJustArrivedIds.isNotEmpty() && genuinelyNew.isNotEmpty()) {
+                // Fire the animation whenever new items appear — including the first item
+                // arriving into a previously empty Just arrived row. The poll only runs
+                // after a 30s delay so load() has always set knownJustArrivedIds first.
+                if (genuinelyNew.isNotEmpty()) {
                     newItemsArrived = true
                 }
                 knownJustArrivedIds = newIds

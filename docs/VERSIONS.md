@@ -2,6 +2,31 @@
 
 ---
 
+## v0.25.2 — Android bug fixes: login, Just arrived animation, image disk cache (8 May 2026)
+
+Post-D4 patch.
+
+**Bug fixes:**
+- Login screen appearing when navigating Explore → photo detail. `MainApp` used `remember`
+  (not `rememberSaveable`) for `apiKey`, so Activity recreation (OS process-kill + restore on
+  the RAM-constrained A02s) reset it to the initialiser value. NavController back stack was
+  preserved but `apiKey` reset, showing the API key screen. Fixed by switching to
+  `rememberSaveable`. SharedPreferences remains the authoritative store; `rememberSaveable`
+  is a safety net. `SharedPreferenceStore.putString` also changed from `apply()` to `commit()`
+  to guarantee synchronous disk writes.
+- Just arrived arrival animation not firing when the row was empty. The guard
+  `knownJustArrivedIds.isNotEmpty() && genuinelyNew.isNotEmpty()` short-circuited when no
+  items had been seen yet, preventing the animation when the very first item arrived. Removed
+  the redundant `isNotEmpty()` guard — `genuinelyNew.isNotEmpty()` alone is sufficient since
+  `refreshJustArrived` only runs after the initial `load()` has set `knownJustArrivedIds`.
+
+**Performance:**
+- Added Coil `DiskCache` (50 MB) and explicit `MemoryCache` (20% of heap) to the `ImageLoader`.
+  Thumbnails use stable non-signed URLs, so cache keys are consistent across sessions.
+  Thumbnails previously had to be re-fetched from GCS on every app restart.
+
+---
+
 ## v0.25.1 — Upload progress screen + Garden refresh fixes (8 May 2026)
 
 Patch on D4. All changes driven by hands-on testing of v0.25.0 on device.

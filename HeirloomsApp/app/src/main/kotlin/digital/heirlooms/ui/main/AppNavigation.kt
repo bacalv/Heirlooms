@@ -37,6 +37,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import coil3.ImageLoader
+import coil3.disk.DiskCache
+import coil3.disk.directory
+import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import digital.heirlooms.api.HeirloomsApi
 import digital.heirlooms.ui.brand.OliveBranchIcon
@@ -102,6 +105,17 @@ fun MainNavigation(apiKey: String, onApiKeyReset: () -> Unit) {
     val api = remember(apiKey) { HeirloomsApi(apiKey = apiKey) }
     val imageLoader = remember(apiKey) {
         ImageLoader.Builder(context)
+            .memoryCache {
+                MemoryCache.Builder()
+                    .maxSizePercent(context, 0.20)
+                    .build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(context.cacheDir.resolve("image_cache"))
+                    .maxSizeBytes(50L * 1024 * 1024)
+                    .build()
+            }
             .components {
                 add(OkHttpNetworkFetcherFactory(
                     callFactory = {
