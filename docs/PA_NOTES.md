@@ -24,7 +24,9 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.25.3 (8 May 2026) — Upload progress clear-finished button + auto-prune.
+- Current version: v0.25.7 (8 May 2026) — video player auth + sizing. v0.25.6 = arrival
+  animation per-tile. v0.25.5 = Just arrived scroll + animation reliability. v0.25.4 = share
+  screen video thumbnail + upload progress jump. v0.25.3 = upload progress clear-finished.
   v0.25.2 = Android bug fixes: login screen on Explore→detail nav, Just arrived animation not
   firing for first item, thumbnail disk cache. v0.25.1 = M6
   D4 post-ship fixes (upload progress screen, Garden staleness, API key corrections).
@@ -277,6 +279,33 @@ re-run; the script is idempotent so successfully imported rows are skipped on re
   (inline extraction). Recovery is a safety net for crashes. Suitable for a single-instance
   workload; revisit if multi-instance Cloud Run becomes a real configuration (two instances
   would both query the same pending rows).
+
+- **ExoPlayer needs an OkHttp data source for authenticated endpoints (v0.25.7).** ExoPlayer's
+  default HTTP stack has no `X-Api-Key` header. Any endpoint protected by `ApiKeyFilter` returns
+  401; the player silently fails to load. Fix: add `media3-datasource-okhttp` and configure
+  `ExoPlayer.Builder` with `setMediaSourceFactory(DefaultMediaSourceFactory(OkHttpDataSource.Factory(...)))`.
+  The `OkHttpDataSource.Factory` accepts a custom `OkHttpClient` where auth interceptors can be
+  added. Keywords: `ExoPlayer`, `OkHttpDataSource`, `401`, `ApiKeyFilter`, `media3`.
+
+- **Coil needs `VideoFrameDecoder` for local video URI thumbnails (v0.25.4).** The default Coil
+  `ImageLoader` has no video decoder — video URIs render blank. Add `coil-video` artifact and
+  register `VideoFrameDecoder.Factory()` in the `ImageLoader`'s `.components { }` block.
+  `ShareActivity` needs its own `ImageLoader` (not the singleton) because it loads local
+  content:// URIs rather than remote URLs; provide it via `CompositionLocalProvider(LocalImageLoader)`.
+  Keywords: `VideoFrameDecoder`, `coil-video`, `share sheet`, `blank thumbnail`.
+
+- **Plain `var` on a ViewModel is not observable by Compose (v0.25.5).** Reading a plain `var`
+  during composition and mutating it as a side effect is unreliable — Compose may not recompose
+  when the value changes, and state mutation during composition can behave unexpectedly. Use
+  `MutableStateFlow` / `StateFlow` and collect with `collectAsStateWithLifecycle()`. Trigger
+  reactions from `LaunchedEffect`, not from composition-time `if` blocks.
+  Keywords: `StateFlow`, `observe`, `LaunchedEffect`, `side effect`, `composition`.
+
+- **`rememberLazyListState(initialFirstVisibleItemIndex=…)` is creation-only (v0.25.5).** The
+  `initialFirstVisibleItemIndex` is only applied when the `LazyListState` is first created.
+  Subsequent changes to the value passed in do not scroll the list. To scroll programmatically
+  in response to state changes, call `listState.scrollToItem(n)` or `listState.animateScrollToItem(n)`
+  from a `LaunchedEffect`. Keywords: `LazyListState`, `scroll`, `rememberLazyListState`.
 
 - **`owner_user_id = NULL` is the v1 single-user sentinel for plots (v0.23.0).** All plots
   in v1 have `owner_user_id = NULL`. At M7, this column becomes NOT NULL with a FK to the

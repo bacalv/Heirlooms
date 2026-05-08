@@ -2,6 +2,57 @@
 
 ---
 
+## v0.25.7 — Video player: auth + sizing (8 May 2026)
+
+- `VideoPlayer` used ExoPlayer's default HTTP stack — no `X-Api-Key` header, so every
+  request to `/api/content/uploads/{id}/file` got a 401 and nothing played. Added
+  `media3-datasource-okhttp:1.4.1`; ExoPlayer now uses an `OkHttpDataSource.Factory` with
+  an auth interceptor. `HeirloomsApi.apiKey` promoted from `private` to `internal` so the
+  composable can read it via `LocalHeirloomsApi.current`.
+- `PlayerView` had no height constraint (caller passed `fillMaxWidth`); `AndroidView` fell
+  back to wrap_content and rendered a tiny strip. Fixed by adding `aspectRatio(16f/9f)` to
+  the view modifier.
+- Added `player.playWhenReady = true` — video now starts automatically once buffered.
+
+---
+
+## v0.25.6 — Just arrived: arrival animation per-tile (8 May 2026)
+
+- `OliveBranchArrival` was a full-screen parchment overlay. Moved to play inside each newly
+  arrived thumbnail tile. `GardenViewModel` now exposes `newlyArrivedIds: StateFlow<Set<String>>`
+  (the IDs from `genuinelyNew` on each poll). `PlotRowSection` overlays `OliveBranchArrival`
+  (clipped to tile bounds, 88% parchment background) on each matching thumbnail. `onComplete`
+  clears the ID set via `clearNewlyArrived()`. Full-screen overlay removed.
+
+---
+
+## v0.25.5 — Just arrived: scroll-to-start + animation trigger fix (8 May 2026)
+
+- New item at index 0 appeared off to the left: `rememberLazyListState(initialFirstVisibleItemIndex=…)`
+  only applies the saved index on first creation; Compose's scroll-preservation kept old items
+  in place. Fixed by adding `shouldScrollToStart: Boolean` to `PlotRowSection` and calling
+  `listState.scrollToItem(0)` in a `LaunchedEffect` for the Just arrived row.
+- Arrival animation was unreliable: `newItemsArrived` was a plain `var` — Compose cannot
+  observe it — and the check ran during composition as a side effect. Converted to
+  `StateFlow<Boolean>`, collected via `collectAsStateWithLifecycle()`, triggered from
+  `LaunchedEffect(newItemsArrived)`.
+
+---
+
+## v0.25.4 — Share screen: video thumbnail + upload progress jump (8 May 2026)
+
+- Share idle screen showed blank for videos: `AsyncImage` used Coil's singleton ImageLoader
+  which had no `VideoFrameDecoder`. Added `coil-video:3.1.0`; `ShareActivity` now provides
+  a `CompositionLocalProvider(LocalImageLoader)` containing a `VideoFrameDecoder`-capable
+  loader. `IdleScreen`'s `AsyncImage` calls updated to `imageLoader = LocalImageLoader.current`.
+- Upload progress screen flashed "No uploads in progress" before showing the active upload:
+  `collectAsState(initial = SessionUploadState(emptyList()))` triggered `files.isEmpty()` →
+  `DoneState` (and a premature `pruneFinished()`) before any jobs were enqueued. Split the
+  `when` branch: `allDone` → DoneState + prune; `files.isEmpty()` → blank `Box` (brief, while
+  IO copy+enqueue is in flight); otherwise → `InProgressState`.
+
+---
+
 ## v0.25.3 — Upload progress: clear finished button + auto-prune (8 May 2026)
 
 `workManager.pruneWork()` is now called in two places:
@@ -13,6 +64,9 @@
 - **Auto-prune on done state** — when all active jobs finish and the screen reaches "No uploads
   in progress", `pruneWork()` fires automatically via `LaunchedEffect` so stale records don't
   accumulate and reappear in the next session's upload list.
+
+Upload progress subtitle changed from `"N of M in progress"` to `"N uploading"`: `M` was
+`files.size` which counted all historical SUCCEEDED/FAILED records, not just active jobs.
 
 ---
 

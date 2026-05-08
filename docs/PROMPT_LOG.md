@@ -6,6 +6,48 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-08 — v0.25.4–v0.25.7: Android bugfix round (continued)
+
+Hands-on device testing session on Samsung Galaxy A02s. All fixes driven by live observation.
+
+**v0.25.4 — Share screen video thumbnail + upload progress jump.**
+Share idle screen showed blank tiles for videos — `AsyncImage` used Coil's singleton
+`ImageLoader` which had no `VideoFrameDecoder`. Added `coil-video:3.1.0`. `ShareActivity`
+now creates a lightweight `ImageLoader` with `VideoFrameDecoder` and provides it via
+`CompositionLocalProvider(LocalImageLoader)`. `IdleScreen`'s `AsyncImage` calls updated to
+`imageLoader = LocalImageLoader.current`. Upload progress screen flashed "No uploads in
+progress" before showing the active upload — `collectAsState(initial = emptyList())` triggered
+`DoneState` (including a premature `pruneFinished()`) before WorkManager had any jobs.
+Fixed by splitting the `when` branch: `allDone` → DoneState + prune; `files.isEmpty()` →
+blank `Box` while the IO copy+enqueue is in flight; otherwise `InProgressState`.
+
+**v0.25.5 — Just arrived scroll and animation reliability.**
+Two bugs: (1) new item at index 0 appeared off-screen to the left because
+`rememberLazyListState(initialFirstVisibleItemIndex=…)` is creation-only — Compose's
+scroll-preservation kept existing items in place. Fixed: `shouldScrollToStart` parameter
+on `PlotRowSection` calls `listState.scrollToItem(0)` via `LaunchedEffect`. (2) Arrival
+animation was unreliable: `newItemsArrived` was a plain `var` on the ViewModel — not
+observable by Compose — and was read during composition as a side effect (bad pattern).
+Converted to `StateFlow<Boolean>`, collected via `collectAsStateWithLifecycle()`, triggered
+from `LaunchedEffect(newItemsArrived)`.
+
+**v0.25.6 — Arrival animation scoped to tile, not full screen.**
+User observation: animation shouldn't cover the whole screen, just the item(s) that arrived.
+Replaced full-screen `OliveBranchArrival` overlay with per-tile overlays. `GardenViewModel`
+now exposes `newlyArrivedIds: StateFlow<Set<String>>` (the exact IDs from `genuinelyNew`).
+`PlotRowSection` overlays `OliveBranchArrival` (clipped to tile shape, 88% parchment
+background, `withWordmark = false`) on each matching thumbnail. `onComplete` clears the set.
+
+**v0.25.7 — Video playback in photo detail.**
+Two bugs: (1) ExoPlayer's default HTTP stack has no `X-Api-Key` header → 401 on every
+request to `/api/content/uploads/{id}/file` → nothing played. Added
+`media3-datasource-okhttp:1.4.1`; configured `ExoPlayer` with `OkHttpDataSource.Factory`
+that injects the auth header. `HeirloomsApi.apiKey` promoted from `private` to `internal`.
+(2) `PlayerView` had no height — `AndroidView` fell back to wrap_content, rendering a tiny
+strip. Fixed with `aspectRatio(16f/9f)`. Added `player.playWhenReady = true`.
+
+---
+
 ## Session — 2026-05-08 — v0.25.3: Upload progress clear-finished + auto-prune
 
 Upload progress screen was accumulating completed and failed uploads indefinitely.
