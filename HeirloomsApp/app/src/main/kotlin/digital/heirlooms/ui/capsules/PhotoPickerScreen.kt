@@ -79,7 +79,10 @@ fun PhotoPickerScreen(
     }
 
     LaunchedEffect(Unit) {
-        try { uploads = api.listUploads() } catch (_: Exception) {}
+        try {
+            // Fetch first 200 non-composted uploads for the picker (no pagination UI here).
+            uploads = api.listUploadsPage(limit = 200).uploads
+        } catch (_: Exception) {}
         loading = false
     }
 

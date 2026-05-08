@@ -45,7 +45,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,37 +64,32 @@ import digital.heirlooms.ui.theme.Forest15
 import digital.heirlooms.ui.theme.HeirloomsSerifItalic
 import digital.heirlooms.ui.theme.Parchment
 import digital.heirlooms.ui.theme.TextMuted
-import kotlinx.coroutines.launch
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.collectAsState
 
 @Composable
 fun CapsuleDetailScreen(
     capsuleId: String,
     onBack: () -> Unit,
     onPhotoTap: (String) -> Unit,
+    vm: CapsuleDetailViewModel = viewModel(key = capsuleId),
 ) {
     val api = LocalHeirloomsApi.current
-    val scope = rememberCoroutineScope()
+    val vmState by vm.state.collectAsState()
 
-    var capsule by remember { mutableStateOf<CapsuleDetail?>(null) }
-    var loading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
     var showSealDialog by remember { mutableStateOf(false) }
     var showCancelDialog by remember { mutableStateOf(false) }
     var sealing by remember { mutableStateOf(false) }
     var cancelling by remember { mutableStateOf(false) }
-    // Drives the sealing animation: set to true after successful seal response.
     var triggerSealAnimation by remember { mutableStateOf(false) }
     var showOverflow by remember { mutableStateOf(false) }
 
-    fun load() {
-        scope.launch {
-            error = null
-            try { capsule = api.getCapsule(capsuleId) } catch (e: Exception) { error = e.message }
-            finally { loading = false }
-        }
-    }
+    // Adapt VM state to the local variables the existing body expects.
+    val loading = vmState is CapsuleDetailState.Loading
+    val error = (vmState as? CapsuleDetailState.Error)?.message
+    val capsule = (vmState as? CapsuleDetailState.Ready)?.capsule
 
-    LaunchedEffect(capsuleId) { load() }
+    LaunchedEffect(capsuleId) { vm.load(api, capsuleId) }
 
     Scaffold(
         containerColor = Parchment,
@@ -129,7 +123,7 @@ fun CapsuleDetailScreen(
             loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Forest)
             }
-            error != null -> digital.heirlooms.ui.garden.DidntTake(onRetry = { loading = true; load() })
+            error != null -> digital.heirlooms.ui.garden.DidntTake(onRetry = { vm.load(api, capsuleId) })
             else -> {
                 val c = capsule ?: return@Scaffold
                 val bgColor = when (c.state) {
@@ -286,14 +280,10 @@ fun CapsuleDetailScreen(
                 Button(
                     onClick = {
                         showSealDialog = false
-                        scope.launch {
-                            sealing = true
-                            try {
-                                capsule = api.sealCapsule(capsuleId)
-                                triggerSealAnimation = true
-                            } catch (_: Exception) {}
-                            sealing = false
-                        }
+                        sealing = true
+                        vm.seal(api, capsuleId)
+                        triggerSealAnimation = true
+                        sealing = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Forest, contentColor = Parchment),
                 ) { Text("Seal capsule") }
@@ -322,11 +312,9 @@ fun CapsuleDetailScreen(
                 Button(
                     onClick = {
                         showCancelDialog = false
-                        scope.launch {
-                            cancelling = true
-                            try { capsule = api.cancelCapsule(capsuleId) } catch (_: Exception) {}
-                            cancelling = false
-                        }
+                        cancelling = true
+                        vm.cancel(api, capsuleId)
+                        cancelling = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Earth, contentColor = Parchment),
                 ) { Text("Cancel capsule") }

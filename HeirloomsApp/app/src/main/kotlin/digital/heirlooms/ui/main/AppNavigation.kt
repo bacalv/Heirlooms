@@ -8,7 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -16,32 +17,37 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import coil3.ImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import digital.heirlooms.api.HeirloomsApi
 import digital.heirlooms.ui.brand.OliveBranchIcon
-import digital.heirlooms.ui.common.LocalHeirloomsApi
 import digital.heirlooms.ui.brand.WaxSealOliveIcon
 import digital.heirlooms.ui.capsules.CapsuleCreateScreen
 import digital.heirlooms.ui.capsules.CapsuleDetailScreen
 import digital.heirlooms.ui.capsules.CapsulesScreen
 import digital.heirlooms.ui.capsules.PhotoPickerScreen
+import digital.heirlooms.ui.common.LocalHeirloomsApi
 import digital.heirlooms.ui.common.LocalImageLoader
+import digital.heirlooms.ui.explore.ExploreScreen
 import digital.heirlooms.ui.garden.CompostHeapScreen
 import digital.heirlooms.ui.garden.GardenScreen
 import digital.heirlooms.ui.garden.PhotoDetailScreen
@@ -49,12 +55,14 @@ import digital.heirlooms.ui.settings.SettingsScreen
 import digital.heirlooms.ui.theme.Forest
 import digital.heirlooms.ui.theme.Forest15
 import digital.heirlooms.ui.theme.Parchment
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 
-// Route constants
 internal object Routes {
     const val GARDEN = "garden"
-    const val PHOTO_DETAIL = "garden/photo/{uploadId}"
+    const val EXPLORE = "explore"
+    // Photo detail — neutral route serving garden/explore/compost flavours via ?from= param.
+    const val PHOTO_DETAIL = "photo/{uploadId}?from={from}"
     const val COMPOST = "compost"
     const val CAPSULES = "capsules"
     const val CAPSULE_DETAIL = "capsules/{capsuleId}"
@@ -62,24 +70,25 @@ internal object Routes {
     const val PHOTO_PICKER = "photo_picker"
     const val SETTINGS = "settings"
 
-    fun photoDetail(uploadId: String) = "garden/photo/$uploadId"
+    fun photoDetail(uploadId: String, from: String = "garden") = "photo/$uploadId?from=$from"
     fun capsuleDetail(capsuleId: String) = "capsules/$capsuleId"
+    // Navigate to Explore with pre-applied filters (pushes on back stack, not a tab switch).
+    fun exploreWithTags(tags: List<String>) = "explore?initial_tags=${tags.joinToString(",")}"
+    fun exploreJustArrived() = "explore?just_arrived=true"
 }
 
-private val topLevelRoutes = setOf(Routes.GARDEN, Routes.CAPSULES, Routes.SETTINGS)
+// Compose Nav's currentRoute returns the full pattern including query placeholders.
+// Match tab selection by prefix so "explore?initial_tags=..." still highlights Explore.
+private fun String?.matchesTab(tabRoute: String) =
+    this == tabRoute || (this?.startsWith("$tabRoute?") == true)
 
-// The three root tabs for the bottom nav
 private enum class Tab(val route: String, val label: String) {
     Garden(Routes.GARDEN, "Garden"),
+    Explore(Routes.EXPLORE, "Explore"),
     Capsules(Routes.CAPSULES, "Capsules"),
-    Settings(Routes.SETTINGS, "Settings"),
+    Burger("burger", "More"),
 }
 
-/**
- * Hosts the bottom-nav bar and the full navigation graph.
- * The bottom nav stays visible across all destinations (sub-screens are pushed
- * inside the same NavHost, not in separate activities).
- */
 @Composable
 fun MainNavigation(apiKey: String, onApiKeyReset: () -> Unit) {
     val context = LocalContext.current
@@ -112,12 +121,34 @@ fun MainNavigation(apiKey: String, onApiKeyReset: () -> Unit) {
         val backStack by navController.currentBackStackEntryAsState()
         val currentRoute = backStack?.destination?.route
 
+        val burgerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val scope = rememberCoroutineScope()
+        var showBurger by remember { mutableStateOf(false) }
+
+        if (showBurger) {
+            BurgerPanel(
+                sheetState = burgerSheetState,
+                onDismiss = { showBurger = false },
+                onSettingsTap = { navController.navigate(Routes.SETTINGS) },
+                onCompostHeapTap = { navController.navigate(Routes.COMPOST) },
+            )
+        }
+
         Scaffold(
             containerColor = Parchment,
             bottomBar = {
                 HeirloomsBottomNav(
                     currentRoute = currentRoute,
-                    onTabSelected = { tab -> navController.navigateToTab(tab.route) },
+                    onTabSelected = { tab ->
+                        if (tab == Tab.Burger) {
+                            scope.launch {
+                                showBurger = true
+                                burgerSheetState.show()
+                            }
+                        } else {
+                            navController.navigateToTab(tab.route)
+                        }
+                    },
                 )
             },
         ) { innerPadding ->
@@ -127,7 +158,10 @@ fun MainNavigation(apiKey: String, onApiKeyReset: () -> Unit) {
                     .background(Parchment)
                     .padding(innerPadding)
             ) {
-                AppNavHost(navController = navController, onApiKeyReset = onApiKeyReset)
+                AppNavHost(
+                    navController = navController,
+                    onApiKeyReset = onApiKeyReset,
+                )
             }
         }
     }
@@ -140,7 +174,7 @@ private fun HeirloomsBottomNav(
 ) {
     NavigationBar(containerColor = Parchment, tonalElevation = 0.dp) {
         Tab.entries.forEach { tab ->
-            val selected = currentRoute == tab.route
+            val selected = currentRoute.matchesTab(tab.route)
             NavigationBarItem(
                 selected = selected,
                 onClick = { onTabSelected(tab) },
@@ -148,8 +182,9 @@ private fun HeirloomsBottomNav(
                 icon = {
                     when (tab) {
                         Tab.Garden -> OliveBranchIcon(Modifier.size(24.dp))
+                        Tab.Explore -> Icon(Icons.Filled.Search, contentDescription = null)
                         Tab.Capsules -> WaxSealOliveIcon(Modifier.size(24.dp))
-                        Tab.Settings -> Icon(Icons.Filled.Settings, contentDescription = null)
+                        Tab.Burger -> Icon(Icons.Filled.Menu, contentDescription = null)
                     }
                 },
                 colors = NavigationBarItemDefaults.colors(
@@ -172,14 +207,41 @@ private fun AppNavHost(navController: NavController, onApiKeyReset: () -> Unit) 
     ) {
         composable(Routes.GARDEN) {
             GardenScreen(
-                onPhotoTap = { uploadId -> navController.navigate(Routes.photoDetail(uploadId)) },
-                onCompostHeapTap = { navController.navigate(Routes.COMPOST) },
+                onPhotoTap = { uploadId -> navController.navigate(Routes.photoDetail(uploadId, "garden")) },
+                onNavigateToExplore = { tags, justArrived ->
+                    if (justArrived) navController.navigate(Routes.exploreJustArrived())
+                    else navController.navigate(Routes.exploreWithTags(tags))
+                },
             )
         }
-        composable(Routes.PHOTO_DETAIL) { backStack ->
+        composable(
+            route = "explore?initial_tags={initial_tags}&just_arrived={just_arrived}",
+            arguments = listOf(
+                navArgument("initial_tags") { type = NavType.StringType; defaultValue = "" },
+                navArgument("just_arrived") { type = NavType.BoolType; defaultValue = false },
+            ),
+        ) { backStack ->
+            val initialTagsStr = backStack.arguments?.getString("initial_tags") ?: ""
+            val initialTags = if (initialTagsStr.isNotEmpty()) initialTagsStr.split(",") else emptyList()
+            val justArrived = backStack.arguments?.getBoolean("just_arrived") ?: false
+            ExploreScreen(
+                initialTags = initialTags,
+                initialJustArrived = justArrived,
+                onPhotoTap = { uploadId -> navController.navigate(Routes.photoDetail(uploadId, "explore")) },
+            )
+        }
+        composable(
+            route = Routes.PHOTO_DETAIL,
+            arguments = listOf(
+                navArgument("uploadId") { type = NavType.StringType },
+                navArgument("from") { type = NavType.StringType; defaultValue = "garden" },
+            ),
+        ) { backStack ->
             val uploadId = backStack.arguments?.getString("uploadId") ?: return@composable
+            val from = backStack.arguments?.getString("from") ?: "garden"
             PhotoDetailScreen(
                 uploadId = uploadId,
+                from = from,
                 onBack = { navController.popBackStack() },
                 onCapsuleTap = { capsuleId -> navController.navigate(Routes.capsuleDetail(capsuleId)) },
                 onStartCapsuleWithPhoto = { id -> navController.navigate("${Routes.CAPSULE_CREATE}?preSelectedId=$id") },
@@ -199,7 +261,7 @@ private fun AppNavHost(navController: NavController, onApiKeyReset: () -> Unit) 
             CapsuleDetailScreen(
                 capsuleId = capsuleId,
                 onBack = { navController.popBackStack() },
-                onPhotoTap = { uploadId -> navController.navigate(Routes.photoDetail(uploadId)) },
+                onPhotoTap = { uploadId -> navController.navigate(Routes.photoDetail(uploadId, "garden")) },
             )
         }
         composable("${Routes.CAPSULE_CREATE}?preSelectedId={preSelectedId}") { backStack ->
@@ -221,12 +283,7 @@ private fun AppNavHost(navController: NavController, onApiKeyReset: () -> Unit) 
             )
         }
         composable(Routes.SETTINGS) {
-            SettingsScreen(
-                onApiKeyReset = {
-                    onApiKeyReset()
-                },
-                onCompostHeapTap = { navController.navigate(Routes.COMPOST) },
-            )
+            SettingsScreen(onApiKeyReset = onApiKeyReset)
         }
     }
 }

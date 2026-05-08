@@ -61,8 +61,35 @@ class HeirloomsApi(
         }
     }
 
-    suspend fun listUploads(): List<Upload> =
-        JSONArray(get("/api/content/uploads")).toUploadList()
+    // ── Upload list ──────────────────────────────────────────────────────────
+
+    suspend fun listUploadsPage(
+        cursor: String? = null,
+        limit: Int = 20,
+        tags: List<String> = emptyList(),
+        excludeTags: List<String> = emptyList(),
+        justArrived: Boolean = false,
+        inCapsule: Boolean? = null,
+        hasLocation: Boolean? = null,
+        includeComposted: Boolean = false,
+        sort: String = "upload_newest",
+        fromDate: String? = null,
+        toDate: String? = null,
+    ): UploadPage {
+        val params = buildString {
+            append("?limit=$limit&sort=$sort")
+            cursor?.let { append("&cursor=${it.encodeParam()}") }
+            if (tags.isNotEmpty()) append("&tag=${tags.joinToString(",") { it.encodeParam() }}")
+            if (excludeTags.isNotEmpty()) append("&exclude_tag=${excludeTags.joinToString(",") { it.encodeParam() }}")
+            if (justArrived) append("&just_arrived=true")
+            inCapsule?.let { append("&in_capsule=$it") }
+            hasLocation?.let { append("&has_location=$it") }
+            if (includeComposted) append("&include_composted=true")
+            fromDate?.let { append("&from_date=${it.encodeParam()}") }
+            toDate?.let { append("&to_date=${it.encodeParam()}") }
+        }
+        return JSONObject(get("/api/content/uploads$params")).toUploadPage()
+    }
 
     suspend fun listCompostedUploads(): List<Upload> =
         JSONObject(get("/api/content/uploads/composted")).getJSONArray("uploads").toUploadList()
@@ -81,8 +108,26 @@ class HeirloomsApi(
         return JSONObject(patch("/api/content/uploads/$id/tags", """{"tags":$tagsJson}""")).toUpload()
     }
 
+    suspend fun rotateUpload(id: String, rotation: Int): Upload =
+        JSONObject(patch("/api/content/uploads/$id/rotation", """{"rotation":$rotation}""")).toUpload()
+
+    suspend fun trackView(id: String) {
+        try { post("/api/content/uploads/$id/view") } catch (_: Exception) {}
+    }
+
+    suspend fun listTags(): List<String> =
+        JSONObject(get("/api/content/uploads/tags")).getJSONArray("tags")
+            .let { arr -> (0 until arr.length()).map { arr.getString(it) } }
+
     suspend fun getCapsulesForUpload(id: String): List<CapsuleRef> =
         JSONObject(get("/api/content/uploads/$id/capsules")).getJSONArray("capsules").toCapsuleRefList()
+
+    // ── Plots ────────────────────────────────────────────────────────────────
+
+    suspend fun listPlots(): List<Plot> =
+        JSONObject(get("/api/plots")).getJSONArray("plots").toPlotList()
+
+    // ── Capsules ─────────────────────────────────────────────────────────────
 
     suspend fun listCapsules(states: String = "open,sealed"): List<CapsuleSummary> =
         JSONObject(get("/api/capsules?state=$states&order=unlock_at")).getJSONArray("capsules").toCapsuleSummaryList()
@@ -115,7 +160,12 @@ class HeirloomsApi(
     suspend fun cancelCapsule(id: String): CapsuleDetail =
         JSONObject(post("/api/capsules/$id/cancel")).toCapsuleDetail()
 
-    // ── JSON → model helpers ────────────────────────────────────────────────
+    // ── JSON → model helpers ─────────────────────────────────────────────────
+
+    private fun JSONObject.toUploadPage() = UploadPage(
+        uploads = getJSONArray("uploads").toUploadList(),
+        nextCursor = optString("next_cursor").takeIf { it.isNotEmpty() && it != "null" },
+    )
 
     private fun JSONArray.toUploadList(): List<Upload> =
         (0 until length()).map { getJSONObject(it).toUpload() }
@@ -130,6 +180,20 @@ class HeirloomsApi(
         thumbnailKey = optString("thumbnailKey").takeIf { it.isNotEmpty() && it != "null" },
         tags = getJSONArray("tags").let { arr -> (0 until arr.length()).map { arr.getString(it) } },
         compostedAt = optString("compostedAt").takeIf { it.isNotEmpty() && it != "null" },
+        capturedAt = optString("capturedAt").takeIf { it.isNotEmpty() && it != "null" },
+        latitude = if (has("latitude") && !isNull("latitude")) getDouble("latitude") else null,
+        longitude = if (has("longitude") && !isNull("longitude")) getDouble("longitude") else null,
+        lastViewedAt = optString("lastViewedAt").takeIf { it.isNotEmpty() && it != "null" },
+    )
+
+    private fun JSONArray.toPlotList(): List<Plot> =
+        (0 until length()).map { getJSONObject(it).toPlot() }
+
+    private fun JSONObject.toPlot() = Plot(
+        id = getString("id"),
+        name = getString("name"),
+        tagCriteria = getJSONArray("tag_criteria").let { arr -> (0 until arr.length()).map { arr.getString(it) } },
+        sortOrder = optInt("sort_order", 0),
     )
 
     private fun JSONArray.toCapsuleSummaryList(): List<CapsuleSummary> =
@@ -173,6 +237,8 @@ class HeirloomsApi(
         unlockAt = getString("unlock_at"),
         recipients = getJSONArray("recipients").let { arr -> (0 until arr.length()).map { arr.getString(it) } },
     )
+
+    private fun String.encodeParam() = java.net.URLEncoder.encode(this, "UTF-8")
 
     companion object {
         const val BASE_URL = "https://api.heirlooms.digital"

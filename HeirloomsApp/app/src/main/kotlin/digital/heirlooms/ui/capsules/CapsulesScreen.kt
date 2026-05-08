@@ -39,7 +39,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,7 +56,9 @@ import digital.heirlooms.ui.theme.Forest15
 import digital.heirlooms.ui.theme.HeirloomsSerifItalic
 import digital.heirlooms.ui.theme.Parchment
 import digital.heirlooms.ui.theme.TextMuted
-import kotlinx.coroutines.launch
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.collectAsState
+import androidx.compose.material3.CircularProgressIndicator
 
 private enum class StateFilter(val label: String, val stateParam: String) {
     Active("Active", "open,sealed"),
@@ -70,33 +71,18 @@ private enum class StateFilter(val label: String, val stateParam: String) {
 fun CapsulesScreen(
     onCapsuleTap: (String) -> Unit,
     onStartCapsule: () -> Unit,
+    vm: CapsulesViewModel = viewModel(),
 ) {
     val api = LocalHeirloomsApi.current
-    val scope = rememberCoroutineScope()
-
-    var capsules by remember { mutableStateOf<List<CapsuleSummary>>(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
+    val state by vm.state.collectAsState()
     var refreshing by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
     var filter by remember { mutableStateOf(StateFilter.Active) }
     var showFilterMenu by remember { mutableStateOf(false) }
     var showOverflow by remember { mutableStateOf(false) }
 
-    fun load() {
-        scope.launch {
-            error = null
-            try {
-                capsules = api.listCapsules(filter.stateParam)
-            } catch (e: Exception) {
-                error = e.message
-            } finally {
-                loading = false
-                refreshing = false
-            }
-        }
-    }
+    LaunchedEffect(filter) { vm.load(api, filter.stateParam) }
 
-    LaunchedEffect(filter) { loading = true; load() }
+    val capsules = (state as? CapsulesState.Ready)?.capsules ?: emptyList()
 
     Column(Modifier.fillMaxSize().background(Parchment)) {
         TopAppBar(
@@ -125,14 +111,14 @@ fun CapsulesScreen(
 
         PullToRefreshBox(
             isRefreshing = refreshing,
-            onRefresh = { refreshing = true; load() },
+            onRefresh = { refreshing = true; vm.load(api, filter.stateParam); refreshing = false },
             modifier = Modifier.weight(1f),
         ) {
-            when {
-                loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    androidx.compose.material3.CircularProgressIndicator(color = Forest)
+            when (state) {
+                is CapsulesState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Forest)
                 }
-                error != null -> DidntTake(onRetry = { loading = true; load() })
+                is CapsulesState.Error -> DidntTake(onRetry = { vm.load(api, filter.stateParam) })
                 else -> LazyColumn(
                     Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),

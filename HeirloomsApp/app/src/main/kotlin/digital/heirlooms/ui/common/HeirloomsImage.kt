@@ -4,11 +4,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
 
-// Provided by MainNavigation with an OkHttp client that adds the X-Api-Key header.
 val LocalImageLoader = compositionLocalOf<ImageLoader> { error("No ImageLoader provided") }
 
 @Composable
@@ -18,13 +18,14 @@ fun HeirloomsImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
     colorFilter: ColorFilter? = null,
+    rotation: Int = 0,
 ) {
     val imageLoader = LocalImageLoader.current
     AsyncImage(
         model = url,
         contentDescription = contentDescription,
         imageLoader = imageLoader,
-        modifier = modifier,
+        modifier = if (rotation != 0) modifier.graphicsLayer { rotationZ = rotation.toFloat() } else modifier,
         contentScale = contentScale,
         colorFilter = colorFilter,
     )

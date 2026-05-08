@@ -6,13 +6,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -42,10 +40,7 @@ import digital.heirlooms.ui.theme.Parchment
 import digital.heirlooms.ui.theme.TextMuted
 
 @Composable
-fun SettingsScreen(
-    onApiKeyReset: () -> Unit,
-    onCompostHeapTap: () -> Unit,
-) {
+fun SettingsScreen(onApiKeyReset: () -> Unit) {
     var showResetConfirm by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -77,14 +72,6 @@ fun SettingsScreen(
                 value = "v${BuildConfig.VERSION_NAME}",
                 onClick = null,
                 showArrow = false,
-            )
-            HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Forest15)
-
-            SettingsRow(
-                label = "Compost heap",
-                value = "",
-                onClick = onCompostHeapTap,
-                showArrow = true,
             )
             HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Forest15)
         }

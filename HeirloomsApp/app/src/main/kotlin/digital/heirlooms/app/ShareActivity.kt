@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.provider.MediaStore
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,6 +46,8 @@ import digital.heirlooms.ui.brand.WorkingDots
 import digital.heirlooms.ui.brand.WorkingDotsSize
 import digital.heirlooms.ui.share.IdleScreen
 import digital.heirlooms.ui.share.RecentTagsStore
+import digital.heirlooms.ui.share.ReceiveState
+import digital.heirlooms.ui.share.ShareViewModel
 import digital.heirlooms.ui.share.isValidTag
 import digital.heirlooms.ui.theme.Earth
 import digital.heirlooms.ui.theme.Forest
@@ -61,35 +64,35 @@ import java.io.InputStream
 import java.util.UUID
 import kotlin.coroutines.resume
 
-sealed class ReceiveState {
-    data class Idle(
-        val photos: List<Uri>,
-        val tagsInProgress: List<String> = emptyList(),
-        val currentTagInput: String = "",
-        val recentTags: List<String> = emptyList(),
-    ) : ReceiveState()
-    object Uploading : ReceiveState()
-    data class Arriving(val photoCount: Int) : ReceiveState()
-    data class Arrived(val photoCount: Int) : ReceiveState()
-    object FailedAnimating : ReceiveState()
-    object Failed : ReceiveState()
-}
-
 class ShareActivity : ComponentActivity() {
 
+    private val viewModel: ShareViewModel by viewModels()
     private var screenState by mutableStateOf<ReceiveState>(ReceiveState.Uploading)
     private var pendingUris: List<Uri> = emptyList()
-    private var pendingTags: List<String> = emptyList()
-    private var uploadPhotoCount: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        pendingUris = resolveUris()
-        if (pendingUris.isEmpty()) { finish(); return }
-
-        val recentTags = RecentTagsStore(applicationContext).load()
-        screenState = ReceiveState.Idle(pendingUris, recentTags = recentTags)
+        if (savedInstanceState == null) {
+            // Fresh launch — resolve URIs from the share intent.
+            pendingUris = resolveUris()
+            if (pendingUris.isEmpty()) { finish(); return }
+            val recentTags = RecentTagsStore(applicationContext).load()
+            screenState = ReceiveState.Idle(pendingUris, recentTags = recentTags)
+        } else {
+            // Recreation (rotation etc.) — restore state.
+            // If there was an upload in flight, re-observe it; otherwise restore to Uploading
+            // so the working-dots screen shows while we reconnect.
+            val workerId = viewModel.pendingWorkerId
+            if (workerId != null) {
+                screenState = ReceiveState.Uploading
+                lifecycleScope.launch { observeExistingWork(UUID.fromString(workerId)) }
+            }
+            // If no worker id, the ViewModel has no in-flight upload and we're in a terminal
+            // state — the setContent below will render whatever screenState was last set to.
+            // (For Idle, pendingUris is empty on recreation so we just stay in Uploading until
+            // the observation resolves or the user dismisses.)
+        }
 
         setContent {
             HeirloomsTheme {
@@ -127,7 +130,7 @@ class ShareActivity : ComponentActivity() {
                             onPlant = {
                                 (screenState as? ReceiveState.Idle)?.let { idle ->
                                     val input = idle.currentTagInput.trim()
-                                    pendingTags = if (input.isNotEmpty() && isValidTag(input)) {
+                                    viewModel.pendingTags = if (input.isNotEmpty() && isValidTag(input)) {
                                         idle.tagsInProgress + input
                                     } else {
                                         idle.tagsInProgress
@@ -141,7 +144,7 @@ class ShareActivity : ComponentActivity() {
                 } else {
                     ReceiveScreenContent(
                         state = screenState,
-                        onArrivalComplete = { screenState = ReceiveState.Arrived(uploadPhotoCount) },
+                        onArrivalComplete = { screenState = ReceiveState.Arrived(viewModel.uploadPhotoCount) },
                         onFailureAnimationComplete = { screenState = ReceiveState.Failed },
                         onDone = { finish() },
                         onViewGarden = { openGarden() },
@@ -169,13 +172,13 @@ class ShareActivity : ComponentActivity() {
                 return@launch
             }
 
-            uploadPhotoCount = tempFiles.size
+            viewModel.uploadPhotoCount = tempFiles.size
 
             val data = workDataOf(
                 UploadWorker.KEY_FILE_PATHS to tempFiles.map { it.first }.toTypedArray(),
                 UploadWorker.KEY_MIME_TYPES to tempFiles.map { it.second }.toTypedArray(),
                 UploadWorker.KEY_API_KEY to (apiKey ?: ""),
-                UploadWorker.KEY_TAGS to pendingTags.toTypedArray(),
+                UploadWorker.KEY_TAGS to viewModel.pendingTags.toTypedArray(),
             )
             val constraints = Constraints.Builder()
                 .apply { if (wifiOnly) setRequiredNetworkType(NetworkType.UNMETERED) }
@@ -187,17 +190,42 @@ class ShareActivity : ComponentActivity() {
                 .addTag("${UploadWorker.TAG_COUNT_PREFIX}${tempFiles.size}")
                 .build()
 
+            viewModel.pendingWorkerId = request.id.toString()
             WorkManager.getInstance(applicationContext).enqueue(request)
             observeWorkToCompletion(request.id)
         }
     }
 
-    // Suspend until the work request reaches a terminal state (SUCCEEDED, FAILED, CANCELLED).
-    // Uses observeForever + suspendCancellableCoroutine to avoid adding lifecycle-livedata-ktx
-    // as an explicit dependency (it's available transitively but not declared).
     private suspend fun observeWorkToCompletion(id: UUID) {
+        val result = awaitWork(id)
+        viewModel.pendingWorkerId = null
+        if (result.state == WorkInfo.State.SUCCEEDED) {
+            RecentTagsStore(applicationContext).record(viewModel.pendingTags)
+            screenState = ReceiveState.Arriving(viewModel.uploadPhotoCount)
+        } else {
+            screenState = ReceiveState.FailedAnimating
+        }
+    }
+
+    private suspend fun observeExistingWork(id: UUID) {
+        val info = WorkManager.getInstance(applicationContext)
+            .getWorkInfoById(id).get()
+        if (info == null || info.state.isFinished) {
+            // Already done or unknown — check result.
+            if (info?.state == WorkInfo.State.SUCCEEDED) {
+                screenState = ReceiveState.Arriving(viewModel.uploadPhotoCount)
+            } else {
+                screenState = ReceiveState.FailedAnimating
+            }
+            viewModel.pendingWorkerId = null
+            return
+        }
+        observeWorkToCompletion(id)
+    }
+
+    private suspend fun awaitWork(id: UUID): WorkInfo {
         val liveData = WorkManager.getInstance(applicationContext).getWorkInfoByIdLiveData(id)
-        val result: WorkInfo = withContext(Dispatchers.Main) {
+        return withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { cont ->
                 val observer = object : Observer<WorkInfo> {
                     override fun onChanged(value: WorkInfo) {
@@ -210,12 +238,6 @@ class ShareActivity : ComponentActivity() {
                 liveData.observeForever(observer)
                 cont.invokeOnCancellation { liveData.removeObserver(observer) }
             }
-        }
-        if (result.state == WorkInfo.State.SUCCEEDED) {
-            RecentTagsStore(applicationContext).record(pendingTags)
-            screenState = ReceiveState.Arriving(uploadPhotoCount)
-        } else {
-            screenState = ReceiveState.FailedAnimating
         }
     }
 
@@ -258,9 +280,6 @@ class ShareActivity : ComponentActivity() {
         }
     }
 
-    // Try the unredacted URI first (preserves GPS EXIF on Android 10+).
-    // SecurityException from openInputStream must be caught separately —
-    // it bypasses the null-coalescing fallback if left in the outer try block.
     private fun openStream(uri: Uri): InputStream? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
@@ -272,7 +291,7 @@ class ShareActivity : ComponentActivity() {
     }
 }
 
-// ── Receive screen Composables ─────────────────────────────────────────────
+// ── Receive screen composables ────────────────────────────────────────────────
 
 @Composable
 private fun ReceiveScreenContent(
@@ -285,123 +304,94 @@ private fun ReceiveScreenContent(
     onDismiss: () -> Unit,
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Parchment),
+        modifier = Modifier.fillMaxSize().background(Parchment),
         contentAlignment = Alignment.Center,
     ) {
         when (state) {
-            is ReceiveState.Uploading -> {
-                WorkingDots(
-                    size = WorkingDotsSize.Large,
-                    label = stringResource(R.string.upload_in_progress),
-                )
-            }
+            is ReceiveState.Uploading -> WorkingDots(
+                size = WorkingDotsSize.Large,
+                label = stringResource(R.string.upload_in_progress),
+            )
 
-            is ReceiveState.Arriving -> {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.padding(horizontal = 32.dp),
-                ) {
-                    OliveBranchArrival(
-                        withWordmark = false,
-                        onComplete = onArrivalComplete,
-                        modifier = Modifier.size(200.dp),
-                    )
-                    Text(
-                        text = stringResource(R.string.upload_success),
-                        style = HeirloomsSerifItalic.copy(fontSize = 18.sp),
-                        color = Forest,
-                    )
-                    Text(
-                        text = photoCountString(state.photoCount),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextMuted,
-                    )
-                }
-            }
-
-            is ReceiveState.Arrived -> {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.padding(horizontal = 32.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.upload_success),
-                        style = HeirloomsSerifItalic.copy(fontSize = 18.sp),
-                        color = Forest,
-                    )
-                    Text(
-                        text = photoCountString(state.photoCount),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextMuted,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Button(
-                        onClick = onViewGarden,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Forest,
-                            contentColor = Parchment,
-                        ),
-                        shape = RoundedCornerShape(22.dp),
-                    ) {
-                        Text("view garden", style = HeirloomsSerifItalic.copy(fontSize = 14.sp))
-                    }
-                    TextButton(onClick = onDone) {
-                        Text(
-                            text = "done",
-                            style = HeirloomsSerifItalic.copy(fontSize = 14.sp),
-                            color = TextMuted,
-                        )
-                    }
-                }
-            }
-
-            is ReceiveState.FailedAnimating -> {
-                OliveBranchDidntTake(
-                    onComplete = onFailureAnimationComplete,
+            is ReceiveState.Arriving -> Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.padding(horizontal = 32.dp),
+            ) {
+                OliveBranchArrival(
+                    withWordmark = false,
+                    onComplete = onArrivalComplete,
                     modifier = Modifier.size(200.dp),
                 )
+                Text(
+                    text = stringResource(R.string.upload_success),
+                    style = HeirloomsSerifItalic.copy(fontSize = 18.sp),
+                    color = Forest,
+                )
+                Text(
+                    text = photoCountString(state.photoCount),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                )
             }
 
-            is ReceiveState.Failed -> {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.padding(horizontal = 32.dp),
+            is ReceiveState.Arrived -> Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.padding(horizontal = 32.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.upload_success),
+                    style = HeirloomsSerifItalic.copy(fontSize = 18.sp),
+                    color = Forest,
+                )
+                Text(
+                    text = photoCountString(state.photoCount),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = onViewGarden,
+                    colors = ButtonDefaults.buttonColors(containerColor = Forest, contentColor = Parchment),
+                    shape = RoundedCornerShape(22.dp),
                 ) {
-                    Text(
-                        text = stringResource(R.string.upload_failed),
-                        style = HeirloomsSerifItalic.copy(fontSize = 18.sp),
-                        color = Earth,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Button(
-                        onClick = onRetry,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Forest,
-                            contentColor = Parchment,
-                        ),
-                        shape = RoundedCornerShape(22.dp),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.upload_retry),
-                            style = HeirloomsSerifItalic.copy(fontSize = 14.sp),
-                        )
-                    }
-                    TextButton(onClick = onDismiss) {
-                        Text(
-                            text = stringResource(R.string.upload_dismiss),
-                            style = HeirloomsSerifItalic.copy(fontSize = 14.sp),
-                            color = TextMuted,
-                        )
-                    }
+                    Text("view garden", style = HeirloomsSerifItalic.copy(fontSize = 14.sp))
+                }
+                TextButton(onClick = onDone) {
+                    Text("done", style = HeirloomsSerifItalic.copy(fontSize = 14.sp), color = TextMuted)
                 }
             }
 
-            else -> { /* Idle is handled before ReceiveScreenContent is called */ }
+            is ReceiveState.FailedAnimating -> OliveBranchDidntTake(
+                onComplete = onFailureAnimationComplete,
+                modifier = Modifier.size(200.dp),
+            )
+
+            is ReceiveState.Failed -> Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.padding(horizontal = 32.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.upload_failed),
+                    style = HeirloomsSerifItalic.copy(fontSize = 18.sp),
+                    color = Earth,
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = onRetry,
+                    colors = ButtonDefaults.buttonColors(containerColor = Forest, contentColor = Parchment),
+                    shape = RoundedCornerShape(22.dp),
+                ) {
+                    Text(text = stringResource(R.string.upload_retry), style = HeirloomsSerifItalic.copy(fontSize = 14.sp))
+                }
+                TextButton(onClick = onDismiss) {
+                    Text(text = stringResource(R.string.upload_dismiss), style = HeirloomsSerifItalic.copy(fontSize = 14.sp), color = TextMuted)
+                }
+            }
+
+            else -> {}
         }
     }
 }

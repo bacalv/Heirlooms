@@ -10,6 +10,24 @@ data class Upload(
     val thumbnailKey: String?,
     val tags: List<String>,
     val compostedAt: String?,
+    val capturedAt: String?,
+    val latitude: Double?,
+    val longitude: Double?,
+    val lastViewedAt: String?,
+) {
+    val isVideo: Boolean get() = mimeType.startsWith("video/")
+}
+
+data class UploadPage(
+    val uploads: List<Upload>,
+    val nextCursor: String?,
+)
+
+data class Plot(
+    val id: String,
+    val name: String,
+    val tagCriteria: List<String>,
+    val sortOrder: Int,
 )
 
 data class CapsuleSummary(

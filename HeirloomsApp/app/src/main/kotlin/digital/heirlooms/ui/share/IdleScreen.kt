@@ -46,7 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import digital.heirlooms.app.R
-import digital.heirlooms.app.ReceiveState
+import digital.heirlooms.ui.share.ReceiveState
 import digital.heirlooms.ui.theme.Earth
 import digital.heirlooms.ui.theme.Forest
 import digital.heirlooms.ui.theme.Forest08
