@@ -196,6 +196,7 @@ class HeirloomsApi(
         name = getString("name"),
         tagCriteria = getJSONArray("tag_criteria").let { arr -> (0 until arr.length()).map { arr.getString(it) } },
         sortOrder = optInt("sort_order", 0),
+        isSystemDefined = optBoolean("is_system_defined", false),
     )
 
     private fun JSONArray.toCapsuleSummaryList(): List<CapsuleSummary> =

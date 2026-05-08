@@ -37,6 +37,8 @@ fun BurgerPanel(
     onDismiss: () -> Unit,
     onSettingsTap: () -> Unit,
     onCompostHeapTap: () -> Unit,
+    uploadsInProgress: Boolean = false,
+    onUploadsTap: () -> Unit = {},
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -48,6 +50,10 @@ fun BurgerPanel(
             HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Forest15)
             BurgerRow(label = "Compost heap", onClick = { onDismiss(); onCompostHeapTap() })
             HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Forest15)
+            if (uploadsInProgress) {
+                BurgerRow(label = "Uploads in progress", onClick = { onDismiss(); onUploadsTap() })
+                HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Forest15)
+            }
 
             Spacer(Modifier.weight(1f, fill = false))
 

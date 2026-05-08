@@ -4,6 +4,7 @@ package digital.heirlooms.ui.garden
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -60,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import digital.heirlooms.api.Upload
+import digital.heirlooms.ui.brand.OliveBranchArrival
 import digital.heirlooms.ui.common.HeirloomsImage
 import digital.heirlooms.ui.common.LocalHeirloomsApi
 import digital.heirlooms.ui.share.isValidTag
@@ -69,6 +71,7 @@ import digital.heirlooms.ui.theme.Forest25
 import digital.heirlooms.ui.theme.HeirloomsSerifItalic
 import digital.heirlooms.ui.theme.Parchment
 import digital.heirlooms.ui.theme.TextMuted
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private const val THUMBNAIL_SIZE_DP = 108
@@ -84,13 +87,31 @@ fun GardenScreen(
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { if (state is GardenLoadState.Loading) vm.load(api) }
+    LaunchedEffect(Unit) {
+        if (state is GardenLoadState.Loading) vm.load(api) else vm.refresh(api)
+    }
+
+    // Poll Just arrived every 30 seconds. Lightweight — only fetches that single row.
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000L)
+            vm.refreshJustArrived(api)
+        }
+    }
+
+    // Show arrival animation when the poll detects new items.
+    var showArrival by remember { mutableStateOf(false) }
+    if (vm.newItemsArrived && !showArrival) {
+        showArrival = true
+        vm.clearArrivalFlag()
+    }
 
     fun refresh() {
         refreshing = true
         scope.launch { vm.load(api); refreshing = false }
     }
 
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(Parchment)) {
         TopAppBar(
             title = { Text("Garden", style = MaterialTheme.typography.titleLarge.copy(color = Forest)) },
@@ -161,6 +182,23 @@ fun GardenScreen(
             }
         }
     }
+
+    // Arrival animation overlay — shown when new items land in Just arrived.
+    if (showArrival) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Parchment.copy(alpha = 0.92f)),
+            contentAlignment = androidx.compose.ui.Alignment.Center,
+        ) {
+            OliveBranchArrival(
+                withWordmark = false,
+                onComplete = { showArrival = false },
+                modifier = Modifier.size(200.dp),
+            )
+        }
+    }
+    } // closes outer Box
 }
 
 @Composable

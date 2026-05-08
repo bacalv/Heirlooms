@@ -47,8 +47,13 @@ import digital.heirlooms.ui.capsules.CapsulesScreen
 import digital.heirlooms.ui.capsules.PhotoPickerScreen
 import digital.heirlooms.ui.common.LocalHeirloomsApi
 import digital.heirlooms.ui.common.LocalImageLoader
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import digital.heirlooms.app.UploadWorker
 import digital.heirlooms.ui.explore.ExploreScreen
 import digital.heirlooms.ui.garden.CompostHeapScreen
+import digital.heirlooms.ui.share.UploadProgressScreen
 import digital.heirlooms.ui.garden.GardenScreen
 import digital.heirlooms.ui.garden.PhotoDetailScreen
 import digital.heirlooms.ui.settings.SettingsScreen
@@ -69,6 +74,8 @@ internal object Routes {
     const val CAPSULE_CREATE = "capsule_create"
     const val PHOTO_PICKER = "photo_picker"
     const val SETTINGS = "settings"
+    const val UPLOAD_PROGRESS = "upload_progress/{sessionTag}"
+    fun uploadProgress(sessionTag: String) = "upload_progress/$sessionTag"
 
     fun photoDetail(uploadId: String, from: String = "garden") = "photo/$uploadId?from=$from"
     fun capsuleDetail(capsuleId: String) = "capsules/$capsuleId"
@@ -125,12 +132,29 @@ fun MainNavigation(apiKey: String, onApiKeyReset: () -> Unit) {
         val scope = rememberCoroutineScope()
         var showBurger by remember { mutableStateOf(false) }
 
+        // Observe active uploads so the Burger entry appears only when needed.
+        val activeWorkInfos by WorkManager.getInstance(context)
+            .getWorkInfosByTagFlow(UploadWorker.TAG)
+            .collectAsStateWithLifecycle(initialValue = emptyList())
+        val uploadsActive = activeWorkInfos.any {
+            it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED
+        }
+        // Find a session tag from the first active job to link the Burger entry to the right screen.
+        val activeSessionTag = if (uploadsActive) activeWorkInfos
+            .firstOrNull { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }
+            ?.tags?.firstOrNull { it.startsWith("session:") }
+        else null
+
         if (showBurger) {
             BurgerPanel(
                 sheetState = burgerSheetState,
                 onDismiss = { showBurger = false },
                 onSettingsTap = { navController.navigate(Routes.SETTINGS) },
                 onCompostHeapTap = { navController.navigate(Routes.COMPOST) },
+                uploadsInProgress = uploadsActive,
+                onUploadsTap = {
+                    activeSessionTag?.let { navController.navigate(Routes.uploadProgress(it)) }
+                },
             )
         }
 
@@ -284,6 +308,18 @@ private fun AppNavHost(navController: NavController, onApiKeyReset: () -> Unit) 
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(onApiKeyReset = onApiKeyReset)
+        }
+        composable(
+            route = Routes.UPLOAD_PROGRESS,
+            arguments = listOf(navArgument("sessionTag") { type = NavType.StringType }),
+        ) { backStack ->
+            val sessionTag = backStack.arguments?.getString("sessionTag") ?: return@composable
+            UploadProgressScreen(
+                sessionTag = sessionTag,
+                fromShare = false,
+                onGoToGarden = { navController.navigateToTab(Routes.GARDEN) },
+                onContinueInBackground = { navController.popBackStack() },
+            )
         }
     }
 }

@@ -11,26 +11,17 @@ sealed class ReceiveState {
         val currentTagInput: String = "",
         val recentTags: List<String> = emptyList(),
     ) : ReceiveState()
-    object Uploading : ReceiveState()
-    data class Arriving(val photoCount: Int) : ReceiveState()
-    data class Arrived(val photoCount: Int) : ReceiveState()
-    object FailedAnimating : ReceiveState()
-    object Failed : ReceiveState()
+    data class Uploading(val sessionTag: String) : ReceiveState()
 }
 
 class ShareViewModel(private val savedState: SavedStateHandle) : ViewModel() {
 
-    // Worker request ID survives process death so we can re-observe on restore.
-    var pendingWorkerId: String?
-        get() = savedState["pending_worker_id"]
-        set(v) { savedState["pending_worker_id"] = v }
+    // Session tag groups all work requests from one share action. Survives process death
+    // so the progress screen can re-observe the same WorkManager jobs on recreation.
+    var sessionTag: String?
+        get() = savedState["session_tag"]
+        set(v) { savedState["session_tag"] = v }
 
-    // Photo count survives process death so we can show the right arrival message.
-    var uploadPhotoCount: Int
-        get() = savedState["upload_photo_count"] ?: 0
-        set(v) { savedState["upload_photo_count"] = v }
-
-    // Pending tags survive process death — the user set them before upload started.
     var pendingTags: List<String>
         get() = savedState.get<Array<String>>("pending_tags")?.toList() ?: emptyList()
         set(v) { savedState["pending_tags"] = v.toTypedArray() }

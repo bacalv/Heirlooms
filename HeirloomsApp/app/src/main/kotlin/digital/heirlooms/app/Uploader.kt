@@ -128,7 +128,7 @@ class Uploader(
         fileBytes: ByteArray?,
         mimeType: String,
         apiKey: String? = null,
-        onProgress: ((Int) -> Unit)? = null,
+        onProgress: ((bytesWritten: Long, totalBytes: Long) -> Unit)? = null,
         onConfirming: (() -> Unit)? = null,
     ): UploadResult {
         if (!isValidEndpoint(baseUrl)) return UploadResult.Failure("No endpoint configured")
@@ -159,7 +159,7 @@ class Uploader(
 
         // Step 2: PUT directly to GCS
         val putBody: RequestBody = if (onProgress != null)
-            ProgressRequestBody(fileBytes, mimeType, onProgress)
+            ProgressRequestBody(fileBytes, mimeType) { w, t -> onProgress(w, t) }
         else
             fileBytes.toRequestBody(mimeType.toMediaType())
 
@@ -212,7 +212,7 @@ class Uploader(
         mimeType: String,
         apiKey: String? = null,
         tags: List<String> = emptyList(),
-        onProgress: ((Int) -> Unit)? = null,
+        onProgress: ((bytesWritten: Long, totalBytes: Long) -> Unit)? = null,
         onConfirming: (() -> Unit)? = null,
     ): UploadResult {
         if (!isValidEndpoint(baseUrl)) return UploadResult.Failure("No endpoint configured")
@@ -284,28 +284,26 @@ class Uploader(
     }
 }
 
+// Progress callbacks report (bytesWritten, totalBytes) so callers can aggregate
+// multiple files into an overall percentage without re-computing from percent values.
+
 private class ProgressRequestBody(
     private val bytes: ByteArray,
     private val mimeType: String,
-    private val onProgress: (Int) -> Unit,
+    private val onProgress: (bytesWritten: Long, totalBytes: Long) -> Unit,
 ) : RequestBody() {
     override fun contentType() = mimeType.toMediaType()
     override fun contentLength() = bytes.size.toLong()
     override fun writeTo(sink: BufferedSink) {
-        val total = bytes.size
-        if (total == 0) return
+        val total = bytes.size.toLong()
+        if (total == 0L) return
         var written = 0
-        var lastPercent = -1
         val chunk = 8 * 1024
         while (written < total) {
-            val end = minOf(written + chunk, total)
+            val end = minOf(written + chunk, total.toInt())
             sink.write(bytes, written, end - written)
             written = end
-            val percent = (written * 100L / total).toInt()
-            if (percent != lastPercent) {
-                lastPercent = percent
-                onProgress(percent)
-            }
+            onProgress(written.toLong(), total)
         }
     }
 }
@@ -313,7 +311,7 @@ private class ProgressRequestBody(
 private class ProgressFileRequestBody(
     private val file: File,
     private val mimeType: String,
-    private val onProgress: (Int) -> Unit,
+    private val onProgress: (bytesWritten: Long, totalBytes: Long) -> Unit,
 ) : RequestBody() {
     override fun contentType() = mimeType.toMediaType()
     override fun contentLength() = file.length()
@@ -321,18 +319,13 @@ private class ProgressFileRequestBody(
         val total = file.length()
         if (total == 0L) return
         var written = 0L
-        var lastPercent = -1
         val buffer = ByteArray(8 * 1024)
         file.inputStream().use { input ->
             var bytesRead: Int
             while (input.read(buffer).also { bytesRead = it } != -1) {
                 sink.write(buffer, 0, bytesRead)
                 written += bytesRead
-                val percent = (written * 100L / total).toInt()
-                if (percent != lastPercent) {
-                    lastPercent = percent
-                    onProgress(percent)
-                }
+                onProgress(written, total)
             }
         }
     }

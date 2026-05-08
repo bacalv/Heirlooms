@@ -37,6 +37,45 @@ class GardenViewModel(
     // Process-death restoration isn't needed for scroll position.
     val scrollPositions: MutableMap<String, Int> = mutableMapOf()
 
+    // Silent refresh: fetches fresh data without clearing the current display
+    // (no loading spinner). Called every time GardenScreen enters composition so the
+    // data matches the server's current state after any activity on other platforms.
+    fun refresh(api: HeirloomsApi) {
+        if (_state.value is GardenLoadState.Loading) return  // initial load already in flight
+        viewModelScope.launch {
+            try {
+                val (plots, justArrived) = coroutineScope {
+                    val plotsDeferred = async { api.listPlots() }
+                    val jaDeferred = async { api.listUploadsPage(justArrived = true) }
+                    Pair(plotsDeferred.await(), jaDeferred.await())
+                }
+                val rows = buildList {
+                    add(PlotRowState(
+                        plot = null,
+                        uploads = justArrived.uploads,
+                        nextCursor = justArrived.nextCursor,
+                        loading = false,
+                        loadingMore = false,
+                    ))
+                    plots.filter { !it.isSystemDefined }.forEach { plot ->
+                        val page = api.listUploadsPage(tags = plot.tagCriteria)
+                        add(PlotRowState(
+                            plot = plot,
+                            uploads = page.uploads,
+                            nextCursor = page.nextCursor,
+                            loading = false,
+                            loadingMore = false,
+                        ))
+                    }
+                }
+                // Reset Just arrived scroll to top so the newest items are visible.
+                knownJustArrivedIds = justArrived.uploads.map { it.id }.toSet()
+                scrollPositions["__just_arrived__"] = 0
+                _state.value = GardenLoadState.Ready(rows)
+            } catch (_: Exception) { }
+        }
+    }
+
     fun load(api: HeirloomsApi) {
         viewModelScope.launch {
             _state.value = GardenLoadState.Loading
@@ -55,7 +94,7 @@ class GardenViewModel(
                         loading = false,
                         loadingMore = false,
                     ))
-                    plots.forEach { plot ->
+                    plots.filter { !it.isSystemDefined }.forEach { plot ->
                         val page = api.listUploadsPage(tags = plot.tagCriteria)
                         add(PlotRowState(
                             plot = plot,
@@ -66,6 +105,8 @@ class GardenViewModel(
                         ))
                     }
                 }
+                knownJustArrivedIds = justArrived.uploads.map { it.id }.toSet()
+                scrollPositions["__just_arrived__"] = 0
                 _state.value = GardenLoadState.Ready(rows)
             } catch (e: Exception) {
                 _state.value = GardenLoadState.Error(e.message ?: "Couldn't load")
@@ -125,6 +166,44 @@ class GardenViewModel(
                 if (u.id == uploadId) u.copy(tags = newTags) else u
             })
         })
+    }
+
+    // Set to true when polling detects IDs in Just arrived that weren't there before.
+    // GardenScreen reads this, shows the arrival animation, then calls clearArrivalFlag().
+    var newItemsArrived: Boolean = false
+        private set
+
+    fun clearArrivalFlag() { newItemsArrived = false }
+
+    private var knownJustArrivedIds: Set<String> = emptySet()
+
+    fun refreshJustArrived(api: HeirloomsApi) {
+        viewModelScope.launch {
+            try {
+                val page = api.listUploadsPage(justArrived = true)
+                val newIds = page.uploads.map { it.id }.toSet()
+                val genuinelyNew = newIds - knownJustArrivedIds
+                // Only trigger the animation if items appeared that weren't there before
+                // (not on the very first load when knownIds is empty).
+                if (knownJustArrivedIds.isNotEmpty() && genuinelyNew.isNotEmpty()) {
+                    newItemsArrived = true
+                }
+                knownJustArrivedIds = newIds
+
+                val current = _state.value as? GardenLoadState.Ready ?: return@launch
+                val rows = current.rows.toMutableList()
+                val jaIndex = rows.indexOfFirst { it.plot == null }
+                if (jaIndex >= 0) {
+                    rows[jaIndex] = rows[jaIndex].copy(
+                        uploads = page.uploads,
+                        nextCursor = page.nextCursor,
+                        loadingMore = false,
+                    )
+                    if (genuinelyNew.isNotEmpty()) scrollPositions["__just_arrived__"] = 0
+                    _state.value = GardenLoadState.Ready(rows)
+                }
+            } catch (_: Exception) { }
+        }
     }
 
     fun removeFromJustArrived(uploadId: String) {

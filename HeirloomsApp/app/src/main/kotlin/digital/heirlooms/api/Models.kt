@@ -28,6 +28,7 @@ data class Plot(
     val name: String,
     val tagCriteria: List<String>,
     val sortOrder: Int,
+    val isSystemDefined: Boolean,
 )
 
 data class CapsuleSummary(
