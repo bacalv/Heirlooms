@@ -2,6 +2,42 @@
 
 ---
 
+## v0.24.1 — D3 polish: plot UX, multi-tag filter, CORS fix (8 May 2026)
+
+Patch on D3. All changes driven by hands-on testing of v0.24.0.
+
+**Bug fixes:**
+- Explore thumbnails were blank in production — `ExploreThumb` used relative URLs without
+  `API_URL` prefix, which breaks when API and web are on different origins.
+- `DELETE` and `PUT` missing from `CorsFilter` allowed methods — silently blocked plot
+  deletion and plot-criteria updates from the browser (CORS preflight failure).
+- Plot tag filtering returned all items regardless of tag criteria — `tags && ?::text[]`
+  with JDBC `setArray` was unreliable; switched to `ARRAY[?,?]::text[]` with individual
+  `setString` params, mirroring the working `@>` pattern.
+- Plot `tag_criteria` saved empty when user clicked Create without pressing Enter first
+  in the old `PlotTagPicker` — now moot (form replaced).
+
+**Features:**
+- Plot management redesigned: inline `PlotTagPicker/PlotForm` removed from Garden.
+  Creating a plot now uses Explore's filter controls: apply a tag filter, see the results,
+  click "Save as plot…" to name it. Editing navigates to `/explore?edit_plot=<id>` with
+  an "Editing [name]" banner and "Update plot" / "Cancel" buttons.
+- Multi-tag filter in Explore: `TagChromePicker` replaces the single text input — shows
+  chips for selected tags, dropdown of all used tags (from new `GET /uploads/tags`
+  endpoint), keyboard-friendly (Enter to add, Backspace to remove last).
+- Plots now store and filter by multiple tags (`tag_criteria` already an array).
+- Video modal in Garden: clicking a video thumbnail opens an inline player (signed URL
+  streaming, with proxy fallback) instead of navigating to the detail page.
+- Quick tag on Garden thumbnails: tag icon appears top-right on hover, opens a modal.
+- Rotate button on Garden thumbnails: rotate icon appears top-left on hover, images only,
+  optimistic update.
+- Photo detail (Garden flavour): rotate button and inline tag editor added.
+- `GET /api/content/uploads/tags` — new endpoint returning all distinct tags.
+
+**Tests:** 88 web tests passing.
+
+---
+
 ## v0.24.0 — Milestone 6 D3: Web complete (8 May 2026)
 
 Minor bump — D3 of Milestone 6. Garden becomes plot rows, Explore gains filters, PhotoDetail

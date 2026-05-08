@@ -1824,3 +1824,68 @@ only with *Edit tags* link. Back link context-aware. Every open fires `POST .../
 **Docs updated:** `IDIOMS.md` (3 entries + quick-reference update + status line), `VERSIONS.md`
 (v0.24.0), `ROADMAP.md` (D3 marked done), `PA_NOTES.md` (view tracking note), `PROMPT_LOG.md`
 (this entry).
+
+---
+
+## Session: D3 polish — testing, fixes, UX iteration (v0.24.1) — 8 May 2026
+
+**Context:** Hands-on testing of the v0.24.0 D3 release. Bret tested the new Garden,
+Explore, and PhotoDetail surfaces and reported a series of issues. This session worked
+through each one, deploying continuously to production after each fix.
+
+**Issues found and resolved:**
+
+1. **Explore thumbnails blank in production.** `ExploreThumb` constructed URLs as
+   `/api/content/uploads/…` (relative). In dev (same-origin) this works; in prod
+   (api.heirlooms.digital vs heirlooms.digital) it fetches from the wrong host. Fixed
+   by prepending `API_URL`.
+
+2. **Video thumbnails in Garden had no play indicator.** `PlotThumbCard` showed the
+   thumbnail image but no overlay. Added a play circle overlay for video items.
+
+3. **Garden detail page missing rotate and tag actions.** `GardenFlavour` in
+   `PhotoDetailPage` only had capsule + compost affordances. Added a rotate button
+   (images only) and inline `InlineTagEditor`.
+
+4. **Plot tag filtering returned all items regardless of criteria.** Root cause: the
+   SQL `tags && ?::text[]` with JDBC `setArray` was unreliable (JDBC array param
+   + `::text[]` cast). Fixed by switching to `ARRAY[?,?]::text[]` with individual
+   `setString` params per tag — the same pattern used by the working `@>` filter. Also
+   fixed the form: the `PlotTagPicker` discarded pending text (not yet confirmed with
+   Enter) when the user clicked Create, so plots were created with empty `tag_criteria`.
+
+5. **Tag modal caused visible page reload.** After tagging a Just arrived item, all
+   plot rows reset to loading state. Fixed by optimistic exclusion (`justArrivedExclude`
+   set) for Just arrived plus silent background re-fetch for user plots.
+
+6. **Plot management UX redesigned.** The inline `PlotTagPicker/PlotForm` was brittle
+   and confusing. New flow: "Add a plot" navigates to Explore; when a tag filter is
+   active, a "Save as plot…" bar appears. Gear → Edit navigates to
+   `/explore?edit_plot=<id>` with filter pre-loaded and an "Editing [name]" banner.
+
+7. **Delete and Update plot silently did nothing.** `CorsFilter` listed only
+   `GET, POST, PATCH, OPTIONS`. `DELETE` and `PUT` were blocked by CORS preflight.
+   Fixed by adding both to the allowed methods.
+
+8. **Rotate button on Garden thumbnails.** Rotate icon top-left on hover (images only).
+   Handled inside `PlotItemsRow` (optimistic state update + background PATCH).
+
+9. **Multi-tag filter in Explore.** Single text input replaced with `TagChromePicker`:
+   chips for selected tags, dropdown populated from new `GET /api/content/uploads/tags`
+   endpoint, keyboard (Enter/Backspace). "Save as plot" and "Update plot" send the full
+   `tag_criteria` array. `PlotItemsRow` already used `plot.tag_criteria.join(',')` so
+   Garden plot rows work with multi-tag criteria automatically.
+
+**New backend endpoint:** `GET /api/content/uploads/tags` — returns all distinct tags
+across non-composted uploads, sorted alphabetically. Uses `UNNEST(tags)` + `DISTINCT`.
+
+**Architectural note — CORS:** The `CorsFilter` list of allowed methods should include
+all HTTP verbs the web app uses. At the time of writing: `GET, POST, PUT, PATCH, DELETE,
+OPTIONS`. Revisit if new verbs are introduced.
+
+**Tests:** 88 web tests passing (up from 85 before this session). explore.test.jsx
+switched from positional `mockResolvedValueOnce` chains to URL-routing
+`mockImplementation` to handle the new tags fetch that fires alongside uploads fetch.
+
+**Docs updated:** `VERSIONS.md` (v0.24.1), `PROMPT_LOG.md` (this entry),
+memory/project_milestone_state.md updated.
