@@ -262,7 +262,7 @@ re-run; the script is idempotent so successfully imported rows are skipped on re
   that hard-deletes items past their 90-day window (GCS object first, then DB row). At v1
   with a single user this works fine: queries are frequent, items past the window are few.
   At multi-user scale, users who go inactive could leave composted GCS objects sitting
-  indefinitely, accumulating storage cost. Milestone 7 should revisit with a scheduled
+  indefinitely, accumulating storage cost. Milestone 7 (multi-user) should revisit with a scheduled
   cleanup job (Cloud Scheduler hitting an internal endpoint, weekly or daily). The lazy
   approach was a deliberate v1 choice for simplicity. Keywords: `compost`, `lazy cleanup`,
   `Cloud Scheduler`, `multi-user`, `GCS storage`.
@@ -274,9 +274,9 @@ re-run; the script is idempotent so successfully imported rows are skipped on re
   would both query the same pending rows).
 
 - **`owner_user_id = NULL` is the v1 single-user sentinel for plots (v0.23.0).** All plots
-  in v1 have `owner_user_id = NULL`. At M8, this column becomes NOT NULL with a FK to the
+  in v1 have `owner_user_id = NULL`. At M7, this column becomes NOT NULL with a FK to the
   `users` table; plot endpoints filter to the authenticated user's UUID. Search for
-  `owner_user_id` when implementing M8 — all write paths need to switch from NULL to the
+  `owner_user_id` when implementing M7 — all write paths need to switch from NULL to the
   user's UUID.
 
 - **Hard-delete is system-only by design (v0.20.0).** When compost was added in v0.20.0 as
@@ -453,15 +453,20 @@ VITE_API_URL is a build-time variable.
 | VERSIONS.md | Version history |
 ---
 
-## View tracking and Just arrived — M8 scope note
+## View tracking and Just arrived — multi-user scope note
 
 `last_viewed_at` on `uploads` tracks the first time a user opens a photo's detail page.
-In v1 (single-user), this is a global flag shared across any viewer. At M8 (multi-user),
+In v1 (single-user), this is a global flag shared across any viewer. At M7 (multi-user),
 view tracking will need to become per-user (e.g., a `upload_views` junction table keyed
 on `(upload_id, user_id)`). The current column-on-uploads approach is intentionally simple
 for v1 and will need a migration + predicate update.
 
+The deferral only stays honest if M7's ownership model never lets a user read another
+user's upload outside of capsule delivery. The moment a second viewer enters the picture,
+global view tracking starts lying — *Just arrived* no longer means what it says. The M7
+brief must guarantee single-owner reads or this deferral collapses.
+
 The *Just arrived* predicate is: `last_viewed_at IS NULL AND tags = '{}' AND composted_at IS NULL
 AND NOT IN active capsule`. The partial index `idx_uploads_just_arrived` covers the three
-static conditions; the capsule exclusion is a runtime subquery. Re-check this index at M8 when
+static conditions; the capsule exclusion is a runtime subquery. Re-check this index at M7 when
 the predicate adds a user-id dimension.

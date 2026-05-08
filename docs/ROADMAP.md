@@ -153,7 +153,7 @@ Android tagging are deferred — see IDEAS.md.
 A user can plant photos and a message for someone, to be opened on a chosen date.
 A capsule has a shape (open: contents editable until delivery; sealed: contents frozen
 at sealing) and a state (open, sealed, delivered, cancelled). Recipients are free-text
-in v1, becoming connections at Milestone 8.
+in v1, becoming connections at Milestone 7.
 
 - **Increment 1 (v0.18.0, shipped 8 May 2026).** Schema and backend API. Four tables,
   seven endpoints, message versioning, state-machine validation, ~49 integration tests.
@@ -206,16 +206,25 @@ The work nips several decisions in the bud: brand register on a workflow-vs-leis
 surface; loading-time issues that compound as the dataset grows; multi-user
 implications for plot ownership and pagination that are easier to design correctly
 now than to retrofit. Inserted before the originally-planned Milestone 6 (delivery,
-now Milestone 7) because delivery deserves to land on a settled foundation rather
+now Milestone 8) because delivery deserves to land on a settled foundation rather
 than a flat surface that's about to change shape.
 
-**Milestone 7 — Milestone delivery**
+**Milestone 7 — Multi-user access**
+Per-user accounts and data isolation. The current single-user/shared-API-key model
+becomes per-user authentication. Bret backfilled as the existing user during the
+migration. Cross-user reads return 404 (privacy-preserving — a probing attacker
+can't distinguish "doesn't exist" from "exists but isn't yours"). Two-user
+isolation tests across every endpoint are the milestone's non-negotiable
+correctness property.
+
+After M7 ships, the first non-Bret human (a friend tester) is onboarded.
+
+**Milestone 8 — Milestone delivery**
 Scheduled delivery of a capsule on a specific date — a child's 18th birthday,
 a graduation, a wedding. The feature that makes this more than cloud storage.
-
-**Milestone 8 — Multi-user access**
-Beneficiary accounts: people who can receive but not upload. Notification on unlock.
-Dignified, personal delivery experience rather than a password reset email.
+Designed against real recipient accounts that exist post-M7, including a
+resolution UI for capsules sealed with free-text recipients before M7 (see
+IDEAS.md).
 
 ---
 

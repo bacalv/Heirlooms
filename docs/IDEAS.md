@@ -7,19 +7,19 @@ aren't yet ready to become roadmap items. Maintained by the PA.
 
 ## Deferred from Milestone 5 (Capsules, Increment 1) — 8 May 2026
 
-### 1. Tag-rule capsules (Milestone 7)
+### 1. Tag-rule capsules (Milestone 8)
 
 The v1 schema uses a fixed upload list per capsule. A natural extension: capsule contents
 become a *predicate* (a tag query) rather than a fixed set, evaluated at delivery time.
 A new `capsule_content_rules` table referencing tags, plus a flag on `capsules` indicating
 which mechanism applies. Cleanly stackable on the v1 schema.
 
-### 2. Per-recipient delivery state (Milestone 7)
+### 2. Per-recipient delivery state (Milestone 8)
 
 Each `capsule_recipients` row gains `opened_at TIMESTAMPTZ` (nullable). Required for the
 recipient-side UX showing who has and hasn't opened their capsule.
 
-### 3. Recipient timezone resolution (Milestone 7)
+### 3. Recipient timezone resolution (Milestone 8)
 
 `unlock_at` is currently anchored to the sender's timezone. Milestone 7 may want to
 resolve to each recipient's timezone at delivery time, given sufficient recipient profile
