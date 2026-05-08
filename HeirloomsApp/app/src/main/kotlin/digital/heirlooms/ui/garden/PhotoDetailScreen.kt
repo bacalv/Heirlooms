@@ -3,6 +3,7 @@
 package digital.heirlooms.ui.garden
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -10,7 +11,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -21,13 +21,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material3.AlertDialog
@@ -40,7 +36,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -55,6 +50,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,7 +59,6 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -73,16 +68,16 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
-import okhttp3.OkHttpClient
 import digital.heirlooms.api.CapsuleRef
 import digital.heirlooms.api.CapsuleSummary
 import digital.heirlooms.api.Upload
 import digital.heirlooms.ui.common.HeirloomsImage
 import digital.heirlooms.ui.common.LocalHeirloomsApi
+import digital.heirlooms.ui.common.TagInputField
 import digital.heirlooms.ui.common.formatInstantDate
 import digital.heirlooms.ui.common.formatOffsetDate
 import digital.heirlooms.ui.common.daysUntilDeletion
-import digital.heirlooms.ui.share.isValidTag
+import digital.heirlooms.ui.share.RecentTagsStore
 import digital.heirlooms.ui.theme.Bloom
 import digital.heirlooms.ui.theme.Earth
 import digital.heirlooms.ui.theme.Forest
@@ -93,7 +88,7 @@ import digital.heirlooms.ui.theme.HeirloomsSerifItalic
 import digital.heirlooms.ui.theme.Parchment
 import digital.heirlooms.ui.theme.TextMuted
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.rememberCoroutineScope
+import okhttp3.OkHttpClient
 
 @Composable
 fun PhotoDetailScreen(
@@ -106,18 +101,39 @@ fun PhotoDetailScreen(
 ) {
     val api = LocalHeirloomsApi.current
     val state by vm.state.collectAsState()
+    val availableTags by vm.availableTags.collectAsState()
+    val stagedTags by vm.stagedTags.collectAsState()
+    val isDirty by vm.isDirty.collectAsState()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     LaunchedEffect(uploadId) {
         vm.load(api, uploadId)
         vm.trackView(api, uploadId)
     }
 
+    // Auto-save staged changes on back navigation (system gesture or top-bar button).
+    fun navigateBack() {
+        if (isDirty) {
+            scope.launch {
+                stagedTags?.let { RecentTagsStore(context).record(it) }
+                vm.saveChanges(api, uploadId)
+                onBack()
+            }
+        } else {
+            onBack()
+        }
+    }
+
+    BackHandler { navigateBack() }
+
     val backLabel = when (from) {
         "explore" -> "← Explore"
         "compost" -> "← Compost heap"
         else -> "← Garden"
     }
+
+    val recentTags = remember(context) { RecentTagsStore(context).load().take(5) }
 
     Scaffold(
         containerColor = Parchment,
@@ -132,18 +148,17 @@ fun PhotoDetailScreen(
                         }
                         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                             if (upload != null && upload.compostedAt == null) {
-                                val hasTagsOrCapsules = (state as? PhotoDetailState.Ready)
-                                    ?.let { s -> upload.tags.isNotEmpty() || s.capsuleRefs.any { it.state == "open" || it.state == "sealed" } } == true
+                                val effectiveTags = stagedTags ?: upload.tags
+                                val hasTagsOrCapsules = effectiveTags.isNotEmpty() ||
+                                    (state as? PhotoDetailState.Ready)?.capsuleRefs
+                                        ?.any { it.state == "open" || it.state == "sealed" } == true
                                 DropdownMenuItem(
                                     text = { Text("Compost", color = if (hasTagsOrCapsules) TextMuted else Earth) },
                                     onClick = {
                                         if (!hasTagsOrCapsules) {
                                             showMenu = false
                                             scope.launch {
-                                                try {
-                                                    api.compostUpload(uploadId)
-                                                    onBack()
-                                                } catch (_: Exception) {}
+                                                try { api.compostUpload(uploadId); onBack() } catch (_: Exception) {}
                                             }
                                         }
                                     },
@@ -159,7 +174,7 @@ fun PhotoDetailScreen(
             TopAppBar(
                 title = {},
                 navigationIcon = {
-                    TextButton(onClick = onBack) {
+                    TextButton(onClick = ::navigateBack) {
                         Text(backLabel, color = Forest, style = MaterialTheme.typography.bodyMedium)
                     }
                 },
@@ -175,7 +190,8 @@ fun PhotoDetailScreen(
             is PhotoDetailState.Error -> DidntTake(onRetry = { vm.load(api, uploadId) })
             is PhotoDetailState.Ready -> {
                 val u = s.upload
-                val isComposted = u.compostedAt != null
+                val effectiveTags = stagedTags ?: u.tags
+                val effectiveRotation = vm.effectiveRotation()
                 when (from) {
                     "compost" -> CompostFlavour(
                         upload = u,
@@ -189,19 +205,25 @@ fun PhotoDetailScreen(
                     "explore" -> ExploreFlavour(
                         upload = u,
                         capsuleRefs = s.capsuleRefs,
+                        tags = effectiveTags,
+                        rotation = effectiveRotation,
+                        availableTags = availableTags,
+                        recentTags = recentTags,
                         innerPadding = innerPadding,
-                        onSwitchToGarden = { /* switch flavour in place */ },
+                        onTagsChange = { vm.stageTags(it) },
+                        onRotate = { vm.stageRotate() },
                         onCapsuleTap = onCapsuleTap,
                     )
                     else -> GardenFlavour(
                         upload = u,
                         capsuleRefs = s.capsuleRefs,
-                        tagInput = vm.tagInput,
-                        onTagInputChange = { vm.tagInput = it },
+                        tags = effectiveTags,
+                        rotation = effectiveRotation,
+                        availableTags = availableTags,
+                        recentTags = recentTags,
                         innerPadding = innerPadding,
-                        onRotate = { vm.rotate(api, uploadId) },
-                        onTagAdd = { tag -> vm.updateTags(api, uploadId, u.tags + tag) },
-                        onTagRemove = { tag -> vm.updateTags(api, uploadId, u.tags - tag) },
+                        onTagsChange = { vm.stageTags(it) },
+                        onRotate = { vm.stageRotate() },
                         onCapsuleTap = onCapsuleTap,
                         onStartCapsule = { onStartCapsuleWithPhoto(uploadId) },
                         onCompost = {
@@ -217,7 +239,7 @@ fun PhotoDetailScreen(
 }
 
 @Composable
-private fun MediaArea(upload: Upload, modifier: Modifier = Modifier) {
+private fun MediaArea(upload: Upload, rotation: Int, modifier: Modifier = Modifier) {
     if (upload.isVideo) {
         VideoPlayer(
             videoUrl = LocalHeirloomsApi.current.fileUrl(upload.id),
@@ -229,7 +251,7 @@ private fun MediaArea(upload: Upload, modifier: Modifier = Modifier) {
             contentDescription = null,
             modifier = modifier,
             contentScale = ContentScale.FillWidth,
-            rotation = upload.rotation,
+            rotation = rotation,
         )
     }
 }
@@ -270,19 +292,20 @@ private fun VideoPlayer(videoUrl: String, modifier: Modifier = Modifier) {
 internal fun GardenFlavour(
     upload: Upload,
     capsuleRefs: List<CapsuleRef>,
-    tagInput: String,
-    onTagInputChange: (String) -> Unit,
+    tags: List<String>,
+    rotation: Int,
+    availableTags: List<String>,
+    recentTags: List<String>,
     innerPadding: androidx.compose.foundation.layout.PaddingValues,
+    onTagsChange: (List<String>) -> Unit,
     onRotate: () -> Unit,
-    onTagAdd: (String) -> Unit,
-    onTagRemove: (String) -> Unit,
     onCapsuleTap: (String) -> Unit,
     onStartCapsule: () -> Unit,
     onCompost: () -> Unit,
 ) {
     var showAddToCapsule by remember { mutableStateOf(false) }
     var showCompostConfirm by remember { mutableStateOf(false) }
-    val hasTagsOrCapsules = upload.tags.isNotEmpty() || capsuleRefs.any { it.state == "open" || it.state == "sealed" }
+    val hasTagsOrCapsules = tags.isNotEmpty() || capsuleRefs.any { it.state == "open" || it.state == "sealed" }
 
     Column(
         Modifier
@@ -290,77 +313,36 @@ internal fun GardenFlavour(
             .padding(innerPadding)
             .verticalScroll(rememberScrollState())
     ) {
-        // Media + rotate button
         Box {
-            MediaArea(
-                upload = upload,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            IconButton(
-                onClick = onRotate,
-                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
-            ) {
-                Icon(
-                    Icons.Filled.RotateRight,
-                    contentDescription = "Rotate",
-                    tint = Parchment,
-                    modifier = Modifier
-                        .background(Forest.copy(alpha = 0.55f), RoundedCornerShape(50))
-                        .padding(4.dp),
-                )
+            MediaArea(upload = upload, rotation = rotation, modifier = Modifier.fillMaxWidth())
+            if (!upload.isVideo) {
+                IconButton(
+                    onClick = onRotate,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.RotateRight,
+                        contentDescription = "Rotate",
+                        tint = Parchment,
+                        modifier = Modifier
+                            .background(Forest.copy(alpha = 0.55f), RoundedCornerShape(50))
+                            .padding(4.dp),
+                    )
+                }
             }
         }
 
         Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
-            // Inline tag editor
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                upload.tags.forEach { tag ->
-                    InputChip(
-                        selected = false,
-                        onClick = {},
-                        label = { Text(tag, style = MaterialTheme.typography.bodySmall) },
-                        trailingIcon = {
-                            Icon(
-                                Icons.Filled.Close,
-                                contentDescription = "Remove tag",
-                                modifier = Modifier
-                                    .size(14.dp)
-                                    .clickable { onTagRemove(tag) },
-                            )
-                        },
-                    )
-                }
-                BasicTextField(
-                    value = tagInput,
-                    onValueChange = onTagInputChange,
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodySmall.copy(color = Forest),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = {
-                        if (tagInput.isNotBlank() && isValidTag(tagInput.trim())) {
-                            onTagAdd(tagInput.trim())
-                            onTagInputChange("")
-                        }
-                    }),
-                    decorationBox = { inner ->
-                        Box(
-                            Modifier
-                                .background(Forest08, RoundedCornerShape(50))
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            if (tagInput.isEmpty()) {
-                                Text("+ tag", style = MaterialTheme.typography.bodySmall.copy(color = TextMuted))
-                            }
-                            inner()
-                        }
-                    },
-                )
-            }
+            TagInputField(
+                tags = tags,
+                onTagsChange = onTagsChange,
+                availableTags = availableTags,
+                recentTags = recentTags,
+            )
 
             Spacer(Modifier.height(12.dp))
             Text("Uploaded ${formatInstantDate(upload.uploadedAt)}", style = MaterialTheme.typography.bodySmall, color = TextMuted)
 
-            // Active capsule memberships
             val activeCapsules = capsuleRefs.filter { it.state == "open" || it.state == "sealed" }
             if (activeCapsules.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
@@ -375,7 +357,6 @@ internal fun GardenFlavour(
             HorizontalDivider(color = Forest15)
             Spacer(Modifier.height(16.dp))
 
-            // Add to a capsule — prominent
             OutlinedButton(
                 onClick = { showAddToCapsule = true },
                 modifier = Modifier.fillMaxWidth(),
@@ -388,7 +369,6 @@ internal fun GardenFlavour(
             HorizontalDivider(color = Forest15)
             Spacer(Modifier.height(16.dp))
 
-            // Compost — separated below divider
             OutlinedButton(
                 onClick = { showCompostConfirm = true },
                 enabled = !hasTagsOrCapsules,
@@ -440,8 +420,13 @@ internal fun GardenFlavour(
 internal fun ExploreFlavour(
     upload: Upload,
     capsuleRefs: List<CapsuleRef>,
+    tags: List<String>,
+    rotation: Int,
+    availableTags: List<String>,
+    recentTags: List<String>,
     innerPadding: androidx.compose.foundation.layout.PaddingValues,
-    onSwitchToGarden: () -> Unit,
+    onTagsChange: (List<String>) -> Unit,
+    onRotate: () -> Unit,
     onCapsuleTap: (String) -> Unit,
 ) {
     Column(
@@ -450,10 +435,26 @@ internal fun ExploreFlavour(
             .padding(innerPadding)
             .verticalScroll(rememberScrollState())
     ) {
-        MediaArea(upload = upload, modifier = Modifier.fillMaxWidth())
+        Box {
+            MediaArea(upload = upload, rotation = rotation, modifier = Modifier.fillMaxWidth())
+            if (!upload.isVideo) {
+                IconButton(
+                    onClick = onRotate,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.RotateRight,
+                        contentDescription = "Rotate",
+                        tint = Parchment,
+                        modifier = Modifier
+                            .background(Forest.copy(alpha = 0.55f), RoundedCornerShape(50))
+                            .padding(4.dp),
+                    )
+                }
+            }
+        }
 
         Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
-            // Metadata
             upload.capturedAt?.let {
                 Text("Taken ${formatInstantDate(it)}", style = MaterialTheme.typography.bodyMedium, color = Forest)
                 Spacer(Modifier.height(4.dp))
@@ -473,22 +474,12 @@ internal fun ExploreFlavour(
 
             Spacer(Modifier.height(12.dp))
 
-            // Tags read-only
-            if (upload.tags.isNotEmpty()) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    upload.tags.forEach { tag ->
-                        InputChip(
-                            selected = false,
-                            onClick = {},
-                            label = { Text(tag, style = MaterialTheme.typography.bodySmall) },
-                        )
-                    }
-                }
-                Spacer(Modifier.height(4.dp))
-            }
-            TextButton(onClick = onSwitchToGarden, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
-                Text("Edit tags", color = Forest, style = MaterialTheme.typography.bodySmall)
-            }
+            TagInputField(
+                tags = tags,
+                onTagsChange = onTagsChange,
+                availableTags = availableTags,
+                recentTags = recentTags,
+            )
 
             Spacer(Modifier.height(32.dp))
         }
@@ -542,7 +533,7 @@ private fun CompostFlavour(
     }
 }
 
-// ── Add to capsule dialog (unchanged from v0.21.0) ────────────────────────────
+// ── Add to capsule dialog (unchanged) ─────────────────────────────────────────
 
 @Composable
 private fun AddToCapsuleDialog(

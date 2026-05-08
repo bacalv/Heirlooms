@@ -37,16 +37,6 @@ class PhotoDetailViewModelTest {
     private fun baseUrl() = server.url("/").toString().trimEnd('/')
 
     @Test
-    fun tagInput_survives_savedstate_round_trip() {
-        val handle = SavedStateHandle()
-        val vm = PhotoDetailViewModel(handle)
-        vm.tagInput = "family"
-
-        val restored = PhotoDetailViewModel(handle)
-        assertEquals("family", restored.tagInput)
-    }
-
-    @Test
     fun trackView_fires_exactly_once_for_multiple_calls() = runTest {
         repeat(5) { server.enqueue(MockResponse().setBody("{}").setResponseCode(200)) }
         val api = HeirloomsApi(baseUrl = baseUrl(), apiKey = "test")

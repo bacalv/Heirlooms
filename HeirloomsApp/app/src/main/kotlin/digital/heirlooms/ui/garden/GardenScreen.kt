@@ -4,17 +4,13 @@ package digital.heirlooms.ui.garden
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,30 +22,24 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.automirrored.filled.Label
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -58,23 +48,23 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import digital.heirlooms.api.Upload
 import digital.heirlooms.ui.brand.OliveBranchArrival
 import digital.heirlooms.ui.common.HeirloomsImage
 import digital.heirlooms.ui.common.LocalHeirloomsApi
-import digital.heirlooms.ui.share.isValidTag
+import digital.heirlooms.ui.common.TagInputField
+import digital.heirlooms.ui.share.RecentTagsStore
 import digital.heirlooms.ui.theme.Forest
 import digital.heirlooms.ui.theme.Forest15
-import digital.heirlooms.ui.theme.Forest25
 import digital.heirlooms.ui.theme.HeirloomsSerifItalic
 import digital.heirlooms.ui.theme.Parchment
 import digital.heirlooms.ui.theme.TextMuted
@@ -92,6 +82,7 @@ fun GardenScreen(
     val api = LocalHeirloomsApi.current
     val state by vm.state.collectAsState()
     val availableTags by vm.availableTags.collectAsState()
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
 
@@ -99,7 +90,6 @@ fun GardenScreen(
         if (state is GardenLoadState.Loading) vm.load(api) else vm.refresh(api)
     }
 
-    // Poll Just arrived every 30 seconds. Lightweight — only fetches that single row.
     LaunchedEffect(Unit) {
         while (true) {
             delay(30_000L)
@@ -107,7 +97,6 @@ fun GardenScreen(
         }
     }
 
-    // IDs that just landed in Just arrived — drives per-tile arrival animations.
     val newlyArrivedIds by vm.newlyArrivedIds.collectAsStateWithLifecycle()
 
     fun refresh() {
@@ -173,12 +162,13 @@ fun GardenScreen(
                                             catch (_: Exception) { vm.optimisticRotate(uploadId, currentRotation) }
                                         }
                                     },
-                                    onQuickTag = { uploadId, currentTags, newTag ->
-                                        val updated = currentTags + newTag
-                                        vm.optimisticTag(uploadId, updated)
+                                    onTagsUpdated = { uploadId, oldTags, newTags ->
+                                        val added = newTags.filter { it !in oldTags }
+                                        if (added.isNotEmpty()) RecentTagsStore(context).record(added)
+                                        vm.optimisticTag(uploadId, newTags)
                                         scope.launch {
-                                            try { api.updateTags(uploadId, updated) }
-                                            catch (_: Exception) { vm.optimisticTag(uploadId, currentTags) }
+                                            try { api.updateTags(uploadId, newTags) }
+                                            catch (_: Exception) { vm.optimisticTag(uploadId, oldTags) }
                                         }
                                     },
                                     emptyLabel = if (isJustArrived) "Nothing waiting." else "No items match this plot's tags.",
@@ -190,7 +180,6 @@ fun GardenScreen(
             }
         }
     }
-
     } // closes outer Box
 }
 
@@ -212,7 +201,7 @@ private fun PlotRowSection(
     onClearNewlyArrived: () -> Unit = {},
     availableTags: List<String> = emptyList(),
     onQuickRotate: (uploadId: String, currentRotation: Int) -> Unit,
-    onQuickTag: (uploadId: String, currentTags: List<String>, newTag: String) -> Unit,
+    onTagsUpdated: (uploadId: String, oldTags: List<String>, newTags: List<String>) -> Unit,
     emptyLabel: String,
 ) {
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = savedScrollIndex)
@@ -221,13 +210,11 @@ private fun PlotRowSection(
         onScrollIndex(listState.firstVisibleItemIndex)
     }
 
-    // When new items arrive in Just arrived, snap to the start so the new item is visible.
     LaunchedEffect(shouldScrollToStart) {
         if (shouldScrollToStart) listState.scrollToItem(0)
     }
 
     Column(Modifier.padding(top = 16.dp)) {
-        // Interactive row title
         Row(
             modifier = Modifier
                 .clickable(onClick = onTitleTap)
@@ -262,7 +249,7 @@ private fun PlotRowSection(
             ) {
                 itemsIndexed(uploads, key = { _, u -> u.id }) { _, upload ->
                     var showMenu by remember { mutableStateOf(false) }
-                    var showAddTag by remember { mutableStateOf(false) }
+                    var showTagSheet by remember { mutableStateOf(false) }
 
                     Box {
                         Box(
@@ -295,11 +282,11 @@ private fun PlotRowSection(
                                 )
                             }
                         }
-                        // Visible tag button — higher Z order than inner Box so taps are captured here.
+                        // Visible tag button — higher Z order so taps don't reach inner Box.
                         Box(
                             Modifier
                                 .align(Alignment.BottomStart)
-                                .clickable { showAddTag = true }
+                                .clickable { showTagSheet = true }
                                 .background(Forest.copy(alpha = 0.65f), RoundedCornerShape(topEnd = 4.dp))
                                 .padding(6.dp)
                         ) {
@@ -339,24 +326,23 @@ private fun PlotRowSection(
                             )
                             DropdownMenuItem(
                                 text = { Text("Add tag…") },
-                                onClick = { showMenu = false; showAddTag = true },
+                                onClick = { showMenu = false; showTagSheet = true },
                             )
                         }
-                        if (showAddTag) {
-                            QuickTagDialog(
-                                existingTags = upload.tags,
+                        if (showTagSheet) {
+                            QuickTagSheet(
+                                upload = upload,
                                 availableTags = availableTags,
-                                onDismiss = { showAddTag = false },
-                                onAdd = { tag ->
-                                    showAddTag = false
-                                    onQuickTag(upload.id, upload.tags, tag)
+                                onDismiss = { showTagSheet = false },
+                                onTagsUpdated = { newTags ->
+                                    showTagSheet = false
+                                    onTagsUpdated(upload.id, upload.tags, newTags)
                                 },
                             )
                         }
                     }
                 }
 
-                // End-of-row affordances
                 if (loadingMore) {
                     item {
                         Box(
@@ -372,6 +358,45 @@ private fun PlotRowSection(
                     item { ExploreAllTile(isJustArrived = isJustArrived, onClick = onExploreAll) }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun QuickTagSheet(
+    upload: Upload,
+    availableTags: List<String>,
+    onDismiss: () -> Unit,
+    onTagsUpdated: (List<String>) -> Unit,
+) {
+    val context = LocalContext.current
+    val recentTags = remember(context) { RecentTagsStore(context).load().take(5) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var stagedTags by remember { mutableStateOf(upload.tags) }
+
+    ModalBottomSheet(
+        onDismissRequest = {
+            if (stagedTags != upload.tags) onTagsUpdated(stagedTags) else onDismiss()
+        },
+        sheetState = sheetState,
+        containerColor = Parchment,
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Tags", style = MaterialTheme.typography.titleMedium, color = Forest)
+            TagInputField(
+                tags = stagedTags,
+                onTagsChange = { stagedTags = it },
+                availableTags = availableTags,
+                recentTags = recentTags,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
@@ -419,69 +444,6 @@ private fun ExploreAllTile(isJustArrived: Boolean, onClick: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun QuickTagDialog(
-    existingTags: List<String>,
-    availableTags: List<String>,
-    onDismiss: () -> Unit,
-    onAdd: (String) -> Unit,
-) {
-    var input by remember { mutableStateOf("") }
-    val isValid = isValidTag(input.trim())
-    val suggestions = remember(availableTags, existingTags) {
-        availableTags.filter { it !in existingTags }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = Parchment,
-        title = { Text("Add tag", style = MaterialTheme.typography.titleMedium.copy(color = Forest)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (suggestions.isNotEmpty()) {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        suggestions.forEach { tag ->
-                            FilterChip(
-                                selected = false,
-                                onClick = { onAdd(tag) },
-                                label = { Text(tag, style = MaterialTheme.typography.bodySmall) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    containerColor = Forest15,
-                                    labelColor = Forest,
-                                ),
-                            )
-                        }
-                    }
-                }
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { input = it },
-                    placeholder = { Text(if (suggestions.isEmpty()) "e.g. family" else "New tag…", color = TextMuted) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = {
-                        if (isValid) onAdd(input.trim())
-                    }),
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { if (isValid) onAdd(input.trim()) },
-                enabled = isValid,
-                colors = ButtonDefaults.buttonColors(containerColor = Forest, contentColor = Parchment),
-            ) { Text("Add") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel", color = TextMuted) }
-        },
-    )
-}
-
 @Composable
 private fun GardenEmptyState() {
     Column(
@@ -516,7 +478,7 @@ internal fun DidntTake(onRetry: () -> Unit) {
             style = HeirloomsSerifItalic.copy(fontSize = 22.sp, color = Forest),
         )
         Spacer(Modifier.height(8.dp))
-        TextButton(onClick = onRetry) {
+        androidx.compose.material3.TextButton(onClick = onRetry) {
             Text("Try again", style = MaterialTheme.typography.bodyMedium.copy(color = Forest))
         }
     }

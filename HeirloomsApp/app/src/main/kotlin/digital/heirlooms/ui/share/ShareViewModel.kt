@@ -8,7 +8,6 @@ sealed class ReceiveState {
     data class Idle(
         val photos: List<Uri>,
         val tagsInProgress: List<String> = emptyList(),
-        val currentTagInput: String = "",
         val recentTags: List<String> = emptyList(),
     ) : ReceiveState()
     data class Uploading(val sessionTag: String) : ReceiveState()

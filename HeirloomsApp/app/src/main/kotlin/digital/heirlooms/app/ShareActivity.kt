@@ -78,40 +78,14 @@ class ShareActivity : ComponentActivity() {
                     Box(Modifier.fillMaxSize().background(Parchment)) {
                         IdleScreen(
                             state = s,
-                            onTagInputChanged = { input ->
+                            onTagsChange = { newTags ->
                                 (screenState as? ReceiveState.Idle)?.let {
-                                    screenState = it.copy(currentTagInput = input)
-                                }
-                            },
-                            onTagCommit = { tag ->
-                                (screenState as? ReceiveState.Idle)?.let {
-                                    screenState = it.copy(
-                                        tagsInProgress = it.tagsInProgress + tag,
-                                        currentTagInput = "",
-                                    )
-                                }
-                            },
-                            onTagRemoved = { tag ->
-                                (screenState as? ReceiveState.Idle)?.let {
-                                    screenState = it.copy(tagsInProgress = it.tagsInProgress - tag)
-                                }
-                            },
-                            onRecentTagTapped = { tag ->
-                                (screenState as? ReceiveState.Idle)?.let {
-                                    screenState = it.copy(
-                                        tagsInProgress = it.tagsInProgress + tag,
-                                        recentTags = it.recentTags - tag,
-                                    )
+                                    screenState = it.copy(tagsInProgress = newTags)
                                 }
                             },
                             onPlant = {
                                 (screenState as? ReceiveState.Idle)?.let { idle ->
-                                    val input = idle.currentTagInput.trim()
-                                    viewModel.pendingTags = if (input.isNotEmpty() && isValidTag(input)) {
-                                        idle.tagsInProgress + input
-                                    } else {
-                                        idle.tagsInProgress
-                                    }
+                                    viewModel.pendingTags = idle.tagsInProgress
                                     RecentTagsStore(applicationContext).record(viewModel.pendingTags)
                                     enqueueUploads()
                                 }

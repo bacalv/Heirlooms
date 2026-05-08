@@ -6,6 +6,46 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-09 — v0.26.0: Unified TagInputField + staged photo detail edits
+
+**New shared `TagInputField` composable** (`ui/common/TagInputField.kt`).
+Chips for existing tags (× to remove) + inline `BasicTextField` + suggestion list
+below. When input is empty: last 5 from `RecentTagsStore` (labelled "recent").
+When typing: filtered from `availableTags`, falling back to `recentTags` when
+`availableTags` is empty (share flow). Duplicate prevention; invalid-input error
+line; `rememberSaveable` for text input. Replaces all previous per-screen tag UI.
+
+**Staged changes in photo detail** (`PhotoDetailViewModel`).
+`stageTags()` and `stageRotate()` buffer changes locally. `saveChanges()` is
+`suspend` — patches tags and/or rotation then clears staged state. `isDirty:
+StateFlow<Boolean>` derived via `combine()`. `BackHandler` in `PhotoDetailScreen`
+intercepts both the system back gesture and the top-bar label; calls
+`RecentTagsStore.record()` for newly added tags then `vm.saveChanges()` before
+`onBack()`. Navigation waits for the save to complete.
+
+**Rotation in photo detail — both flavours, images only.** `MediaArea` now takes
+an explicit `rotation: Int` (effective = `stagedRotation ?: upload.rotation`).
+`RotateRight` button added to `ExploreFlavour` (Garden already had it); hidden
+when `upload.isVideo`. `PhotoDetailViewModel.availableTags` populated the same
+way as Garden and Explore ViewModels.
+
+**Garden quick-tag sheet.** `QuickTagDialog` (AlertDialog) replaced by
+`QuickTagSheet` (ModalBottomSheet + `TagInputField`). Staged: dismiss commits if
+tags changed. `onQuickTag` callback renamed `onTagsUpdated` with full old/new
+list signature; `RecentTagsStore.record()` called for added tags.
+
+**Share flow simplified.** `ReceiveState.Idle` loses `currentTagInput`. Four
+IdleScreen callbacks (`onTagInputChanged`, `onTagCommit`, `onTagRemoved`,
+`onRecentTagTapped`) replaced by one `onTagsChange: (List<String>) → Unit`.
+
+**Test cleanup.** `tagInput_survives_savedstate_round_trip` removed (property
+gone). `ShareViewModelTest` orphaned tests for `pendingWorkerId` /
+`uploadPhotoCount` (removed from VM in an earlier session) cleaned up.
+
+APK v0.26.0 (versionCode 31) installed on Samsung Galaxy A02s.
+
+---
+
 ## Session — 2026-05-08 — v0.25.8–v0.25.10: Explore filter tags + video badges + garden tag button
 
 **v0.25.10 — Visible tag button on Garden tiles.**
