@@ -139,7 +139,7 @@ export function CapsuleCreatePage() {
         ← Capsules
       </button>
 
-      <p className="font-serif italic text-forest text-xl mb-8">Plant something for someone.</p>
+      <p className="font-serif italic text-forest text-xl mb-8">Keep something for someone.</p>
 
       <div className="space-y-6">
         {/* For */}
@@ -210,7 +210,7 @@ export function CapsuleCreatePage() {
 
       {submitError && (
         <div className="mt-6 p-4 rounded-card border border-earth/30 bg-earth-10 text-center space-y-2">
-          <p className="font-serif italic text-earth">didn't take</p>
+          <p className="text-earth">Couldn't start.</p>
           <p className="text-sm text-text-body">Your capsule wasn't started.</p>
           <button onClick={() => setSubmitError(null)}
             className="text-sm text-forest underline">Try again</button>

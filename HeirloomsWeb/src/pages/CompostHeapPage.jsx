@@ -58,7 +58,7 @@ export function CompostHeapPage() {
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
       setUploads((prev) => prev.filter((u) => u.id !== uploadId))
     } catch (e) {
-      setRestoreErrors((prev) => ({ ...prev, [uploadId]: "didn't take. Try again." }))
+      setRestoreErrors((prev) => ({ ...prev, [uploadId]: "Couldn't restore. Try again." }))
     } finally {
       setRestoringId(null)
     }
@@ -110,7 +110,7 @@ export function CompostHeapPage() {
                       Composted {formatCompactDate(upload.compostedAt)}. {days} {days === 1 ? 'day' : 'days'} left.
                     </p>
                     {restoreErrors[upload.id] && (
-                      <p className="text-xs font-serif italic text-earth mt-0.5">{restoreErrors[upload.id]}</p>
+                      <p className="text-xs text-earth mt-0.5">{restoreErrors[upload.id]}</p>
                     )}
                   </div>
                   <button

@@ -6,6 +6,63 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-10 (v0.20.3 — Brand vocabulary cleanup)
+
+**Prompt:** Implement the brand vocabulary cleanup per the SE Brief. Two brand-vocabulary
+problems caught in PA review: *"Didn't take"* as the failure idiom required first-time
+readers to know the gardening sense of "the seed didn't take root" before the metaphor
+activated — opaque rather than invisible-but-felt. *"Plant something for someone"* on the
+capsule create form had the *plant + for [a person]* shape, carrying unintended reproductive
+connotations in a memory product adjacent to family and parenthood.
+
+**What was built:**
+
+- **Dropped *didn't take* entirely.** Errors now use plain operational copy (*"Couldn't
+  save. Try again."*, *"Couldn't upload. Try again."*, etc.) — sans typography (not
+  italic Georgia), earth colour, retry affordance unchanged. Updated all web error copy
+  strings across `AddToCapsuleModal.jsx`, `PhotoDetailPage.jsx`, `CompostHeapPage.jsx`,
+  `CapsulesListPage.jsx`, `CapsuleDetailPage.jsx`, `GardenPage.jsx`, `CapsuleCreatePage.jsx`,
+  and `OliveBranchDidntTake.jsx`. The InlineError component in `CapsuleDetailPage.jsx`
+  had its styling updated (font-serif italic → sans) and its default prop updated.
+
+- **Replaced *Plant something for someone* with *Keep something for someone*** in
+  `CapsuleCreatePage.jsx`. Uses the existing *keep* concept from the welcome screen.
+  The *plant* verb is now upload-only. Added *Keep* entry to IDIOMS.md.
+
+- **IDIOMS.md substantially rewritten.** Removed *Didn't take* entry. Added Errors
+  section (brand voice deliberately absent from error states). Updated lifecycle verbs
+  table (upload failure row: no brand verb; cancelled row: *cancelled* filled in). Updated
+  *What not to say* table. Updated *Plant* entry (upload-only, retired recipient
+  construction). Added *Keep / Keeping* entry. Rewrote *Bloom* entry (visual moment vs
+  technical state). Added brand-discipline meta-note (*Checking combinations, not just
+  words*). Added *Known unsettled* section (the *open* overload for Milestone 6; the
+  recipients-as-categories question for Milestone 7). Added *The unit of content* section
+  (*items* for plural/count contexts, no new brand-vocabulary noun). Added *Quick
+  reference* table (GLOSSARY.md absorbed — B2 path).
+
+- **GLOSSARY.md deleted.** Content merged into IDIOMS.md as *Quick reference*. Single
+  source of truth; no parallel-update overhead.
+
+- **BRAND.md updated.** Removed *didn't take* verb from voice section. Updated canonical
+  strings (upload failed: plain operational copy; capsule create opening line: *Keep
+  something for someone*). Updated motion language table (*didn't take* state renamed
+  *error*, plain sans copy). Updated palette token descriptions (earth, earth-10).
+  Updated signal-colour section (earth = fault, failure, drop — not "didn't take").
+
+- **PA_NOTES.md updated.** Working-principle entry added: PA's productive-by-default
+  impulse versus brand restraint. Version line updated.
+
+- **Tests updated.** `capsules.test.jsx`: two *didn't take* assertions updated to
+  *Couldn't load.*; two *Plant something for someone* assertions updated to *Keep
+  something for someone.* `OliveBranchDidntTake.test.jsx`: assertion updated to
+  *Couldn't upload.*
+
+No functional behaviour changes. No new tests added. Web error copy strings updated;
+visual treatment (earth colour, retry affordance) unchanged. The v0.21.0 Android brief
+will be revised by PA before implementation to remove remaining *didn't take* references.
+
+---
+
 ## Session — 2026-05-10 (v0.21.0 — Combined Android Increment 3 + Daily-Use)
 
 **Prompt:** Implement the combined Android Increment 3 + Daily-Use per the SE Brief in

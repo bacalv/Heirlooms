@@ -11,12 +11,12 @@ describe('OliveBranchDidntTake', () => {
     })
   })
 
-  it("renders the partial branch, leaf pair, seed, and didn't-take text", () => {
+  it('renders the partial branch, leaf pair, seed, and error text', () => {
     const { container, getByText } = render(<OliveBranchDidntTake />)
     expect(container.querySelector('.dt-branch')).toBeInTheDocument()
     expect(container.querySelectorAll('.dt-leaf')).toHaveLength(2)
     expect(container.querySelector('.dt-seed')).toBeInTheDocument()
-    expect(getByText("didn't take")).toBeInTheDocument()
+    expect(getByText("Couldn't upload.")).toBeInTheDocument()
   })
 
   it('fires onComplete on next tick under reduced motion', async () => {

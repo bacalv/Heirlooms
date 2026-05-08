@@ -121,7 +121,7 @@ export function AddToCapsuleModal({ uploadId, onSuccess, onCancel }) {
         </div>
 
         {error && (
-          <p className="text-sm font-serif italic text-earth">didn't take. Try again.</p>
+          <p className="text-sm text-earth">Couldn't add to capsule. Try again.</p>
         )}
 
         <div className="flex items-center justify-between pt-2">

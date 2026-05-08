@@ -158,7 +158,7 @@ export function CapsulesListPage() {
 
       {error && (
         <div className="text-center py-20 space-y-3">
-          <p className="font-serif italic text-earth text-lg">didn't take</p>
+          <p className="text-earth text-lg">Couldn't load.</p>
           <p className="text-sm text-text-body">The capsules didn't load.</p>
           <button onClick={fetchCapsules}
             className="px-4 py-2 rounded-button text-sm bg-forest text-parchment hover:opacity-90 transition-opacity">

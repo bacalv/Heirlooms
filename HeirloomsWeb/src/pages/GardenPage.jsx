@@ -159,12 +159,12 @@ function TagEditor({ currentTags, allTags, onSave, onCancel }) {
 function FailedTile({ onRetry, onDismiss }) {
   return (
     <div className="gallery-tile--failed">
-      <p className="font-serif italic text-earth text-[12px]">didn't take</p>
+      <p className="text-earth text-[12px]">Couldn't upload.</p>
       <div className="flex gap-2 mt-2">
         <button onClick={onRetry}
-          className="px-2 py-1 bg-forest text-parchment rounded-button font-serif italic text-[10px]">try again</button>
+          className="px-2 py-1 bg-forest text-parchment rounded-button text-[10px]">Try again</button>
         <button onClick={onDismiss}
-          className="px-2 py-1 text-text-muted text-[10px] font-serif italic">dismiss</button>
+          className="px-2 py-1 text-text-muted text-[10px]">Dismiss</button>
       </div>
     </div>
   )

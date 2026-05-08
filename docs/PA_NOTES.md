@@ -17,6 +17,19 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Tends to work in focused sessions and likes a clean summary at the end of each one
 - Appreciates being told when something is a one-time setup vs ongoing requirement
 
+- **PA's productive-by-default impulse versus brand restraint (v0.20.3).** When
+  proposing new brand vocabulary, the PA's training bias is to be *productive* — to
+  find words that compose into the existing metaphor system, to extend metaphors, to
+  make things feel coherent. That productivity is exactly the wrong instinct in
+  Heirlooms's register, where *restraint* is the brand discipline. Heirlooms is a
+  quiet product about memory; the words it uses should mostly get out of the way.
+  When PA proposes new vocabulary, default to "no, plain is better" unless there's a
+  clear case for the new word. Catch the productive-by-default impulse before it ships.
+  Cf. v0.20.3 vocabulary cleanup, where two PA-proposed brand-vocabulary expansions
+  (*seed* as canonical noun, *leaf* as count noun) were caught by Bret's review before
+  they landed. The instinct was wrong both times; the right move was to recognise the
+  brand doesn't need a unifier noun.
+
 ---
 
 ## Things to always remember
@@ -27,8 +40,9 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Current version: v0.21.0 (10 May 2026) — brand foundation (v0.17.0), share-sheet
   idle state (v0.17.1), capsule backend (v0.18.0), doc sweeps (v0.18.1, v0.19.6, v0.20.1),
   brand visual mechanic (v0.18.2), capsule web UI (v0.19.0–v0.19.5), compost heap
-  (v0.20.0), Coil 3.x migration (v0.20.2), combined Android Increment 3 + Daily-Use
-  (v0.21.0). Milestone 5 closed; Milestone 6 (delivery) is next.
+  (v0.20.0), Coil 3.x migration (v0.20.2), brand vocabulary cleanup (v0.20.3),
+  combined Android Increment 3 + Daily-Use (v0.21.0). Milestone 5 closed;
+  Milestone 6 (delivery) is next.
 - One-time machine setup required: ~/.testcontainers.properties with
   docker.raw.sock path — see PROMPT_LOG.md for details
 
@@ -143,7 +157,7 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
   A quoting bug — the closing `"""` consumed the trailing `"` meant to close the `state`
   field's value — produced malformed output like `"state":"open,"created_at":...`, with the
   comma leaking into the string value. Browsers' strict `JSON.parse` rejected this; users
-  got *didn't take* on every capsule list and create. Worse, **all 49 integration tests
+  got the error state on every capsule list and create. Worse, **all 49 integration tests
   passed** because Jackson's `ObjectMapper.readTree()` (the test client's parser) is lenient
   by default and accepted `open,` as a string value. Fix in v0.19.5: rewrite all three
   serialisers using Jackson's `ObjectNode` API (`mapper.createObjectNode()`, `putArray()`,

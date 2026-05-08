@@ -4,8 +4,8 @@ import { lerp, prefersReducedMotion } from './animations'
 const DURATION_MS = 2000
 
 /**
- * Didn't-take animation: partial branch with one leaf pair, a pause beat,
- * earth-coloured seed appears on the soil line, "didn't take" text fades in.
+ * Upload-error animation: partial branch with one leaf pair, a pause beat,
+ * earth-coloured seed appears on the soil line, error text fades in.
  * Honours `prefers-reduced-motion` by snapping to the end state.
  */
 export function OliveBranchDidntTake({
@@ -78,14 +78,13 @@ export function OliveBranchDidntTake({
       <text
         className="dt-text"
         x="70" y="182"
-        fontFamily="var(--hl-font-serif)"
-        fontSize="16"
-        fontStyle="italic"
+        fontFamily="var(--hl-font-sans)"
+        fontSize="14"
         textAnchor="middle"
         fill="var(--hl-earth)"
         opacity="0"
       >
-        didn't take
+        Couldn't upload.
       </text>
     </svg>
   )

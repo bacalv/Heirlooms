@@ -142,7 +142,7 @@ describe('CapsulesListPage', () => {
   it('shows error state with try-again button', async () => {
     global.fetch.mockResolvedValueOnce({ ok: false, status: 500 })
     render(<Wrapper><CapsulesListPage /></Wrapper>)
-    await waitFor(() => expect(screen.getByText("didn't take")).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText("Couldn't load.")).toBeInTheDocument())
     expect(screen.getByText("The capsules didn't load.")).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument()
   })
@@ -216,7 +216,7 @@ describe('CapsuleDetailPage', () => {
   it('shows error state with try-again on fetch failure', async () => {
     global.fetch.mockResolvedValueOnce({ ok: false, status: 500 })
     render(<Wrapper initialEntries={['/capsules/cap-1']}><CapsuleDetailPage /></Wrapper>)
-    await waitFor(() => expect(screen.getByText("didn't take")).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText("Couldn't load.")).toBeInTheDocument())
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument()
   })
 
@@ -387,7 +387,7 @@ describe('CapsuleCreatePage', () => {
 
   it('renders brand-voice opening line and all four fields', () => {
     setup()
-    expect(screen.getByText('Plant something for someone.')).toBeInTheDocument()
+    expect(screen.getByText('Keep something for someone.')).toBeInTheDocument()
     expect(screen.getByText('For')).toBeInTheDocument()
     expect(screen.getByText('To open on')).toBeInTheDocument()
     expect(screen.getByText('Include')).toBeInTheDocument()
@@ -427,7 +427,7 @@ describe('CapsuleCreatePage', () => {
     // The include strip should appear (upload IDs initialised)
     // We look for "1 item selected" text once any thumb fetch completes
     // Just check the page renders without error
-    expect(screen.getByText('Plant something for someone.')).toBeInTheDocument()
+    expect(screen.getByText('Keep something for someone.')).toBeInTheDocument()
   })
 })
 

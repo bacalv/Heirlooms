@@ -27,8 +27,8 @@ function EditAffordance({ onClick, disabled }) {
   )
 }
 
-function InlineError({ message = 'didn\'t take. Try again.' }) {
-  return <p className="text-xs font-serif italic text-earth mt-1">{message}</p>
+function InlineError({ message = 'Couldn\'t save. Try again.' }) {
+  return <p className="text-xs text-earth mt-1">{message}</p>
 }
 
 // Sealing animation — the wax seal olive appears with scale-in
@@ -267,7 +267,7 @@ export function CapsuleDetailPage() {
 
   if (fetchError) return (
     <div className="max-w-3xl mx-auto px-4 py-8 text-center space-y-4">
-      <p className="font-serif italic text-earth">didn't take</p>
+      <p className="text-earth">Couldn't load.</p>
       <p className="text-sm text-text-body">The capsule didn't load.</p>
       <div className="flex items-center justify-center gap-4">
         <button onClick={fetchCapsule} className="px-4 py-2 rounded-button text-sm bg-forest text-parchment hover:opacity-90 transition-opacity">Try again</button>

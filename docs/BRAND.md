@@ -2,7 +2,8 @@
 
 **Status:** foundation locked at v0.17.0, 7 May 2026; capsule visual
 mechanic added at v0.18.2, 8 May 2026; *compost* verb and empty-state
-pool reference added at v0.20.0, 9 May 2026.
+pool reference added at v0.20.0, 9 May 2026; vocabulary cleanup
+(errors section, *keep* verb, *plant* upload-only) at v0.20.3, 10 May 2026.
 **Source of truth:** this document. If `tailwind.config.js`, `src/index.css`,
 or any component disagrees with what's written here, the discrepancy is a bug
 in the code, not in the brand.
@@ -34,7 +35,7 @@ document.
 | `parchment`  | #F2EEDF  | Ground. Page backgrounds, cards.              |
 | `forest`     | #3F4F33  | Primary. The colour of the brand mark, body type, in-progress states. |
 | `bloom`      | #D89B85  | Arrival. The ripened olive. Success states. Used sparingly — every appearance is earned. |
-| `earth`      | #B5694B  | Didn't-take. The seed that fell. Failure states. Also avatar/accent colour. |
+| `earth`      | #B5694B  | Failure states. The seed that fell. Also avatar/accent colour. |
 | `new-leaf`   | #7DA363  | Secondary vegetation accent. Used in illustrations and the occasional pop of plant green. |
 | `ink`        | #2C2A26  | Deepest text. Use sparingly — `forest` is preferred for body text on parchment. |
 
@@ -50,7 +51,7 @@ prescribes.
 | ------------ | ------------------------- | ------------------------------------- |
 | `forest-75`  | forest at 75% opacity     | Inactive navigation link text — muted version of full-forest for non-active nav items. |
 | `bloom-15`   | bloom at 15% opacity      | Delivered capsule card background in list view (the parchment-bloom wash). |
-| `earth-10`   | earth at 10% opacity      | Cancelled capsule card background in list view; hover background on earth-style action buttons; "didn't take" error banner background in the create form. |
+| `earth-10`   | earth at 10% opacity      | Cancelled capsule card background in list view; hover background on earth-style action buttons; error banner background in the create form. |
 
 The discipline above the primary table — *no new primary colours without a
 deliberate decision* — applies to *new hex values*. Derived tokens
@@ -65,7 +66,7 @@ discipline:
 
 - **Forest** = in-progress, neutral, the act of growing.
 - **Bloom** = arrival, success, completion.
-- **Earth** = didn't-take, fault, drop.
+- **Earth** = fault, failure, drop.
 
 No green checkmarks. No red X-marks. No warning triangles. No exclamation
 glyphs. The colour, paired with typography, does the work.
@@ -121,8 +122,6 @@ Do **not** use it for:
   copy ("Composted 9 May"). Not a destructive verb — *compost* says *this isn't
   useful to me anymore, but it isn't garbage either; it's part of what becomes
   the garden's future*.
-- *didn't take* — failure language for upload/save failures. Earth-coloured.
-
 ### Canonical strings
 
 - Empty gallery: "A garden begins with a single seed."
@@ -130,7 +129,8 @@ Do **not** use it for:
 - Empty gallery CTA: "plant your first"
 - Upload complete: "Something has been planted."
 - Upload complete sub: "{n} photos saved to your garden."
-- Upload failed: "didn't take"
+- Upload failed: plain operational copy — *"Couldn't upload. Try again."* Sans, earth colour, retry affordance. No brand verb.
+- Capsule create opening line: "Keep something for someone."
 - Milestone delivery (future, Milestone 6): "Something has bloomed for you."
 - Compost-heap empty state (randomised per session): see the `compostHeapEmptyState`
   array in `HeirloomsWeb/src/brand/brandStrings.js`. Five lines; pool can be
@@ -147,7 +147,7 @@ vocabulary is reusable.
 | growing            | Branch draws, leaves emerge in pairs base→tip.            |
 | blooming           | Olive forms in forest, then ripens to bloom colour.       |
 | arrived            | Wordmark settles in beneath. Composition complete.        |
-| didn't take        | Branch stops short, no olive, earth-coloured seed on soil, "didn't take" line. |
+| error              | Branch stops short, no olive, earth-coloured seed on soil, plain sans error line. |
 
 The arrival animation runs ~3 seconds total. `prefers-reduced-motion` falls
 back to the static end state of each animation, with no transitions.

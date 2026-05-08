@@ -82,7 +82,7 @@ export function PhotoDetailPage() {
       navigate('/', { state: { composted: true } })
       // composting stays true — component unmounts via navigation, no re-render needed
     } catch {
-      setCompostError("didn't take. Try again.")
+      setCompostError("Couldn't compost. Try again.")
       setComposting(false)
     }
   }
@@ -96,7 +96,7 @@ export function PhotoDetailPage() {
       const restored = await r.json()
       setUpload(restored)
     } catch {
-      setRestoreError("didn't take. Try again.")
+      setRestoreError("Couldn't restore. Try again.")
     } finally {
       setRestoring(false)
     }
@@ -176,7 +176,7 @@ export function PhotoDetailPage() {
           >
             {restoring ? <WorkingDots size="sm" /> : 'Restore'}
           </button>
-          {restoreError && <p className="text-xs font-serif italic text-earth">{restoreError}</p>}
+          {restoreError && <p className="text-xs text-earth">{restoreError}</p>}
         </div>
       )}
 
@@ -220,7 +220,7 @@ export function PhotoDetailPage() {
                 Compost requires no tags and no active capsule memberships.
               </p>
             )}
-            {compostError && <p className="text-xs font-serif italic text-earth mt-1">{compostError}</p>}
+            {compostError && <p className="text-xs text-earth mt-1">{compostError}</p>}
           </div>
         </div>
       )}

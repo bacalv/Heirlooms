@@ -2,6 +2,40 @@
 
 ---
 
+## v0.20.3 — Brand vocabulary cleanup (10 May 2026)
+
+Patch increment. Vocabulary-only changes; no functional behaviour change.
+
+**Dropped *didn't take* from the brand vocabulary.** Error states now use plain
+operational copy (*"Couldn't save. Try again."*, *"Couldn't upload. Try again."*,
+context-appropriate). Sans typography, earth colour, retry affordance — visual
+treatment unchanged; only the words and typography of error copy shift.
+
+**Replaced *Plant something for someone* with *Keep something for someone*** as
+the capsule create form's brand-voice opening line (web). Uses the existing *keep*
+concept from the welcome screen; no reproductive connotation. The *plant* verb is
+now upload-only.
+
+**IDIOMS.md substantially updated:** Errors section added (brand voice deliberately
+absent from error states); *Keep / Keeping* entry added; *Bloom* entry rewritten
+(visual moment vs technical state split); *Plant* entry updated (upload-only);
+brand-discipline meta-note added (*Checking combinations, not just words*); *Known
+unsettled* section added (the *open* overload, the recipients-as-categories
+question); *The unit of content* section added (*items* for counts — no new brand
+vocabulary noun); *Quick reference* table added (absorbed from GLOSSARY.md).
+
+**GLOSSARY.md deleted.** Content merged into IDIOMS.md as a *Quick reference*
+section (B2 path). Single source of truth; no parallel-update overhead.
+
+**BRAND.md updated:** Removed *didn't take* verb; updated canonical strings;
+updated motion language table; updated palette token descriptions.
+
+**Tests updated** to match new error copy strings and new opening line.
+
+Test counts unchanged: ~149 backend integration tests; ~40 web tests.
+
+---
+
 ## v0.21.0 — Combined Android Increment 3 + Daily-Use (10 May 2026)
 
 Minor bump — substantial new feature surface. Closes Milestone 5.
