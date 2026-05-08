@@ -6,119 +6,101 @@ important context or tradeoffs discovered along the way.
 
 ---
 
-## Session — 2026-05-10 (v0.20.3 — Brand vocabulary cleanup)
+## Session — 2026-05-10 (Milestone 6 — Garden / Explore restructure planning)
 
-**Prompt:** Implement the brand vocabulary cleanup per the SE Brief. Two brand-vocabulary
-problems caught in PA review: *"Didn't take"* as the failure idiom required first-time
-readers to know the gardening sense of "the seed didn't take root" before the metaphor
-activated — opaque rather than invisible-but-felt. *"Plant something for someone"* on the
-capsule create form had the *plant + for [a person]* shape, carrying unintended reproductive
-connotations in a memory product adjacent to family and parenthood.
+A scoping session before any code is written. The session settled the structural shape
+of a new milestone — *Milestone 6, Garden / Explore restructure* — that's been inserted
+before the originally-planned Milestone 6 (delivery, now Milestone 7). The decisions
+came out of a working observation that the Garden tab today is doing two jobs at once:
+helping the user *do work* (tag, process, compost incoming items) and helping the user
+*explore memories* (browse what's been kept). Loading everything every time is slow.
+The two jobs have different emotional registers and should live in different surfaces.
 
-**What was built:**
+**The split.** Garden becomes the work surface — a vertically-scrolling stack of
+horizontal Netflix-style "plots". The mandatory top plot is *Just arrived* — items
+the user hasn't yet acted on (tag, encapsulate, compost). Below sit user-defined
+plots (tag-based criteria) so advanced users can pin a "Family" plot, a "2026" plot,
+etc. Explore becomes the leisure surface — paginated grid, full filter set (tag,
+date range, capsule membership, composted toggle, location-boolean), photo-detail
+emphasising content presentation rather than action affordances.
 
-- **Dropped *didn't take* entirely.** Errors now use plain operational copy (*"Couldn't
-  save. Try again."*, *"Couldn't upload. Try again."*, etc.) — sans typography (not
-  italic Georgia), earth colour, retry affordance unchanged. Updated all web error copy
-  strings across `AddToCapsuleModal.jsx`, `PhotoDetailPage.jsx`, `CompostHeapPage.jsx`,
-  `CapsulesListPage.jsx`, `CapsuleDetailPage.jsx`, `GardenPage.jsx`, `CapsuleCreatePage.jsx`,
-  and `OliveBranchDidntTake.jsx`. The InlineError component in `CapsuleDetailPage.jsx`
-  had its styling updated (font-serif italic → sans) and its default prop updated.
+**Vocabulary settled.**
+- *Just arrived* — the noun-phrase for items received but not yet acted on. Replaces
+  *Untended* (which carried unintended productivity-app *neglect* connotations).
+- *Plot* — the noun for a section of the Garden tab. *"Add a plot"* affordance.
+  Garden contains plots. Verb forms (*plotted*, *plotting*) deliberately stay out of
+  user-facing copy; the noun carries the metaphor.
+- The unifier noun for content stays *items* — the brand has no canonical user-facing
+  noun for "the unit of content". Considered and rejected: *seed* (reproductive
+  connotations when paired with *plant*), *leaf* (mixed verb usage with *shelved*),
+  *keepsake* / *treasure* / *plot itself*. The brand voice lives in the verbs (plant,
+  seal, bloom, compost), not in the noun for the unit of content. This matches the
+  v0.20.3 brand-restraint discipline.
+- A new design principle: *negative-action button separation* — destructive actions
+  (compost, cancel, restore from compost) live in a different visual region from
+  positive actions (start a capsule, seal, add to capsule). To be added to BRAND.md
+  during the v0.20.3 vocabulary cleanup or Phase 1 of Milestone 6, whichever lands
+  first.
 
-- **Replaced *Plant something for someone* with *Keep something for someone*** in
-  `CapsuleCreatePage.jsx`. Uses the existing *keep* concept from the welcome screen.
-  The *plant* verb is now upload-only. Added *Keep* entry to IDIOMS.md.
+**Phased plan.** Four phases, three streams (backend / web / Android), twelve
+incremental briefs.
 
-- **IDIOMS.md substantially rewritten.** Removed *Didn't take* entry. Added Errors
-  section (brand voice deliberately absent from error states). Updated lifecycle verbs
-  table (upload failure row: no brand verb; cancelled row: *cancelled* filled in). Updated
-  *What not to say* table. Updated *Plant* entry (upload-only, retired recipient
-  construction). Added *Keep / Keeping* entry. Rewrote *Bloom* entry (visual moment vs
-  technical state). Added brand-discipline meta-note (*Checking combinations, not just
-  words*). Added *Known unsettled* section (the *open* overload for Milestone 6; the
-  recipients-as-categories question for Milestone 7). Added *The unit of content* section
-  (*items* for plural/count contexts, no new brand-vocabulary noun). Added *Quick
-  reference* table (GLOSSARY.md absorbed — B2 path).
+- **Phase 1: Backend foundations.** Three increments — EXIF extraction (background
+  job populating taken-date and location lat/lng on uploads), pagination on list
+  endpoints (cursor-based, backwards-compatible), plot schema and endpoints. No UI
+  changes; v0.21.0 Android ships unaffected during this phase.
+- **Phase 2: Web Explore tab.** Three increments — basic /explore route with
+  paginated grid, filter elaboration (date range, capsule membership, composted,
+  location-boolean), photo detail variant emphasising content. Built first because
+  it's mostly additive; Garden's existing behaviour unchanged during this phase.
+- **Phase 3: Web Garden plots.** Three increments — *Just arrived* plot, user plot
+  management with "Add a plot" affordance, photo detail variant emphasising actions.
+  Riskier; done after Explore so users have a fallback during the Garden transition.
+- **Phase 4: Android adoption.** Three increments — Android Explore tab, Android
+  Garden plots, bottom-nav restructure (burger menu replacing v0.21.0's three-tab
+  Settings entry).
 
-- **GLOSSARY.md deleted.** Content merged into IDIOMS.md as *Quick reference*. Single
-  source of truth; no parallel-update overhead.
+**Sequencing.** v0.21.0 Android (currently in flight) ships first as scoped, then
+this milestone begins. v0.21.0's bottom-nav structure changes during Phase 4 — users
+see two nav structures in close succession. Acceptable.
 
-- **BRAND.md updated.** Removed *didn't take* verb from voice section. Updated canonical
-  strings (upload failed: plain operational copy; capsule create opening line: *Keep
-  something for someone*). Updated motion language table (*didn't take* state renamed
-  *error*, plain sans copy). Updated palette token descriptions (earth, earth-10).
-  Updated signal-colour section (earth = fault, failure, drop — not "didn't take").
+**Timescales (rough estimates, ranges not commitments).**
+- One engineer, sequential: 5–7 weeks.
+- Two engineers, parallel where dependencies allow: 3–5 weeks.
+- Three engineers, maximum useful parallelism: 3–4 weeks. Diminishing returns past
+  three because the dependency graph constrains how much can run truly in parallel.
 
-- **PA_NOTES.md updated.** Working-principle entry added: PA's productive-by-default
-  impulse versus brand restraint. Version line updated.
+**Pending before Phase 1A brief is drafted.** Four small questions: plot
+configuration scope (single-user only at v1, or per-user-foreshadowing schema); the
+timing of vocabulary doc updates (with Phase 1, with Phase 2, or as a separate
+doc-only patch); plot criteria language at v1 (tag-matching only, or richer queries
+including date ranges and capsule membership); and confirming v0.21.0 Android ships
+first as currently scoped.
 
-- **Tests updated.** `capsules.test.jsx`: two *didn't take* assertions updated to
-  *Couldn't load.*; two *Plant something for someone* assertions updated to *Keep
-  something for someone.* `OliveBranchDidntTake.test.jsx`: assertion updated to
-  *Couldn't upload.*
+**Output artefacts.**
+- `docs/presentations/Garden_Explore_Plan.pptx` — the phased plan with timescale
+  estimates, dependency Gantt-style chart, and milestone renumbering. The first
+  presentation in a new `docs/presentations/` directory; future presentations may
+  cover retrospectives of past milestones, scoping for upcoming ones, or
+  team-shareable views of project state.
 
-No functional behaviour changes. No new tests added. Web error copy strings updated;
-visual treatment (earth colour, retry affordance) unchanged. The v0.21.0 Android brief
-will be revised by PA before implementation to remove remaining *didn't take* references.
+**Milestone renumbering.** The originally-planned M6 (delivery) becomes M7. The
+originally-planned M7 (multi-user) becomes M8. ROADMAP.md updated to reflect the
+new ordering. The reasoning: delivery deserves to land on a settled foundation
+rather than a flat surface that's about to change shape; loading and brand-register
+problems compound with every increment delayed; multi-user makes scaling decisions
+more expensive to retrofit.
 
----
-
-## Session — 2026-05-10 (v0.21.0 — Combined Android Increment 3 + Daily-Use)
-
-**Prompt:** Implement the combined Android Increment 3 + Daily-Use per the SE Brief in
-`HeirloomsApp`. Upgrade the build toolchain (AGP 8.8.2, compileSdk 35, Compose BOM
-2024.12.01, Coil 3.1.0, Kotlin 2.0.21). Add a new `MainActivity` hosting a three-tab
-bottom nav (Garden, Capsules, Settings). Build the Garden tab, Capsules tab, Settings
-tab, Compost heap view, capsule create flow, welcome screen. Drive-by: remove unused
-Tailwind tokens `bloom-25` and `earth-20`.
-
-**What was built:**
-
-- **Toolchain upgraded.** AGP 8.3.0 → 8.8.2; compileSdk/targetSdk 34 → 35; Kotlin
-  1.9.22 → 2.0.21 with `kotlin.plugin.compose` (replaces `composeOptions`
-  `kotlinCompilerExtensionVersion`); Compose BOM 2024.01.00 → 2024.12.01; Coil 3.0.4 →
-  3.1.0 (`coil-network-okhttp` added); JVM target 11 → 17; Navigation Compose 2.8.5;
-  Lifecycle ViewModel + Runtime Compose 2.8.7; `material-icons-extended` added.
-
-- **Two-activity structure.** `MainActivity` (new launcher, pure Compose) +
-  `ShareActivity` (unchanged). `SettingsActivity` kept but removed from app drawer
-  (exported=false).
-
-- **API layer.** `HeirloomsApi` (OkHttp + `org.json`) wraps all endpoints used by the
-  new screens. `LocalHeirloomsApi` + `LocalImageLoader` CompositionLocals provide the
-  API and auth-bearing Coil ImageLoader to all composables.
-
-- **Welcome screen.** Shown once per install via `EndpointStore.getWelcomed()` flag.
-  API key reset does NOT reset the welcome flag.
-
-- **Garden tab.** 2-column grid (revised from spec's 1-column — see design decisions
-  below). Tag filter; pull-to-refresh; skeleton loading; Compost heap link.
-
-- **Photo detail.** Active and composted states. `ColorMatrix.setToSaturation(0.6f)` +
-  `alpha(0.85f)` for composted rendering. Add-to-capsule dialog patches upload list.
-
-- **Compost heap.** Restore-only rows; 5-line randomised empty-state pool.
-
-- **Capsules tab + detail.** Four state variants; 2-col FlowRow photo grid; 700ms
-  ease-out sealing animation with reduced-motion fallback; cancel/seal dialogs.
-
-- **Capsule create flow.** Chip recipient input; native Material3 `DatePickerDialog`;
-  photo picker result via `SavedStateHandle`; `unlock_at` as 8am local timezone.
-
-- **Photo picker.** 4-column grid; bloom selection overlay; result returned to create
-  form via `savedStateHandle`.
-
-- **Settings tab.** Three items: API key reset, app version (`BuildConfig.VERSION_NAME`),
-  compost heap link.
-
-- **Bottom nav icons.** Canvas-drawn `OliveBranchIcon` and `WaxSealOliveIcon`.
-
-- **Drive-by.** `bloom-25` and `earth-20` removed from `tailwind.config.js` and BRAND.md.
-
-**Design decisions recorded:**
-- **2-column Garden grid** (not spec's 1-column): single-column full-width photos feel
-  sparse for browsing on a phone screen. 2 columns improves density without approaching
-  the Instagram-density 3-column that would break the considered register.
+**Brand-discipline note worth recording.** During the session, the PA initially
+proposed a *shelf layout* with productivity-app conventions (inbox shelf, recent
+shelf, tag shelf) on the Garden tab. Bret pushed back — those conventions import
+the *getting-behind* / *zero-as-achievement* register the brand has been resisting.
+The eventual answer (Garden = work surface with plots, Explore = leisure surface)
+came from Bret's reframing, not the PA's initial proposal. This is the third such
+catch in recent sessions (the others being *didn't take* opacity and *plant a seed
+for someone* near-miss in v0.20.3). The pattern is real: PA's productive-by-default
+instinct extends metaphors and surfaces; the brand's discipline restrains them.
+Captured in PA_NOTES.md at v0.20.3; reinforced here.
 
 ---
 

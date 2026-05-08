@@ -153,7 +153,7 @@ Android tagging are deferred — see IDEAS.md.
 A user can plant photos and a message for someone, to be opened on a chosen date.
 A capsule has a shape (open: contents editable until delivery; sealed: contents frozen
 at sealing) and a state (open, sealed, delivered, cancelled). Recipients are free-text
-in v1, becoming connections at Milestone 7.
+in v1, becoming connections at Milestone 8.
 
 - **Increment 1 (v0.18.0, shipped 8 May 2026).** Schema and backend API. Four tables,
   seven endpoints, message versioning, state-machine validation, ~49 integration tests.
@@ -165,13 +165,15 @@ in v1, becoming connections at Milestone 7.
   detail view (four state variants), create form, shared photo picker modal, photo detail
   page's "in N capsules" line and "Add to capsule" flow, confirmation dialogs, sealing
   animation, navigation guard. Bug fixes through v0.19.5; documentation sweep at v0.19.6.
-- **Increment 3 + Android Daily-Use (v0.21.0, shipped 10 May 2026).** New `MainActivity`
-  with three-tab bottom nav (Garden, Capsules, Settings). Read-only Gallery and Capsules
-  views; capsule create flow (Start + Seal paths); compost-aware behaviour throughout;
-  welcome screen. Toolchain upgraded: AGP 8.8.2, compileSdk 35, Kotlin 2.0.21, Compose
-  BOM 2024.12.01, Coil 3.1.0. Editing existing capsules stays on web for v1. ViewModel +
-  SavedStateHandle migration remains deferred.
-- **Milestone 5 closed (v0.21.0, 10 May 2026).**
+- **Increment 3 (planned, combined with Android Daily-Use).** Android: extend the
+  share-sheet flow with "+ start a capsule" as an alternative to plain upload. Capsule
+  creation on Android. Planned to ship together with the Daily-Use increment below.
+- **Android Daily-Use Increment (planned, combined with Increment 3).** Read-only Gallery
+  and Capsules views on Android. Solves the phone/web switching friction. The
+  orientation-change fix in v0.17.1 (`android:configChanges`) is tactical; the proper
+  ViewModel + SavedStateHandle migration is scoped for this increment. Editing stays on
+  web for now.
+- **Closes Milestone 5.**
 
 **v0.20.x — Compost heap (shipped 9 May 2026)**
 A non-milestone increment between Milestone 5 and 6: the first user-facing removal
@@ -180,11 +182,26 @@ no tags and no active capsule memberships. The 90-day window is the safety net; 
 hard-delete endpoint exists. Removal in Heirlooms is not a trash can: it is the product's
 considered way of returning something to the earth.
 
-**Milestone 6 — Capsule delivery** ← *next active milestone*
+**Milestone 6 — Garden / Explore restructure**
+A re-architecting of the main browsing surfaces before delivery work begins. The single
+flat Garden tab becomes two: a *Garden* (work surface — the *Just arrived* plot plus
+user-defined plots) and an *Explore* (leisure surface — paginated, filterable, where
+you visit memories rather than process them). Adds backend foundations (EXIF extraction,
+pagination, plot schema), new web surfaces, and Android adoption. See
+`docs/presentations/Garden_Explore_Plan.pptx` for the phased plan.
+
+The work nips several decisions in the bud: brand register on a workflow-vs-leisure
+surface; loading-time issues that compound as the dataset grows; multi-user
+implications for plot ownership and pagination that are easier to design correctly
+now than to retrofit. Inserted before the originally-planned Milestone 6 (delivery,
+now Milestone 7) because delivery deserves to land on a settled foundation rather
+than a flat surface that's about to change shape.
+
+**Milestone 7 — Milestone delivery**
 Scheduled delivery of a capsule on a specific date — a child's 18th birthday,
 a graduation, a wedding. The feature that makes this more than cloud storage.
 
-**Milestone 7 — Multi-user access**
+**Milestone 8 — Multi-user access**
 Beneficiary accounts: people who can receive but not upload. Notification on unlock.
 Dignified, personal delivery experience rather than a password reset email.
 
