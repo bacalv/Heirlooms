@@ -33,7 +33,7 @@ Three Gradle subprojects under `/Users/bac/IdeaProjects/Heirlooms/`:
 
 | Subproject | Package | Purpose |
 |---|---|---|
-| `HeirloomsApp` | `digital.heirlooms.app` | Android share-target app |
+| `HeirloomsApp` | `digital.heirlooms.app` | Android app (Gallery, Capsules, share-sheet) |
 | `HeirloomsServer` | `digital.heirlooms.server` | Kotlin/http4k backend |
 | `HeirloomsTest` | `digital.heirlooms.test` | Testcontainers integration tests |
 

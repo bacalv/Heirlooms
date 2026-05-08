@@ -360,5 +360,7 @@ VITE_API_URL is a build-time variable.
 | PA_NOTES.md | This file — PA working memory and preferences |
 | SE_NOTES.md | Software Engineer working memory |
 | ROADMAP.md | Milestone plan and product vision |
+| BRAND.md | Visual identity, palette, typography, motion language |
+| IDIOMS.md | Product vocabulary glossary — what each term means and how to use it |
 | IDEAS.md | Product brainstorms not yet ready for the roadmap |
 | VERSIONS.md | Version history |
