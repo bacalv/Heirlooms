@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
 import { apiFetch, daysUntilPurge, formatCompactDate, formatUploadDate, capsuleTitle } from '../api'
@@ -12,6 +12,88 @@ function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function RotateIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+  )
+}
+
+function TagIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a2 2 0 012-2h2z" />
+    </svg>
+  )
+}
+
+function InlineTagEditor({ currentTags, onSave, onCancel }) {
+  const [selected, setSelected] = useState([...currentTags])
+  const [input, setInput] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const inputRef = useRef(null)
+  const suppressBlurRef = useRef(false)
+
+  useEffect(() => { inputRef.current?.focus() }, [])
+
+  function addTag(tag) {
+    const t = tag.trim().toLowerCase()
+    if (t && !selected.includes(t)) setSelected((prev) => [...prev, t])
+    setInput('')
+    inputRef.current?.focus()
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter') { e.preventDefault(); if (input.trim()) addTag(input.trim()) }
+    else if (e.key === 'Escape') { if (input) setInput(''); else onCancel() }
+    else if (e.key === 'Backspace' && !input && selected.length > 0) setSelected((prev) => prev.slice(0, -1))
+  }
+
+  async function handleSave() {
+    const pending = input.trim().toLowerCase()
+    const finalTags = pending && !selected.includes(pending) ? [...selected, pending] : selected
+    setSaving(true); setError(null)
+    try { await onSave(finalTags) } catch (err) { setError(err.message) } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="pt-1 space-y-1.5">
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {selected.map((tag) => (
+            <span key={tag} className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-chip bg-forest-08 text-forest text-[11px]">
+              {tag}
+              <button type="button" onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setSelected((prev) => prev.filter((t) => t !== tag))}
+                className="text-text-muted text-[13px] leading-none ml-0.5">×</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <input ref={inputRef} value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Add tag…" autoComplete="off" disabled={saving}
+        className="w-full text-xs border border-forest-15 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-forest-25 bg-transparent" />
+      {error && <p className="text-xs text-earth">{error}</p>}
+      <div className="flex gap-1">
+        <button type="button" onClick={handleSave} disabled={saving}
+          className="text-xs px-2 py-0.5 bg-forest text-parchment rounded-button hover:opacity-90 disabled:opacity-40 transition-opacity">
+          {saving ? '…' : 'Save'}
+        </button>
+        <button type="button" onClick={onCancel} disabled={saving}
+          className="text-xs px-2 py-0.5 text-text-muted hover:text-forest transition-colors">
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
 }
 
 function KebabIcon() {
@@ -68,11 +150,13 @@ function KebabMenu({ onAddToCapsule, onCompost, compostDisabled }) {
 // ---- Garden flavour (default) — action-forward layout ----------------------
 
 function GardenFlavour({ upload, blobUrl, capsules, isComposted, composting, compostError,
-  restoring, restoreError, compostDisabled, onCompost, onRestore, onOpenAddModal }) {
+  restoring, restoreError, compostDisabled, onCompost, onRestore, onOpenAddModal,
+  onRotate, onUpdateTags }) {
 
   const isImage = upload.mimeType?.startsWith('image/')
   const isVideo = upload.mimeType?.startsWith('video/')
   const activeCapsules = capsules.filter((c) => c.state === 'open' || c.state === 'sealed')
+  const [editingTags, setEditingTags] = useState(false)
   const imageStyle = {
     ...(upload.rotation ? { transform: `rotate(${upload.rotation}deg)` } : {}),
     ...(isComposted ? { filter: 'saturate(0.6) opacity(0.85)' } : {}),
@@ -93,15 +177,41 @@ function GardenFlavour({ upload, blobUrl, capsules, isComposted, composting, com
       )}
 
       <div className="space-y-2">
-        <h1 className="text-lg font-medium text-forest">{upload.storageKey}</h1>
+        <div className="flex items-start justify-between gap-2">
+          <h1 className="text-lg font-medium text-forest">{upload.storageKey}</h1>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {isImage && onRotate && (
+              <button onClick={onRotate} title="Rotate 90°"
+                className="p-1 text-text-muted hover:text-forest transition-colors rounded">
+                <RotateIcon />
+              </button>
+            )}
+            {!isComposted && onUpdateTags && (
+              <button onClick={() => setEditingTags((v) => !v)} title="Edit tags"
+                className={`p-1 transition-colors rounded ${editingTags ? 'text-forest' : 'text-text-muted hover:text-forest'}`}>
+                <TagIcon />
+              </button>
+            )}
+          </div>
+        </div>
         <p className="text-sm text-text-muted">{upload.mimeType} · {formatBytes(upload.fileSize)}</p>
         <p className="text-sm text-text-muted">Added {formatUploadDate(upload.uploadedAt)}</p>
-        {!isComposted && upload.tags?.length > 0 && (
-          <div className="flex flex-wrap gap-1 pt-1">
-            {upload.tags.map((tag) => (
-              <span key={tag} className="px-[9px] py-[3px] rounded-chip bg-forest-08 text-forest text-[11px]">{tag}</span>
-            ))}
-          </div>
+        {!isComposted && (
+          editingTags ? (
+            <InlineTagEditor
+              currentTags={upload.tags ?? []}
+              onSave={async (tags) => { await onUpdateTags(tags); setEditingTags(false) }}
+              onCancel={() => setEditingTags(false)}
+            />
+          ) : upload.tags?.length > 0 ? (
+            <div className="flex flex-wrap gap-1 pt-1">
+              {upload.tags.map((tag) => (
+                <span key={tag} className="px-[9px] py-[3px] rounded-chip bg-forest-08 text-forest text-[11px]">{tag}</span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-text-muted italic pt-1">No tags yet.</p>
+          )
         )}
       </div>
 
@@ -338,6 +448,33 @@ export function PhotoDetailPage() {
     }
   }
 
+  async function handleRotate() {
+    const newRotation = ((upload.rotation ?? 0) + 90) % 360
+    setUpload((prev) => ({ ...prev, rotation: newRotation }))
+    apiFetch(`/api/content/uploads/${upload.id}/rotation`, apiKey, {
+      method: 'PATCH',
+      body: JSON.stringify({ rotation: newRotation }),
+    }).catch(() => {})
+  }
+
+  async function handleUpdateTags(tags) {
+    const r = await apiFetch(`/api/content/uploads/${upload.id}/tags`, apiKey, {
+      method: 'PATCH',
+      body: JSON.stringify({ tags }),
+    })
+    if (!r.ok) {
+      let msg = `HTTP ${r.status}`
+      try {
+        const body = await r.json()
+        if (body.tag && body.reason) msg = `"${body.tag}": ${body.reason}`
+        else if (body.error) msg = body.error
+      } catch {}
+      throw new Error(msg)
+    }
+    const updated = await r.json()
+    setUpload(updated)
+  }
+
   async function handleRestore() {
     setRestoring(true)
     setRestoreError(null)
@@ -383,6 +520,8 @@ export function PhotoDetailPage() {
     composting, compostError, compostDisabled, onCompost: handleCompost,
     restoring, restoreError, onRestore: handleRestore,
     onOpenAddModal: () => setShowAddModal(true),
+    onRotate: handleRotate,
+    onUpdateTags: handleUpdateTags,
   }
 
   return (

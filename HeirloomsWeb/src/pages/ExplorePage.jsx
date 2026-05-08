@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../AuthContext'
-import { apiFetch } from '../api'
+import { apiFetch, API_URL } from '../api'
 import { PhotoGrid } from '../components/PhotoGrid'
 import { WorkingDots } from '../brand/WorkingDots'
 
@@ -184,8 +184,8 @@ function ExploreThumb({ upload, isComposted }) {
   const { apiKey } = useAuth()
   const isImage = upload.mimeType?.startsWith('image/')
   const displayUrl = upload.thumbnailKey
-    ? `/api/content/uploads/${upload.id}/thumb`
-    : (isImage ? `/api/content/uploads/${upload.id}/file` : null)
+    ? `${API_URL}/api/content/uploads/${upload.id}/thumb`
+    : (isImage ? `${API_URL}/api/content/uploads/${upload.id}/file` : null)
 
   const [blobUrl, setBlobUrl] = useState(null)
 
