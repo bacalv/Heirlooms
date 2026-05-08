@@ -6,6 +6,87 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-10 (Milestone 6 — deliverable restructure + tools addition)
+
+A follow-up to the prior Milestone 6 planning session. The body of work is the
+same; the structure has been reframed.
+
+**From phases to deliverables.** The original 4-phase × 3-increment decomposition
+(12 small briefs across backend / web / Android streams) reframed as 4
+deliverables shipping one per session, each ~1 day of focused work:
+
+- D1 — Tools (re-import utility)
+- D2 — Backend + Explore basic
+- D3 — Web complete
+- D4 — Android adoption
+
+The phase-and-stream view is still useful as a "what's in scope" map, but it
+was a misleading execution plan given the founder + AI working pattern. Each
+deliverable bundles work that previously sat across multiple phases:
+
+- D2 = Phase 1 entirely (1A EXIF, 1B pagination, 1C plot schema) plus 2A (basic
+  /explore route).
+- D3 = 2B/2C (filters, photo detail) plus all of Phase 3 (Garden plots, plot
+  management).
+- D4 = Phase 4 unchanged.
+
+The decomposition is preserved as sub-tasks within each deliverable's brief.
+
+**Tools added as D1.** A re-import utility — standalone script that scans the
+configured GCS bucket, computes SHA256 of each object, and INSERTs `uploads`
+rows pointing at existing GCS keys. Originally suggested as a deferred / backlog
+item, promoted to a first-class deliverable on Bret's direction. Justification:
+D1 first acts as a safety net for the rest of M6 — with the re-import tool in
+place, subsequent deliverables can experiment freely with the schema and data,
+knowing recovery is one script away.
+
+**Velocity finding (perceived).** The project to date — roughly nine days from
+end of April through 8 May, with substantial backend / web / Android / brand
+work shipped — would plausibly take a solo founder working evenings and
+weekends about a year. Perceived multiplier: roughly 40×. Recorded in the deck
+(slide 12: *Velocity*) as an observation, not a benchmarked claim. The
+multiplier is specific to this product, this working pattern, and this team —
+founder owning context across sessions, tight scoping discipline,
+ship-then-polish cadence, AI doing the typing while the founder steers. None
+of those factors is AI alone; the multiplier wouldn't transfer to a context
+where any is missing.
+
+**Operational constraints recorded.** A new section in PA_NOTES.md (*Pre-launch
+operational constraints*) captures three durable rules:
+
+1. Data destruction during M6 is acceptable — destructive schema changes can
+   simplify implementation.
+2. GCS objects are never auto-deleted outside the user-initiated compost flow.
+3. DB backup is deferred but on the backlog (a small `pg_dump` to GCS on a
+   schedule).
+
+**Pending before D1 brief is drafted.**
+
+1. Where does the re-import script live? (`scripts/`, `tools/`, or part of the
+   server module?)
+2. How does it run? (Gradle task, standalone jar, bash wrapper?)
+3. Does it run locally pointing at remote DB and GCS, or on the Cloud Run
+   instance?
+4. One-shot recovery tool, or reusable for periodic drift-detection?
+5. Does the v0.20.0 compost flow currently auto-purge GCS objects after the
+   90-day window? The D1 brief needs to know whether composted GCS keys should
+   be re-imported (no — they were intentionally removed) or whether they're
+   already absent from the bucket (no GCS object to re-import).
+
+Plus the four open questions still pending from the prior planning session
+(plot configuration scope, vocabulary doc timing, plot criteria language,
+v0.21.0 sequencing).
+
+**Output artefacts updated.** `docs/presentations/Garden_Explore_Plan.pptx` now
+13 slides. Slide 5 (*Plan at a glance*) shows 4 deliverables. Slides 6-9 are
+deliverable detail slides (D1 Tools, D2 Backend + Explore basic, D3 Web
+complete, D4 Android adoption). Slide 10 (*Sequence and dependencies*) replaces
+the prior Gantt with a simpler view: D1 standalone with annotation,
+D2 → D3 → D4 sequential. Slide 12 (*Velocity*) updated to four sessions
+matching the deliverables.
+
+---
+
 ## Session — 2026-05-10 (Milestone 6 — Garden / Explore restructure planning)
 
 A scoping session before any code is written. The session settled the structural shape
@@ -101,6 +182,15 @@ catch in recent sessions (the others being *didn't take* opacity and *plant a se
 for someone* near-miss in v0.20.3). The pattern is real: PA's productive-by-default
 instinct extends metaphors and surfaces; the brand's discipline restrains them.
 Captured in PA_NOTES.md at v0.20.3; reinforced here.
+
+**Drive-by:** Milestone 3 (self-hosted deployment) retroactively marked as done in
+ROADMAP.md. The full Docker Compose stack runs locally and meets the substantive
+intent of the milestone. Some original M3 sub-goals around polished non-developer
+self-hosting setup remain unaddressed but are no longer relevant given the project
+shipped on Cloud Run for production. Marker change brings ROADMAP.md into alignment
+with the actual project state — M0, M1, M2, and M4 had `(done)` markers; M3 didn't,
+which surfaced as a question when the *Where we are* slide was added to the
+Milestone 6 deck.
 
 ---
 

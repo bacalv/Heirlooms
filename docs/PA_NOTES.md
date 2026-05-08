@@ -17,19 +17,6 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Tends to work in focused sessions and likes a clean summary at the end of each one
 - Appreciates being told when something is a one-time setup vs ongoing requirement
 
-- **PA's productive-by-default impulse versus brand restraint (v0.20.3).** When
-  proposing new brand vocabulary, the PA's training bias is to be *productive* — to
-  find words that compose into the existing metaphor system, to extend metaphors, to
-  make things feel coherent. That productivity is exactly the wrong instinct in
-  Heirlooms's register, where *restraint* is the brand discipline. Heirlooms is a
-  quiet product about memory; the words it uses should mostly get out of the way.
-  When PA proposes new vocabulary, default to "no, plain is better" unless there's a
-  clear case for the new word. Catch the productive-by-default impulse before it ships.
-  Cf. v0.20.3 vocabulary cleanup, where two PA-proposed brand-vocabulary expansions
-  (*seed* as canonical noun, *leaf* as count noun) were caught by Bret's review before
-  they landed. The instinct was wrong both times; the right move was to recognise the
-  brand doesn't need a unifier noun.
-
 ---
 
 ## Things to always remember
@@ -37,14 +24,48 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.21.0 (10 May 2026) — brand foundation (v0.17.0), share-sheet
-  idle state (v0.17.1), capsule backend (v0.18.0), doc sweeps (v0.18.1, v0.19.6, v0.20.1),
+- Current version: v0.20.2 (10 May 2026) — brand foundation (v0.17.0), share-sheet idle
+  state (v0.17.1), capsule backend (v0.18.0), doc sweeps (v0.18.1, v0.19.6, v0.20.1),
   brand visual mechanic (v0.18.2), capsule web UI (v0.19.0–v0.19.5), compost heap
-  (v0.20.0), Coil 3.x migration (v0.20.2), brand vocabulary cleanup (v0.20.3),
-  combined Android Increment 3 + Daily-Use (v0.21.0). Milestone 5 closed;
-  Milestone 6 (delivery) is next.
+  (v0.20.0), Coil 3.x migration (v0.20.2). Combined Android Increment 3 + Daily-Use is next.
 - One-time machine setup required: ~/.testcontainers.properties with
   docker.raw.sock path — see PROMPT_LOG.md for details
+
+---
+
+## Pre-launch operational constraints
+
+These constraints govern how M6 (and adjacent work) handles data and infrastructure
+operations during the pre-launch period. Bret has explicitly confirmed each.
+
+**Data destruction is acceptable during M6.** None of the current data is
+considered "live" — destructive schema changes (DROP TABLE, column type
+changes, etc.) are fine if they make implementation cleaner. This means:
+
+- Migrations during M6 can use simple drop-and-recreate patterns rather than
+  ALTER-and-migrate flows.
+- Pagination changes (D2) can change endpoint signatures without backwards-
+  compatibility shims for un-paginated callers.
+- EXIF backfill (D2) only needs to handle new uploads; retroactive processing
+  of existing rows is optional.
+
+**GCS objects are never auto-deleted outside the user-initiated compost flow.**
+The compost flow is the only sanctioned auto-delete path. Any code touching
+GCS object lifecycle (deletion, expiry, cleanup) requires explicit confirmation
+before implementation. The bucket itself is the durable backup — as long as
+files stay in GCS, the D1 re-import tool (Milestone 6) can rebuild any lost
+upload rows from content.
+
+**DB backup deferred but on the backlog.** A simple `pg_dump` to a GCS bucket
+on a schedule would do it. Roughly one day of work; not an M6 deliverable, not
+needed for current operations. Worth doing before the user count grows past
+trivial.
+
+**Re-import via SHA256 match (D1) is the recovery mechanism.** If the database
+is nuked or corrupted, D1's standalone script scans GCS, recreates `uploads`
+rows by content-addressed identity. Lost on recovery: tags, rotation, capsule
+membership, compost state. Preserved: actual content. Acceptable trade-off for
+the pre-launch period.
 
 ---
 
@@ -112,23 +133,6 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
   Compose 1.8.x+ which requires compileSdk 35 and AGP 8.6.0+; 3.0.4 is the highest
   compatible with the current compileSdk 34 + AGP 8.3.0 build config. Upgrade 3.0.4 →
   latest deliberately when the build toolchain is also upgraded.
-- **Kotlin 2.0 changes the Compose compiler setup (v0.21.0).** From Kotlin 2.0+, the
-  Compose compiler is bundled with the Kotlin plugin. In `app/build.gradle.kts`, drop the
-  `composeOptions { kotlinCompilerExtensionVersion = "..." }` block entirely and apply
-  `id("org.jetbrains.kotlin.plugin.compose")` in the root and app `build.gradle.kts`
-  instead. The `composeOptions` block is silently ignored (or errors) with K2.
-- **Coil 3.x remote images require an explicit network fetcher (v0.21.0).** Coil 3.x
-  doesn't include a network fetcher by default — add `coil-network-okhttp` alongside
-  `coil-compose`. For authenticated endpoints (all Heirlooms API images require
-  `X-Api-Key`), build a custom `ImageLoader` with an OkHttp interceptor and provide it
-  via `CompositionLocal`. AsyncImage calls must pass this loader explicitly or via Coil's
-  singleton factory.
-- **Navigation Compose `?param=` optionals need exact route string (v0.21.0).** When
-  using optional nav args like `"capsule_create?preSelectedId={preSelectedId}"`, the
-  route string used in `composable(...)` and in the `navigate(...)` call must match
-  exactly. Type-safe navigation (Navigation 2.8+) is the cleaner path but requires
-  `kotlin-serialization`; string-based routes work if the strings are kept as named
-  constants (see `Routes` object in `AppNavigation.kt`).
 - **Transaction rollback safety with non-local returns (v0.18.0).** The `withTransaction`
   helper uses an explicit `committed` flag tracked in a `try/finally`. The reason for the
   explicit flag rather than "set committed = true at the end of try" is that a **non-local
@@ -157,7 +161,7 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
   A quoting bug — the closing `"""` consumed the trailing `"` meant to close the `state`
   field's value — produced malformed output like `"state":"open,"created_at":...`, with the
   comma leaking into the string value. Browsers' strict `JSON.parse` rejected this; users
-  got the error state on every capsule list and create. Worse, **all 49 integration tests
+  got *didn't take* on every capsule list and create. Worse, **all 49 integration tests
   passed** because Jackson's `ObjectMapper.readTree()` (the test client's parser) is lenient
   by default and accepted `open,` as a string value. Fix in v0.19.5: rewrite all three
   serialisers using Jackson's `ObjectNode` API (`mapper.createObjectNode()`, `putArray()`,
@@ -374,7 +378,5 @@ VITE_API_URL is a build-time variable.
 | PA_NOTES.md | This file — PA working memory and preferences |
 | SE_NOTES.md | Software Engineer working memory |
 | ROADMAP.md | Milestone plan and product vision |
-| BRAND.md | Visual identity, palette, typography, motion language |
-| IDIOMS.md | Product vocabulary glossary — what each term means and how to use it |
 | IDEAS.md | Product brainstorms not yet ready for the roadmap |
 | VERSIONS.md | Version history |
