@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react' // useMemo removed with PlotForm
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { BrandModal } from '../components/BrandModal'
 import {
   DndContext,
@@ -390,124 +390,6 @@ function QuickVideoModal({ upload, apiKey, onClose }) {
   )
 }
 
-// ---- Plot form (Add / Edit) ------------------------------------------------
-
-function PlotTagPicker({ selected, onChange, suggestions, pendingRef }) {
-  const [input, setInput] = useState('')
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-  const inputRef = useRef(null)
-  const suppressBlurRef = useRef(false)
-
-  const filtered = suggestions
-    .filter((t) => !selected.includes(t))
-    .filter((t) => !input || t.startsWith(input.toLowerCase()))
-
-  function addTag(tag) {
-    const t = tag.trim().toLowerCase()
-    if (t && !selected.includes(t)) onChange([...selected, t])
-    setInput('')
-    if (pendingRef) pendingRef.current = ''
-    inputRef.current?.focus()
-  }
-
-  function handleKeyDown(e) {
-    if (e.key === 'Enter') { e.preventDefault(); if (input.trim()) addTag(input.trim()) }
-    else if (e.key === 'Backspace' && !input && selected.length > 0) onChange(selected.slice(0, -1))
-    else if (e.key === 'Escape') setDropdownOpen(false)
-  }
-
-  return (
-    <div>
-      {selected.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-1.5">
-          {selected.map((tag) => (
-            <span key={tag} className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-chip bg-forest-08 text-forest text-[11px]">
-              {tag}
-              <button type="button" onMouseDown={(e) => e.preventDefault()}
-                onClick={() => onChange(selected.filter((t) => t !== tag))}
-                className="text-text-muted text-[13px] leading-none ml-0.5">×</button>
-            </span>
-          ))}
-        </div>
-      )}
-      <input ref={inputRef} value={input}
-        onChange={(e) => { setInput(e.target.value); setDropdownOpen(true); if (pendingRef) pendingRef.current = e.target.value }}
-        onFocus={() => setDropdownOpen(true)}
-        onBlur={() => { if (!suppressBlurRef.current) setDropdownOpen(false) }}
-        onKeyDown={handleKeyDown}
-        placeholder="Add tag…" autoComplete="off"
-        className="w-full text-xs border border-forest-15 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-forest-25 bg-transparent" />
-      {dropdownOpen && filtered.length > 0 && (
-        <div className="mt-0.5 border border-forest-15 rounded bg-white shadow-sm max-h-28 overflow-y-auto"
-          onMouseDown={() => { suppressBlurRef.current = true }}
-          onMouseUp={() => { suppressBlurRef.current = false }}>
-          {filtered.map((tag) => (
-            <button key={tag} type="button" onClick={() => addTag(tag)}
-              className="w-full text-left text-xs px-2 py-1 hover:bg-forest-04 text-forest">{tag}</button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function PlotForm({ initial, suggestions, onSave, onCancel }) {
-  const [name, setName] = useState(initial?.name ?? '')
-  const [tagCriteria, setTagCriteria] = useState(initial?.tag_criteria ?? [])
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState(null)
-  const nameRef = useRef(null)
-  const pendingTagRef = useRef('')
-
-  useEffect(() => { nameRef.current?.focus() }, [])
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    if (!name.trim()) return
-    // Commit any tag text still in the input (user typed but didn't press Enter)
-    const pending = pendingTagRef.current.trim().toLowerCase()
-    const finalCriteria = pending && !tagCriteria.includes(pending)
-      ? [...tagCriteria, pending]
-      : tagCriteria
-    setSaving(true)
-    setError(null)
-    try { await onSave(name.trim(), finalCriteria) }
-    catch (err) { setError(err.message) }
-    finally { setSaving(false) }
-  }
-
-  return (
-    <form onSubmit={handleSubmit}
-      className="border border-forest-15 rounded-card bg-parchment p-4 space-y-3">
-      <p className="text-sm font-sans text-forest font-medium">
-        {initial ? 'Edit plot' : 'New plot'}
-      </p>
-      <div>
-        <label className="text-xs text-text-muted block mb-0.5">Name</label>
-        <input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)}
-          maxLength={100} required placeholder="Plot name"
-          className="w-full text-sm border border-forest-15 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-forest-25 bg-transparent" />
-      </div>
-      <div>
-        <label className="text-xs text-text-muted block mb-0.5">Tag criteria</label>
-        <PlotTagPicker selected={tagCriteria} onChange={setTagCriteria} suggestions={suggestions} pendingRef={pendingTagRef} />
-        <p className="text-[10px] text-text-muted mt-0.5">Items matching any of these tags appear in this plot.</p>
-      </div>
-      {error && <p className="text-xs text-earth">{error}</p>}
-      <div className="flex gap-2 pt-1">
-        <button type="submit" disabled={saving || !name.trim()}
-          className="px-3 py-1.5 bg-forest text-parchment rounded-button text-sm hover:opacity-90 transition-opacity disabled:opacity-40">
-          {saving ? '…' : (initial ? 'Save' : 'Create')}
-        </button>
-        <button type="button" onClick={onCancel} disabled={saving}
-          className="px-3 py-1.5 text-text-muted hover:text-forest transition-colors text-sm">
-          Cancel
-        </button>
-      </div>
-    </form>
-  )
-}
-
 // ---- System (Just arrived) plot row — no DnD, no gear ----------------------
 
 function SystemPlotRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey, excludeIds }) {
@@ -574,14 +456,14 @@ function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMo
 export function GardenPage() {
   const { apiKey } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
   const [plots, setPlots] = useState([])
   const [plotsLoading, setPlotsLoading] = useState(true)
   const [plotsError, setPlotsError] = useState(null)
   const [compostCount, setCompostCount] = useState(0)
-  const [showForm, setShowForm] = useState(false)
-  const [editingPlot, setEditingPlot] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [showCompostedMsg] = useState(() => !!location.state?.composted)
+  const [plotSavedMsg] = useState(() => location.state?.plotSaved ?? null)
   const [quickTagUpload, setQuickTagUpload] = useState(null)
   const [videoUpload, setVideoUpload] = useState(null)
   const [plotRefreshKey, setPlotRefreshKey] = useState(0)
@@ -595,12 +477,6 @@ export function GardenPage() {
   const systemPlot = plots.find((p) => p.is_system_defined)
   const userPlots = plots.filter((p) => !p.is_system_defined)
   const userPlotIds = userPlots.map((p) => p.id)
-
-  // Tags used in existing plot criteria — offered as autocomplete suggestions in the form
-  const suggestionTags = useMemo(
-    () => [...new Set(plots.flatMap((p) => p.tag_criteria ?? []))].sort(),
-    [plots],
-  )
 
   useEffect(() => {
     document.title = 'Garden · Heirlooms'
@@ -619,8 +495,8 @@ export function GardenPage() {
   }, [apiKey])
 
   useEffect(() => {
-    if (showCompostedMsg) window.history.replaceState({}, document.title, location.pathname)
-  }, [showCompostedMsg, location.pathname])
+    if (showCompostedMsg || plotSavedMsg) window.history.replaceState({}, document.title, location.pathname)
+  }, [showCompostedMsg, plotSavedMsg, location.pathname])
 
   function handleDragEnd(event) {
     const { active, over } = event
@@ -658,30 +534,6 @@ export function GardenPage() {
       method: 'PATCH',
       body: JSON.stringify(updated.map((p, i) => ({ id: p.id, sort_order: i }))),
     }).catch(() => {})
-  }
-
-  async function handleAddPlot(name, tagCriteria) {
-    const r = await apiFetch('/api/plots', apiKey, {
-      method: 'POST',
-      body: JSON.stringify({ name, tag_criteria: tagCriteria }),
-    })
-    if (!r.ok) throw new Error(`HTTP ${r.status}`)
-    const newPlot = await r.json()
-    setPlots((prev) => [...prev, newPlot])
-    setShowForm(false)
-    setEditingPlot(null)
-  }
-
-  async function handleEditPlot(name, tagCriteria) {
-    const r = await apiFetch(`/api/plots/${editingPlot.id}`, apiKey, {
-      method: 'PUT',
-      body: JSON.stringify({ name, tag_criteria: tagCriteria }),
-    })
-    if (!r.ok) throw new Error(`HTTP ${r.status}`)
-    const updated = await r.json()
-    setPlots((prev) => prev.map((p) => p.id === editingPlot.id ? updated : p))
-    setShowForm(false)
-    setEditingPlot(null)
   }
 
   async function handleQuickUpdateTags(uploadId, tags) {
@@ -737,6 +589,11 @@ export function GardenPage() {
           Composted. Find it in the compost heap below.
         </p>
       )}
+      {plotSavedMsg && (
+        <p className="font-serif italic text-forest text-sm mb-6">
+          "{plotSavedMsg}" saved as a plot.
+        </p>
+      )}
       <div className="space-y-8">
         {systemPlot && (
           <SystemPlotRow plot={systemPlot} apiKey={apiKey}
@@ -754,7 +611,7 @@ export function GardenPage() {
                   isFirst={idx === 0}
                   isLast={idx === userPlots.length - 1}
                   apiKey={apiKey}
-                  onEdit={() => { setEditingPlot(plot); setShowForm(true) }}
+                  onEdit={() => navigate(`/explore?edit_plot=${plot.id}`, { state: { plot } })}
                   onDelete={() => setConfirmDelete(plot)}
                   onMoveUp={() => handleMoveUp(plot.id)}
                   onMoveDown={() => handleMoveDown(plot.id)}
@@ -767,21 +624,12 @@ export function GardenPage() {
           </SortableContext>
         </DndContext>
 
-        {showForm ? (
-          <PlotForm
-            initial={editingPlot}
-            suggestions={suggestionTags}
-            onSave={editingPlot ? handleEditPlot : handleAddPlot}
-            onCancel={() => { setShowForm(false); setEditingPlot(null) }}
-          />
-        ) : (
-          <button
-            onClick={() => { setEditingPlot(null); setShowForm(true) }}
-            className="text-sm font-sans text-forest border border-forest-25 rounded-button px-3 py-1.5 hover:bg-forest-04 transition-colors"
-          >
-            + Add a plot
-          </button>
-        )}
+        <button
+          onClick={() => navigate('/explore?new_plot=true')}
+          className="text-sm font-sans text-forest border border-forest-25 rounded-button px-3 py-1.5 hover:bg-forest-04 transition-colors"
+        >
+          + Add a plot
+        </button>
       </div>
 
       <div className="mt-12">

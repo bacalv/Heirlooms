@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
 import { apiFetch, API_URL } from '../api'
 import { PhotoGrid } from '../components/PhotoGrid'
@@ -216,6 +217,19 @@ function ExploreThumb({ upload, isComposted }) {
 
 export function ExplorePage() {
   const { apiKey } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
+
+  // Plot edit/create mode
+  const editPlotId = searchParams.get('edit_plot') ?? null
+  const newPlotMode = searchParams.get('new_plot') === 'true'
+  const [editPlot, setEditPlot] = useState(null) // {id, name} when editing existing plot
+  const [showSaveForm, setShowSaveForm] = useState(false)
+  const [saveName, setSaveName] = useState('')
+  const [saveError, setSaveError] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const saveNameRef = useRef(null)
 
   // Filters
   const [tag, setTag] = useState('')
@@ -232,6 +246,54 @@ export function ExplorePage() {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState(null)
+
+  // Load plot data when entering edit mode
+  useEffect(() => {
+    if (!editPlotId) { setEditPlot(null); return }
+    const fromState = location.state?.plot
+    if (fromState?.id === editPlotId) {
+      setEditPlot({ id: fromState.id, name: fromState.name })
+      setTag(fromState.tag_criteria?.[0] ?? '')
+      return
+    }
+    apiFetch('/api/plots', apiKey)
+      .then((r) => r.ok ? r.json() : [])
+      .then((plots) => {
+        const p = Array.isArray(plots) ? plots.find((x) => x.id === editPlotId) : null
+        if (p) { setEditPlot({ id: p.id, name: p.name }); setTag(p.tag_criteria?.[0] ?? '') }
+      })
+      .catch(() => {})
+  }, [editPlotId, apiKey])
+
+  useEffect(() => {
+    if (showSaveForm) saveNameRef.current?.focus()
+  }, [showSaveForm])
+
+  async function handleSavePlot() {
+    if (!saveName.trim()) return
+    setSaving(true); setSaveError(null)
+    try {
+      const r = await apiFetch('/api/plots', apiKey, {
+        method: 'POST',
+        body: JSON.stringify({ name: saveName.trim(), tag_criteria: tag ? [tag] : [] }),
+      })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      navigate('/', { state: { plotSaved: saveName.trim() } })
+    } catch (e) { setSaveError(e.message) } finally { setSaving(false) }
+  }
+
+  async function handleUpdatePlot() {
+    if (!editPlot) return
+    setSaving(true); setSaveError(null)
+    try {
+      const r = await apiFetch(`/api/plots/${editPlot.id}`, apiKey, {
+        method: 'PUT',
+        body: JSON.stringify({ tag_criteria: tag ? [tag] : [] }),
+      })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      navigate('/', { state: { plotSaved: editPlot.name } })
+    } catch (e) { setSaveError(e.message) } finally { setSaving(false) }
+  }
 
   const hasActiveFilters = !!(tag || fromDate || toDate || inCapsule !== null ||
     includeComposted || hasLocation !== null || sort !== 'upload_newest')
@@ -291,6 +353,32 @@ export function ExplorePage() {
     <main className="max-w-7xl mx-auto px-4 py-8">
       <h1 className="font-serif italic text-forest text-xl mb-6">Explore</h1>
 
+      {/* Edit-mode banner */}
+      {editPlot && (
+        <div className="mb-4 flex items-center gap-3 px-4 py-2.5 bg-forest-08 border border-forest-25 rounded-card text-sm">
+          <span className="text-forest font-sans flex-1">
+            Editing <span className="font-medium">"{editPlot.name}"</span>
+            {tag ? <span className="text-text-muted"> — tag: {tag}</span> : <span className="text-text-muted"> — no tag set</span>}
+          </span>
+          {saveError && <span className="text-earth text-xs">{saveError}</span>}
+          <button onClick={handleUpdatePlot} disabled={saving}
+            className="px-3 py-1 bg-forest text-parchment rounded-button text-xs hover:opacity-90 transition-opacity disabled:opacity-40">
+            {saving ? '…' : 'Update plot'}
+          </button>
+          <button onClick={() => navigate('/')}
+            className="px-3 py-1 text-text-muted hover:text-forest transition-colors text-xs">
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* New-plot hint */}
+      {newPlotMode && !editPlot && (
+        <div className="mb-4 px-4 py-2.5 bg-forest-04 border border-forest-15 rounded-card text-sm text-text-muted font-sans">
+          Apply a <span className="font-medium text-forest">Tag</span> filter below, then click <span className="font-medium text-forest">Save as plot</span> when the results look right.
+        </div>
+      )}
+
       <FilterChrome
         tag={tag} setTag={setTag}
         fromDate={fromDate} setFromDate={setFromDate}
@@ -302,6 +390,41 @@ export function ExplorePage() {
         onReset={handleReset}
         hasActiveFilters={hasActiveFilters}
       />
+
+      {/* Save-as-plot bar (not in edit mode, tag filter active) */}
+      {!editPlot && tag && !showSaveForm && (
+        <div className="mb-4 flex items-center gap-3 px-4 py-2 bg-forest-04 border border-forest-15 rounded-card text-sm">
+          <span className="text-text-muted font-sans flex-1">
+            Filtered by <span className="text-forest font-medium">{tag}</span>
+          </span>
+          <button onClick={() => setShowSaveForm(true)}
+            className="px-3 py-1 text-forest border border-forest-25 rounded-button text-xs hover:bg-forest-08 transition-colors">
+            Save as plot…
+          </button>
+        </div>
+      )}
+      {showSaveForm && !editPlot && (
+        <div className="mb-4 flex items-center gap-2 px-4 py-2.5 bg-forest-04 border border-forest-15 rounded-card">
+          <input
+            ref={saveNameRef}
+            value={saveName}
+            onChange={(e) => setSaveName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSavePlot(); if (e.key === 'Escape') setShowSaveForm(false) }}
+            placeholder="Plot name…"
+            maxLength={100}
+            className="flex-1 text-sm border border-forest-15 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-forest-25 bg-white"
+          />
+          {saveError && <span className="text-earth text-xs">{saveError}</span>}
+          <button onClick={handleSavePlot} disabled={saving || !saveName.trim()}
+            className="px-3 py-1 bg-forest text-parchment rounded-button text-sm hover:opacity-90 transition-opacity disabled:opacity-40 flex-shrink-0">
+            {saving ? '…' : 'Save'}
+          </button>
+          <button onClick={() => { setShowSaveForm(false); setSaveName('') }}
+            className="px-2 py-1 text-text-muted hover:text-forest text-sm transition-colors flex-shrink-0">
+            Cancel
+          </button>
+        </div>
+      )}
 
       {loading && (
         <div className="flex justify-center py-20">

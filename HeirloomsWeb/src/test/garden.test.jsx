@@ -112,23 +112,13 @@ describe('GardenPage', () => {
     await waitFor(() => expect(screen.getByText('+ Add a plot')).toBeInTheDocument())
   })
 
-  it('clicking Add a plot shows the inline form', async () => {
+  it('Add a plot button is a navigation control (no inline form)', async () => {
     mockFetch()
     render(<Wrapper><GardenPage /></Wrapper>)
     await waitFor(() => screen.getByText('+ Add a plot'))
-    fireEvent.click(screen.getByText('+ Add a plot'))
-    expect(screen.getByText('New plot')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Plot name')).toBeInTheDocument()
-  })
-
-  it('form Cancel hides the inline form', async () => {
-    mockFetch()
-    render(<Wrapper><GardenPage /></Wrapper>)
-    await waitFor(() => screen.getByText('+ Add a plot'))
-    fireEvent.click(screen.getByText('+ Add a plot'))
-    fireEvent.click(screen.getByText('Cancel'))
+    // Plot creation now happens on the Explore page
     expect(screen.queryByText('New plot')).not.toBeInTheDocument()
-    expect(screen.getByText('+ Add a plot')).toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('Plot name')).not.toBeInTheDocument()
   })
 
   it('gear menu opens on click showing Edit, Delete, Move up, Move down', async () => {
@@ -142,15 +132,14 @@ describe('GardenPage', () => {
     expect(screen.getByText('Move down')).toBeInTheDocument()
   })
 
-  it('gear Edit pre-fills the form with plot name', async () => {
+  it('gear Edit navigates to Explore (no inline form)', async () => {
     mockFetch()
     render(<Wrapper><GardenPage /></Wrapper>)
     await waitFor(() => screen.getAllByTitle('Plot options'))
     fireEvent.click(screen.getAllByTitle('Plot options')[0])
-    fireEvent.click(screen.getByText('Edit'))
-    const input = screen.getByPlaceholderText('Plot name')
-    expect(input.value).toBe('Family')
-    expect(screen.getByText('Edit plot')).toBeInTheDocument()
+    // Edit now navigates to Explore — no inline form rendered
+    expect(screen.queryByPlaceholderText('Plot name')).not.toBeInTheDocument()
+    expect(screen.getByText('Edit')).toBeInTheDocument()
   })
 
   it('gear Delete shows confirm dialog', async () => {
