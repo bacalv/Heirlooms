@@ -917,6 +917,19 @@ class Database(private val dataSource: DataSource) {
         }
     }
 
+    fun listAllTags(): List<String> {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                "SELECT DISTINCT UNNEST(tags) AS tag FROM uploads WHERE composted_at IS NULL ORDER BY tag"
+            ).use { stmt ->
+                val rs = stmt.executeQuery()
+                val tags = mutableListOf<String>()
+                while (rs.next()) tags.add(rs.getString("tag"))
+                return tags
+            }
+        }
+    }
+
     // ---- EXIF recovery ----------------------------------------------------
 
     fun listPendingExifIds(): List<UUID> {

@@ -91,6 +91,7 @@ fun buildApp(
         routes += listOf(
             uploadContractRoute(storage, database, thumbnailGenerator, metadataExtractor),
             listUploadsContractRoute(storage, database),
+            listTagsContractRoute(database),
             listCompostedUploadsContractRoute(database),
             getUploadByIdContractRoute(database),
             prepareUploadContractRoute(directUpload),
@@ -213,6 +214,20 @@ private fun listUploadsContractRoute(storage: FileStore, database: Database): Co
         summary = "List uploads"
         description = "Returns uploads as a cursor-paginated JSON object. Query params: `cursor`, `limit` (1–200, default 50), `tag` (comma-separated, any-match), `exclude_tag`, `from_date` (ISO date, inclusive), `to_date` (ISO date, inclusive), `in_capsule` (true|false), `include_composted` (true), `has_location` (true|false), `sort` (upload_newest|upload_oldest|taken_newest|taken_oldest), `just_arrived` (true)."
     } bindContract GET to listUploadsHandler(storage, database)
+
+private fun listTagsContractRoute(database: Database): ContractRoute =
+    "/uploads/tags" meta {
+        summary = "List all tags"
+        description = "Returns all distinct tags used across non-composted uploads, sorted alphabetically."
+    } bindContract GET to { _: Request ->
+        try {
+            val tags = database.listAllTags()
+            val json = com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(tags)
+            Response(OK).header("Content-Type", "application/json").body(json)
+        } catch (e: Exception) {
+            Response(INTERNAL_SERVER_ERROR).body("Failed to list tags: ${e.message}")
+        }
+    }
 
 private fun getUploadByIdContractRoute(database: Database): ContractRoute {
     val id = Path.uuid().of("id")

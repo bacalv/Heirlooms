@@ -5,6 +5,80 @@ import { apiFetch, API_URL } from '../api'
 import { PhotoGrid } from '../components/PhotoGrid'
 import { WorkingDots } from '../brand/WorkingDots'
 
+// ---- Multi-tag picker for filter chrome ------------------------------------
+
+function TagChromePicker({ selected, onChange }) {
+  const { apiKey } = useAuth()
+  const [allTags, setAllTags] = useState([])
+  const [input, setInput] = useState('')
+  const [open, setOpen] = useState(false)
+  const inputRef = useRef(null)
+  const suppressBlurRef = useRef(false)
+
+  useEffect(() => {
+    apiFetch('/api/content/uploads/tags', apiKey)
+      .then((r) => r.ok ? r.json() : [])
+      .then((data) => setAllTags(Array.isArray(data) ? data : []))
+      .catch(() => {})
+  }, [apiKey])
+
+  const suggestions = allTags
+    .filter((t) => !selected.includes(t))
+    .filter((t) => !input || t.toLowerCase().startsWith(input.toLowerCase()))
+
+  function addTag(tag) {
+    const t = tag.trim().toLowerCase().replace(/\s+/g, '-')
+    if (t && !selected.includes(t)) onChange([...selected, t])
+    setInput('')
+    inputRef.current?.focus()
+  }
+
+  function removeTag(tag) { onChange(selected.filter((t) => t !== tag)) }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter') { e.preventDefault(); if (input.trim()) addTag(input.trim()) }
+    else if (e.key === 'Backspace' && !input && selected.length > 0) removeTag(selected[selected.length - 1])
+    else if (e.key === 'Escape') setOpen(false)
+  }
+
+  return (
+    <div className="relative min-w-[180px]">
+      <div className="flex flex-wrap gap-1 items-center border border-forest-15 rounded px-1.5 py-0.5 bg-transparent focus-within:ring-1 focus-within:ring-forest-25 cursor-text"
+        onClick={() => inputRef.current?.focus()}>
+        {selected.map((tag) => (
+          <span key={tag} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-forest-08 text-forest text-[11px]">
+            {tag}
+            <button type="button"
+              onMouseDown={(e) => { e.preventDefault(); removeTag(tag) }}
+              className="text-text-muted hover:text-forest leading-none ml-0.5">×</button>
+          </span>
+        ))}
+        <input
+          ref={inputRef}
+          value={input}
+          onChange={(e) => { setInput(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => { if (!suppressBlurRef.current) setOpen(false) }}
+          onKeyDown={handleKeyDown}
+          placeholder={selected.length ? '' : 'filter by tag…'}
+          autoComplete="off"
+          className="flex-1 min-w-[80px] text-xs outline-none bg-transparent py-0.5"
+        />
+      </div>
+      {open && (suggestions.length > 0) && (
+        <div className="absolute top-full left-0 right-0 mt-0.5 z-10 border border-forest-15 rounded bg-white shadow-md max-h-40 overflow-y-auto"
+          onMouseDown={() => { suppressBlurRef.current = true }}
+          onMouseUp={() => { suppressBlurRef.current = false }}>
+          {suggestions.map((tag) => (
+            <button key={tag} type="button" onClick={() => { addTag(tag); setOpen(false) }}
+              className="w-full text-left text-xs px-2 py-1.5 hover:bg-forest-04 text-forest">{tag}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function FilterIcon() {
   return (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -40,7 +114,7 @@ function SegmentedControl({ value, onChange, anyLabel = 'Any', yesLabel = 'Yes',
 
 // ---- Filter chrome ---------------------------------------------------------
 
-function FilterChrome({ tag, setTag, fromDate, setFromDate, toDate, setToDate,
+function FilterChrome({ tags, setTags, fromDate, setFromDate, toDate, setToDate,
   inCapsule, setInCapsule, includeComposted, setIncludeComposted,
   hasLocation, setHasLocation, sort, setSort, onReset, hasActiveFilters }) {
 
@@ -92,16 +166,10 @@ function FilterChrome({ tag, setTag, fromDate, setFromDate, toDate, setToDate,
 
       {/* Filter controls — hidden on mobile when collapsed */}
       <div className={`${collapsed ? 'hidden md:flex' : 'flex'} flex-wrap gap-x-6 gap-y-3 px-4 pb-3`}>
-        {/* Tag */}
-        <div className="flex flex-col gap-0.5 min-w-[140px]">
-          <label className="text-[10px] text-text-muted uppercase tracking-wide">Tag</label>
-          <input
-            type="text"
-            value={tag}
-            onChange={(e) => setTag(e.target.value.toLowerCase().replace(/\s/g, '-'))}
-            placeholder="filter by tag"
-            className="text-xs border border-forest-15 rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-forest-25 bg-transparent"
-          />
+        {/* Tags (multi-select with dropdown) */}
+        <div className="flex flex-col gap-0.5">
+          <label className="text-[10px] text-text-muted uppercase tracking-wide">Tags</label>
+          <TagChromePicker selected={tags} onChange={setTags} />
         </div>
 
         {/* Date range */}
@@ -232,7 +300,7 @@ export function ExplorePage() {
   const saveNameRef = useRef(null)
 
   // Filters
-  const [tag, setTag] = useState('')
+  const [tags, setTags] = useState([])
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [inCapsule, setInCapsule] = useState(null)
@@ -253,14 +321,14 @@ export function ExplorePage() {
     const fromState = location.state?.plot
     if (fromState?.id === editPlotId) {
       setEditPlot({ id: fromState.id, name: fromState.name })
-      setTag(fromState.tag_criteria?.[0] ?? '')
+      setTags(fromState.tag_criteria ?? [])
       return
     }
     apiFetch('/api/plots', apiKey)
       .then((r) => r.ok ? r.json() : [])
       .then((plots) => {
         const p = Array.isArray(plots) ? plots.find((x) => x.id === editPlotId) : null
-        if (p) { setEditPlot({ id: p.id, name: p.name }); setTag(p.tag_criteria?.[0] ?? '') }
+        if (p) { setEditPlot({ id: p.id, name: p.name }); setTags(p.tag_criteria ?? []) }
       })
       .catch(() => {})
   }, [editPlotId, apiKey])
@@ -275,7 +343,7 @@ export function ExplorePage() {
     try {
       const r = await apiFetch('/api/plots', apiKey, {
         method: 'POST',
-        body: JSON.stringify({ name: saveName.trim(), tag_criteria: tag ? [tag] : [] }),
+        body: JSON.stringify({ name: saveName.trim(), tag_criteria: tags }),
       })
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
       navigate('/', { state: { plotSaved: saveName.trim() } })
@@ -288,19 +356,19 @@ export function ExplorePage() {
     try {
       const r = await apiFetch(`/api/plots/${editPlot.id}`, apiKey, {
         method: 'PUT',
-        body: JSON.stringify({ tag_criteria: tag ? [tag] : [] }),
+        body: JSON.stringify({ tag_criteria: tags }),
       })
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
       navigate('/', { state: { plotSaved: editPlot.name } })
     } catch (e) { setSaveError(e.message) } finally { setSaving(false) }
   }
 
-  const hasActiveFilters = !!(tag || fromDate || toDate || inCapsule !== null ||
+  const hasActiveFilters = !!(tags.length > 0 || fromDate || toDate || inCapsule !== null ||
     includeComposted || hasLocation !== null || sort !== 'upload_newest')
 
   const buildUrl = useCallback((cursor) => {
     const params = new URLSearchParams({ limit: '50' })
-    if (tag) params.set('tag', tag)
+    if (tags.length > 0) params.set('tag', tags.join(','))
     if (fromDate) params.set('from_date', fromDate)
     if (toDate) params.set('to_date', toDate)
     if (inCapsule === true) params.set('in_capsule', 'true')
@@ -311,7 +379,7 @@ export function ExplorePage() {
     if (sort !== 'upload_newest') params.set('sort', sort)
     if (cursor) params.set('cursor', cursor)
     return `/api/content/uploads?${params}`
-  }, [tag, fromDate, toDate, inCapsule, includeComposted, hasLocation, sort])
+  }, [tags.join(','), fromDate, toDate, inCapsule, includeComposted, hasLocation, sort])
 
   useEffect(() => {
     document.title = 'Explore · Heirlooms'
@@ -344,7 +412,7 @@ export function ExplorePage() {
   }
 
   function handleReset() {
-    setTag(''); setFromDate(''); setToDate('')
+    setTags([]); setFromDate(''); setToDate('')
     setInCapsule(null); setIncludeComposted(false)
     setHasLocation(null); setSort('upload_newest')
   }
@@ -358,7 +426,7 @@ export function ExplorePage() {
         <div className="mb-4 flex items-center gap-3 px-4 py-2.5 bg-forest-08 border border-forest-25 rounded-card text-sm">
           <span className="text-forest font-sans flex-1">
             Editing <span className="font-medium">"{editPlot.name}"</span>
-            {tag ? <span className="text-text-muted"> — tag: {tag}</span> : <span className="text-text-muted"> — no tag set</span>}
+            {tags.length > 0 ? <span className="text-text-muted"> — tags: {tags.join(', ')}</span> : <span className="text-text-muted"> — no tags set</span>}
           </span>
           {saveError && <span className="text-earth text-xs">{saveError}</span>}
           <button onClick={handleUpdatePlot} disabled={saving}
@@ -380,7 +448,7 @@ export function ExplorePage() {
       )}
 
       <FilterChrome
-        tag={tag} setTag={setTag}
+        tags={tags} setTags={setTags}
         fromDate={fromDate} setFromDate={setFromDate}
         toDate={toDate} setToDate={setToDate}
         inCapsule={inCapsule} setInCapsule={setInCapsule}
@@ -392,10 +460,13 @@ export function ExplorePage() {
       />
 
       {/* Save-as-plot bar (not in edit mode, tag filter active) */}
-      {!editPlot && tag && !showSaveForm && (
+      {!editPlot && tags.length > 0 && !showSaveForm && (
         <div className="mb-4 flex items-center gap-3 px-4 py-2 bg-forest-04 border border-forest-15 rounded-card text-sm">
           <span className="text-text-muted font-sans flex-1">
-            Filtered by <span className="text-forest font-medium">{tag}</span>
+            {tags.length === 1
+              ? <span>Tag: <span className="text-forest font-medium">{tags[0]}</span></span>
+              : <span>Tags: {tags.map((t, i) => <span key={t}><span className="text-forest font-medium">{t}</span>{i < tags.length - 1 ? ', ' : ''}</span>)}</span>
+            }
           </span>
           <button onClick={() => setShowSaveForm(true)}
             className="px-3 py-1 text-forest border border-forest-25 rounded-button text-xs hover:bg-forest-08 transition-colors">
