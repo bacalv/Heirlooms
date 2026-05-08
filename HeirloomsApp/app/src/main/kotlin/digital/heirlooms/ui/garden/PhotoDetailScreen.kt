@@ -69,8 +69,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import okhttp3.OkHttpClient
 import digital.heirlooms.api.CapsuleRef
 import digital.heirlooms.api.CapsuleSummary
 import digital.heirlooms.api.Upload
@@ -234,11 +237,23 @@ private fun MediaArea(upload: Upload, modifier: Modifier = Modifier) {
 @Composable
 private fun VideoPlayer(videoUrl: String, modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val apiKey = LocalHeirloomsApi.current.apiKey
     val player = remember {
-        ExoPlayer.Builder(context).build().also { player ->
-            player.setMediaItem(MediaItem.fromUri(Uri.parse(videoUrl)))
-            player.prepare()
-        }
+        val dataSourceFactory = OkHttpDataSource.Factory(
+            OkHttpClient.Builder()
+                .addInterceptor { chain ->
+                    chain.proceed(chain.request().newBuilder().header("X-Api-Key", apiKey).build())
+                }
+                .build()
+        )
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            .build()
+            .also { player ->
+                player.setMediaItem(MediaItem.fromUri(Uri.parse(videoUrl)))
+                player.prepare()
+                player.playWhenReady = true
+            }
     }
     DisposableEffect(Unit) {
         onDispose { player.release() }
@@ -247,7 +262,7 @@ private fun VideoPlayer(videoUrl: String, modifier: Modifier = Modifier) {
         factory = { ctx ->
             PlayerView(ctx).apply { this.player = player }
         },
-        modifier = modifier,
+        modifier = modifier.aspectRatio(16f / 9f),
     )
 }
 

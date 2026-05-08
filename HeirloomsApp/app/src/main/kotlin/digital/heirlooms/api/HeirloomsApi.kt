@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit
 
 class HeirloomsApi(
     val baseUrl: String = BASE_URL,
-    private val apiKey: String,
+    internal val apiKey: String,
 ) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
