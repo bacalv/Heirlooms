@@ -763,9 +763,13 @@ class Database(private val dataSource: DataSource) {
                 if (!includeComposted) conditions += "composted_at IS NULL"
 
                 if (tags.isNotEmpty()) {
-                    conditions += "tags && ?::text[]"
-                    val arr = conn.createArrayOf("text", tags.toTypedArray())
-                    setters += { stmt, idx -> stmt.setArray(idx, arr); idx + 1 }
+                    // Use individual string placeholders — mirrors the existing @> pattern
+                    // and avoids JDBC setArray / ::text[] cast incompatibility.
+                    val placeholders = tags.indices.joinToString(",") { "?" }
+                    conditions += "tags && ARRAY[$placeholders]::text[]"
+                    tags.forEach { tag ->
+                        setters += { stmt, idx -> stmt.setString(idx, tag); idx + 1 }
+                    }
                 }
                 if (excludeTag != null) {
                     conditions += "NOT (tags @> ARRAY[?]::text[])"

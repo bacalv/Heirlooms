@@ -119,7 +119,7 @@ function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay }) {
 
 // ---- Horizontal scrolling row of items for one plot ------------------------
 
-function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey }) {
+function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey, excludeIds }) {
   const [items, setItems] = useState([])
   const [nextCursor, setNextCursor] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -137,6 +137,7 @@ function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey }) {
     return `/api/content/uploads?${params}`
   }, [plot.name, plot.tag_criteria?.join(',')])
 
+  // Full reload (shows loading state) — for initial mount and plot criteria changes
   useEffect(() => {
     setLoading(true)
     setItems([])
@@ -146,7 +147,19 @@ function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey }) {
       .then((data) => { setItems(data.items ?? []); setNextCursor(data.next_cursor ?? null) })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [buildUrl, apiKey, refreshKey])
+  }, [buildUrl, apiKey])
+
+  // Silent re-fetch triggered externally (refreshKey) — swaps items without loading flash
+  useEffect(() => {
+    if (refreshKey === 0) return
+    apiFetch(buildUrl(null), apiKey)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((data) => { setItems(data.items ?? []); setNextCursor(data.next_cursor ?? null) })
+      .catch(() => {})
+  }, [refreshKey])
+
+  // Optimistic exclusion: items removed immediately by the parent (e.g. after tagging)
+  const visibleItems = excludeIds?.size ? items.filter((u) => !excludeIds.has(u.id)) : items
 
   async function handleLoadMore() {
     if (!nextCursor || loadingMore) return
@@ -167,7 +180,7 @@ function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey }) {
     )
   }
 
-  if (items.length === 0) {
+  if (visibleItems.length === 0) {
     const emptyMsg = plot.name === JUST_ARRIVED_SENTINEL
       ? 'Nothing new to tend.'
       : "No items match this plot's criteria yet."
@@ -180,7 +193,7 @@ function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey }) {
 
   return (
     <div ref={rowRef} className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
-      {items.map((upload) => (
+      {visibleItems.map((upload) => (
         <PlotThumbCard key={upload.id} upload={upload} apiKey={apiKey}
           onTagClick={onTagClick} onVideoPlay={onVideoPlay} />
       ))}
@@ -497,21 +510,21 @@ function PlotForm({ initial, suggestions, onSave, onCancel }) {
 
 // ---- System (Just arrived) plot row — no DnD, no gear ----------------------
 
-function SystemPlotRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey }) {
+function SystemPlotRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey, excludeIds }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
         <h2 className="font-serif italic text-forest text-base">Just arrived</h2>
       </div>
       <PlotItemsRow plot={plot} apiKey={apiKey}
-        onTagClick={onTagClick} onVideoPlay={onVideoPlay} refreshKey={refreshKey} />
+        onTagClick={onTagClick} onVideoPlay={onVideoPlay} refreshKey={refreshKey} excludeIds={excludeIds} />
     </div>
   )
 }
 
 // ---- Sortable user plot row ------------------------------------------------
 
-function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMoveUp, onMoveDown, onTagClick, onVideoPlay, refreshKey }) {
+function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMoveUp, onMoveDown, onTagClick, onVideoPlay, refreshKey, excludeIds }) {
   const {
     attributes,
     listeners,
@@ -551,7 +564,7 @@ function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMo
         />
       </div>
       <PlotItemsRow plot={plot} apiKey={apiKey}
-        onTagClick={onTagClick} onVideoPlay={onVideoPlay} refreshKey={refreshKey} />
+        onTagClick={onTagClick} onVideoPlay={onVideoPlay} refreshKey={refreshKey} excludeIds={excludeIds} />
     </div>
   )
 }
@@ -572,6 +585,7 @@ export function GardenPage() {
   const [quickTagUpload, setQuickTagUpload] = useState(null)
   const [videoUpload, setVideoUpload] = useState(null)
   const [plotRefreshKey, setPlotRefreshKey] = useState(0)
+  const [justArrivedExclude, setJustArrivedExclude] = useState(new Set())
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -684,8 +698,10 @@ export function GardenPage() {
       } catch {}
       throw new Error(msg)
     }
+    // Optimistically remove from Just arrived immediately (it now has tags).
+    setJustArrivedExclude((prev) => new Set([...prev, uploadId]))
     setQuickTagUpload(null)
-    // Increment refresh key so all plot rows re-fetch (tagged item leaves Just arrived, may join a user plot)
+    // Silently re-fetch user plots in the background (no loading flash).
     setPlotRefreshKey((k) => k + 1)
   }
 
@@ -724,7 +740,8 @@ export function GardenPage() {
       <div className="space-y-8">
         {systemPlot && (
           <SystemPlotRow plot={systemPlot} apiKey={apiKey}
-            onTagClick={setQuickTagUpload} onVideoPlay={setVideoUpload} refreshKey={plotRefreshKey} />
+            onTagClick={setQuickTagUpload} onVideoPlay={setVideoUpload}
+            refreshKey={plotRefreshKey} excludeIds={justArrivedExclude} />
         )}
 
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
