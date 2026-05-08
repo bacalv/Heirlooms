@@ -34,6 +34,9 @@ class GardenViewModel(
     private val _state = MutableStateFlow<GardenLoadState>(GardenLoadState.Loading)
     val state: StateFlow<GardenLoadState> = _state
 
+    private val _availableTags = MutableStateFlow<List<String>>(emptyList())
+    val availableTags: StateFlow<List<String>> = _availableTags.asStateFlow()
+
     // Scroll positions survive config changes because the ViewModel does.
     // Process-death restoration isn't needed for scroll position.
     val scrollPositions: MutableMap<String, Int> = mutableMapOf()
@@ -112,6 +115,9 @@ class GardenViewModel(
             } catch (e: Exception) {
                 _state.value = GardenLoadState.Error(e.message ?: "Couldn't load")
             }
+        }
+        viewModelScope.launch {
+            try { _availableTags.value = api.listTags() } catch (_: Exception) {}
         }
     }
 

@@ -9,6 +9,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,6 +31,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -37,6 +40,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -86,6 +91,7 @@ fun GardenScreen(
 ) {
     val api = LocalHeirloomsApi.current
     val state by vm.state.collectAsState()
+    val availableTags by vm.availableTags.collectAsState()
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
 
@@ -158,6 +164,7 @@ fun GardenScreen(
                                     shouldScrollToStart = isJustArrived && newlyArrivedIds.isNotEmpty(),
                                     newlyArrivedIds = if (isJustArrived) newlyArrivedIds else emptySet(),
                                     onClearNewlyArrived = { vm.clearNewlyArrived() },
+                                    availableTags = availableTags,
                                     onQuickRotate = { uploadId, currentRotation ->
                                         val newRotation = (currentRotation + 90) % 360
                                         vm.optimisticRotate(uploadId, newRotation)
@@ -203,6 +210,7 @@ private fun PlotRowSection(
     shouldScrollToStart: Boolean = false,
     newlyArrivedIds: Set<String> = emptySet(),
     onClearNewlyArrived: () -> Unit = {},
+    availableTags: List<String> = emptyList(),
     onQuickRotate: (uploadId: String, currentRotation: Int) -> Unit,
     onQuickTag: (uploadId: String, currentTags: List<String>, newTag: String) -> Unit,
     emptyLabel: String,
@@ -287,6 +295,21 @@ private fun PlotRowSection(
                                 )
                             }
                         }
+                        // Visible tag button — higher Z order than inner Box so taps are captured here.
+                        Box(
+                            Modifier
+                                .align(Alignment.BottomStart)
+                                .clickable { showAddTag = true }
+                                .background(Forest.copy(alpha = 0.65f), RoundedCornerShape(topEnd = 4.dp))
+                                .padding(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Label,
+                                contentDescription = "Add tag",
+                                tint = Parchment,
+                                modifier = Modifier.size(14.dp),
+                            )
+                        }
                         // Per-tile arrival animation for newly landed items.
                         if (upload.id in newlyArrivedIds) {
                             Box(
@@ -321,6 +344,8 @@ private fun PlotRowSection(
                         }
                         if (showAddTag) {
                             QuickTagDialog(
+                                existingTags = upload.tags,
+                                availableTags = availableTags,
                                 onDismiss = { showAddTag = false },
                                 onAdd = { tag ->
                                     showAddTag = false
@@ -394,26 +419,55 @@ private fun ExploreAllTile(isJustArrived: Boolean, onClick: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun QuickTagDialog(onDismiss: () -> Unit, onAdd: (String) -> Unit) {
+private fun QuickTagDialog(
+    existingTags: List<String>,
+    availableTags: List<String>,
+    onDismiss: () -> Unit,
+    onAdd: (String) -> Unit,
+) {
     var input by remember { mutableStateOf("") }
     val isValid = isValidTag(input.trim())
+    val suggestions = remember(availableTags, existingTags) {
+        availableTags.filter { it !in existingTags }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Parchment,
         title = { Text("Add tag", style = MaterialTheme.typography.titleMedium.copy(color = Forest)) },
         text = {
-            OutlinedTextField(
-                value = input,
-                onValueChange = { input = it },
-                placeholder = { Text("e.g. family", color = TextMuted) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = {
-                    if (isValid) onAdd(input.trim())
-                }),
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (suggestions.isNotEmpty()) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        suggestions.forEach { tag ->
+                            FilterChip(
+                                selected = false,
+                                onClick = { onAdd(tag) },
+                                label = { Text(tag, style = MaterialTheme.typography.bodySmall) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = Forest15,
+                                    labelColor = Forest,
+                                ),
+                            )
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    placeholder = { Text(if (suggestions.isEmpty()) "e.g. family" else "New tag…", color = TextMuted) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = {
+                        if (isValid) onAdd(input.trim())
+                    }),
+                )
+            }
         },
         confirmButton = {
             Button(

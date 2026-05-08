@@ -6,6 +6,25 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-08 — v0.25.8–v0.25.10: Explore filter tags + video badges + garden tag button
+
+**v0.25.10 — Visible tag button on Garden tiles.**
+Long-press → dropdown → "Add tag…" existed but was invisible. Added a small
+`Label` icon button (Forest 65% alpha, bottom-left corner, `RoundedCornerShape(topEnd=4.dp)`)
+to every Garden tile. Placed in the outer `Box` after the inner `Box` (higher Z order),
+so taps on it are consumed before reaching the inner Box's `pointerInput`/`onPhotoTap`.
+
+`QuickTagDialog` upgraded: accepts `existingTags` and `availableTags`; shows a
+`FlowRow` of `FilterChip`s for tags in the library that aren't already on the item —
+tapping one immediately calls `onAdd(tag)` and closes the dialog. The text field
+remains below for adding a new tag. Placeholder adapts ("e.g. family" vs "New tag…"
+depending on whether suggestions are available).
+
+`GardenViewModel` gains `availableTags: StateFlow<List<String>>`, populated by a
+silent parallel coroutine in `load()`, same pattern as `ExploreViewModel`.
+
+---
+
 ## Session — 2026-05-08 — v0.25.8–v0.25.9: Explore filter tags + video badges
 
 **v0.25.9 — Video indicator badge on thumbnails.**
