@@ -6,6 +6,138 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-08 (evening) — v0.25.0/v0.25.1: M6 D4 Android adoption + post-ship fixes
+
+**D4 brief delivered and executed.** Closes Milestone 6. Android picks up the
+Garden/Explore restructure that shipped on web in D2/D3. After D4, Android and
+web are surface-equivalent for browsing, filtering, and photo detail.
+
+**What shipped in v0.25.0 (D4):**
+
+- **4E — ViewModel + SavedStateHandle migration.** All seven screens (Garden,
+  Explore, Photo detail, Capsules, Capsule detail, Compost heap, ShareActivity)
+  now have ViewModels. State that should survive configuration changes lives in
+  the ViewModel; state that should survive process death goes through
+  SavedStateHandle. `android:configChanges` removed from ShareActivity —
+  rotation mid-upload now works because the ViewModel holds upload state and
+  re-observes the WorkManager job on recreation.
+
+- **4A — Four-tab bottom nav.** Garden | Explore | Capsules | Burger. Burger
+  opens a `ModalBottomSheet` (chosen over a right-side slide panel — more
+  natural Android idiom) containing Settings and Compost heap. Compost heap
+  migrated from the Garden footer and Settings screen to Burger as the sole
+  entry point.
+
+- **4C — Explore tab.** Mirrors web `/explore`. Filter chrome always collapses
+  to a "Filters" button + bottom sheet (all phone viewports are narrow). Tags,
+  date range, capsule/location segmented controls, composted toggle, sort. 4-column
+  thumbnail grid with cursor-paginated "Load more".
+
+- **4B — Garden plot rows.** 2-column grid replaced with horizontal plot rows.
+  Just arrived fixed at top. User plots in sort_order. Interactive row titles
+  (chevron → Explore with plot tags pre-applied). "Load more" chip at end of
+  partial rows; "See all in Explore →" tile at end of exhausted rows. Long-press
+  thumbnail → DropdownMenu with Rotate 90° (immediate PATCH) and Add tag
+  (AlertDialog).
+
+- **4D — Photo detail flavours.** `?from=garden|explore|compost`. Garden:
+  action-forward with rotate button, inline tag editor, Add to capsule, Compost
+  below divider. Explore: content-forward, tags read-only, Compost in overflow.
+  Compost: faded image, countdown, Restore. Back label is context-aware.
+  Every photo detail open fires `POST .../view` once (tracked in ViewModel).
+
+- **API layer.** Upload model gains `capturedAt`, `latitude`, `longitude`,
+  `lastViewedAt`. Plot model added. `listUploadsPage()` replaces `listUploads()`
+  with full filter/cursor/sort support. `listPlots()`, `listTags()`,
+  `rotateUpload()`, `trackView()` added. ExoPlayer (media3:1.4.1) for inline
+  video playback.
+
+- **Tests.** 14 new automated tests: ExploreViewModel filter persistence via
+  SavedStateHandle, PhotoDetailViewModel trackView fires exactly once and hits
+  the correct endpoint, ShareViewModel state survives process death, Compose UI
+  tests for Garden/Explore photo detail flavour split.
+
+**Deployment.** HeirloomsServer and HeirloomsWeb unchanged for D4. Android APK
+built with `./gradlew assembleDebug` and sideloaded via `adb install` to
+Samsung Galaxy A02s (R9HR102XT8J). Device had ~512 KB free internal storage
+at first install attempt — had to uninstall old APK first to free space. APK
+is ~21 MB debug build.
+
+**Post-ship fixes shipped same session as v0.25.1:**
+
+*API response key mismatch (immediate deploy fix).* The live server returns
+`"items"` not `"uploads"` for paginated upload lists, `"items"` not `"uploads"`
+for composted uploads, a plain JSON array for `/api/plots` (not `{"plots":[...]}`),
+and a plain JSON array for `/api/content/uploads/tags`. All four corrected in
+`HeirloomsApi.kt`. Root cause: keys were assumed from code reading; not verified
+against the live server before shipping D4.
+
+*async/launch exception propagation.* `GardenViewModel.load()` used `async { }`
+inside `launch { }`. When an `async` child fails, it cancels the parent
+`StandaloneCoroutine` and the exception propagates past the `try/catch`, crashing
+the app. Fixed by wrapping the parallel fetches in `coroutineScope { }` so child
+exceptions are re-thrown at the `coroutineScope` boundary and caught correctly.
+
+*Upload progress screen (new feature, v0.25.1).* The share-sheet uploading screen
+replaced. Key decisions:
+- **One WorkManager job per file** (was one batch for all): enables per-file
+  cancellation and byte-level progress via `setProgressAsync()`.
+- **Progress callback changed** from `(Int)` percent to `(Long, Long)` bytes so
+  multiple workers aggregate into an overall %.
+- **ShareActivity.enqueueUploads() is now fully async** (`lifecycleScope.launch`):
+  progress screen appears immediately on Plant; no more ANR on 12-video batches
+  where the old `runBlocking` blocked the main thread copying large files.
+  Files are copied and workers enqueued sequentially (one at a time) to avoid
+  holding multiple large temp files in memory simultaneously on the A02s.
+- **Unified job list**: progress screen observes all `heirloom_upload`-tagged
+  jobs, not just the current session's batch.
+- **Retry**: 3 attempts with 30s exponential backoff before marking failed.
+- **Burger entry** appears dynamically (WorkManager LiveData) only while uploads
+  are active.
+
+*System plot rogue row.* `listPlots()` returns all plots including the system
+`__just_arrived__` plot. `GardenViewModel` was passing it through to user-plot
+rows, which rendered it with raw name `__just_arrived__` and no filter (empty
+`tag_criteria` → fetches all uploads). Fixed by adding `isSystemDefined` to the
+`Plot` model and filtering it out before building user-plot rows.
+
+*Garden staleness.* `LaunchedEffect(Unit) { if (Loading) vm.load() }` only ran
+on first composition. If the ViewModel was retained across navigation (which it
+is), data stayed stale. Fixed with `refresh()` (silent background re-fetch that
+replaces Ready state without a loading flash) called on every composition.
+
+*Just arrived scroll drift.* Android saves row scroll positions in the ViewModel.
+After refresh, the row started at the saved offset, making the visible items
+differ from the web (which always starts at the beginning). Fixed: scroll
+position for `__just_arrived__` resets to 0 whenever new data arrives.
+
+*30-second Just arrived poll.* Lightweight `refreshJustArrived()` fetches only
+that row every 30 seconds. Detects genuinely new arrivals by comparing against a
+known-ID set seeded on first load. Triggers `OliveBranchArrival` animation as a
+semi-transparent overlay when new items land. Note for future: replace with
+Server-Sent Events (see IDEAS.md) — polling is the interim approach, the
+detection/animation logic stays in place.
+
+**Things that tripped us up (don't repeat):**
+
+- The live server's upload list endpoint returns `"items"` not `"uploads"`.
+  Always verify actual HTTP responses before assuming field names from code.
+- `async { }` inside `launch { }` without `coroutineScope { }` wrapping: child
+  exceptions cancel the parent coroutine and bypass the outer `try/catch`,
+  producing a FATAL crash instead of an error state.
+- `runBlocking` on the Android main thread for large file copies = ANR. Always
+  use `lifecycleScope.launch(Dispatchers.IO)` for any IO on the main thread.
+- The A02s has ~201 MB heap and was nearly out of storage — both affect
+  stability. Copy large files sequentially, not in parallel.
+- WorkManager's `getWorkInfosByTagFlow()` (from `work-runtime-ktx`) is correct
+  for Compose; `getWorkInfosByTagLiveData()` needs `lifecycle-livedata-compose`
+  (not in deps) for `observeAsState`. Use Flow API throughout.
+- `async { }` in Kotlin does not expose `inputData` on `WorkInfo` — that is a
+  worker-side concept. Use progress data (`setProgressAsync`) for the ViewModel
+  to observe state from running workers.
+
+---
+
 ## Session — 2026-05-10 (Milestone 6 — deliverable restructure + tools addition)
 
 A follow-up to the prior Milestone 6 planning session. The body of work is the

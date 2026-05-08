@@ -2,6 +2,86 @@
 
 ---
 
+## v0.25.1 — Upload progress screen + Garden refresh fixes (8 May 2026)
+
+Patch on D4. All changes driven by hands-on testing of v0.25.0 on device.
+
+**Bug fixes:**
+- API response keys corrected: server returns `"items"` (not `"uploads"`) for
+  paginated upload lists and composted uploads; plain arrays for `/api/plots`
+  and `/api/content/uploads/tags`. All four corrected in `HeirloomsApi.kt`.
+- `async {}` inside `launch {}` without `coroutineScope {}` caused a FATAL crash
+  in `GardenViewModel.load()` — child exceptions were propagating past the outer
+  `try/catch`. Wrapped parallel fetches in `coroutineScope {}`.
+- System plot (`__just_arrived__`, `is_system_defined=true`) was being rendered
+  as a second user-plot row with no tag filter, showing all uploads. Fixed by
+  adding `isSystemDefined` to the `Plot` model and filtering system plots from
+  the user-plot list in `GardenViewModel`.
+- Garden data was stale after navigation: `LaunchedEffect(Unit)` guarded by
+  `if (Loading)` meant retained ViewModels never re-fetched. Added a silent
+  `refresh()` that replaces Ready state without a loading flash, called on every
+  composition.
+- Just arrived scroll position drifted after refresh: saved offset caused the
+  row to start mid-list rather than at the newest item. Scroll position now
+  resets to 0 whenever new data arrives.
+
+**Features:**
+- Upload progress screen replaces the blank "Uploading…" state in the share
+  sheet. One WorkManager job per file (was one batch). Byte-level progress bar
+  per file and overall %. Per-file cancel button. "Continue in background"
+  dismisses the Activity while uploads keep running. Success state shows "No
+  uploads in progress" with "Go to Garden" and "← Back". Burger panel shows
+  "Uploads in progress" entry dynamically while any job is active.
+- File copies and worker enqueuing are now async (`lifecycleScope.launch`) so
+  Plant responds instantly regardless of batch size.
+- Unified job list: progress screen shows all active uploads across all
+  sessions, not just the current batch.
+- Upload retry: 3 attempts with 30s exponential backoff before marking failed.
+- Just arrived polls every 30 seconds (`refreshJustArrived()` — that row only).
+  New arrivals trigger the `OliveBranchArrival` animation as an overlay.
+
+---
+
+## v0.25.0 — Milestone 6 D4: Android adoption (8 May 2026)
+
+Closes Milestone 6. Android picks up the Garden/Explore restructure from D2/D3.
+After D4, Android and web are surface-equivalent for browsing, filtering, and
+photo detail. Capsule creation and plot management remain web-only.
+
+**4E — ViewModel + SavedStateHandle migration:**
+All seven screens get ViewModels. `android:configChanges` removed from
+ShareActivity. Upload state survives rotation because the ViewModel holds the
+WorkManager request ID and re-observes on recreation.
+
+**4A — Four-tab bottom nav:**
+Garden | Explore | Capsules | Burger. Burger opens `ModalBottomSheet` with
+Settings and Compost heap. Compost heap removed from Garden footer and Settings.
+
+**4C — Explore tab:**
+Mirrors web `/explore`. Filter chrome collapses to "Filters" button + bottom
+sheet on all phone viewports. 4-column grid, "Load more" cursor pagination.
+
+**4B — Garden plot rows:**
+Horizontal scrolling plot rows replace the 2-column grid. Just arrived fixed at
+top. Interactive titles navigate to Explore with plot tags pre-applied.
+Long-press thumbnail → Rotate 90° or Add tag. End-of-row "Load more" / "See
+all in Explore →" tiles.
+
+**4D — Photo detail flavours:**
+Garden (action-forward), Explore (content-forward), Compost (faded + restore).
+Context-aware back label. View tracking fires on every open.
+
+**API layer:**
+Upload model gains `capturedAt`, `latitude`, `longitude`, `lastViewedAt`. Plot
+model added. `listUploadsPage()` with full filter/cursor support. ExoPlayer
+(media3:1.4.1) for inline video in photo detail.
+
+**Tests:**
+14 new automated tests (ViewModel SavedStateHandle survival, trackView behaviour,
+photo detail flavour split).
+
+---
+
 ## v0.24.1 — D3 polish: plot UX, multi-tag filter, CORS fix (8 May 2026)
 
 Patch on D3. All changes driven by hands-on testing of v0.24.0.
