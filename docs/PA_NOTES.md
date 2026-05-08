@@ -451,3 +451,17 @@ VITE_API_URL is a build-time variable.
 | ROADMAP.md | Milestone plan and product vision |
 | IDEAS.md | Product brainstorms not yet ready for the roadmap |
 | VERSIONS.md | Version history |
+---
+
+## View tracking and Just arrived — M8 scope note
+
+`last_viewed_at` on `uploads` tracks the first time a user opens a photo's detail page.
+In v1 (single-user), this is a global flag shared across any viewer. At M8 (multi-user),
+view tracking will need to become per-user (e.g., a `upload_views` junction table keyed
+on `(upload_id, user_id)`). The current column-on-uploads approach is intentionally simple
+for v1 and will need a migration + predicate update.
+
+The *Just arrived* predicate is: `last_viewed_at IS NULL AND tags = '{}' AND composted_at IS NULL
+AND NOT IN active capsule`. The partial index `idx_uploads_just_arrived` covers the three
+static conditions; the capsule exclusion is a runtime subquery. Re-check this index at M8 when
+the predicate adds a user-id dimension.

@@ -67,11 +67,12 @@ describe('PhotoDetailPage — compost affordance', () => {
 
   it('Compost button is disabled with helper text when in active capsule', async () => {
     global.fetch
-      .mockResolvedValueOnce({ ok: true, blob: () => Promise.resolve(new Blob()) })
+      .mockResolvedValueOnce({ ok: true }) // view POST
+      .mockResolvedValueOnce({ ok: true, blob: () => Promise.resolve(new Blob()) }) // thumb
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ capsules: [{ id: 'cap-1', state: 'open', recipients: ['Sophie'] }] }),
-      })
+      }) // capsules
 
     render(
       <Wrapper initialEntries={[{ pathname: '/photos/upload-1', state: { upload: mockUpload() } }]}>
@@ -129,12 +130,12 @@ describe('GardenPage — compost heap link', () => {
 
   it('shows Compost heap link with correct count', async () => {
     global.fetch
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [mockUpload()], next_cursor: null }) }) // active list
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) }) // plots (empty — no item row fetches)
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ items: [mockUpload({ id: 'c1', compostedAt: '2026-05-01T10:00:00Z' })], next_cursor: null }),
-      }) // composted list
-      .mockResolvedValue({ ok: false }) // thumbnail fetches fail gracefully
+      }) // composted count
+      .mockResolvedValue({ ok: false })
 
     render(<Wrapper><GardenPage /></Wrapper>)
     await waitFor(() => expect(screen.getByText(/Compost heap \(1\)/)).toBeInTheDocument())
@@ -142,9 +143,9 @@ describe('GardenPage — compost heap link', () => {
 
   it('shows Compost heap (0) link when heap is empty', async () => {
     global.fetch
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [mockUpload()], next_cursor: null }) })
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [], next_cursor: null }) })
-      .mockResolvedValue({ ok: false }) // thumbnail fetches
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) }) // plots
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [], next_cursor: null }) }) // composted count
+      .mockResolvedValue({ ok: false })
 
     render(<Wrapper><GardenPage /></Wrapper>)
     await waitFor(() => expect(screen.getByText(/Compost heap \(0\)/)).toBeInTheDocument())
@@ -152,8 +153,8 @@ describe('GardenPage — compost heap link', () => {
 
   it('shows transient composted message when navigated from compost', async () => {
     global.fetch
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [], next_cursor: null }) })
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [], next_cursor: null }) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) }) // plots
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [], next_cursor: null }) }) // composted count
       .mockResolvedValue({ ok: false })
 
     render(

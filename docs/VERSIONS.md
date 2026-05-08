@@ -2,6 +2,67 @@
 
 ---
 
+## v0.24.0 — Milestone 6 D3: Web complete (8 May 2026)
+
+Minor bump — D3 of Milestone 6. Garden becomes plot rows, Explore gains filters, PhotoDetail
+gains layout variants, view-tracking column added.
+
+**Schema (V11):**
+- `last_viewed_at TIMESTAMPTZ NULL` added to `uploads`. Partial index on `(uploaded_at DESC)`
+  for the *Just arrived* predicate (untagged, unviewed, non-composted rows).
+
+**Backend — upload list filters:**
+- `GET /api/content/uploads` accepts: `tag` (comma-separated any-match), `from_date`, `to_date`
+  (ISO date, inclusive), `in_capsule` (true|false), `include_composted` (true), `has_location`
+  (true|false), `sort` (upload_newest|upload_oldest|taken_newest|taken_oldest), `just_arrived`
+  (true — the *Just arrived* predicate).
+- Cursor encoding updated to be sort-aware: format `SORT_NAME:sortKeyMs_or_null:id`.
+  Legacy upload-oldest cursor format is unsupported; any mismatched cursor restarts pagination.
+
+**Backend — view tracking:**
+- `POST /api/content/uploads/:id/view` — sets `last_viewed_at = NOW()`. Idempotent. Called
+  by the web photo detail page on every open.
+
+**Backend — plot reorder:**
+- `PATCH /api/plots` — batch reorder: `[{id, sort_order},...]`. Atomic. Returns 403 on system
+  plot and 404 on unknown id.
+
+**Web — Garden:**
+- Redesigned as vertical stack of horizontal Netflix-style plot rows.
+- *Just arrived* (system plot) fixed at top. No drag handle, no gear menu.
+- User-defined plots: drag-and-drop reorder via `@dnd-kit/sortable` (desktop); gear menu with
+  Move up / Move down fallback (mobile/accessibility).
+- Per-plot gear menu: Edit, Delete, Move up, Move down. Edit/Add opens an inline form.
+- Inline *Add a plot* form at the bottom (name + tag criteria picker).
+- Delete confirmation dialog. Empty states per plot.
+- Composted message toast preserved on navigation-from-compost.
+- `?limit=10000` kludge retired.
+
+**Web — Explore:**
+- Filter chrome: tag (single, comma-separated for plot fetches), date range (uploaded_at),
+  capsule membership, location, composted toggle.
+- Sort dropdown: newest/oldest by upload date, newest/oldest by taken date.
+- Items without `capturedAt` tagged *no date* when sorting by taken date.
+- Composted items rendered with desaturation when `include_composted=true`.
+- Responsive: collapses to a *Filters* toggle on narrow viewports.
+
+**Web — PhotoDetail:**
+- Single route `/photos/:id?from=garden|explore`. Default (no param) = Garden flavour.
+- Garden flavour: action-forward. *Add to capsule* prominent. *Compost* below a visual divider
+  (negative-action button separation principle in practice).
+- Explore flavour: content-forward. Larger hero, metadata prominent (taken date, upload date,
+  location, capsule count). Tags read-only with *Edit tags* link. Actions in kebab menu.
+- Back link context-aware: *← Garden* / *← Explore* / *← Compost heap*.
+- Every page open fires `POST .../view` to remove the item from *Just arrived*.
+
+**IDIOMS.md:** Three new entries — *Plot*, *Just arrived*, *Negative-action button separation*.
+
+**Tests:** 21 new backend (18 upload filters/sort, 3 view endpoint, 5 plot reorder, now in
+`UploadFilterApiTest.kt` + `PlotApiTest.kt`); 22 new web (13 garden, 5 explore filters, 4 photo
+detail). All passing: 190+ backend, 86 web.
+
+---
+
 ## v0.23.0 — Milestone 6 D2: backend + Explore basic (8 May 2026)
 
 Minor bump — D2 of Milestone 6. Schema foundations, cursor pagination, and /explore.

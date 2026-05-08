@@ -1,127 +1,255 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useAuth } from '../AuthContext'
 import { API_URL, apiFetch } from '../api'
 import { WorkingDots } from '../brand/WorkingDots'
-import { EmptyGarden } from '../brand/EmptyGarden'
-import { OliveBranchArrival } from '../brand/OliveBranchArrival'
-import { OliveBranchDidntTake } from '../brand/OliveBranchDidntTake'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 
-function formatBytes(bytes) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
+const JUST_ARRIVED_SENTINEL = '__just_arrived__'
 
-function formatDate(isoString) {
-  return new Date(isoString).toLocaleDateString('en-GB', {
-    day: 'numeric', month: 'short', year: 'numeric',
-  })
-}
+// ---- Thumbnail card for horizontal plot row --------------------------------
 
-function isImage(mimeType) { return mimeType?.startsWith('image/') }
-function isVideo(mimeType) { return mimeType?.startsWith('video/') }
+function PlotThumbCard({ upload, apiKey }) {
+  const isImage = upload.mimeType?.startsWith('image/')
+  const isVideo = upload.mimeType?.startsWith('video/')
+  const displayUrl = upload.thumbnailKey
+    ? `${API_URL}/api/content/uploads/${upload.id}/thumb`
+    : (isImage ? `${API_URL}/api/content/uploads/${upload.id}/file` : null)
 
-function FileIcon() {
+  const [blobUrl, setBlobUrl] = useState(null)
+  const isComposted = !!upload.compostedAt
+
+  useEffect(() => {
+    if (!displayUrl) return
+    let cancelled = false
+    fetch(displayUrl, { headers: { 'X-Api-Key': apiKey } })
+      .then((r) => r.ok ? r.blob() : Promise.reject())
+      .then((blob) => {
+        if (!cancelled) setBlobUrl(URL.createObjectURL(blob))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [displayUrl, apiKey])
+
+  const saturate = isComposted ? { filter: 'saturate(0.4) opacity(0.7)' } : {}
+  const rotate = upload.rotation ? { transform: `rotate(${upload.rotation}deg)` } : {}
+
   return (
-    <svg className="w-16 h-16 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-        d="M15.172 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V8.828a2 2 0 00-.586-1.414l-3.828-3.828A2 2 0 0015.172 3z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 3v5a1 1 0 001 1h5" />
-    </svg>
+    <Link
+      to={`/photos/${upload.id}?from=garden`}
+      state={{ upload }}
+      className="flex-shrink-0 w-40 h-40 rounded overflow-hidden border border-forest-08 bg-forest-04 block hover:opacity-90 transition-opacity relative"
+    >
+      {blobUrl ? (
+        <img src={blobUrl} alt="" className="w-full h-full object-cover" style={{ ...rotate, ...saturate }} />
+      ) : isVideo && !upload.thumbnailKey ? (
+        <div className="w-full h-full flex items-center justify-center bg-forest-08">
+          <svg className="w-10 h-10 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+          </svg>
+        </div>
+      ) : (
+        <div className="w-full h-full bg-forest-08 flex items-center justify-center">
+          <span className="text-text-muted text-xs">…</span>
+        </div>
+      )}
+    </Link>
   )
 }
 
-function VideoIcon() {
-  return (
-    <svg className="w-16 h-16 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-        d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
-    </svg>
-  )
-}
+// ---- Horizontal scrolling row of items for one plot ------------------------
 
-function RefreshIcon({ spinning = false }) {
-  return (
-    <svg className={`w-4 h-4 ${spinning ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-    </svg>
-  )
-}
+function PlotItemsRow({ plot, apiKey }) {
+  const [items, setItems] = useState([])
+  const [nextCursor, setNextCursor] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const rowRef = useRef(null)
 
-function PlayIcon() {
+  const buildUrl = useCallback((cursor) => {
+    const params = new URLSearchParams({ limit: '50' })
+    if (plot.name === JUST_ARRIVED_SENTINEL) {
+      params.set('just_arrived', 'true')
+    } else if (plot.tag_criteria?.length > 0) {
+      params.set('tag', plot.tag_criteria.join(','))
+    }
+    if (cursor) params.set('cursor', cursor)
+    return `/api/content/uploads?${params}`
+  }, [plot.name, plot.tag_criteria?.join(',')])
+
+  useEffect(() => {
+    setLoading(true)
+    setItems([])
+    setNextCursor(null)
+    apiFetch(buildUrl(null), apiKey)
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then((data) => { setItems(data.items ?? []); setNextCursor(data.next_cursor ?? null) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [buildUrl, apiKey])
+
+  async function handleLoadMore() {
+    if (!nextCursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const data = await apiFetch(buildUrl(nextCursor), apiKey).then((r) => r.ok ? r.json() : Promise.reject())
+      setItems((prev) => [...prev, ...(data.items ?? [])])
+      setNextCursor(data.next_cursor ?? null)
+    } catch {}
+    setLoadingMore(false)
+  }
+
+  if (loading) {
+    return (
+      <div className="h-40 flex items-center px-4">
+        <WorkingDots size="md" />
+      </div>
+    )
+  }
+
+  if (items.length === 0) {
+    const emptyMsg = plot.name === JUST_ARRIVED_SENTINEL
+      ? 'Nothing new to tend.'
+      : "No items match this plot's criteria yet."
+    return (
+      <div className="h-24 flex items-center px-1">
+        <p className="font-serif italic text-text-muted text-sm">{emptyMsg}</p>
+      </div>
+    )
+  }
+
   return (
-    <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center">
-      <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M8 5v14l11-7z" />
-      </svg>
+    <div ref={rowRef} className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+      {items.map((upload) => (
+        <PlotThumbCard key={upload.id} upload={upload} apiKey={apiKey} />
+      ))}
+      {nextCursor && (
+        <button
+          onClick={handleLoadMore}
+          disabled={loadingMore}
+          className="flex-shrink-0 w-24 h-40 rounded border border-forest-15 text-forest text-xs font-sans hover:bg-forest-04 transition-colors disabled:opacity-40 flex items-center justify-center"
+        >
+          {loadingMore ? <WorkingDots size="sm" /> : 'More'}
+        </button>
+      )}
     </div>
   )
 }
 
-function RotateIcon() {
+// ---- Gear icon SVG ---------------------------------------------------------
+
+function GearIcon() {
   return (
-    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
-        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
   )
 }
 
-function TagIcon() {
+function DragHandleIcon() {
   return (
-    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a2 2 0 012-2h2z" />
+    <svg className="w-4 h-4 text-text-muted" fill="currentColor" viewBox="0 0 24 24">
+      <circle cx="9" cy="7" r="1.5" /><circle cx="15" cy="7" r="1.5" />
+      <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+      <circle cx="9" cy="17" r="1.5" /><circle cx="15" cy="17" r="1.5" />
     </svg>
   )
 }
 
-function TagEditor({ currentTags, allTags, onSave, onCancel }) {
-  const [selected, setSelected] = useState([...currentTags])
+// ---- Gear menu for user-defined plots --------------------------------------
+
+function PlotGearMenu({ plot, isFirst, isLast, onEdit, onDelete, onMoveUp, onMoveDown }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="p-1 text-text-muted hover:text-forest transition-colors rounded"
+        title="Plot options"
+        aria-label="Plot options"
+      >
+        <GearIcon />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-7 z-20 w-36 bg-white border border-forest-15 rounded shadow-md text-sm py-1">
+          <button className="w-full text-left px-3 py-1.5 hover:bg-forest-04 text-forest"
+            onClick={() => { setOpen(false); onEdit() }}>Edit</button>
+          <button className="w-full text-left px-3 py-1.5 hover:bg-forest-04 text-forest disabled:opacity-40"
+            disabled={isFirst}
+            onClick={() => { setOpen(false); onMoveUp() }}>Move up</button>
+          <button className="w-full text-left px-3 py-1.5 hover:bg-forest-04 text-forest disabled:opacity-40"
+            disabled={isLast}
+            onClick={() => { setOpen(false); onMoveDown() }}>Move down</button>
+          <div className="border-t border-forest-08 my-1" />
+          <button className="w-full text-left px-3 py-1.5 hover:bg-earth-10 text-earth"
+            onClick={() => { setOpen(false); onDelete() }}>Delete</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---- Plot form (Add / Edit) ------------------------------------------------
+
+function PlotTagPicker({ selected, onChange, suggestions }) {
   const [input, setInput] = useState('')
   const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState(null)
   const inputRef = useRef(null)
   const suppressBlurRef = useRef(false)
 
-  useEffect(() => { inputRef.current?.focus() }, [])
-
-  const suggestions = allTags
+  const filtered = suggestions
     .filter((t) => !selected.includes(t))
     .filter((t) => !input || t.startsWith(input.toLowerCase()))
 
   function addTag(tag) {
     const t = tag.trim().toLowerCase()
-    if (t && !selected.includes(t)) setSelected((prev) => [...prev, t])
+    if (t && !selected.includes(t)) onChange([...selected, t])
     setInput('')
     inputRef.current?.focus()
   }
 
   function handleKeyDown(e) {
     if (e.key === 'Enter') { e.preventDefault(); if (input.trim()) addTag(input.trim()) }
-    else if (e.key === 'Escape') { if (dropdownOpen) setDropdownOpen(false); else onCancel() }
-    else if (e.key === 'Backspace' && !input && selected.length > 0) setSelected((prev) => prev.slice(0, -1))
-  }
-
-  async function handleSave() {
-    const pending = input.trim().toLowerCase()
-    const finalTags = pending && !selected.includes(pending) ? [...selected, pending] : selected
-    setSaving(true); setError(null)
-    try { await onSave(finalTags) } catch (err) { setError(err.message) } finally { setSaving(false) }
+    else if (e.key === 'Backspace' && !input && selected.length > 0) onChange(selected.slice(0, -1))
+    else if (e.key === 'Escape') setDropdownOpen(false)
   }
 
   return (
-    <div className="pt-1">
+    <div>
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-1.5">
           {selected.map((tag) => (
             <span key={tag} className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-chip bg-forest-08 text-forest text-[11px]">
               {tag}
               <button type="button" onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setSelected((prev) => prev.filter((t) => t !== tag))}
+                onClick={() => onChange(selected.filter((t) => t !== tag))}
                 className="text-text-muted text-[13px] leading-none ml-0.5">×</button>
             </span>
           ))}
@@ -132,306 +260,337 @@ function TagEditor({ currentTags, allTags, onSave, onCancel }) {
         onFocus={() => setDropdownOpen(true)}
         onBlur={() => { if (!suppressBlurRef.current) setDropdownOpen(false) }}
         onKeyDown={handleKeyDown}
-        placeholder="Add tag…" autoComplete="off" disabled={saving}
+        placeholder="Add tag…" autoComplete="off"
         className="w-full text-xs border border-forest-15 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-forest-25 bg-transparent" />
-      {dropdownOpen && suggestions.length > 0 && (
+      {dropdownOpen && filtered.length > 0 && (
         <div className="mt-0.5 border border-forest-15 rounded bg-white shadow-sm max-h-28 overflow-y-auto"
           onMouseDown={() => { suppressBlurRef.current = true }}
           onMouseUp={() => { suppressBlurRef.current = false }}>
-          {suggestions.map((tag) => (
+          {filtered.map((tag) => (
             <button key={tag} type="button" onClick={() => addTag(tag)}
               className="w-full text-left text-xs px-2 py-1 hover:bg-forest-04 text-forest">{tag}</button>
           ))}
         </div>
       )}
-      {error && <p className="text-xs text-earth mt-0.5">{error}</p>}
-      <div className="flex gap-1 mt-1.5">
-        <button type="button" onClick={handleSave} disabled={saving}
-          className="text-xs px-2 py-0.5 bg-forest text-parchment rounded-button hover:opacity-90 disabled:opacity-40 transition-opacity">
-          {saving ? '…' : 'Save'}</button>
-        <button type="button" onClick={onCancel} disabled={saving}
-          className="text-xs px-2 py-0.5 text-text-muted hover:text-forest transition-colors">Cancel</button>
-      </div>
     </div>
   )
 }
 
-function FailedTile({ onRetry, onDismiss }) {
-  return (
-    <div className="gallery-tile--failed">
-      <p className="text-earth text-[12px]">Couldn't upload.</p>
-      <div className="flex gap-2 mt-2">
-        <button onClick={onRetry}
-          className="px-2 py-1 bg-forest text-parchment rounded-button text-[10px]">Try again</button>
-        <button onClick={onDismiss}
-          className="px-2 py-1 text-text-muted text-[10px]">Dismiss</button>
-      </div>
-    </div>
-  )
-}
+function PlotForm({ initial, suggestions, onSave, onCancel }) {
+  const [name, setName] = useState(initial?.name ?? '')
+  const [tagCriteria, setTagCriteria] = useState(initial?.tag_criteria ?? [])
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const nameRef = useRef(null)
 
-// Session-level thumbnail cache — blob URLs survive navigation within the same page session.
-const thumbnailCache = new Map()
+  useEffect(() => { nameRef.current?.focus() }, [])
 
-function UploadCard({ upload, apiKey, onRotate, onUpdateTags, allTags, isNew }) {
-  const fileUrl = `${API_URL}/api/content/uploads/${upload.id}/file`
-  const displayUrl = upload.thumbnailKey
-    ? `${API_URL}/api/content/uploads/${upload.id}/thumb`
-    : fileUrl
-  const needsFetch = isImage(upload.mimeType) || !!upload.thumbnailKey
-  const cached = needsFetch ? (thumbnailCache.get(upload.id) ?? null) : null
-  const [tileState, setTileState] = useState(needsFetch ? (cached ? 'arrived' : 'loading') : 'arrived')
-  const [blobUrl, setBlobUrl] = useState(cached)
-  const [fetchAttempt, setFetchAttempt] = useState(0)
-  const [editingTags, setEditingTags] = useState(false)
-  const animateArrivalRef = useRef(isNew)
-
-  useEffect(() => {
-    if (!needsFetch) return
-    // Cache hit on initial load — skip network fetch entirely.
-    if (fetchAttempt === 0 && thumbnailCache.has(upload.id)) {
-      setBlobUrl(thumbnailCache.get(upload.id))
-      setTileState('arrived')
-      return
-    }
-    setTileState('loading')
-    let cancelled = false
-    fetch(displayUrl, { headers: { 'X-Api-Key': apiKey } })
-      .then((r) => r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then((blob) => {
-        if (cancelled) return
-        const url = URL.createObjectURL(blob)
-        thumbnailCache.set(upload.id, url)
-        setBlobUrl(url)
-        const shouldAnimate = animateArrivalRef.current
-        animateArrivalRef.current = false
-        setTileState(shouldAnimate ? 'arriving' : 'arrived')
-      })
-      .catch(() => { if (!cancelled) setTileState('error-animating') })
-    // Blob URLs are intentionally not revoked on unmount — they live in thumbnailCache
-    // so back-navigation is instant. The browser frees them when the session ends.
-    return () => { cancelled = true }
-  }, [displayUrl, apiKey, fetchAttempt, needsFetch, upload.id])
-
-  function renderTileContent() {
-    switch (tileState) {
-      case 'loading': return <WorkingDots size="md" />
-      case 'arriving': return (
-        <div className="gallery-tile--animating">
-          <OliveBranchArrival withWordmark={false} onComplete={() => setTileState('arrived')} />
-        </div>
-      )
-      case 'error-animating': return (
-        <div className="gallery-tile--animating">
-          <OliveBranchDidntTake onComplete={() => setTileState('failed')} />
-        </div>
-      )
-      case 'failed': return (
-        <FailedTile onRetry={() => setFetchAttempt((n) => n + 1)} onDismiss={() => setTileState('dismissed')} />
-      )
-      case 'dismissed': return isVideo(upload.mimeType) ? <VideoIcon /> : <FileIcon />
-      default:
-        if (isImage(upload.mimeType) && blobUrl) {
-          return (
-            <Link to={`/photos/${upload.id}`} state={{ upload }} className="block w-full h-full">
-              <img src={blobUrl} alt={upload.storageKey}
-                className="object-cover w-full h-full hover:opacity-90 transition-opacity"
-                style={upload.rotation ? { transform: `rotate(${upload.rotation}deg)`, transition: 'transform 0.2s' } : {}} />
-            </Link>
-          )
-        }
-        if (isVideo(upload.mimeType) && blobUrl) {
-          return (
-            <Link to={`/photos/${upload.id}`} state={{ upload }} className="relative w-full h-full block group">
-              <img src={blobUrl} alt={upload.storageKey} className="object-cover w-full h-full" />
-              <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
-                <PlayIcon />
-              </div>
-            </Link>
-          )
-        }
-        if (isVideo(upload.mimeType)) return <Link to={`/photos/${upload.id}`} state={{ upload }}
-          className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity"><VideoIcon /><span className="text-xs text-text-muted">Click to play</span></Link>
-        return <FileIcon />
-    }
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!name.trim()) return
+    setSaving(true)
+    setError(null)
+    try { await onSave(name.trim(), tagCriteria) }
+    catch (err) { setError(err.message) }
+    finally { setSaving(false) }
   }
 
-  const showPhoto = tileState === 'arrived' && blobUrl
   return (
-    <div className="relative bg-white rounded-card shadow-sm border border-forest-08 flex flex-col">
-      <div className={`h-48 flex items-center justify-center overflow-hidden rounded-t-card ${showPhoto ? 'bg-forest-04' : 'bg-forest-15'}`}>
-        {renderTileContent()}
+    <form onSubmit={handleSubmit}
+      className="border border-forest-15 rounded-card bg-parchment p-4 space-y-3">
+      <p className="text-sm font-sans text-forest font-medium">
+        {initial ? 'Edit plot' : 'New plot'}
+      </p>
+      <div>
+        <label className="text-xs text-text-muted block mb-0.5">Name</label>
+        <input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)}
+          maxLength={100} required placeholder="Plot name"
+          className="w-full text-sm border border-forest-15 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-forest-25 bg-transparent" />
       </div>
-      <div className="p-3 space-y-1 text-sm text-text-body">
-        <div className="flex items-start justify-between gap-1">
-          <Link to={`/photos/${upload.id}`} state={{ upload }}
-            className="font-medium text-forest truncate hover:underline" title={upload.storageKey}>
-            {upload.storageKey}
-          </Link>
-          <div className="flex-shrink-0 flex items-center gap-0.5">
-            {isImage(upload.mimeType) && onRotate && (
-              <button onClick={() => onRotate(upload.id)} title="Rotate 90°"
-                className="text-text-muted hover:text-forest transition-colors p-0.5"><RotateIcon /></button>
-            )}
-            {onUpdateTags && (
-              <button onClick={() => setEditingTags(true)} title="Edit tags"
-                className={`p-0.5 transition-colors ${editingTags ? 'text-forest' : 'text-text-muted hover:text-forest'}`}>
-                <TagIcon /></button>
-            )}
-          </div>
-        </div>
-        <p className="text-text-muted text-xs">{upload.mimeType}</p>
-        <p className="text-text-muted text-xs">{formatBytes(upload.fileSize)}</p>
-        <p className="text-text-muted text-xs">{formatDate(upload.uploadedAt)}</p>
-        {editingTags ? (
-          <TagEditor currentTags={upload.tags} allTags={allTags}
-            onSave={async (tags) => { await onUpdateTags(upload.id, tags); setEditingTags(false) }}
-            onCancel={() => setEditingTags(false)} />
-        ) : upload.tags.length > 0 ? (
-          <div className="flex flex-wrap gap-1 pt-1">
-            {upload.tags.map((tag) => (
-              <span key={tag} className="inline-flex items-center px-[9px] py-[3px] rounded-chip bg-forest-08 text-forest text-[11px]">{tag}</span>
-            ))}
-          </div>
-        ) : null}
+      <div>
+        <label className="text-xs text-text-muted block mb-0.5">Tag criteria</label>
+        <PlotTagPicker selected={tagCriteria} onChange={setTagCriteria} suggestions={suggestions} />
+        <p className="text-[10px] text-text-muted mt-0.5">Items matching any of these tags appear in this plot.</p>
       </div>
+      {error && <p className="text-xs text-earth">{error}</p>}
+      <div className="flex gap-2 pt-1">
+        <button type="submit" disabled={saving || !name.trim()}
+          className="px-3 py-1.5 bg-forest text-parchment rounded-button text-sm hover:opacity-90 transition-opacity disabled:opacity-40">
+          {saving ? '…' : (initial ? 'Save' : 'Create')}
+        </button>
+        <button type="button" onClick={onCancel} disabled={saving}
+          className="px-3 py-1.5 text-text-muted hover:text-forest transition-colors text-sm">
+          Cancel
+        </button>
+      </div>
+    </form>
+  )
+}
+
+// ---- System (Just arrived) plot row — no DnD, no gear ----------------------
+
+function SystemPlotRow({ plot, apiKey }) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <h2 className="font-serif italic text-forest text-base">Just arrived</h2>
+      </div>
+      <PlotItemsRow plot={plot} apiKey={apiKey} />
     </div>
   )
 }
+
+// ---- Sortable user plot row ------------------------------------------------
+
+function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMoveUp, onMoveDown }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: plot.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className="space-y-2">
+      <div className="flex items-center gap-2">
+        <button
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing p-0.5 -ml-0.5 rounded hover:bg-forest-04 transition-colors touch-none"
+          title="Drag to reorder"
+          aria-label="Drag to reorder"
+        >
+          <DragHandleIcon />
+        </button>
+        <h2 className="font-sans text-forest text-sm font-medium flex-1">{plot.name}</h2>
+        <PlotGearMenu
+          plot={plot}
+          isFirst={isFirst}
+          isLast={isLast}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onMoveUp={onMoveUp}
+          onMoveDown={onMoveDown}
+        />
+      </div>
+      <PlotItemsRow plot={plot} apiKey={apiKey} />
+    </div>
+  )
+}
+
+// ---- Main GardenPage -------------------------------------------------------
 
 export function GardenPage() {
   const { apiKey } = useAuth()
   const location = useLocation()
-  const [uploads, setUploads] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [refreshing, setRefreshing] = useState(false)
-  const [autoRefresh, setAutoRefresh] = useState(false)
-  const seenIdsRef = useRef(null)
-  const [newUploadIds, setNewUploadIds] = useState(new Set())
+  const [plots, setPlots] = useState([])
+  const [plotsLoading, setPlotsLoading] = useState(true)
+  const [plotsError, setPlotsError] = useState(null)
   const [compostCount, setCompostCount] = useState(0)
+  const [showForm, setShowForm] = useState(false)
+  const [editingPlot, setEditingPlot] = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState(null)
   const [showCompostedMsg] = useState(() => !!location.state?.composted)
 
-  const allTags = useMemo(() => [...new Set(uploads.flatMap((u) => u.tags))].sort(), [uploads])
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
-  const fetchUploads = useCallback(async (showSpinner = false) => {
-    if (showSpinner) setRefreshing(true)
-    try {
-      const r = await apiFetch('/api/content/uploads?limit=10000', apiKey)
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const data = await r.json()
-      const items = data.items ?? []
-      let newIds = new Set()
-      if (seenIdsRef.current === null) {
-        seenIdsRef.current = new Set(items.map((u) => u.id))
-      } else {
-        newIds = new Set(items.filter((u) => !seenIdsRef.current.has(u.id)).map((u) => u.id))
-        newIds.forEach((id) => seenIdsRef.current.add(id))
-      }
-      setUploads(items)
-      setNewUploadIds(newIds)
-    } catch (e) {
-      if (showSpinner) setError(e.message)
-    } finally {
-      if (showSpinner) setRefreshing(false)
-      setLoading(false)
-    }
-  }, [apiKey])
+  const systemPlot = plots.find((p) => p.is_system_defined)
+  const userPlots = plots.filter((p) => !p.is_system_defined)
+  const userPlotIds = userPlots.map((p) => p.id)
+
+  // Tags used in existing plot criteria — offered as autocomplete suggestions in the form
+  const suggestionTags = useMemo(
+    () => [...new Set(plots.flatMap((p) => p.tag_criteria ?? []))].sort(),
+    [plots],
+  )
 
   useEffect(() => {
     document.title = 'Garden · Heirlooms'
-    fetchUploads()
-    if (showCompostedMsg) window.history.replaceState({}, document.title, location.pathname)
-  }, [fetchUploads])
+    apiFetch('/api/plots', apiKey)
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then((data) => setPlots(Array.isArray(data) ? data : []))
+      .catch((e) => setPlotsError(e.message))
+      .finally(() => setPlotsLoading(false))
+  }, [apiKey])
 
   useEffect(() => {
-    apiFetch('/api/content/uploads/composted?limit=10000', apiKey)
-      .then((r) => r.ok ? r.json() : Promise.reject())
+    apiFetch('/api/content/uploads/composted?limit=200', apiKey)
+      .then((r) => r.ok ? r.json() : { items: [] })
       .then((data) => setCompostCount(data.items?.length ?? 0))
       .catch(() => {})
   }, [apiKey])
 
   useEffect(() => {
-    if (!autoRefresh) return
-    const id = setInterval(() => fetchUploads(), 10_000)
-    return () => clearInterval(id)
-  }, [autoRefresh, fetchUploads])
+    if (showCompostedMsg) window.history.replaceState({}, document.title, location.pathname)
+  }, [showCompostedMsg, location.pathname])
 
-  async function handleRotate(uploadId) {
-    setUploads((prev) => prev.map((u) => {
-      if (u.id !== uploadId) return u
-      const newRotation = ((u.rotation ?? 0) + 90) % 360
-      apiFetch(`/api/content/uploads/${uploadId}/rotation`, apiKey, {
-        method: 'PATCH',
-        body: JSON.stringify({ rotation: newRotation }),
-      }).catch(() => {})
-      return { ...u, rotation: newRotation }
-    }))
+  function handleDragEnd(event) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = userPlots.findIndex((p) => p.id === active.id)
+    const newIndex = userPlots.findIndex((p) => p.id === over.id)
+    const reordered = arrayMove(userPlots, oldIndex, newIndex)
+    const updated = reordered.map((p, i) => ({ ...p, sort_order: i }))
+    setPlots([...(systemPlot ? [systemPlot] : []), ...updated])
+    apiFetch('/api/plots', apiKey, {
+      method: 'PATCH',
+      body: JSON.stringify(updated.map((p, i) => ({ id: p.id, sort_order: i }))),
+    }).catch(() => {})
   }
 
-  async function handleUpdateTags(uploadId, tags) {
-    const r = await apiFetch(`/api/content/uploads/${uploadId}/tags`, apiKey, {
+  function handleMoveUp(plotId) {
+    const idx = userPlots.findIndex((p) => p.id === plotId)
+    if (idx <= 0) return
+    const reordered = arrayMove(userPlots, idx, idx - 1)
+    const updated = reordered.map((p, i) => ({ ...p, sort_order: i }))
+    setPlots([...(systemPlot ? [systemPlot] : []), ...updated])
+    apiFetch('/api/plots', apiKey, {
       method: 'PATCH',
-      body: JSON.stringify({ tags }),
+      body: JSON.stringify(updated.map((p, i) => ({ id: p.id, sort_order: i }))),
+    }).catch(() => {})
+  }
+
+  function handleMoveDown(plotId) {
+    const idx = userPlots.findIndex((p) => p.id === plotId)
+    if (idx < 0 || idx >= userPlots.length - 1) return
+    const reordered = arrayMove(userPlots, idx, idx + 1)
+    const updated = reordered.map((p, i) => ({ ...p, sort_order: i }))
+    setPlots([...(systemPlot ? [systemPlot] : []), ...updated])
+    apiFetch('/api/plots', apiKey, {
+      method: 'PATCH',
+      body: JSON.stringify(updated.map((p, i) => ({ id: p.id, sort_order: i }))),
+    }).catch(() => {})
+  }
+
+  async function handleAddPlot(name, tagCriteria) {
+    const r = await apiFetch('/api/plots', apiKey, {
+      method: 'POST',
+      body: JSON.stringify({ name, tag_criteria: tagCriteria }),
     })
-    if (!r.ok) {
-      let msg = `HTTP ${r.status}`
-      try {
-        const body = await r.json()
-        if (body.tag && body.reason) msg = `"${body.tag}": ${body.reason}`
-        else if (body.error) msg = body.error
-      } catch {}
-      throw new Error(msg)
-    }
+    if (!r.ok) throw new Error(`HTTP ${r.status}`)
+    const newPlot = await r.json()
+    setPlots((prev) => [...prev, newPlot])
+    setShowForm(false)
+    setEditingPlot(null)
+  }
+
+  async function handleEditPlot(name, tagCriteria) {
+    const r = await apiFetch(`/api/plots/${editingPlot.id}`, apiKey, {
+      method: 'PUT',
+      body: JSON.stringify({ name, tag_criteria: tagCriteria }),
+    })
+    if (!r.ok) throw new Error(`HTTP ${r.status}`)
     const updated = await r.json()
-    setUploads((prev) => prev.map((u) => u.id === uploadId ? updated : u))
+    setPlots((prev) => prev.map((p) => p.id === editingPlot.id ? updated : p))
+    setShowForm(false)
+    setEditingPlot(null)
+  }
+
+  async function handleDeletePlot(plot) {
+    const r = await apiFetch(`/api/plots/${plot.id}`, apiKey, { method: 'DELETE' })
+    if (!r.ok) throw new Error(`HTTP ${r.status}`)
+    setPlots((prev) => prev.filter((p) => p.id !== plot.id))
+    setConfirmDelete(null)
+  }
+
+  if (plotsLoading) {
+    return (
+      <main className="max-w-7xl mx-auto px-4 py-8">
+        <div className="flex justify-center py-20"><WorkingDots size="lg" label="Loading…" /></div>
+      </main>
+    )
+  }
+
+  if (plotsError) {
+    return (
+      <main className="max-w-7xl mx-auto px-4 py-8">
+        <p className="text-center text-earth font-serif italic py-20">
+          Something went wrong — {plotsError}
+        </p>
+      </main>
+    )
   }
 
   return (
-    <div>
-      <div className="border-b border-forest-08 px-6 py-3 flex items-center justify-between">
-        <div />
-        <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 text-sm text-text-muted cursor-pointer select-none">
-            <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} className="rounded" />
-            Auto-refresh
-          </label>
-          <button onClick={() => fetchUploads(true)} disabled={refreshing} title="Refresh"
-            className="text-text-muted hover:text-forest transition-colors disabled:opacity-40">
-            <RefreshIcon spinning={refreshing} />
+    <main className="max-w-7xl mx-auto px-4 py-8">
+      {showCompostedMsg && (
+        <p className="font-serif italic text-forest text-sm mb-6">
+          Composted. Find it in the compost heap below.
+        </p>
+      )}
+      <div className="space-y-8">
+        {systemPlot && (
+          <SystemPlotRow plot={systemPlot} apiKey={apiKey} />
+        )}
+
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={userPlotIds} strategy={verticalListSortingStrategy}>
+            <div className="space-y-8">
+              {userPlots.map((plot, idx) => (
+                <SortablePlotRow
+                  key={plot.id}
+                  plot={plot}
+                  isFirst={idx === 0}
+                  isLast={idx === userPlots.length - 1}
+                  apiKey={apiKey}
+                  onEdit={() => { setEditingPlot(plot); setShowForm(true) }}
+                  onDelete={() => setConfirmDelete(plot)}
+                  onMoveUp={() => handleMoveUp(plot.id)}
+                  onMoveDown={() => handleMoveDown(plot.id)}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+
+        {showForm ? (
+          <PlotForm
+            initial={editingPlot}
+            suggestions={suggestionTags}
+            onSave={editingPlot ? handleEditPlot : handleAddPlot}
+            onCancel={() => { setShowForm(false); setEditingPlot(null) }}
+          />
+        ) : (
+          <button
+            onClick={() => { setEditingPlot(null); setShowForm(true) }}
+            className="text-sm font-sans text-forest border border-forest-25 rounded-button px-3 py-1.5 hover:bg-forest-04 transition-colors"
+          >
+            + Add a plot
           </button>
-        </div>
+        )}
       </div>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        {showCompostedMsg && (
-          <p className="font-serif italic text-forest text-sm mb-6">
-            Composted. Find it in the compost heap below.
-          </p>
-        )}
-        {loading && <div className="flex justify-center py-20"><WorkingDots size="lg" label="Loading…" /></div>}
-        {error && <p className="text-center text-earth font-serif italic py-20">Something went wrong — {error}</p>}
-        {!loading && !error && uploads.length === 0 && <EmptyGarden />}
-        {!loading && !error && uploads.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {uploads.map((upload) => (
-              <UploadCard key={upload.id} upload={upload} apiKey={apiKey}
-                isNew={newUploadIds.has(upload.id)}
-                onRotate={handleRotate} onUpdateTags={handleUpdateTags} allTags={allTags} />
-            ))}
-          </div>
-        )}
-        {!loading && (
-          <div className="mt-12">
-            <Link
-              to="/compost"
-              className={`text-sm font-sans hover:text-forest transition-colors ${compostCount === 0 ? 'text-text-muted opacity-60' : 'text-text-muted'}`}
-            >
-              Compost heap ({compostCount})
-            </Link>
-          </div>
-        )}
-      </main>
-    </div>
+      <div className="mt-12">
+        <Link
+          to="/compost"
+          className={`text-sm font-sans hover:text-forest transition-colors ${compostCount === 0 ? 'text-text-muted opacity-60' : 'text-text-muted'}`}
+        >
+          Compost heap ({compostCount})
+        </Link>
+      </div>
+
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Delete plot?"
+          body={`"${confirmDelete.name}" will be removed. Your photos are not affected.`}
+          primaryLabel="Delete"
+          primaryClass="bg-earth text-parchment"
+          cancelLabel="Keep it"
+          onConfirm={() => handleDeletePlot(confirmDelete)}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+    </main>
   )
 }

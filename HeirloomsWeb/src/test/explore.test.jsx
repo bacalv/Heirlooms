@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { AuthContext } from '../AuthContext'
 import { ExplorePage } from '../pages/ExplorePage'
@@ -104,5 +104,82 @@ describe('ExplorePage', () => {
     fireEvent.click(btn)
 
     await waitFor(() => expect(screen.queryByRole('button', { name: /Load more/i })).not.toBeInTheDocument())
+  })
+
+  // ---- Filter chrome tests -------------------------------------------------
+
+  it('renders sort dropdown with default option', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ items: [], next_cursor: null }),
+    })
+    render(<Wrapper><ExplorePage /></Wrapper>)
+    await waitFor(() => screen.getByRole('combobox'))
+    const select = screen.getByRole('combobox')
+    expect(select.value).toBe('upload_newest')
+  })
+
+  it('changing sort triggers a re-fetch', async () => {
+    global.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ items: [], next_cursor: null }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ items: [], next_cursor: null }),
+      })
+
+    render(<Wrapper><ExplorePage /></Wrapper>)
+    await waitFor(() => screen.getByRole('combobox'))
+    act(() => { fireEvent.change(screen.getByRole('combobox'), { target: { value: 'upload_oldest' } }) })
+    await waitFor(() => {
+      const calls = global.fetch.mock.calls.map((c) => c[0])
+      expect(calls.some((u) => u.includes('sort=upload_oldest'))).toBe(true)
+    })
+  })
+
+  it('renders tag input in filter chrome', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ items: [], next_cursor: null }),
+    })
+    render(<Wrapper><ExplorePage /></Wrapper>)
+    await waitFor(() => screen.getByPlaceholderText(/filter by tag/i))
+  })
+
+  it('entering a tag value triggers a re-fetch with tag param', async () => {
+    global.fetch
+      .mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ items: [], next_cursor: null }),
+      })
+
+    render(<Wrapper><ExplorePage /></Wrapper>)
+    await waitFor(() => screen.getByPlaceholderText(/filter by tag/i))
+    act(() => {
+      fireEvent.change(screen.getByPlaceholderText(/filter by tag/i), { target: { value: 'family' } })
+    })
+    await waitFor(() => {
+      const calls = global.fetch.mock.calls.map((c) => c[0])
+      expect(calls.some((u) => u.includes('tag=family'))).toBe(true)
+    })
+  })
+
+  it('Clear filters button appears when filters are active', async () => {
+    global.fetch
+      .mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ items: [], next_cursor: null }),
+      })
+
+    render(<Wrapper><ExplorePage /></Wrapper>)
+    await waitFor(() => screen.getByPlaceholderText(/filter by tag/i))
+    expect(screen.queryByText('Clear filters')).not.toBeInTheDocument()
+
+    act(() => {
+      fireEvent.change(screen.getByPlaceholderText(/filter by tag/i), { target: { value: 'family' } })
+    })
+    await waitFor(() => expect(screen.getByText('Clear filters')).toBeInTheDocument())
   })
 })

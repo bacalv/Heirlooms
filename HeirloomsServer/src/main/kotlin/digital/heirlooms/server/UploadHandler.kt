@@ -25,6 +25,7 @@ import org.http4k.core.Status.Companion.INTERNAL_SERVER_ERROR
 import org.http4k.core.Status.Companion.NOT_FOUND
 import org.http4k.core.Status.Companion.CONFLICT
 import org.http4k.core.Status.Companion.NOT_IMPLEMENTED
+import org.http4k.core.Status.Companion.NO_CONTENT
 import org.http4k.core.Status.Companion.OK
 import org.http4k.core.Status.Companion.UNPROCESSABLE_ENTITY
 import org.http4k.format.Jackson
@@ -39,6 +40,8 @@ import org.http4k.routing.static
 import java.io.ByteArrayInputStream
 import java.security.MessageDigest
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 import java.util.UUID
 
 private const val SWAGGER_UI_VERSION = "5.11.8"
@@ -97,6 +100,7 @@ fun buildApp(
             readUrlContractRoute(directUpload, database),
             rotationContractRoute(database),
             tagsContractRoute(database),
+            viewUploadContractRoute(database),
             capsuleReverseLookupRoute(database),
             compostUploadContractRoute(database),
             restoreUploadContractRoute(database),
@@ -207,7 +211,7 @@ private fun uploadContractRoute(
 private fun listUploadsContractRoute(storage: FileStore, database: Database): ContractRoute =
     "/uploads" meta {
         summary = "List uploads"
-        description = "Returns active (non-composted) uploads as a cursor-paginated JSON object. Query params: `cursor` (opaque, from previous next_cursor), `limit` (1–200, default 50), `tag`, `exclude_tag`."
+        description = "Returns uploads as a cursor-paginated JSON object. Query params: `cursor`, `limit` (1–200, default 50), `tag` (comma-separated, any-match), `exclude_tag`, `from_date` (ISO date, inclusive), `to_date` (ISO date, inclusive), `in_capsule` (true|false), `include_composted` (true), `has_location` (true|false), `sort` (upload_newest|upload_oldest|taken_newest|taken_oldest), `just_arrived` (true)."
     } bindContract GET to listUploadsHandler(storage, database)
 
 private fun getUploadByIdContractRoute(database: Database): ContractRoute {
@@ -290,15 +294,48 @@ private fun listUploadsHandler(storage: FileStore, database: Database): HttpHand
     try {
         val cursor = request.query("cursor")?.takeIf { it.isNotBlank() }
         val limit = request.query("limit")?.toIntOrNull()?.coerceIn(1, 200) ?: 50
-        val tag = request.query("tag")?.takeIf { it.isNotBlank() }
+        val tagParam = request.query("tag")?.takeIf { it.isNotBlank() }
+        val tags = tagParam?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
         val excludeTag = request.query("exclude_tag")?.takeIf { it.isNotBlank() }
-        val page = database.listUploadsPaginated(cursor = cursor, limit = limit, tag = tag, excludeTag = excludeTag)
+        val fromDate = request.query("from_date")?.let { tryParseDate(it) }
+        val toDate = request.query("to_date")?.let { tryParseDate(it, endOfDay = true) }
+        val inCapsule = request.query("in_capsule")?.let {
+            when (it) { "true" -> true; "false" -> false; else -> null }
+        }
+        val includeComposted = request.query("include_composted") == "true"
+        val hasLocation = request.query("has_location")?.let {
+            when (it) { "true" -> true; "false" -> false; else -> null }
+        }
+        val sort = when (request.query("sort")) {
+            "upload_oldest" -> UploadSort.UPLOAD_OLDEST
+            "taken_newest"  -> UploadSort.TAKEN_NEWEST
+            "taken_oldest"  -> UploadSort.TAKEN_OLDEST
+            else            -> UploadSort.UPLOAD_NEWEST
+        }
+        val justArrived = request.query("just_arrived") == "true"
+
+        val page = database.listUploadsPaginated(
+            cursor = cursor, limit = limit, tags = tags, excludeTag = excludeTag,
+            fromDate = fromDate, toDate = toDate, inCapsule = inCapsule,
+            includeComposted = includeComposted, hasLocation = hasLocation,
+            sort = sort, justArrived = justArrived,
+        )
         val response = Response(OK).header("Content-Type", "application/json").body(page.toJson())
         launchCompostCleanup(storage, database)
         response
     } catch (e: Exception) {
         Response(INTERNAL_SERVER_ERROR).body("Failed to list uploads: ${e.message}")
     }
+}
+
+private fun tryParseDate(s: String, endOfDay: Boolean = false): Instant? = try {
+    Instant.parse(s)
+} catch (_: Exception) {
+    try {
+        val date = LocalDate.parse(s)
+        val base = if (endOfDay) date.plusDays(1) else date
+        base.atStartOfDay(ZoneOffset.UTC).toInstant()
+    } catch (_: Exception) { null }
 }
 
 private fun listCompostedUploadsHandler(database: Database): HttpHandler = { request ->
@@ -619,6 +656,23 @@ private fun rotationContractRoute(database: Database): ContractRoute {
                 }
             } catch (e: Exception) {
                 Response(INTERNAL_SERVER_ERROR).body("Failed to update rotation: ${e.message}")
+            }
+        }
+    }
+}
+
+private fun viewUploadContractRoute(database: Database): ContractRoute {
+    val id = Path.uuid().of("id")
+    return "/uploads" / id / "view" meta {
+        summary = "Record a detail view"
+        description = "Sets last_viewed_at on the upload, removing it from the Just arrived plot. Idempotent — subsequent calls on an already-viewed item are no-ops."
+    } bindContract POST to { uploadId: UUID, _: String ->
+        { _: Request ->
+            val exists = database.getUploadById(uploadId) != null
+            if (!exists) Response(NOT_FOUND)
+            else {
+                database.recordView(uploadId)
+                Response(NO_CONTENT)
             }
         }
     }

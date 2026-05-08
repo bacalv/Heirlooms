@@ -7,6 +7,7 @@ import org.http4k.contract.div
 import org.http4k.contract.meta
 import org.http4k.core.Method.DELETE
 import org.http4k.core.Method.GET
+import org.http4k.core.Method.PATCH
 import org.http4k.core.Method.POST
 import org.http4k.core.Method.PUT
 import org.http4k.core.Request
@@ -17,6 +18,7 @@ import org.http4k.core.Status.Companion.FORBIDDEN
 import org.http4k.core.Status.Companion.NOT_FOUND
 import org.http4k.core.Status.Companion.NO_CONTENT
 import org.http4k.core.Status.Companion.OK
+import org.http4k.core.Status.Companion.INTERNAL_SERVER_ERROR
 import org.http4k.lens.Path
 import org.http4k.lens.uuid
 import java.util.UUID
@@ -29,6 +31,7 @@ fun plotRoutes(database: Database): List<ContractRoute> = listOf(
     createPlotRoute(database),
     updatePlotRoute(database),
     deletePlotRoute(database),
+    batchReorderPlotsRoute(database),
 )
 
 private fun listPlotsRoute(database: Database): ContractRoute =
@@ -110,6 +113,43 @@ private fun deletePlotRoute(database: Database): ContractRoute {
 }
 
 private data class PlotBodyParsed(val name: String?, val tagCriteria: List<String>?, val error: String?)
+
+private fun batchReorderPlotsRoute(database: Database): ContractRoute =
+    "/plots" meta {
+        summary = "Batch reorder plots"
+        description = "Updates sort_order for multiple user-defined plots atomically. Body: [{\"id\":\"uuid\",\"sort_order\":0},...]."
+    } bindContract PATCH to { request: Request ->
+        val node = try { plotMapper.readTree(request.bodyString()) } catch (_: Exception) { null }
+        if (node == null || !node.isArray) {
+            Response(BAD_REQUEST).body("Expected JSON array of {id, sort_order} objects")
+        } else {
+            val updates = node.elements().asSequence().mapNotNull { el ->
+                val idStr = el.get("id")?.asText()
+                val sortOrder = el.get("sort_order")?.asInt()
+                if (idStr != null && sortOrder != null) {
+                    try { java.util.UUID.fromString(idStr) to sortOrder } catch (_: Exception) { null }
+                } else null
+            }.toList()
+
+            if (updates.isEmpty()) {
+                Response(BAD_REQUEST).body("No valid {id, sort_order} entries found")
+            } else {
+                try {
+                    when (database.batchReorderPlots(updates)) {
+                        is Database.BatchReorderResult.Success ->
+                            Response(NO_CONTENT)
+                        is Database.BatchReorderResult.SystemDefined ->
+                            Response(FORBIDDEN).header("Content-Type", "application/json")
+                                .body("""{"error":"Cannot reorder system-defined plots"}""")
+                        is Database.BatchReorderResult.NotFound ->
+                            Response(NOT_FOUND)
+                    }
+                } catch (e: Exception) {
+                    Response(INTERNAL_SERVER_ERROR).body("Failed to reorder plots: ${e.message}")
+                }
+            }
+        }
+    }
 
 private fun parsePlotBody(request: Request): PlotBodyParsed {
     return try {

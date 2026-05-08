@@ -196,6 +196,11 @@ pagination, plot schema), new web surfaces, and Android adoption. See
 - **D2 — Backend + Explore basic (done, v0.23.0).** V9/V10 migrations (exif_processed_at,
   plots schema + seed). ExifExtractionService recovery. Cursor pagination on list
   endpoints. Plot CRUD (4 endpoints). `/explore` page + nav entry.
+- **D3 — Web complete (done, v0.24.0).** V11 migration (last_viewed_at + Just arrived index).
+  Upload list filters + sort-aware cursor. View tracking endpoint. PATCH /api/plots batch
+  reorder. Garden redesigned as plot rows with DnD + gear menu + inline Add form. Explore
+  filter chrome + sort. PhotoDetail ?from=garden|explore variants with negative-action
+  button separation. IDIOMS.md: Plot, Just arrived, Negative-action button separation.
 
 The work nips several decisions in the bud: brand register on a workflow-vs-leisure
 surface; loading-time issues that compound as the dataset grows; multi-user

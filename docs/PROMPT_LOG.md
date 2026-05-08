@@ -1757,3 +1757,70 @@ to be restarted (known requirement, see PA_NOTES.md — `docker.raw.sock`). Run
 
 **Docs updated:** `PA_NOTES.md` (recovery runbook), `VERSIONS.md` (v0.22.0), `ROADMAP.md`
 (D1 marked done), `PROMPT_LOG.md` (this entry).
+
+---
+
+## Session: M6 D3 — Web complete (v0.24.0) — 8 May 2026
+
+**Brief:** D3 of Milestone 6 — three sub-tasks bundled: Explore filters (3A), Garden
+plots (3B), PhotoDetail variants (3C). See D3 brief in `docs/chats/` for full spec.
+
+**Decisions resolved at session start:**
+- Add a plot UX: inline form (not modal).
+- Batch reorder: `PATCH /api/plots` bulk endpoint (not sequential PUTs).
+- Sort cursors: sort-aware encoding (`SORT_NAME:epochMs_or_null:id`). Old-format cursors
+  silently restart pagination (acceptable; D2 never exposed cursors to end users).
+
+**What was built:**
+
+*Schema:* V11 migration — `last_viewed_at TIMESTAMPTZ NULL` on `uploads`. Partial index
+`idx_uploads_just_arrived` for the Just arrived predicate.
+
+*Backend 3A:* `listUploadsPaginated` extended with `tags` (any-match), `fromDate`, `toDate`,
+`inCapsule`, `includeComposted`, `hasLocation`, `sort`, `justArrived`. Sort-aware cursor
+system replaces old single-sort cursor. `tryParseDate` helper handles ISO date strings with
+inclusive boundaries (from = start of day, to = exclusive start of next day).
+
+*Backend 3B:* `POST /api/content/uploads/:id/view` sets `last_viewed_at = NOW()`, idempotent.
+`PATCH /api/plots` batch reorder is atomic (checks system-defined status before writing).
+`Database.recordView` + `Database.batchReorderPlots` added.
+
+*Web 3A — Explore:* Filter chrome added above the grid. `FilterChrome` component with tag
+input, date range pickers, capsule/location segmented controls, composted checkbox, sort
+dropdown. Collapses to a *Filters* toggle on narrow viewports. Re-fetches on any filter change.
+Sort dropdown always visible. `ExploreGrid` replaces `PhotoGrid` to add composted-item
+desaturation and *no date* tag on taken-date sorts.
+
+*Web 3B — Garden:* Complete rewrite. Plots fetched from `GET /api/plots`. System plot renders
+as `SystemPlotRow` (no DnD, no gear). User plots render as `SortablePlotRow` with `@dnd-kit/
+sortable`. Gear menu: Edit, Delete, Move up, Move down. Drag-and-drop fires `PATCH /api/plots`.
+Up/down arrows fire the same API. `PlotItemsRow` fetches its own items with cursor pagination.
+`PlotForm` shared between Add and Edit. Delete uses `ConfirmDialog`. Compost count and
+composted-message toast preserved.
+
+*Web 3C — PhotoDetail:* `?from=garden|explore` query param. `GardenFlavour` component:
+action-forward layout, *Compost* below a divider. `ExploreFlavour` component: larger hero,
+metadata prominent (taken date, location, capsule count), kebab menu for actions, tags read-
+only with *Edit tags* link. Back link context-aware. Every open fires `POST .../view`.
+
+*IDIOMS.md:* Three new entries — *Plot*, *Just arrived*, *Negative-action button separation*.
+
+**Test counts:**
+- Backend integration: 21 new (18 × UploadFilterApiTest, 5 × PlotApiTest). Total now 190+.
+- Web: 22 new (13 × garden.test.jsx, 5 × explore filter additions, 4 × photo_detail.test.jsx).
+  3 existing compost tests updated (view mock added to fetch-ordering). Total: 86 web.
+
+**Surprises / decisions during implementation:**
+- `@dnd-kit/sortable` v10 installs cleanly with React 18. No JSdom incompatibilities in tests.
+- `compost.test.jsx` mock ordering broke because `POST .../view` is now fired before the blob
+  and capsules fetches. Fixed by inserting a view mock first in affected test cases.
+- `GardenPage` compost count used two nested fetch calls; simplified to one `limit=200` call.
+- `ExploreThumb` fetches thumbnails inside `ExploreGrid` rather than reusing `PhotoGrid`, to
+  allow the composted-filter desaturation and no-date overlay without modifying the shared
+  component.
+- Cursor format `SORT_NAME:sortKeyMs_or_null:id` handles null `capturedAt` naturally: a `null`
+  sortKeyMs indicates the cursor sits at the NULL-tail of a taken-date sort.
+
+**Docs updated:** `IDIOMS.md` (3 entries + quick-reference update + status line), `VERSIONS.md`
+(v0.24.0), `ROADMAP.md` (D3 marked done), `PA_NOTES.md` (view tracking note), `PROMPT_LOG.md`
+(this entry).

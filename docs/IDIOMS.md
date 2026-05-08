@@ -1,6 +1,6 @@
 # Heirlooms — Idioms & Brand Language
 
-**Status:** established at v0.17.0, 7 May 2026; vocabulary cleanup at v0.20.3, 10 May 2026.
+**Status:** established at v0.17.0, 7 May 2026; vocabulary cleanup at v0.20.3, 10 May 2026; plot system at v0.24.0, 8 May 2026.
 **Purpose:** A working glossary of the product's vocabulary — what each term
 means in this world, where it appears, and what it should never be confused with.
 Consult this when writing copy, naming things in code, or deciding what to call
@@ -30,6 +30,8 @@ Plain-English definitions of the terms you'll encounter in the app.
 | **Compost** | Move a photo to the compost heap. It stays there for 90 days before being permanently deleted — you can restore it at any time during that window. |
 | **Compost heap** | A holding area for composted photos. Everything here is still recoverable. |
 | **Restore** | Bring a composted photo back to your garden. |
+| **Plot** | A named section of your Garden that groups items by tag. Garden is made of plots. |
+| **Just arrived** | The system plot at the top of Garden showing newly uploaded items you haven't processed yet — no tags, no capsule, not yet viewed. |
 
 ---
 
@@ -401,8 +403,73 @@ New features should be named to fit the existing vocabulary before reaching for
 neutral or technical terms. Ask:
 
 1. Is there an existing idiom that fits? (plant, seal, bloom, compost, restore)
-2. Is the thing part of the garden world? (seed, leaf, branch, root, harvest…)
+2. Is the thing part of the garden world? (seed, leaf, branch, root, harvest…, plot)
 3. Does the name earn a place in the brand, or is it just a label?
+
+---
+
+## Plot
+
+A named section of the Garden. The Garden contains plots. The system plot (*Just arrived*) is a
+plot. User-created plots are plots. The gardening metaphor extends naturally — a plot is a
+defined area where specific things grow.
+
+**Appears in:** Garden page section headings ("Family", "Holidays"), affordance copy ("Add a plot",
+"Edit plot", "Delete plot"), the system plot label "Just arrived".
+
+**Does not appear as a verb.** The forms *plotted* and *plotting* stay out of user-facing copy.
+*"You're plotting your garden"* reads as scheming. The noun carries the metaphor on its own.
+
+**Affordance copy:**
+- *Add a plot* — yes.
+- *Edit plot* — yes.
+- *Delete plot* — yes.
+- *Plotting* — no, ever.
+
+**Internal code:** `plots` table, `plot_tag_criteria` table. The sentinel name `__just_arrived__`
+is translated to the user-facing label at render time.
+
+---
+
+## Just arrived
+
+The user-facing label for the system-defined plot at the top of Garden. Items appear here when
+newly uploaded and haven't been processed yet: no tags, not in any capsule, not yet opened in
+detail view.
+
+The label is plain and slightly anticipatory. It does not imply backlog (*Untended* would have) or
+urgency. Items leave *Just arrived* when any of the following happen: a tag is added, the item is
+added to a capsule, or the detail page is opened (which records `last_viewed_at`).
+
+**Appears in:** Garden page, as the first and immutable row title.
+
+**Does not appear in:** navigation, API paths, database identifiers. The schema sentinel name is
+`__just_arrived__`; the render-time translation is `Just arrived`.
+
+**UI rules:** The *Just arrived* row has no drag handle, no gear menu, and no management
+affordances. It is always fixed at the top of Garden. Users cannot reorder it, edit it, or
+delete it — server returns 403 on any modify/delete attempt.
+
+---
+
+## Negative-action button separation
+
+A design principle, not a user-facing term. Destructive actions (compost, delete, cancel) are
+visually separated from positive actions (add to capsule, tag, save) in any UI surface where they
+coexist.
+
+**Forms the separation can take:**
+- A divider line between regions.
+- Different colour treatments (earth tones for destructive; default for positive).
+- Different visual weights (ghost button for destructive; solid for positive).
+- Spatial separation (different sides of the screen, different sections of a menu).
+
+**Why:** Prevents accidental destructive clicks. Signals the emotional weight of removal. Composes
+with the *compost-not-trash* positioning — destructive actions shouldn't feel routine.
+
+**In practice:** In Garden flavour (detail page), *Compost* appears below a divider, visually
+separated from *Add this to a capsule*. In Explore flavour, *Compost* appears in the kebab menu
+with a separator between it and the positive actions above.
 
 If none of the above, a neutral technical name is fine — but record the choice
 here if it's user-facing.

@@ -4,9 +4,11 @@ import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import org.flywaydb.core.Flyway
 import java.sql.Connection
+import java.sql.PreparedStatement
 import java.sql.Timestamp
 import java.time.Instant
 import java.time.OffsetDateTime
+import java.time.temporal.ChronoUnit
 import java.util.Base64
 import java.util.UUID
 import javax.sql.DataSource
@@ -62,9 +64,16 @@ data class UploadRecord(
     val tags: List<String> = emptyList(),
     val compostedAt: Instant? = null,
     val exifProcessedAt: Instant? = null,
+    val lastViewedAt: Instant? = null,
 )
 
 data class UploadPage(val items: List<UploadRecord>, val nextCursor: String?)
+
+// ---- Sort options for uploads -------------------------------------------
+
+enum class UploadSort { UPLOAD_NEWEST, UPLOAD_OLDEST, TAKEN_NEWEST, TAKEN_OLDEST }
+
+private data class DecodedCursor(val sort: UploadSort, val sortKeyMs: Long?, val id: UUID)
 
 // ---- Plot domain model -----------------------------------------------
 
@@ -121,7 +130,7 @@ class Database(private val dataSource: DataSource) {
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
                           captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
-                          composted_at
+                          composted_at, exif_processed_at, last_viewed_at
                    FROM uploads WHERE content_hash = ? LIMIT 1"""
             ).use { stmt ->
                 stmt.setString(1, hash)
@@ -137,13 +146,24 @@ class Database(private val dataSource: DataSource) {
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
                           captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
-                          composted_at
+                          composted_at, exif_processed_at, last_viewed_at
                    FROM uploads WHERE id = ?"""
             ).use { stmt ->
                 stmt.setObject(1, id)
                 val rs = stmt.executeQuery()
                 if (!rs.next()) return null
                 return rs.toUploadRecord()
+            }
+        }
+    }
+
+    fun recordView(id: UUID): Boolean {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                "UPDATE uploads SET last_viewed_at = NOW() WHERE id = ? AND last_viewed_at IS NULL"
+            ).use { stmt ->
+                stmt.setObject(1, id)
+                return stmt.executeUpdate() > 0
             }
         }
     }
@@ -157,7 +177,7 @@ class Database(private val dataSource: DataSource) {
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
                           captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
-                          composted_at
+                          composted_at, exif_processed_at, last_viewed_at
                    FROM uploads $where ORDER BY uploaded_at DESC"""
             ).use { stmt ->
                 var idx = 1
@@ -176,7 +196,7 @@ class Database(private val dataSource: DataSource) {
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
                           captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
-                          composted_at
+                          composted_at, exif_processed_at, last_viewed_at
                    FROM uploads WHERE composted_at IS NOT NULL ORDER BY composted_at DESC"""
             ).use { stmt ->
                 val rs = stmt.executeQuery()
@@ -205,8 +225,8 @@ class Database(private val dataSource: DataSource) {
                 stmt.setObject(1, id)
                 val rs = stmt.executeQuery()
                 if (!rs.next()) return CompostResult.NotFound
-                val record = rs.toUploadRecord()
-                if (record.compostedAt != null) return CompostResult.AlreadyComposted
+                val compostedAt = rs.getTimestamp("composted_at")
+                if (compostedAt != null) return CompostResult.AlreadyComposted
                 if (!canCompost(id, conn)) return CompostResult.PreconditionFailed
             }
             conn.prepareStatement("UPDATE uploads SET composted_at = NOW() WHERE id = ?").use { stmt ->
@@ -247,7 +267,7 @@ class Database(private val dataSource: DataSource) {
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
                           captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
-                          composted_at
+                          composted_at, exif_processed_at, last_viewed_at
                    FROM uploads WHERE composted_at < NOW() - INTERVAL '90 days'"""
             ).use { stmt ->
                 val rs = stmt.executeQuery()
@@ -664,7 +684,8 @@ class Database(private val dataSource: DataSource) {
         conn.prepareStatement(
             """SELECT u.id, u.storage_key, u.mime_type, u.file_size, u.uploaded_at, u.content_hash,
                       u.thumbnail_key, u.captured_at, u.latitude, u.longitude, u.altitude,
-                      u.device_make, u.device_model, u.rotation, u.tags, u.composted_at
+                      u.device_make, u.device_model, u.rotation, u.tags, u.composted_at,
+                      u.exif_processed_at, u.last_viewed_at
                FROM uploads u
                JOIN capsule_contents cc ON u.id = cc.upload_id
                WHERE cc.capsule_id = ?
@@ -707,50 +728,159 @@ class Database(private val dataSource: DataSource) {
     fun listUploadsPaginated(
         cursor: String? = null,
         limit: Int = 50,
-        tag: String? = null,
+        tags: List<String> = emptyList(),
         excludeTag: String? = null,
+        fromDate: Instant? = null,
+        toDate: Instant? = null,
+        inCapsule: Boolean? = null,
+        includeComposted: Boolean = false,
+        hasLocation: Boolean? = null,
+        sort: UploadSort = UploadSort.UPLOAD_NEWEST,
+        justArrived: Boolean = false,
     ): UploadPage {
         val effectiveLimit = limit.coerceIn(1, 200)
+        val effectiveSort = if (justArrived) UploadSort.UPLOAD_NEWEST else sort
         val decoded = cursor?.let { decodeCursor(it) }
+        // Discard cursor if its sort doesn't match (sort change always restarts pagination)
+        val activeCursor = decoded?.takeIf { it.sort == effectiveSort }
+
         dataSource.connection.use { conn: Connection ->
-            val conditions = mutableListOf("composted_at IS NULL")
-            if (decoded != null) conditions.add(
-                "(uploaded_at < ? OR (uploaded_at = ? AND id < ?::uuid))"
-            )
-            if (tag != null) conditions.add("tags @> ARRAY[?]::text[]")
-            if (excludeTag != null) conditions.add("NOT (tags @> ARRAY[?]::text[])")
-            val where = "WHERE ${conditions.joinToString(" AND ")}"
+            // Accumulate SQL condition fragments and parameter-setter lambdas in parallel.
+            // Each setter receives (stmt, currentIdx) and returns the next available index.
+            val conditions = mutableListOf<String>()
+            val setters = mutableListOf<(PreparedStatement, Int) -> Int>()
+
+            if (justArrived) {
+                conditions += "last_viewed_at IS NULL"
+                conditions += "tags = '{}'::text[]"
+                conditions += "composted_at IS NULL"
+                conditions += """NOT EXISTS (
+                    SELECT 1 FROM capsule_contents cc
+                    JOIN capsules c ON c.id = cc.capsule_id
+                    WHERE cc.upload_id = uploads.id AND c.state IN ('open','sealed')
+                )"""
+            } else {
+                if (!includeComposted) conditions += "composted_at IS NULL"
+
+                if (tags.isNotEmpty()) {
+                    conditions += "tags && ?::text[]"
+                    val arr = conn.createArrayOf("text", tags.toTypedArray())
+                    setters += { stmt, idx -> stmt.setArray(idx, arr); idx + 1 }
+                }
+                if (excludeTag != null) {
+                    conditions += "NOT (tags @> ARRAY[?]::text[])"
+                    setters += { stmt, idx -> stmt.setString(idx, excludeTag); idx + 1 }
+                }
+                if (fromDate != null) {
+                    conditions += "uploaded_at >= ?"
+                    setters += { stmt, idx -> stmt.setTimestamp(idx, Timestamp.from(fromDate)); idx + 1 }
+                }
+                if (toDate != null) {
+                    conditions += "uploaded_at < ?"
+                    setters += { stmt, idx -> stmt.setTimestamp(idx, Timestamp.from(toDate)); idx + 1 }
+                }
+                if (inCapsule == true) {
+                    conditions += """EXISTS (
+                        SELECT 1 FROM capsule_contents cc
+                        JOIN capsules c ON c.id = cc.capsule_id
+                        WHERE cc.upload_id = uploads.id AND c.state IN ('open','sealed')
+                    )"""
+                } else if (inCapsule == false) {
+                    conditions += """NOT EXISTS (
+                        SELECT 1 FROM capsule_contents cc
+                        JOIN capsules c ON c.id = cc.capsule_id
+                        WHERE cc.upload_id = uploads.id AND c.state IN ('open','sealed')
+                    )"""
+                }
+                if (hasLocation == true) conditions += "latitude IS NOT NULL"
+                else if (hasLocation == false) conditions += "latitude IS NULL"
+            }
+
+            // Cursor condition appended last so its params bind after filter params
+            if (activeCursor != null) {
+                val (cursorSql, cursorSetter) = buildCursorCondition(effectiveSort, activeCursor)
+                conditions += cursorSql
+                setters += cursorSetter
+            }
+
+            val where = if (conditions.isEmpty()) "" else "WHERE ${conditions.joinToString(" AND ")}"
+            val orderBy = when (effectiveSort) {
+                UploadSort.UPLOAD_NEWEST -> "ORDER BY uploaded_at DESC, id DESC"
+                UploadSort.UPLOAD_OLDEST -> "ORDER BY uploaded_at ASC, id ASC"
+                UploadSort.TAKEN_NEWEST  -> "ORDER BY captured_at DESC NULLS LAST, id DESC"
+                UploadSort.TAKEN_OLDEST  -> "ORDER BY captured_at ASC NULLS LAST, id ASC"
+            }
+
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash,
                           thumbnail_key, captured_at, latitude, longitude, altitude,
-                          device_make, device_model, rotation, tags, composted_at, exif_processed_at
-                   FROM uploads $where
-                   ORDER BY uploaded_at DESC, id DESC
-                   LIMIT ?"""
+                          device_make, device_model, rotation, tags, composted_at, exif_processed_at,
+                          last_viewed_at
+                   FROM uploads $where $orderBy LIMIT ?"""
             ).use { stmt ->
                 var idx = 1
-                if (decoded != null) {
-                    stmt.setTimestamp(idx++, Timestamp.from(decoded.first))
-                    stmt.setTimestamp(idx++, Timestamp.from(decoded.first))
-                    stmt.setString(idx++, decoded.second.toString())
-                }
-                if (tag != null) stmt.setString(idx++, tag)
-                if (excludeTag != null) stmt.setString(idx++, excludeTag)
+                for (setter in setters) idx = setter(stmt, idx)
                 stmt.setInt(idx, effectiveLimit + 1)
                 val rs = stmt.executeQuery()
                 val results = mutableListOf<UploadRecord>()
                 while (rs.next()) results.add(rs.toUploadRecord())
                 val hasMore = results.size > effectiveLimit
                 val items = if (hasMore) results.dropLast(1) else results
-                val nextCursor = if (hasMore) encodeCursor(items.last()) else null
+                val nextCursor = if (hasMore) encodeCursor(items.last(), effectiveSort) else null
                 return UploadPage(items, nextCursor)
+            }
+        }
+    }
+
+    private fun buildCursorCondition(
+        sort: UploadSort,
+        cursor: DecodedCursor,
+    ): Pair<String, (PreparedStatement, Int) -> Int> = when (sort) {
+        UploadSort.UPLOAD_NEWEST -> {
+            val ts = Timestamp.from(Instant.ofEpochMilli(cursor.sortKeyMs ?: 0))
+            "(uploaded_at < ? OR (uploaded_at = ? AND id < ?::uuid))" to { stmt, idx ->
+                stmt.setTimestamp(idx, ts); stmt.setTimestamp(idx + 1, ts)
+                stmt.setString(idx + 2, cursor.id.toString()); idx + 3
+            }
+        }
+        UploadSort.UPLOAD_OLDEST -> {
+            val ts = Timestamp.from(Instant.ofEpochMilli(cursor.sortKeyMs ?: 0))
+            "(uploaded_at > ? OR (uploaded_at = ? AND id > ?::uuid))" to { stmt, idx ->
+                stmt.setTimestamp(idx, ts); stmt.setTimestamp(idx + 1, ts)
+                stmt.setString(idx + 2, cursor.id.toString()); idx + 3
+            }
+        }
+        UploadSort.TAKEN_NEWEST -> {
+            if (cursor.sortKeyMs != null) {
+                val ts = Timestamp.from(Instant.ofEpochMilli(cursor.sortKeyMs))
+                "(captured_at < ? OR (captured_at = ? AND id < ?::uuid) OR captured_at IS NULL)" to { stmt, idx ->
+                    stmt.setTimestamp(idx, ts); stmt.setTimestamp(idx + 1, ts)
+                    stmt.setString(idx + 2, cursor.id.toString()); idx + 3
+                }
+            } else {
+                "(captured_at IS NULL AND id < ?::uuid)" to { stmt, idx ->
+                    stmt.setString(idx, cursor.id.toString()); idx + 1
+                }
+            }
+        }
+        UploadSort.TAKEN_OLDEST -> {
+            if (cursor.sortKeyMs != null) {
+                val ts = Timestamp.from(Instant.ofEpochMilli(cursor.sortKeyMs))
+                "(captured_at > ? OR (captured_at = ? AND id > ?::uuid) OR captured_at IS NULL)" to { stmt, idx ->
+                    stmt.setTimestamp(idx, ts); stmt.setTimestamp(idx + 1, ts)
+                    stmt.setString(idx + 2, cursor.id.toString()); idx + 3
+                }
+            } else {
+                "(captured_at IS NULL AND id > ?::uuid)" to { stmt, idx ->
+                    stmt.setString(idx, cursor.id.toString()); idx + 1
+                }
             }
         }
     }
 
     fun listCompostedUploadsPaginated(cursor: String? = null, limit: Int = 50): UploadPage {
         val effectiveLimit = limit.coerceIn(1, 200)
-        val decoded = cursor?.let { decodeCursor(it) }
+        val decoded = cursor?.let { decodeCompostedCursor(it) }
         dataSource.connection.use { conn: Connection ->
             val where = if (decoded != null)
                 "WHERE composted_at IS NOT NULL AND (composted_at < ? OR (composted_at = ? AND id < ?::uuid))"
@@ -759,7 +889,8 @@ class Database(private val dataSource: DataSource) {
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash,
                           thumbnail_key, captured_at, latitude, longitude, altitude,
-                          device_make, device_model, rotation, tags, composted_at, exif_processed_at
+                          device_make, device_model, rotation, tags, composted_at, exif_processed_at,
+                          last_viewed_at
                    FROM uploads $where
                    ORDER BY composted_at DESC, id DESC
                    LIMIT ?"""
@@ -776,7 +907,7 @@ class Database(private val dataSource: DataSource) {
                 while (rs.next()) results.add(rs.toUploadRecord())
                 val hasMore = results.size > effectiveLimit
                 val items = if (hasMore) results.dropLast(1) else results
-                val nextCursor = if (hasMore) encodeCursor(items.last()) else null
+                val nextCursor = if (hasMore) encodeCompostedCursor(items.last()) else null
                 return UploadPage(items, nextCursor)
             }
         }
@@ -953,6 +1084,39 @@ class Database(private val dataSource: DataSource) {
         return PlotDeleteResult.Success
     }
 
+    sealed class BatchReorderResult {
+        object Success : BatchReorderResult()
+        object NotFound : BatchReorderResult()
+        object SystemDefined : BatchReorderResult()
+    }
+
+    fun batchReorderPlots(updates: List<Pair<UUID, Int>>): BatchReorderResult {
+        withTransaction { conn ->
+            for ((id, _) in updates) {
+                conn.prepareStatement(
+                    "SELECT is_system_defined FROM plots WHERE id = ? FOR UPDATE"
+                ).use { stmt ->
+                    stmt.setObject(1, id)
+                    val rs = stmt.executeQuery()
+                    if (!rs.next()) return BatchReorderResult.NotFound
+                    if (rs.getBoolean("is_system_defined")) return BatchReorderResult.SystemDefined
+                }
+            }
+            val now = Timestamp.from(Instant.now())
+            for ((id, sortOrder) in updates) {
+                conn.prepareStatement(
+                    "UPDATE plots SET sort_order = ?, updated_at = ? WHERE id = ?"
+                ).use { stmt ->
+                    stmt.setInt(1, sortOrder)
+                    stmt.setTimestamp(2, now)
+                    stmt.setObject(3, id)
+                    stmt.executeUpdate()
+                }
+            }
+        }
+        return BatchReorderResult.Success
+    }
+
     private fun queryPlotTagCriteria(conn: Connection, plotId: UUID): List<String> =
         conn.prepareStatement("SELECT tag FROM plot_tag_criteria WHERE plot_id = ? ORDER BY tag").use { stmt ->
             stmt.setObject(1, plotId)
@@ -978,12 +1142,37 @@ class Database(private val dataSource: DataSource) {
 
     // ---- Cursor helpers ---------------------------------------------------
 
-    private fun encodeCursor(record: UploadRecord): String {
-        val raw = "${record.uploadedAt.toEpochMilli()}:${record.id}"
+    // Active uploads cursor: encodes sort name + sort key + id.
+    // Format: "<SORT_NAME>:<epochMs_or_null>:<id>"
+    private fun encodeCursor(record: UploadRecord, sort: UploadSort): String {
+        val sortKeyMs = when (sort) {
+            UploadSort.UPLOAD_NEWEST, UploadSort.UPLOAD_OLDEST -> record.uploadedAt.toEpochMilli()
+            UploadSort.TAKEN_NEWEST, UploadSort.TAKEN_OLDEST   -> record.capturedAt?.toEpochMilli()
+        }
+        val raw = "${sort.name}:${sortKeyMs ?: "null"}:${record.id}"
         return Base64.getUrlEncoder().withoutPadding().encodeToString(raw.toByteArray())
     }
 
-    private fun decodeCursor(cursor: String): Pair<Instant, UUID>? = try {
+    private fun decodeCursor(cursor: String): DecodedCursor? = try {
+        val raw = String(Base64.getUrlDecoder().decode(cursor))
+        val firstColon = raw.indexOf(':')
+        val lastColon = raw.lastIndexOf(':')
+        if (firstColon < 0 || lastColon <= firstColon) null else {
+            val sort = UploadSort.valueOf(raw.substring(0, firstColon))
+            val sortKeyStr = raw.substring(firstColon + 1, lastColon)
+            val sortKeyMs = if (sortKeyStr == "null") null else sortKeyStr.toLong()
+            val uuid = UUID.fromString(raw.substring(lastColon + 1))
+            DecodedCursor(sort, sortKeyMs, uuid)
+        }
+    } catch (_: Exception) { null }
+
+    // Composted uploads cursor: legacy format "<composted_at_epochMs>:<id>"
+    private fun encodeCompostedCursor(record: UploadRecord): String {
+        val raw = "${record.compostedAt!!.toEpochMilli()}:${record.id}"
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(raw.toByteArray())
+    }
+
+    private fun decodeCompostedCursor(cursor: String): Pair<Instant, UUID>? = try {
         val raw = String(Base64.getUrlDecoder().decode(cursor))
         val colon = raw.lastIndexOf(':')
         if (colon < 0) null else {
@@ -1006,7 +1195,6 @@ class Database(private val dataSource: DataSource) {
             try { conn.rollback() } catch (_: Exception) {}
             throw e
         } finally {
-            // Runs even on non-local returns from block; rolls back any uncommitted changes.
             if (!committed) try { conn.rollback() } catch (_: Exception) {}
             conn.autoCommit = true
             conn.close()
@@ -1080,4 +1268,5 @@ private fun java.sql.ResultSet.toUploadRecord() = UploadRecord(
     tags = getArray("tags")?.let { arr -> (arr.array as? Array<*>)?.filterIsInstance<String>() } ?: emptyList(),
     compostedAt = getTimestamp("composted_at")?.toInstant(),
     exifProcessedAt = try { getTimestamp("exif_processed_at")?.toInstant() } catch (_: Exception) { null },
+    lastViewedAt = try { getTimestamp("last_viewed_at")?.toInstant() } catch (_: Exception) { null },
 )
