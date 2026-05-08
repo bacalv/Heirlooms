@@ -169,12 +169,12 @@ class GardenViewModel(
         })
     }
 
-    // Emits true when polling detects IDs in Just arrived that weren't there before.
-    // GardenScreen collects this, shows the arrival animation, then calls clearArrivalFlag().
-    private val _newItemsArrived = MutableStateFlow(false)
-    val newItemsArrived: StateFlow<Boolean> = _newItemsArrived.asStateFlow()
+    // The IDs that just landed in Just arrived from the latest poll — non-empty triggers
+    // the per-tile arrival animation. Cleared by GardenScreen once animations start.
+    private val _newlyArrivedIds = MutableStateFlow<Set<String>>(emptySet())
+    val newlyArrivedIds: StateFlow<Set<String>> = _newlyArrivedIds.asStateFlow()
 
-    fun clearArrivalFlag() { _newItemsArrived.value = false }
+    fun clearNewlyArrived() { _newlyArrivedIds.value = emptySet() }
 
     private var knownJustArrivedIds: Set<String> = emptySet()
 
@@ -188,7 +188,7 @@ class GardenViewModel(
                 // arriving into a previously empty Just arrived row. The poll only runs
                 // after a 30s delay so load() has always set knownJustArrivedIds first.
                 if (genuinelyNew.isNotEmpty()) {
-                    _newItemsArrived.value = true
+                    _newlyArrivedIds.value = genuinelyNew
                 }
                 knownJustArrivedIds = newIds
 

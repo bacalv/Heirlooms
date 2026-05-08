@@ -100,15 +100,8 @@ fun GardenScreen(
         }
     }
 
-    // Show arrival animation when the poll detects new items.
-    val newItemsArrived by vm.newItemsArrived.collectAsStateWithLifecycle()
-    var showArrival by remember { mutableStateOf(false) }
-    LaunchedEffect(newItemsArrived) {
-        if (newItemsArrived) {
-            showArrival = true
-            vm.clearArrivalFlag()
-        }
-    }
+    // IDs that just landed in Just arrived — drives per-tile arrival animations.
+    val newlyArrivedIds by vm.newlyArrivedIds.collectAsStateWithLifecycle()
 
     fun refresh() {
         refreshing = true
@@ -161,7 +154,9 @@ fun GardenScreen(
                                     onLoadMore = { vm.loadMoreForRow(api, index) },
                                     onExploreAll = { onNavigateToExplore(tags, isJustArrived) },
                                     isJustArrived = isJustArrived,
-                                    shouldScrollToStart = isJustArrived && newItemsArrived,
+                                    shouldScrollToStart = isJustArrived && newlyArrivedIds.isNotEmpty(),
+                                    newlyArrivedIds = if (isJustArrived) newlyArrivedIds else emptySet(),
+                                    onClearNewlyArrived = { vm.clearNewlyArrived() },
                                     onQuickRotate = { uploadId, currentRotation ->
                                         val newRotation = (currentRotation + 90) % 360
                                         vm.optimisticRotate(uploadId, newRotation)
@@ -188,21 +183,6 @@ fun GardenScreen(
         }
     }
 
-    // Arrival animation overlay — shown when new items land in Just arrived.
-    if (showArrival) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Parchment.copy(alpha = 0.92f)),
-            contentAlignment = androidx.compose.ui.Alignment.Center,
-        ) {
-            OliveBranchArrival(
-                withWordmark = false,
-                onComplete = { showArrival = false },
-                modifier = Modifier.size(200.dp),
-            )
-        }
-    }
     } // closes outer Box
 }
 
@@ -220,6 +200,8 @@ private fun PlotRowSection(
     onExploreAll: () -> Unit,
     isJustArrived: Boolean,
     shouldScrollToStart: Boolean = false,
+    newlyArrivedIds: Set<String> = emptySet(),
+    onClearNewlyArrived: () -> Unit = {},
     onQuickRotate: (uploadId: String, currentRotation: Int) -> Unit,
     onQuickTag: (uploadId: String, currentTags: List<String>, newTag: String) -> Unit,
     emptyLabel: String,
@@ -291,6 +273,22 @@ private fun PlotRowSection(
                                 modifier = Modifier.fillMaxSize(),
                                 rotation = upload.rotation,
                             )
+                        }
+                        // Per-tile arrival animation for newly landed items.
+                        if (upload.id in newlyArrivedIds) {
+                            Box(
+                                Modifier
+                                    .size(THUMBNAIL_SIZE_DP.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Parchment.copy(alpha = 0.88f)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                OliveBranchArrival(
+                                    withWordmark = false,
+                                    onComplete = onClearNewlyArrived,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
                         }
                         DropdownMenu(
                             expanded = showMenu,
