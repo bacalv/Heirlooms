@@ -558,10 +558,14 @@ export function GardenPage() {
   }
 
   async function handleDeletePlot(plot) {
-    const r = await apiFetch(`/api/plots/${plot.id}`, apiKey, { method: 'DELETE' })
-    if (!r.ok) throw new Error(`HTTP ${r.status}`)
-    setPlots((prev) => prev.filter((p) => p.id !== plot.id))
-    setConfirmDelete(null)
+    try {
+      const r = await apiFetch(`/api/plots/${plot.id}`, apiKey, { method: 'DELETE' })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      setPlots((prev) => prev.filter((p) => p.id !== plot.id))
+      setConfirmDelete(null)
+    } catch (e) {
+      alert(`Couldn't delete plot: ${e.message}`)
+    }
   }
 
   if (plotsLoading) {
