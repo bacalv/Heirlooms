@@ -64,8 +64,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
 
     // Coil — image loading. coil-network-okhttp provides the OkHttp fetcher for remote URLs.
+    // coil-video provides VideoFrameDecoder for showing the first frame of local video URIs.
     implementation("io.coil-kt.coil3:coil-compose:3.1.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.1.0")
+    implementation("io.coil-kt.coil3:coil-video:3.1.0")
 
     // ExoPlayer — inline video playback in photo detail.
     implementation("androidx.media3:media3-exoplayer:1.4.1")

@@ -64,22 +64,30 @@ fun UploadProgressScreen(
             .background(Parchment)
             .padding(horizontal = 24.dp, vertical = 32.dp),
     ) {
-        if (session.allDone || session.files.isEmpty()) {
-            // Auto-prune terminal records when we reach the done state so they don't
-            // accumulate and reappear in the next session's progress list.
-            LaunchedEffect(Unit) { vm.pruneFinished() }
-            DoneState(
-                fromShare = fromShare,
-                onGoToGarden = onGoToGarden,
-                onGoBack = onContinueInBackground,
-            )
-        } else {
-            InProgressState(
-                session = session,
-                onCancel = { vm.cancel(it) },
-                onPruneFinished = { vm.pruneFinished() },
-                onContinueInBackground = onContinueInBackground,
-            )
+        when {
+            session.allDone -> {
+                // All jobs finished — auto-prune terminal records so they don't reappear
+                // in the next session's upload list, then show the done state.
+                LaunchedEffect(Unit) { vm.pruneFinished() }
+                DoneState(
+                    fromShare = fromShare,
+                    onGoToGarden = onGoToGarden,
+                    onGoBack = onContinueInBackground,
+                )
+            }
+            session.files.isEmpty() -> {
+                // Jobs are still being copied and enqueued on the IO thread.
+                // Show nothing rather than flashing "No uploads in progress".
+                Box(Modifier.fillMaxSize())
+            }
+            else -> {
+                InProgressState(
+                    session = session,
+                    onCancel = { vm.cancel(it) },
+                    onPruneFinished = { vm.pruneFinished() },
+                    onContinueInBackground = onContinueInBackground,
+                )
+            }
         }
     }
 }

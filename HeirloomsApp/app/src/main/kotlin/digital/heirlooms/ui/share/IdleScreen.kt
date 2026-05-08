@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import digital.heirlooms.app.R
+import digital.heirlooms.ui.common.LocalImageLoader
 import digital.heirlooms.ui.share.ReceiveState
 import digital.heirlooms.ui.theme.Earth
 import digital.heirlooms.ui.theme.Forest
@@ -114,6 +115,7 @@ private fun PhotoGrid(photos: List<Uri>, modifier: Modifier = Modifier) {
         in 2..4 -> 2
         else -> 3
     }
+    val imageLoader = LocalImageLoader.current
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -124,6 +126,7 @@ private fun PhotoGrid(photos: List<Uri>, modifier: Modifier = Modifier) {
             AsyncImage(
                 model = uri,
                 contentDescription = null,
+                imageLoader = imageLoader,
                 modifier = Modifier
                     .aspectRatio(1f)
                     .clip(RoundedCornerShape(6.dp))
@@ -136,6 +139,7 @@ private fun PhotoGrid(photos: List<Uri>, modifier: Modifier = Modifier) {
 
 @Composable
 private fun PhotoStrip(photos: List<Uri>) {
+    val imageLoader = LocalImageLoader.current
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             text = "${photos.size} photos",
@@ -146,6 +150,7 @@ private fun PhotoStrip(photos: List<Uri>) {
                 AsyncImage(
                     model = uri,
                     contentDescription = null,
+                    imageLoader = imageLoader,
                     modifier = Modifier
                         .size(72.dp)
                         .clip(RoundedCornerShape(6.dp))

@@ -11,10 +11,16 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import coil3.ImageLoader
+import coil3.video.VideoFrameDecoder
+import digital.heirlooms.ui.common.LocalImageLoader
 import androidx.lifecycle.lifecycleScope
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
@@ -60,6 +66,13 @@ class ShareActivity : ComponentActivity() {
 
         setContent {
             HeirloomsTheme {
+                val context = LocalContext.current
+                val shareImageLoader = remember {
+                    ImageLoader.Builder(context)
+                        .components { add(VideoFrameDecoder.Factory()) }
+                        .build()
+                }
+                CompositionLocalProvider(LocalImageLoader provides shareImageLoader) {
                 val s = screenState
                 if (s is ReceiveState.Idle) {
                     Box(Modifier.fillMaxSize().background(Parchment)) {
@@ -120,6 +133,7 @@ class ShareActivity : ComponentActivity() {
                         onContinueInBackground = { finish() },
                     )
                 }
+                } // CompositionLocalProvider
             }
         }
     }
