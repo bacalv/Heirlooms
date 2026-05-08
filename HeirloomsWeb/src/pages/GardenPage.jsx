@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { BrandModal } from '../components/BrandModal'
 import {
   DndContext,
   PointerSensor,
@@ -25,7 +26,7 @@ const JUST_ARRIVED_SENTINEL = '__just_arrived__'
 
 // ---- Thumbnail card for horizontal plot row --------------------------------
 
-function PlotThumbCard({ upload, apiKey }) {
+function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay }) {
   const isImage = upload.mimeType?.startsWith('image/')
   const isVideo = upload.mimeType?.startsWith('video/')
   const displayUrl = upload.thumbnailKey
@@ -50,44 +51,75 @@ function PlotThumbCard({ upload, apiKey }) {
   const saturate = isComposted ? { filter: 'saturate(0.4) opacity(0.7)' } : {}
   const rotate = upload.rotation ? { transform: `rotate(${upload.rotation}deg)` } : {}
 
-  return (
-    <Link
-      to={`/photos/${upload.id}?from=garden`}
-      state={{ upload }}
-      className="flex-shrink-0 w-40 h-40 rounded overflow-hidden border border-forest-08 bg-forest-04 block hover:opacity-90 transition-opacity relative"
-    >
-      {blobUrl ? (
-        <>
-          <img src={blobUrl} alt="" className="w-full h-full object-cover" style={{ ...rotate, ...saturate }} />
-          {isVideo && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/25">
-              <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
-                <svg className="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              </div>
-            </div>
-          )}
-        </>
-      ) : isVideo ? (
-        <div className="w-full h-full flex items-center justify-center bg-forest-08">
-          <svg className="w-10 h-10 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
-          </svg>
-        </div>
-      ) : (
-        <div className="w-full h-full bg-forest-08 flex items-center justify-center">
-          <span className="text-text-muted text-xs">…</span>
+  function stop(e, fn) { e.preventDefault(); e.stopPropagation(); fn() }
+
+  const thumbnailContent = blobUrl ? (
+    <>
+      <img src={blobUrl} alt="" className="w-full h-full object-cover" style={{ ...rotate, ...saturate }} />
+      {isVideo && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/25 pointer-events-none">
+          <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
+            <svg className="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </div>
         </div>
       )}
-    </Link>
+    </>
+  ) : isVideo ? (
+    <div className="w-full h-full flex items-center justify-center bg-forest-08">
+      <svg className="w-10 h-10 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+          d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+      </svg>
+    </div>
+  ) : (
+    <div className="w-full h-full bg-forest-08 flex items-center justify-center">
+      <span className="text-text-muted text-xs">…</span>
+    </div>
+  )
+
+  return (
+    <div className="flex-shrink-0 w-40 h-40 relative group">
+      {/* Video: clicking the play icon opens modal; clicking elsewhere navigates */}
+      {isVideo && onVideoPlay ? (
+        <button
+          onClick={(e) => stop(e, () => onVideoPlay(upload))}
+          className="w-full h-full rounded overflow-hidden border border-forest-08 bg-forest-04 block cursor-pointer relative"
+        >
+          {thumbnailContent}
+        </button>
+      ) : (
+        <Link
+          to={`/photos/${upload.id}?from=garden`}
+          state={{ upload }}
+          className="w-full h-full rounded overflow-hidden border border-forest-08 bg-forest-04 block hover:opacity-90 transition-opacity relative"
+        >
+          {thumbnailContent}
+        </Link>
+      )}
+
+      {/* Tag quick action — appears on hover */}
+      {onTagClick && !isComposted && (
+        <button
+          onClick={(e) => stop(e, () => onTagClick(upload))}
+          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity bg-black/40 rounded p-0.5"
+          title="Edit tags"
+          aria-label="Edit tags"
+        >
+          <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a2 2 0 012-2h2z" />
+          </svg>
+        </button>
+      )}
+    </div>
   )
 }
 
 // ---- Horizontal scrolling row of items for one plot ------------------------
 
-function PlotItemsRow({ plot, apiKey }) {
+function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey }) {
   const [items, setItems] = useState([])
   const [nextCursor, setNextCursor] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -114,7 +146,7 @@ function PlotItemsRow({ plot, apiKey }) {
       .then((data) => { setItems(data.items ?? []); setNextCursor(data.next_cursor ?? null) })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [buildUrl, apiKey])
+  }, [buildUrl, apiKey, refreshKey])
 
   async function handleLoadMore() {
     if (!nextCursor || loadingMore) return
@@ -149,7 +181,8 @@ function PlotItemsRow({ plot, apiKey }) {
   return (
     <div ref={rowRef} className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
       {items.map((upload) => (
-        <PlotThumbCard key={upload.id} upload={upload} apiKey={apiKey} />
+        <PlotThumbCard key={upload.id} upload={upload} apiKey={apiKey}
+          onTagClick={onTagClick} onVideoPlay={onVideoPlay} />
       ))}
       {nextCursor && (
         <button
@@ -227,9 +260,126 @@ function PlotGearMenu({ plot, isFirst, isLast, onEdit, onDelete, onMoveUp, onMov
   )
 }
 
+// ---- Quick tag modal (from garden thumbnail) --------------------------------
+
+function QuickTagModal({ upload, apiKey, onSave, onClose }) {
+  const [selected, setSelected] = useState([...(upload.tags ?? [])])
+  const [input, setInput] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const inputRef = useRef(null)
+  const suppressBlurRef = useRef(false)
+
+  useEffect(() => { inputRef.current?.focus() }, [])
+
+  function addTag(tag) {
+    const t = tag.trim().toLowerCase()
+    if (t && !selected.includes(t)) setSelected((prev) => [...prev, t])
+    setInput('')
+    inputRef.current?.focus()
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter') { e.preventDefault(); if (input.trim()) addTag(input.trim()) }
+    else if (e.key === 'Backspace' && !input && selected.length > 0) setSelected((prev) => prev.slice(0, -1))
+  }
+
+  async function handleSave() {
+    const pending = input.trim().toLowerCase()
+    const finalTags = pending && !selected.includes(pending) ? [...selected, pending] : selected
+    setSaving(true); setError(null)
+    try { await onSave(upload.id, finalTags) } catch (err) { setError(err.message) } finally { setSaving(false) }
+  }
+
+  return (
+    <BrandModal onClose={onClose} width="max-w-xs">
+      <div className="p-4 space-y-3">
+        <p className="text-sm font-sans text-forest font-medium">Edit tags</p>
+        <p className="text-xs text-text-muted truncate">{upload.storageKey}</p>
+
+        {selected.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {selected.map((tag) => (
+              <span key={tag} className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-chip bg-forest-08 text-forest text-[11px]">
+                {tag}
+                <button type="button" onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setSelected((prev) => prev.filter((t) => t !== tag))}
+                  className="text-text-muted text-[13px] leading-none ml-0.5">×</button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <input ref={inputRef} value={input}
+          onChange={(e) => { setInput(e.target.value) }}
+          onFocus={() => {}}
+          onBlur={() => { if (!suppressBlurRef.current && input.trim()) addTag(input.trim()) }}
+          onKeyDown={handleKeyDown}
+          placeholder="Add tag… (Enter to confirm)"
+          autoComplete="off" disabled={saving}
+          className="w-full text-xs border border-forest-15 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-forest-25 bg-transparent" />
+
+        {error && <p className="text-xs text-earth">{error}</p>}
+
+        <div className="flex gap-2 pt-1">
+          <button onClick={handleSave} disabled={saving}
+            className="px-3 py-1.5 bg-forest text-parchment rounded-button text-sm hover:opacity-90 transition-opacity disabled:opacity-40">
+            {saving ? '…' : 'Save'}
+          </button>
+          <button onClick={onClose} disabled={saving}
+            className="px-3 py-1.5 text-text-muted hover:text-forest transition-colors text-sm">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </BrandModal>
+  )
+}
+
+// ---- Quick video modal (from garden thumbnail) ------------------------------
+
+function QuickVideoModal({ upload, apiKey, onClose }) {
+  const [videoSrc, setVideoSrc] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    // Try signed URL for direct streaming; fall back to proxy download
+    apiFetch(`/api/content/uploads/${upload.id}/url`, apiKey)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((data) => { setVideoSrc(data.url); setLoading(false) })
+      .catch(() => {
+        fetch(`${API_URL}/api/content/uploads/${upload.id}/file`, { headers: { 'X-Api-Key': apiKey } })
+          .then((r) => r.ok ? r.blob() : Promise.reject())
+          .then((blob) => { setVideoSrc(URL.createObjectURL(blob)); setLoading(false) })
+          .catch(() => { setError(true); setLoading(false) })
+      })
+  }, [upload.id, apiKey])
+
+  return (
+    <BrandModal onClose={onClose} width="max-w-2xl">
+      <div className="p-2">
+        {loading && (
+          <div className="flex justify-center items-center py-12">
+            <WorkingDots size="lg" label="Loading video…" />
+          </div>
+        )}
+        {error && (
+          <p className="text-center font-serif italic text-earth py-8">
+            Couldn't load video. <Link to={`/photos/${upload.id}?from=garden`} state={{ upload }} className="underline" onClick={onClose}>Open detail page</Link>
+          </p>
+        )}
+        {videoSrc && (
+          <video src={videoSrc} controls autoPlay className="w-full rounded max-h-[75vh]" />
+        )}
+      </div>
+    </BrandModal>
+  )
+}
+
 // ---- Plot form (Add / Edit) ------------------------------------------------
 
-function PlotTagPicker({ selected, onChange, suggestions }) {
+function PlotTagPicker({ selected, onChange, suggestions, pendingRef }) {
   const [input, setInput] = useState('')
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const inputRef = useRef(null)
@@ -243,6 +393,7 @@ function PlotTagPicker({ selected, onChange, suggestions }) {
     const t = tag.trim().toLowerCase()
     if (t && !selected.includes(t)) onChange([...selected, t])
     setInput('')
+    if (pendingRef) pendingRef.current = ''
     inputRef.current?.focus()
   }
 
@@ -267,7 +418,7 @@ function PlotTagPicker({ selected, onChange, suggestions }) {
         </div>
       )}
       <input ref={inputRef} value={input}
-        onChange={(e) => { setInput(e.target.value); setDropdownOpen(true) }}
+        onChange={(e) => { setInput(e.target.value); setDropdownOpen(true); if (pendingRef) pendingRef.current = e.target.value }}
         onFocus={() => setDropdownOpen(true)}
         onBlur={() => { if (!suppressBlurRef.current) setDropdownOpen(false) }}
         onKeyDown={handleKeyDown}
@@ -293,15 +444,21 @@ function PlotForm({ initial, suggestions, onSave, onCancel }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const nameRef = useRef(null)
+  const pendingTagRef = useRef('')
 
   useEffect(() => { nameRef.current?.focus() }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
     if (!name.trim()) return
+    // Commit any tag text still in the input (user typed but didn't press Enter)
+    const pending = pendingTagRef.current.trim().toLowerCase()
+    const finalCriteria = pending && !tagCriteria.includes(pending)
+      ? [...tagCriteria, pending]
+      : tagCriteria
     setSaving(true)
     setError(null)
-    try { await onSave(name.trim(), tagCriteria) }
+    try { await onSave(name.trim(), finalCriteria) }
     catch (err) { setError(err.message) }
     finally { setSaving(false) }
   }
@@ -320,7 +477,7 @@ function PlotForm({ initial, suggestions, onSave, onCancel }) {
       </div>
       <div>
         <label className="text-xs text-text-muted block mb-0.5">Tag criteria</label>
-        <PlotTagPicker selected={tagCriteria} onChange={setTagCriteria} suggestions={suggestions} />
+        <PlotTagPicker selected={tagCriteria} onChange={setTagCriteria} suggestions={suggestions} pendingRef={pendingTagRef} />
         <p className="text-[10px] text-text-muted mt-0.5">Items matching any of these tags appear in this plot.</p>
       </div>
       {error && <p className="text-xs text-earth">{error}</p>}
@@ -340,20 +497,21 @@ function PlotForm({ initial, suggestions, onSave, onCancel }) {
 
 // ---- System (Just arrived) plot row — no DnD, no gear ----------------------
 
-function SystemPlotRow({ plot, apiKey }) {
+function SystemPlotRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
         <h2 className="font-serif italic text-forest text-base">Just arrived</h2>
       </div>
-      <PlotItemsRow plot={plot} apiKey={apiKey} />
+      <PlotItemsRow plot={plot} apiKey={apiKey}
+        onTagClick={onTagClick} onVideoPlay={onVideoPlay} refreshKey={refreshKey} />
     </div>
   )
 }
 
 // ---- Sortable user plot row ------------------------------------------------
 
-function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMoveUp, onMoveDown }) {
+function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMoveUp, onMoveDown, onTagClick, onVideoPlay, refreshKey }) {
   const {
     attributes,
     listeners,
@@ -392,7 +550,8 @@ function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMo
           onMoveDown={onMoveDown}
         />
       </div>
-      <PlotItemsRow plot={plot} apiKey={apiKey} />
+      <PlotItemsRow plot={plot} apiKey={apiKey}
+        onTagClick={onTagClick} onVideoPlay={onVideoPlay} refreshKey={refreshKey} />
     </div>
   )
 }
@@ -410,6 +569,9 @@ export function GardenPage() {
   const [editingPlot, setEditingPlot] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [showCompostedMsg] = useState(() => !!location.state?.composted)
+  const [quickTagUpload, setQuickTagUpload] = useState(null)
+  const [videoUpload, setVideoUpload] = useState(null)
+  const [plotRefreshKey, setPlotRefreshKey] = useState(0)
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -508,6 +670,25 @@ export function GardenPage() {
     setEditingPlot(null)
   }
 
+  async function handleQuickUpdateTags(uploadId, tags) {
+    const r = await apiFetch(`/api/content/uploads/${uploadId}/tags`, apiKey, {
+      method: 'PATCH',
+      body: JSON.stringify({ tags }),
+    })
+    if (!r.ok) {
+      let msg = `HTTP ${r.status}`
+      try {
+        const body = await r.json()
+        if (body.tag && body.reason) msg = `"${body.tag}": ${body.reason}`
+        else if (body.error) msg = body.error
+      } catch {}
+      throw new Error(msg)
+    }
+    setQuickTagUpload(null)
+    // Increment refresh key so all plot rows re-fetch (tagged item leaves Just arrived, may join a user plot)
+    setPlotRefreshKey((k) => k + 1)
+  }
+
   async function handleDeletePlot(plot) {
     const r = await apiFetch(`/api/plots/${plot.id}`, apiKey, { method: 'DELETE' })
     if (!r.ok) throw new Error(`HTTP ${r.status}`)
@@ -542,7 +723,8 @@ export function GardenPage() {
       )}
       <div className="space-y-8">
         {systemPlot && (
-          <SystemPlotRow plot={systemPlot} apiKey={apiKey} />
+          <SystemPlotRow plot={systemPlot} apiKey={apiKey}
+            onTagClick={setQuickTagUpload} onVideoPlay={setVideoUpload} refreshKey={plotRefreshKey} />
         )}
 
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -559,6 +741,9 @@ export function GardenPage() {
                   onDelete={() => setConfirmDelete(plot)}
                   onMoveUp={() => handleMoveUp(plot.id)}
                   onMoveDown={() => handleMoveDown(plot.id)}
+                  onTagClick={setQuickTagUpload}
+                  onVideoPlay={setVideoUpload}
+                  refreshKey={plotRefreshKey}
                 />
               ))}
             </div>
@@ -600,6 +785,23 @@ export function GardenPage() {
           cancelLabel="Keep it"
           onConfirm={() => handleDeletePlot(confirmDelete)}
           onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+
+      {quickTagUpload && (
+        <QuickTagModal
+          upload={quickTagUpload}
+          apiKey={apiKey}
+          onSave={handleQuickUpdateTags}
+          onClose={() => setQuickTagUpload(null)}
+        />
+      )}
+
+      {videoUpload && (
+        <QuickVideoModal
+          upload={videoUpload}
+          apiKey={apiKey}
+          onClose={() => setVideoUpload(null)}
         />
       )}
     </main>
