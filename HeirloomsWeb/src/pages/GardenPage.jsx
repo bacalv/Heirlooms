@@ -26,7 +26,7 @@ const JUST_ARRIVED_SENTINEL = '__just_arrived__'
 
 // ---- Thumbnail card for horizontal plot row --------------------------------
 
-function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay }) {
+function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate }) {
   const isImage = upload.mimeType?.startsWith('image/')
   const isVideo = upload.mimeType?.startsWith('video/')
   const displayUrl = upload.thumbnailKey
@@ -99,6 +99,21 @@ function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay }) {
         </Link>
       )}
 
+      {/* Rotate button — images only, appears on hover */}
+      {isImage && onRotate && (
+        <button
+          onClick={(e) => stop(e, () => onRotate(upload.id))}
+          className="absolute top-1 left-1 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity bg-black/40 rounded p-0.5"
+          title="Rotate 90°"
+          aria-label="Rotate 90°"
+        >
+          <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </button>
+      )}
+
       {/* Tag quick action — appears on hover */}
       {onTagClick && !isComposted && (
         <button
@@ -161,6 +176,18 @@ function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey, exclu
   // Optimistic exclusion: items removed immediately by the parent (e.g. after tagging)
   const visibleItems = excludeIds?.size ? items.filter((u) => !excludeIds.has(u.id)) : items
 
+  function handleRotateItem(uploadId) {
+    setItems((prev) => prev.map((u) => {
+      if (u.id !== uploadId) return u
+      const newRotation = ((u.rotation ?? 0) + 90) % 360
+      apiFetch(`/api/content/uploads/${uploadId}/rotation`, apiKey, {
+        method: 'PATCH',
+        body: JSON.stringify({ rotation: newRotation }),
+      }).catch(() => {})
+      return { ...u, rotation: newRotation }
+    }))
+  }
+
   async function handleLoadMore() {
     if (!nextCursor || loadingMore) return
     setLoadingMore(true)
@@ -195,7 +222,7 @@ function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey, exclu
     <div ref={rowRef} className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
       {visibleItems.map((upload) => (
         <PlotThumbCard key={upload.id} upload={upload} apiKey={apiKey}
-          onTagClick={onTagClick} onVideoPlay={onVideoPlay} />
+          onTagClick={onTagClick} onVideoPlay={onVideoPlay} onRotate={handleRotateItem} />
       ))}
       {nextCursor && (
         <button
