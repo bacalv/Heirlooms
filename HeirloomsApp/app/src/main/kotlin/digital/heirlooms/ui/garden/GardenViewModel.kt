@@ -10,6 +10,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class PlotRowState(
@@ -168,12 +169,12 @@ class GardenViewModel(
         })
     }
 
-    // Set to true when polling detects IDs in Just arrived that weren't there before.
-    // GardenScreen reads this, shows the arrival animation, then calls clearArrivalFlag().
-    var newItemsArrived: Boolean = false
-        private set
+    // Emits true when polling detects IDs in Just arrived that weren't there before.
+    // GardenScreen collects this, shows the arrival animation, then calls clearArrivalFlag().
+    private val _newItemsArrived = MutableStateFlow(false)
+    val newItemsArrived: StateFlow<Boolean> = _newItemsArrived.asStateFlow()
 
-    fun clearArrivalFlag() { newItemsArrived = false }
+    fun clearArrivalFlag() { _newItemsArrived.value = false }
 
     private var knownJustArrivedIds: Set<String> = emptySet()
 
@@ -187,7 +188,7 @@ class GardenViewModel(
                 // arriving into a previously empty Just arrived row. The poll only runs
                 // after a 30s delay so load() has always set knownJustArrivedIds first.
                 if (genuinelyNew.isNotEmpty()) {
-                    newItemsArrived = true
+                    _newItemsArrived.value = true
                 }
                 knownJustArrivedIds = newIds
 

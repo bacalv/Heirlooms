@@ -52,6 +52,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -100,10 +101,13 @@ fun GardenScreen(
     }
 
     // Show arrival animation when the poll detects new items.
+    val newItemsArrived by vm.newItemsArrived.collectAsStateWithLifecycle()
     var showArrival by remember { mutableStateOf(false) }
-    if (vm.newItemsArrived && !showArrival) {
-        showArrival = true
-        vm.clearArrivalFlag()
+    LaunchedEffect(newItemsArrived) {
+        if (newItemsArrived) {
+            showArrival = true
+            vm.clearArrivalFlag()
+        }
     }
 
     fun refresh() {
@@ -157,6 +161,7 @@ fun GardenScreen(
                                     onLoadMore = { vm.loadMoreForRow(api, index) },
                                     onExploreAll = { onNavigateToExplore(tags, isJustArrived) },
                                     isJustArrived = isJustArrived,
+                                    shouldScrollToStart = isJustArrived && newItemsArrived,
                                     onQuickRotate = { uploadId, currentRotation ->
                                         val newRotation = (currentRotation + 90) % 360
                                         vm.optimisticRotate(uploadId, newRotation)
@@ -214,6 +219,7 @@ private fun PlotRowSection(
     onLoadMore: () -> Unit,
     onExploreAll: () -> Unit,
     isJustArrived: Boolean,
+    shouldScrollToStart: Boolean = false,
     onQuickRotate: (uploadId: String, currentRotation: Int) -> Unit,
     onQuickTag: (uploadId: String, currentTags: List<String>, newTag: String) -> Unit,
     emptyLabel: String,
@@ -222,6 +228,11 @@ private fun PlotRowSection(
 
     LaunchedEffect(listState.firstVisibleItemIndex) {
         onScrollIndex(listState.firstVisibleItemIndex)
+    }
+
+    // When new items arrive in Just arrived, snap to the start so the new item is visible.
+    LaunchedEffect(shouldScrollToStart) {
+        if (shouldScrollToStart) listState.scrollToItem(0)
     }
 
     Column(Modifier.padding(top = 16.dp)) {
