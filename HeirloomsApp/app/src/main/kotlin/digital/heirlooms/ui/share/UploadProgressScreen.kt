@@ -28,7 +28,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -63,6 +65,9 @@ fun UploadProgressScreen(
             .padding(horizontal = 24.dp, vertical = 32.dp),
     ) {
         if (session.allDone || session.files.isEmpty()) {
+            // Auto-prune terminal records when we reach the done state so they don't
+            // accumulate and reappear in the next session's progress list.
+            LaunchedEffect(Unit) { vm.pruneFinished() }
             DoneState(
                 fromShare = fromShare,
                 onGoToGarden = onGoToGarden,
@@ -72,6 +77,7 @@ fun UploadProgressScreen(
             InProgressState(
                 session = session,
                 onCancel = { vm.cancel(it) },
+                onPruneFinished = { vm.pruneFinished() },
                 onContinueInBackground = onContinueInBackground,
             )
         }
@@ -82,6 +88,7 @@ fun UploadProgressScreen(
 private fun InProgressState(
     session: SessionUploadState,
     onCancel: (java.util.UUID) -> Unit,
+    onPruneFinished: () -> Unit,
     onContinueInBackground: () -> Unit,
 ) {
     Text(
@@ -105,7 +112,22 @@ private fun InProgressState(
     )
 
     Spacer(Modifier.height(20.dp))
-    HorizontalDivider(color = Forest15)
+
+    val hasFinished = session.files.any { it.isDone }
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HorizontalDivider(color = Forest15, modifier = Modifier.weight(1f))
+        if (hasFinished) {
+            TextButton(
+                onClick = onPruneFinished,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+            ) {
+                Text("Clear finished", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+            }
+        }
+    }
     Spacer(Modifier.height(8.dp))
 
     LazyColumn(modifier = Modifier.fillMaxHeight(0.55f)) {

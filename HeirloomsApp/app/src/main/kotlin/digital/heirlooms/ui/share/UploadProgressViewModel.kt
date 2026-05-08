@@ -66,4 +66,8 @@ class UploadProgressViewModel(app: Application) : AndroidViewModel(app) {
     fun cancel(workerId: UUID) {
         workManager.cancelWorkById(workerId)
     }
+
+    fun pruneFinished() {
+        workManager.pruneWork()
+    }
 }

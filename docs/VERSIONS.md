@@ -2,6 +2,20 @@
 
 ---
 
+## v0.25.3 — Upload progress: clear finished button + auto-prune (8 May 2026)
+
+`workManager.pruneWork()` is now called in two places:
+- **"Clear finished" button** — appears inline above the file list (right-aligned, next to the
+  divider) whenever any job is in a terminal state (SUCCEEDED / FAILED / CANCELLED). Tapping
+  it removes all terminal records from WorkManager's database immediately. Stuck ENQUEUED jobs
+  can be cancelled individually with the per-file × button, which moves them to CANCELLED;
+  "Clear finished" then removes them.
+- **Auto-prune on done state** — when all active jobs finish and the screen reaches "No uploads
+  in progress", `pruneWork()` fires automatically via `LaunchedEffect` so stale records don't
+  accumulate and reappear in the next session's upload list.
+
+---
+
 ## v0.25.2 — Android bug fixes: login, Just arrived animation, image disk cache (8 May 2026)
 
 Post-D4 patch.

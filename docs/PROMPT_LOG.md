@@ -6,6 +6,24 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-08 — v0.25.3: Upload progress clear-finished + auto-prune
+
+Upload progress screen was accumulating completed and failed uploads indefinitely.
+WorkManager keeps terminal-state `WorkInfo` records for ~7 days; `allUploadsFlow()`
+queries all jobs tagged `heirloom_upload` without filtering, so old completed entries
+reappeared in every new session's upload list.
+
+Two fixes: a "Clear finished" `TextButton` appears inline next to the divider above the
+file list whenever `session.files.any { it.isDone }` — tapping calls `workManager.pruneWork()`
+which atomically removes all SUCCEEDED/FAILED/CANCELLED records. Auto-prune via `LaunchedEffect`
+also fires when the screen naturally reaches the done state, so the cleanup happens silently
+for the normal flow (user plants, uploads complete, screen shows "No uploads in progress").
+
+Stuck ENQUEUED jobs: the per-file × cancel button (already present, since `isActive` includes
+ENQUEUED) moves them to CANCELLED; "Clear finished" then removes them. No separate UI needed.
+
+---
+
 ## Session — 2026-05-08 — v0.25.2: Android bug fixes (login, Just arrived, image cache)
 
 Three post-D4 Android bugs fixed:
