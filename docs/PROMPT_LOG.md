@@ -2400,3 +2400,68 @@ switched from positional `mockResolvedValueOnce` chains to URL-routing
 
 **Docs updated:** `VERSIONS.md` (v0.24.1), `PROMPT_LOG.md` (this entry),
 memory/project_milestone_state.md updated.
+
+---
+
+## Session: Roadmap reshape — E2EE inserted as M7 (documentation pass) — 9 May 2026
+
+**Brief:** Update project documentation to insert end-to-end encryption (Vault
+E2EE) as the new Milestone 7, ahead of multi-user access. Renumber subsequent
+milestones (multi-user → M8; new strong-sealing M9; delivery → M10; new
+posthumous-delivery M11). Retire M3 (self-hosted deployment). Documentation-only
+change; no code, no schema, no tests.
+
+**Decision rationale:**
+
+A claude.ai session on 9 May 2026 between Bret and the PA explored E2EE as
+the next milestone instead of multi-user. The session worked through the
+cryptographic design — envelope encryption with per-file DEKs wrapped under
+a master key; device keypairs (Android Keystore, WebCrypto non-extractable)
+for cross-device access; three independent unlock paths for sealed capsules
+(recipient pubkey, drand-based time-lock, executor-held Shamir shares); three
+recovery options (24-word phrase, passphrase-wrapped server backup, social
+recovery via Shamir); crypto agility through versioned envelopes from day one.
+
+The sequencing argument: doing E2EE before multi-user is meaningfully easier
+than doing it after. Single-user has no key-sharing problem. Building
+multi-user with plaintext, then re-encrypting once a friend tester has
+uploaded their data, is the worse migration. Existing data is destroyable per
+pre-launch posture, so M7 can start from a clean slate.
+
+The harder cryptographic decisions (recipient pubkey wrapping, social recovery,
+executor-mediated unlock, time-lock against drand) land in M9 and M11 rather
+than being packed into a single bloated multi-user milestone. Each part of
+the design earns its own milestone with the attention it needs.
+
+M3 (self-hosted) retired because the GCP/Cloud Run path replaced its
+operational shape, and M7's E2EE replaces its trust argument: "the operator
+can't read your data" is a stronger promise than "you can run it yourself,"
+delivered with less operational burden.
+
+**What was changed:**
+
+- ROADMAP.md — replaced M7 (Multi-user → Vault E2EE), shifted M8 (Delivery →
+  Multi-user), added M9 (Strong sealing + social recovery), M10 (Milestone
+  delivery, was M8), M11 (Posthumous delivery). Added "Retired milestones"
+  section covering M3.
+- IDEAS.md — renumbered milestone references throughout. Substantially
+  reworked the "Trust posture and encryption" section (formerly framed as
+  M12+, now framed as M7). Added new "Open questions for the M7
+  implementation brief" section covering web posture, asymmetric scheme
+  choice, and brand voice on recovery-failure copy.
+- PA_NOTES.md — renumbered milestone references. Updated the "next
+  milestone" pointer from M7 (multi-user) to M7 (Vault E2EE). Updated
+  per-user view tracking and owner_user_id notes to reference M8 (the new
+  multi-user milestone).
+- BRAND.md — fixed pre-existing stale M6 references (delivery is now M10).
+  Pre-dated this reshape; addressed in the same sweep for coherence.
+- IDIOMS.md — fixed pre-existing stale M6 references (M10 now) and updated
+  the connections-evolution reference from M7 to M9. Pre-dated this reshape;
+  addressed in the same sweep.
+
+**Surprises / decisions during implementation:**
+
+None — the brief was complete and accurate. All edits landed as described.
+
+**Docs updated:** ROADMAP.md, IDEAS.md, PA_NOTES.md, BRAND.md, IDIOMS.md,
+PROMPT_LOG.md (this entry).
