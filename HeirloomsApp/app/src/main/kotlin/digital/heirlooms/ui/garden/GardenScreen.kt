@@ -69,8 +69,28 @@ import digital.heirlooms.ui.theme.Forest15
 import digital.heirlooms.ui.theme.HeirloomsSerifItalic
 import digital.heirlooms.ui.theme.Parchment
 import digital.heirlooms.ui.theme.TextMuted
+import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.FloatingActionButton
+import androidx.core.content.FileProvider
+import androidx.work.BackoffPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
+import digital.heirlooms.app.UploadWorker
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 private const val THUMBNAIL_SIZE_DP = 108
 
@@ -86,6 +106,52 @@ fun GardenScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
+
+    // ---- Plant flow -------------------------------------------------------
+    var plantState by remember { mutableStateOf<PlantState>(PlantState.Idle) }
+    var showPlantSheet by remember { mutableStateOf(false) }
+    var captureFile by remember { mutableStateOf<File?>(null) }
+    var captureUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingCaptureType by remember { mutableStateOf(PlantType.Photo) }
+
+    val openFileLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
+            plantState = PlantState.Preview(uri, mime, isFile = true)
+        }
+    }
+
+    val takePictureLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        plantState = if (success && captureUri != null)
+            PlantState.Preview(captureUri!!, "image/jpeg")
+        else PlantState.Idle
+    }
+
+    val captureVideoLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CaptureVideo()
+    ) { success ->
+        plantState = if (success && captureUri != null)
+            PlantState.Preview(captureUri!!, "video/mp4")
+        else PlantState.Idle
+    }
+
+    fun launchCamera(type: PlantType) {
+        pendingCaptureType = type
+        val ext = if (type == PlantType.Photo) "jpg" else "mp4"
+        val file = File(context.cacheDir, "capture-${UUID.randomUUID()}.$ext")
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        captureFile = file
+        captureUri = uri
+        if (type == PlantType.Photo) takePictureLauncher.launch(uri)
+        else captureVideoLauncher.launch(uri)
+    }
+    // -----------------------------------------------------------------------
+
+    BackHandler(enabled = plantState != PlantState.Idle) { plantState = PlantState.Idle }
 
     LaunchedEffect(Unit) {
         if (state is GardenLoadState.Loading) vm.load(api) else vm.refresh(api)
@@ -181,6 +247,85 @@ fun GardenScreen(
             }
         }
     }
+        // Plant FAB — hidden while preview or queuing is showing
+        if (plantState == PlantState.Idle) {
+            FloatingActionButton(
+                onClick = { showPlantSheet = true },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+                containerColor = Forest,
+                contentColor = Parchment,
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "Plant")
+            }
+        }
+
+        // Source picker sheet
+        if (showPlantSheet) {
+            PlantSheet(
+                onDismiss = { showPlantSheet = false },
+                onPhoto = { launchCamera(PlantType.Photo) },
+                onVideo = { launchCamera(PlantType.Video) },
+                onFile = { openFileLauncher.launch(arrayOf("*/*")) },
+            )
+        }
+
+        // Preview / queuing overlay
+        AnimatedVisibility(
+            visible = plantState !is PlantState.Idle,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            when (val ps = plantState) {
+                is PlantState.Preview -> PlantPreviewOverlay(
+                    uri = ps.uri,
+                    mimeType = ps.mimeType,
+                    isFile = ps.isFile,
+                    onPlant = {
+                        val snapshot = ps
+                        plantState = PlantState.Queuing
+                        scope.launch(Dispatchers.IO) {
+                            val filePath = if (!snapshot.isFile && captureFile?.exists() == true) {
+                                captureFile!!.absolutePath
+                            } else {
+                                copyContentUriToCache(context, snapshot.uri, snapshot.mimeType)
+                            }
+                            if (filePath != null) {
+                                val fileName = filePath.substringAfterLast("/")
+                                val fileSize = File(filePath).length()
+                                val sessionTag = "session:${UUID.randomUUID()}"
+                                val request = OneTimeWorkRequestBuilder<UploadWorker>()
+                                    .setInputData(workDataOf(
+                                        UploadWorker.KEY_FILE_PATH to filePath,
+                                        UploadWorker.KEY_MIME_TYPE to snapshot.mimeType,
+                                        UploadWorker.KEY_API_KEY to api.apiKey,
+                                        UploadWorker.KEY_TAGS to emptyArray<String>(),
+                                        UploadWorker.KEY_FILE_NAME to fileName,
+                                        UploadWorker.KEY_TOTAL_BYTES to fileSize,
+                                    ))
+                                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                                    .addTag(UploadWorker.TAG)
+                                    .addTag(sessionTag)
+                                    .build()
+                                WorkManager.getInstance(context).enqueue(request)
+                            }
+                            withContext(Dispatchers.Main) { plantState = PlantState.Idle }
+                        }
+                    },
+                    onRetake = if (!ps.isFile) ({ launchCamera(pendingCaptureType) }) else null,
+                    onCancel = { plantState = PlantState.Idle },
+                )
+                PlantState.Queuing -> Box(
+                    Modifier.fillMaxSize().background(Parchment),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(color = Forest)
+                }
+                else -> {}
+            }
+        }
     } // closes outer Box
 }
 
@@ -484,3 +629,22 @@ internal fun DidntTake(onRetry: () -> Unit) {
         }
     }
 }
+
+private suspend fun copyContentUriToCache(context: android.content.Context, uri: Uri, mimeType: String): String? =
+    withContext(Dispatchers.IO) {
+        val ext = when {
+            mimeType.startsWith("image/") -> "jpg"
+            mimeType.startsWith("video/") -> "mp4"
+            else -> "tmp"
+        }
+        val file = File(context.cacheDir, "plant-${UUID.randomUUID()}.$ext")
+        try {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                file.outputStream().use { input.copyTo(it) }
+            }
+            file.absolutePath
+        } catch (_: Exception) {
+            file.delete()
+            null
+        }
+    }
