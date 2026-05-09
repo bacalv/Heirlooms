@@ -37,6 +37,32 @@ Deployed to Cloud Run (heirlooms-web).
 
 ---
 
+## Session — 2026-05-09 — Web: Explore nav fix, video playback, video badge
+
+**Explore → photo detail redirected via login screen.**
+`ExploreGrid` used a plain `<a href="...">` instead of React Router's `<Link>`.
+The native anchor caused a full page reload, wiping `useState(null)` for `apiKey`
+in `App.jsx`. `RequireAuth` saw `null` and bounced to `/login`. Fixed by replacing
+with `<Link to="..." state={{ upload }}>` (client-side nav, API key preserved;
+router state passed for fast first paint in `PhotoDetailPage`). `ExploreThumb` was
+also missing the `getThumb` cache — fixed in the same change.
+
+**Video never loads in photo detail.**
+Two bugs: (1) `displayUrl` used `thumbnailKey` if present — for videos this produced
+a JPEG thumbnail blob, not playable video. (2) Downloading the full file as a blob
+before setting `<video src>` means a large file fully buffers before anything plays.
+Fix mirrors `QuickVideoModal` in `GardenPage`: try `/api/content/uploads/:id/url`
+first (signed GCS URL — browser streams and seeks natively), fall back to a full
+blob download only if that fails. Images keep the existing thumbnail path.
+
+**Video indicator badge on Explore thumbnails.**
+`ExploreThumb` now renders a small play-arrow badge (forest/75% alpha, bottom-right
+corner, top-left rounded) when `mimeType` starts with `video/`. The parent `<Link>`
+already has `relative overflow-hidden` so the badge clips cleanly to the tile
+boundary. Consistent with the Garden tile video badges added in v0.25.9 on Android.
+
+---
+
 ## Session — 2026-05-09 — v0.26.1: Explore filter tags use TagInputField
 
 The Explore filter sheet's Tags section was still using `FilterChip` toggles
