@@ -154,7 +154,7 @@ function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, onIm
       )}
 
       {/* Compost — bottom-left, destructive colour, appears on hover */}
-      {onCompostClick && !isComposted && (
+      {onCompostClick && !isComposted && !upload.tags?.length && (
         <button
           onClick={(e) => stop(e, () => onCompostClick(upload))}
           className="absolute bottom-1 left-1 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity bg-earth/70 rounded p-0.5"
