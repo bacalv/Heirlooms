@@ -229,7 +229,7 @@ now than to retrofit. Inserted before the originally-planned Milestone 6 (delive
 now Milestone 8) because delivery deserves to land on a settled foundation rather
 than a flat surface that's about to change shape.
 
-**Milestone 7 — Vault E2EE** *(in progress — E1, E2, and E3 shipped; E4 next)*
+**Milestone 7 — Vault E2EE** *(shipped — v0.30.0, 9 May 2026)*
 The brand promise — "we cannot read your data" — becomes a cryptographic
 property rather than an operational one.
 

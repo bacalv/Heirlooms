@@ -24,11 +24,11 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.29.0 (9 May 2026) — M7 E4: web client encryption.
-  v0.28.1 = post-E3 device testing fixes (thumbnail call sites, rotate button, Just arrived).
+- Current version: v0.30.0 (9 May 2026) — M7 E5: storage class rename, web EXIF, onboarding copy. M7 complete.
+  v0.29.0 = M7 E4: web client encryption. v0.28.1 = post-E3 device testing fixes.
   v0.28.0 = M7 E3: Android client encryption. v0.27.0 = M7 E2: backend API for E2EE.
   v0.26.0 = M7 E1: schema + envelope format. v0.25.x = M6 D4 Android + post-ship fixes.
-  M7 E5 (onboarding, recovery, polish) is next.
+  M8 (multi-user) is next.
 - One-time machine setup required: ~/.testcontainers.properties with
   docker.raw.sock path — see PROMPT_LOG.md for details
 
@@ -433,8 +433,8 @@ with manual env vars achieves the same result.
 | Artifact Registry | heirlooms (europe-west2) |
 | HeirloomsServer image | europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server |
 | HeirloomsWeb image | europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-web |
-| HeirloomsServer Cloud Run URL | https://heirlooms-server-340655233963.us-central1.run.app (revision heirlooms-server-00034-frz, 2Gi) |
-| HeirloomsWeb Cloud Run URL | https://heirlooms-web-340655233963.us-central1.run.app (revision heirlooms-web-00036-9lm) |
+| HeirloomsServer Cloud Run URL | https://heirlooms-server-340655233963.us-central1.run.app (revision heirlooms-server-00035-qwc, 2Gi) |
+| HeirloomsWeb Cloud Run URL | https://heirlooms-web-340655233963.us-central1.run.app (revision heirlooms-web-00038-njk) |
 | Target domain (web) | https://heirlooms.digital (live) |
 | Target domain (server) | https://api.heirlooms.digital (live) |
 
