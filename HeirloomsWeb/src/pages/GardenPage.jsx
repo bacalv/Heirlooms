@@ -28,7 +28,7 @@ const JUST_ARRIVED_SENTINEL = '__just_arrived__'
 
 // ---- Thumbnail card for horizontal plot row --------------------------------
 
-function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, onImagePreview, isNew, onArrivalComplete }) {
+function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, onImagePreview, onCompostClick, isNew, onArrivalComplete }) {
   const navigate = useNavigate()
   const isImage = upload.mimeType?.startsWith('image/')
   const isVideo = upload.mimeType?.startsWith('video/')
@@ -153,6 +153,21 @@ function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, onIm
         </button>
       )}
 
+      {/* Compost — bottom-left, destructive colour, appears on hover */}
+      {onCompostClick && !isComposted && (
+        <button
+          onClick={(e) => stop(e, () => onCompostClick(upload))}
+          className="absolute bottom-1 left-1 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity bg-earth/70 rounded p-0.5"
+          title="Compost"
+          aria-label="Compost"
+        >
+          <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
+      )}
+
       {/* Arrival animation overlay — shown for newly arrived items */}
       {isNew && (
         <div
@@ -168,7 +183,7 @@ function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, onIm
 
 // ---- Horizontal scrolling row of items for one plot ------------------------
 
-function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, onImagePreview, refreshKey, excludeIds }) {
+function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, onImagePreview, onCompostClick, refreshKey, excludeIds }) {
   const [items, setItems] = useState([])
   const [nextCursor, setNextCursor] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -278,7 +293,7 @@ function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, onImagePreview, r
     <div ref={rowRef} className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
       {visibleItems.map((upload) => (
         <PlotThumbCard key={upload.id} upload={upload} apiKey={apiKey}
-          onTagClick={onTagClick} onVideoPlay={onVideoPlay} onImagePreview={onImagePreview} onRotate={handleRotateItem}
+          onTagClick={onTagClick} onVideoPlay={onVideoPlay} onImagePreview={onImagePreview} onCompostClick={onCompostClick} onRotate={handleRotateItem}
           isNew={newlyArrivedIds.has(upload.id)}
           onArrivalComplete={() => setNewlyArrivedIds((prev) => {
             const next = new Set(prev); next.delete(upload.id); return next
@@ -512,21 +527,21 @@ function QuickImageModal({ upload, apiKey, onClose }) {
 
 // ---- System (Just arrived) plot row — no DnD, no gear ----------------------
 
-function SystemPlotRow({ plot, apiKey, onTagClick, onVideoPlay, onImagePreview, refreshKey, excludeIds }) {
+function SystemPlotRow({ plot, apiKey, onTagClick, onVideoPlay, onImagePreview, onCompostClick, refreshKey, excludeIds }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
         <h2 className="font-serif italic text-forest text-base">Just arrived</h2>
       </div>
       <PlotItemsRow plot={plot} apiKey={apiKey}
-        onTagClick={onTagClick} onVideoPlay={onVideoPlay} onImagePreview={onImagePreview} refreshKey={refreshKey} excludeIds={excludeIds} />
+        onTagClick={onTagClick} onVideoPlay={onVideoPlay} onImagePreview={onImagePreview} onCompostClick={onCompostClick} refreshKey={refreshKey} excludeIds={excludeIds} />
     </div>
   )
 }
 
 // ---- Sortable user plot row ------------------------------------------------
 
-function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMoveUp, onMoveDown, onTagClick, onVideoPlay, onImagePreview, refreshKey, excludeIds }) {
+function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMoveUp, onMoveDown, onTagClick, onVideoPlay, onImagePreview, onCompostClick, refreshKey, excludeIds }) {
   const {
     attributes,
     listeners,
@@ -566,7 +581,7 @@ function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMo
         />
       </div>
       <PlotItemsRow plot={plot} apiKey={apiKey}
-        onTagClick={onTagClick} onVideoPlay={onVideoPlay} onImagePreview={onImagePreview} refreshKey={refreshKey} excludeIds={excludeIds} />
+        onTagClick={onTagClick} onVideoPlay={onVideoPlay} onImagePreview={onImagePreview} onCompostClick={onCompostClick} refreshKey={refreshKey} excludeIds={excludeIds} />
     </div>
   )
 }
@@ -587,6 +602,9 @@ export function GardenPage() {
   const [quickTagUpload, setQuickTagUpload] = useState(null)
   const [videoUpload, setVideoUpload] = useState(null)
   const [previewUpload, setPreviewUpload] = useState(null)
+  const [confirmCompost, setConfirmCompost] = useState(null)
+  const [composting, setComposting] = useState(false)
+  const [compostError, setCompostError] = useState(null)
   const [plotRefreshKey, setPlotRefreshKey] = useState(0)
   const [justArrivedExclude, setJustArrivedExclude] = useState(new Set())
 
@@ -684,6 +702,21 @@ export function GardenPage() {
     setPlotRefreshKey((k) => k + 1)
   }
 
+  async function handleCompostConfirmed() {
+    setComposting(true)
+    setCompostError(null)
+    try {
+      const r = await apiFetch(`/api/content/uploads/${confirmCompost.id}/compost`, apiKey, { method: 'POST' })
+      if (!r.ok) throw new Error('failed')
+      setConfirmCompost(null)
+      setPlotRefreshKey((k) => k + 1)
+    } catch {
+      setCompostError("Couldn't compost — it may still have tags or be in an active capsule.")
+    } finally {
+      setComposting(false)
+    }
+  }
+
   async function handleDeletePlot(plot) {
     try {
       const r = await apiFetch(`/api/plots/${plot.id}`, apiKey, { method: 'DELETE' })
@@ -728,7 +761,7 @@ export function GardenPage() {
       <div className="space-y-8">
         {systemPlot && (
           <SystemPlotRow plot={systemPlot} apiKey={apiKey}
-            onTagClick={setQuickTagUpload} onVideoPlay={setVideoUpload} onImagePreview={setPreviewUpload}
+            onTagClick={setQuickTagUpload} onVideoPlay={setVideoUpload} onImagePreview={setPreviewUpload} onCompostClick={setConfirmCompost}
             refreshKey={plotRefreshKey} excludeIds={justArrivedExclude} />
         )}
 
@@ -749,6 +782,7 @@ export function GardenPage() {
                   onTagClick={setQuickTagUpload}
                   onVideoPlay={setVideoUpload}
                   onImagePreview={setPreviewUpload}
+                  onCompostClick={setConfirmCompost}
                   refreshKey={plotRefreshKey}
                 />
               ))}
@@ -808,6 +842,20 @@ export function GardenPage() {
           apiKey={apiKey}
           onClose={() => setPreviewUpload(null)}
         />
+      )}
+
+      {confirmCompost && (
+        <ConfirmDialog
+          title="Compost this item?"
+          body="It will be moved to the compost heap and permanently deleted after 90 days."
+          primaryLabel={composting ? '…' : 'Compost'}
+          primaryClass="bg-earth text-parchment"
+          cancelLabel="Keep it"
+          onConfirm={handleCompostConfirmed}
+          onCancel={() => { setConfirmCompost(null); setCompostError(null) }}
+        >
+          {compostError && <p className="text-xs text-earth -mt-1">{compostError}</p>}
+        </ConfirmDialog>
       )}
     </main>
   )
