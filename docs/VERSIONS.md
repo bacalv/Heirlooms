@@ -2,6 +2,44 @@
 
 ---
 
+## v0.29.0 — M7 E4: web client encryption (9 May 2026)
+
+- `src/crypto/vaultCrypto.js` — full WebCrypto + Argon2id (via `@noble/hashes`) crypto
+  layer. Symmetric envelopes (AES-256-GCM), asymmetric envelopes (P-256 ECDH + HKDF),
+  passphrase wrapping (Argon2id), DEK wrapping under master key. Byte-for-byte compatible
+  with the server's `EnvelopeFormat` and Android's `VaultCrypto.kt`. A `setTimeout(0)`
+  yield precedes the synchronous Argon2id call so the "Unlocking…" spinner renders before
+  the main thread blocks (~2-3s on an average device).
+- `src/crypto/vaultSession.js` — in-memory master key singleton + LRU thumbnail
+  object-URL cache (max 300 entries, evicted with `URL.revokeObjectURL`).
+- `src/crypto/deviceKeyManager.js` — P-256 keypair generated once per browser and stored
+  as `CryptoKey` objects in IndexedDB (`extractable: false`). Device registered with server
+  once; `localStorage` flag guards re-registration. Browser data wipe = new device
+  (equivalent to Android factory reset).
+- `src/pages/VaultUnlockPage.jsx` — three-case passphrase screen: returning browser
+  (Case A: unlock only), new browser + existing account (Case B: unlock + register device),
+  brand-new account (Case C: generate master key + setup + register device).
+- `src/components/UploadThumb.jsx` — dual-path thumbnail: encrypted uploads fetch
+  ciphertext, decrypt on-device, display via object URL; plaintext uploads use existing
+  `getThumb` path. Decrypted URLs cached in `vaultSession.thumbnailCache`.
+- `src/App.jsx` — vault unlock gate between API key login and main navigation.
+  Sign-out calls `vaultSession.lock()`.
+- `src/api.js` — `putPassphrase`, `registerDevice`, `initiateEncryptedUpload`,
+  `putBlob`, `confirmEncryptedUpload`, `fetchBytes`.
+- `src/pages/GardenPage.jsx` — "Plant" button: file picker → client-side encryption →
+  initiate / PUT / confirm. Thumbnail generated via canvas (images) or video seek (video).
+  `PlotThumbCard` switches to `UploadThumb`; encrypted items navigate to detail page
+  instead of quick modals.
+- `src/pages/PhotoDetailPage.jsx` — encrypted images and videos fetched, decrypted,
+  played from object URL. Plaintext path unchanged.
+- `src/pages/ExplorePage.jsx`, `CompostHeapPage.jsx`, `PhotoGrid.jsx` — thumbnail
+  display updated to `UploadThumb`.
+- `src/test/vaultCrypto.test.js` — 14 unit tests (mirrors Android `VaultCryptoTest`).
+  102 total tests pass.
+- Deployed: Cloud Run revision `heirlooms-web-00036-9lm`.
+
+---
+
 ## v0.28.1 — Post-E3 fixes: thumbnail display, rotate UI, Just arrived (9 May 2026)
 
 Three bugs found during hands-on device testing of v0.28.0:

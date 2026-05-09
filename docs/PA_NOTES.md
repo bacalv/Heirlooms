@@ -24,16 +24,11 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.25.7 (8 May 2026) — video player auth + sizing. v0.25.6 = arrival
-  animation per-tile. v0.25.5 = Just arrived scroll + animation reliability. v0.25.4 = share
-  screen video thumbnail + upload progress jump. v0.25.3 = upload progress clear-finished.
-  v0.25.2 = Android bug fixes: login screen on Explore→detail nav, Just arrived animation not
-  firing for first item, thumbnail disk cache. v0.25.1 = M6
-  D4 post-ship fixes (upload progress screen, Garden staleness, API key corrections).
-  v0.25.0 = M6 D4 Android adoption (closes M6).
-  Previous: v0.24.0 (M6 D3 Web complete), v0.23.0 (M6 D2 Backend + Explore basic),
-  v0.22.0 (M6 D1 re-import), v0.21.0 (Android M5 + Daily-Use), v0.20.x (compost,
-  brand vocabulary). M7 (Vault E2EE) is next.
+- Current version: v0.29.0 (9 May 2026) — M7 E4: web client encryption.
+  v0.28.1 = post-E3 device testing fixes (thumbnail call sites, rotate button, Just arrived).
+  v0.28.0 = M7 E3: Android client encryption. v0.27.0 = M7 E2: backend API for E2EE.
+  v0.26.0 = M7 E1: schema + envelope format. v0.25.x = M6 D4 Android + post-ship fixes.
+  M7 E5 (onboarding, recovery, polish) is next.
 - One-time machine setup required: ~/.testcontainers.properties with
   docker.raw.sock path — see PROMPT_LOG.md for details
 
@@ -336,6 +331,24 @@ with manual env vars achieves the same result.
   content:// URIs rather than remote URLs; provide it via `CompositionLocalProvider(LocalImageLoader)`.
   Keywords: `VideoFrameDecoder`, `coil-video`, `share sheet`, `blank thumbnail`.
 
+- **Synchronous crypto in an async function still blocks before the first real await (v0.29.0).**
+  `@noble/hashes/argon2` is synchronous. Calling it inside an `async` function runs it
+  immediately — before the function's caller has a chance to `await` and yield. In practice:
+  `setState('working')` in a React event handler is batched and never flushes before the
+  ~3s Argon2id freeze, so the loading spinner never appears. Fix: `await new Promise(resolve
+  => setTimeout(resolve, 0))` immediately before the sync KDF call. This yields to the
+  event loop, React flushes its state update, the spinner renders, then the freeze begins.
+  Pattern: any synchronous heavy computation in an `async` path needs an explicit yield if
+  UI feedback must appear first. Keywords: `Argon2id`, `sync`, `setTimeout yield`,
+  `React batch`, `spinner`.
+
+- **vitest `toEqual` doesn't always deep-compare `Uint8Array` across buffer origins (v0.29.0).**
+  Two `Uint8Array` instances with identical bytes can fail `toEqual` when their underlying
+  `ArrayBuffer` objects originate from different WebCrypto operations or `TextEncoder` calls.
+  vitest shows "no visual difference" but still reports a failure. Fix: `Array.from(u)` on
+  both sides — plain arrays compare reliably. Keywords: `Uint8Array`, `toEqual`, `vitest`,
+  `ArrayBuffer`, `no visual difference`.
+
 - **Plain `var` on a ViewModel is not observable by Compose (v0.25.5).** Reading a plain `var`
   during composition and mutating it as a side effect is unreliable — Compose may not recompose
   when the value changes, and state mutation during composition can behave unexpectedly. Use
@@ -421,7 +434,7 @@ with manual env vars achieves the same result.
 | HeirloomsServer image | europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server |
 | HeirloomsWeb image | europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-web |
 | HeirloomsServer Cloud Run URL | https://heirlooms-server-340655233963.us-central1.run.app (revision heirlooms-server-00034-frz, 2Gi) |
-| HeirloomsWeb Cloud Run URL | https://heirlooms-web-340655233963.us-central1.run.app (revision heirlooms-web-00008-9qv) |
+| HeirloomsWeb Cloud Run URL | https://heirlooms-web-340655233963.us-central1.run.app (revision heirlooms-web-00036-9lm) |
 | Target domain (web) | https://heirlooms.digital (live) |
 | Target domain (server) | https://api.heirlooms.digital (live) |
 

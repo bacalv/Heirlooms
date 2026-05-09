@@ -2719,3 +2719,125 @@ Just arrived only when tagged or composted (i.e., actually acted on). Also remov
 `last_viewed_at` current. Two integration tests updated to match the new contract:
 `just_arrived=true keeps item after it has been viewed` (was: excludes after view).
 Deployed: Cloud Run revision `heirlooms-server-00034-frz`.
+
+---
+
+## Session — 9 May 2026 (M7 E4 — web client encryption — v0.29.0)
+
+### What was built
+
+M7 E4: web vault. After this session, photos and videos planted from the browser are
+encrypted on-device before reaching the server. Android-encrypted uploads (E3) decrypt
+and display correctly in the web client. `legacy_plaintext` uploads are unchanged.
+
+### Brief
+
+`docs/M7_E4_brief.md` written before implementation. Key design decisions recorded there:
+passphrase-as-unlock-mechanism (no hardware keystore on web), one-device-per-browser via
+IndexedDB-persisted P-256 keypair, WebCrypto for all symmetric + asymmetric ops, Argon2id
+via `@noble/hashes` (only new runtime dependency), EXIF deferred to E5.
+
+The brief was updated mid-session to fix a design error in the first draft: device
+registration was originally described as "best-effort per session" (would accumulate a new
+`wrapped_keys` row each login). Corrected to: generate keypair once, store in IndexedDB,
+register once, `localStorage` flag guards re-registration on subsequent sessions.
+
+### New files
+
+- `src/crypto/vaultCrypto.js` — pure WebCrypto + `@noble/hashes` crypto layer. Matches
+  the server's `EnvelopeFormat` and Android's `VaultCrypto.kt` byte-for-byte. Functions:
+  `generateMasterKey/Dek/Nonce/Salt`, `aesGcmEncrypt/Decrypt`, `buildSymmetricEnvelope`,
+  `parseSymmetricEnvelope`, `encryptSymmetric`, `decryptSymmetric`, `wrapDekUnderMasterKey`,
+  `unwrapDekWithMasterKey`, `hkdf`, `wrapMasterKeyWithPassphrase`,
+  `unwrapMasterKeyWithPassphrase`, `buildAsymmetricEnvelope`, `parseAsymmetricEnvelope`,
+  `wrapMasterKeyForDevice`, `toB64`, `fromB64`. All async (WebCrypto is Promise-based);
+  Argon2id is synchronous — a `setTimeout(resolve, 0)` yield is added before the KDF call
+  so the "Unlocking…" spinner renders before the main thread freezes.
+- `src/crypto/vaultSession.js` — module-level master key singleton (mirrors Android's
+  `VaultSession`). `unlock/lock/isUnlocked/getMasterKey`. LRU thumbnail object-URL cache
+  (max 300 entries; evicted URLs are revoked to prevent memory leaks).
+- `src/crypto/deviceKeyManager.js` — IndexedDB-backed P-256 keypair persistence (mirrors
+  Android's `DeviceKeyManager`). `generateAndStoreKeypair()` creates the keypair, stores
+  both `CryptoKey` objects in IDB (`extractable: false`), writes a UUID deviceId to
+  `localStorage`. `isVaultSetUp()` / `markVaultSetUp()` guard registration to once per
+  browser. `loadPrivateKey()` / `loadPublicKeySpki()` restore across sessions.
+- `src/pages/VaultUnlockPage.jsx` — three-case screen:
+  - **Case A** (returning browser, vault set up): passphrase → decrypt master key only.
+  - **Case B** (new browser, existing account): passphrase → decrypt → generate keypair →
+    register device with server.
+  - **Case C** (brand-new account): generate master key → wrap with passphrase →
+    `PUT /api/keys/passphrase` → generate keypair → register device.
+  Probe on mount (`GET /api/keys/passphrase`) determines case. Cases A + B share the
+  `'unlock'` UI state; Case C uses `'setup'` (two passphrase fields + match validation).
+- `src/components/UploadThumb.jsx` — dual-path thumbnail composable (mirrors Android's
+  `UploadThumbnail`). `storageClass === 'encrypted'`: fetch ciphertext → decrypt with
+  thumbnail DEK → `URL.createObjectURL` → `<img>`. Plaintext: existing `getThumb` via
+  `thumbCache.js`. Decrypted object URLs cached in `vaultSession.thumbnailCache` with LRU
+  eviction and `URL.revokeObjectURL` on evict.
+- `src/test/vaultCrypto.test.js` — 14 vitest unit tests mirroring Android's
+  `VaultCryptoTest`. All Uint8Array comparisons use `Array.from()` to work around vitest's
+  cross-buffer-origin equality check. Argon2id tests use `{ m: 64, t: 1, p: 1 }` to keep
+  the suite fast.
+
+### Modified files
+
+- `package.json` — `@noble/hashes: ^1.8.0` added (resolved to 1.8.0 by npm).
+- `src/App.jsx` — `vaultUnlocked` state + `onVaultUnlocked` callback added to
+  `AuthContext.Provider`. `RequireAuth` checks `vaultUnlocked`; renders `VaultUnlockPage`
+  when false. `handleSignOut` calls `vaultSession.lock()` before clearing state.
+- `src/api.js` — new functions: `putPassphrase`, `registerDevice`,
+  `initiateEncryptedUpload`, `putBlob` (raw PUT to signed URL, no auth header),
+  `confirmEncryptedUpload`, `fetchBytes`.
+- `src/pages/GardenPage.jsx` — `PlotThumbCard` switches from manual `getThumb` useEffect
+  to `UploadThumb`; encrypted uploads navigate to detail page instead of opening quick
+  modals. `Plant` button (top-right) triggers hidden file input; `encryptAndUpload()`
+  encrypts content + thumbnail on-device and calls initiate/PUT/confirm. `generateThumbnail()`
+  uses `createImageBitmap` + `<canvas>` for images, `<video>` seek + canvas for video;
+  1×1 white JPEG fallback if generation fails. Upload status shown inline ("Encrypting…" →
+  "Uploading…" → "Done").
+- `src/pages/PhotoDetailPage.jsx` — content-loading `useEffect` extended: if
+  `upload.storageClass === 'encrypted'`, fetches `/file`, decrypts with content DEK,
+  creates object URL. Encrypted video plays from blob URL directly in `<video>` (no temp
+  file needed on web). Plaintext path unchanged.
+- `src/pages/ExplorePage.jsx` — `ExploreThumb` rewritten to delegate to `UploadThumb`;
+  manual `getThumb` useEffect removed.
+- `src/pages/CompostHeapPage.jsx` — `ThumbImage` component replaced with `UploadThumb`.
+- `src/components/PhotoGrid.jsx` — `Thumb` component rewritten to use `UploadThumb`;
+  `apiKey` prop removed from `PhotoGrid` (now sourced internally via `useAuth`).
+
+### Design decisions made
+
+**One device per browser (not one per session).** The first E4 brief draft said "generate
+a fresh keypair each login session, register as a new device each time." Bret caught this
+during review. Fixed: keypair generated once, stored in IndexedDB as non-extractable
+`CryptoKey` objects. `localStorage` flag (`heirlooms-vaultSetUp`) gates registration to
+once per browser. Browser data wipe = new device registration (equivalent to Android factory
+reset).
+
+**Passphrase is the sole web unlock mechanism.** No hardware keystore on the browser. The
+master key lives in memory only. Every page refresh re-prompts for the passphrase. Consistent
+with the existing pattern of clearing the API key on refresh — the user already expects to
+re-authenticate each session.
+
+**Argon2id blocks the main thread; yield before it.** `@noble/hashes/argon2` runs
+synchronously. Without a `setTimeout(resolve, 0)` yield before the KDF call, React's
+batched `setState('working')` never flushes to the DOM before the ~3s freeze, leaving the
+user staring at an unresponsive button. The yield ensures the "Unlocking…" spinner renders
+first. Observed and fixed during post-deploy testing.
+
+**EXIF deferred to E5.** Encrypted metadata blob sent as all-null JSON. `takenAt` derived
+from `file.lastModified`. Full EXIF extraction (requires a third-party library) is E5 scope.
+
+### Test results
+
+- 14/14 new `vaultCrypto.test.js` tests pass.
+- 88/88 existing web tests pass (no regressions). Total: 102.
+
+### Deployment
+
+- Built with `--platform linux/amd64 --build-arg VITE_API_URL=https://api.heirlooms.digital`.
+- Deployed to Cloud Run revision `heirlooms-web-00036-9lm`.
+- Tested end-to-end: entered Android vault passphrase on web → vault unlocked → Garden
+  loaded. First page load showed blank (Cloud Run cold start); second load worked correctly.
+
+**Next:** E5 — onboarding, recovery, polish, legacy retirement.
