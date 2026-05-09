@@ -2,6 +2,39 @@
 
 ---
 
+## v0.30.0 — M7 E5: storage class rename, web EXIF, onboarding copy (9–10 May 2026)
+
+Final M7 increment. No new cryptographic operations; no new API endpoints.
+
+- **V16 migration** — renames all `storage_class = 'legacy_plaintext'` rows to `'public'` in
+  both `uploads` and `capsule_messages`. Reflects the mechanism's intended future use
+  (public plots, public uploads) rather than its transitional origin. Migration runs on
+  server startup; takes effect immediately on first cold start of `heirlooms-server-00035-qwc`.
+- **Server** — `UploadRecord` default changed to `"public"`. "Not yet supported" guards for
+  `public` removed from initiate and confirm handlers. Migrate endpoint updated to check for
+  `!= "public"`. `exif_processed_at` auto-set guard updated to `== "public"`.
+- **Android** — `Upload.storageClass` default and JSON parser fallback updated to `"public"`.
+- **Web EXIF** — `exifr ^7.1.3` added. `buildEncryptedMetadata(file)` reads GPS coordinates,
+  camera make/model, lens model, focal length, ISO, shutter speed, and aperture from JPEG EXIF
+  before encryption. Encrypted under the content DEK and passed to `confirmEncryptedUpload`.
+  Videos remain all-null (browser EXIF extraction from video is unreliable). Server already
+  stored the blob; only the client-side extraction was missing.
+- **Android onboarding copy** — `VaultSetupScreen`: headline → "Your vault", sub-copy →
+  "Your passphrase unlocks your vault on any device. Keep it somewhere safe.", button →
+  "Protect vault".
+- **Web onboarding copy** — `VaultUnlockPage` Case C sub-label →
+  "Your passphrase unlocks your vault from any browser. Keep it somewhere safe."
+- **GCS CORS** — `PUT` method added to CORS policy on `gs://heirlooms-uploads`. Required
+  for direct browser-to-GCS uploads via signed URLs (Plant button). Was missing because
+  the Plant flow had never been tested end-to-end before E5.
+- **Upload error auto-clear** — plant error message now clears after 4 seconds (same cadence
+  as "Done" status).
+- **Tests** — `SchemaMigrationTest`, `UploadHandlerTest`, `E2EncryptedUploadTest` updated for
+  `"public"`. 102 web tests pass.
+- Deployed: server `heirlooms-server-00035-qwc`, web `heirlooms-web-00039-g86`.
+
+---
+
 ## v0.29.0 — M7 E4: web client encryption (9 May 2026)
 
 - `src/crypto/vaultCrypto.js` — full WebCrypto + Argon2id (via `@noble/hashes`) crypto

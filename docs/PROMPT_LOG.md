@@ -2841,3 +2841,83 @@ from `file.lastModified`. Full EXIF extraction (requires a third-party library) 
   loaded. First page load showed blank (Cloud Run cold start); second load worked correctly.
 
 **Next:** E5 — onboarding, recovery, polish, legacy retirement.
+
+---
+
+## Session — 9–10 May 2026 (M7 E5 — final wrap — v0.30.0)
+
+### What was built
+
+M7 E5: four items closed out the milestone — storage class rename, web EXIF extraction,
+onboarding copy polish, and one deployment bug fixed (GCS CORS). M7 is now complete.
+
+### Brief
+
+`docs/briefs/M7_E5_brief.md` written before implementation. Key scoping decisions:
+recovery phrase deferred to M9; `legacy_plaintext` renamed to `public` (mechanism stays,
+name reflects future use for public plots); web EXIF via `exifr`; no new API endpoints.
+
+### Changes
+
+**Storage class rename (`legacy_plaintext` → `public`):**
+- V16 Flyway migration: `UPDATE uploads SET storage_class = 'public' WHERE storage_class =
+  'legacy_plaintext'` — also covers `capsule_messages`. Renumbered from the initially
+  mis-numbered V10 (V10 was already taken by the plots migration; V15 by device links).
+- Server `Database.kt`: default, `exif_processed_at` guard, SQL WHERE clause, and ResultSet
+  fallback updated.
+- Server `UploadHandler.kt`: `"public"` and `"legacy_plaintext"` "not yet supported" blocks
+  removed from initiate and confirm handlers; migrate endpoint guard updated.
+- Android `Models.kt`: default `"public"`. `HeirloomsApi.kt`: JSON parser fallback updated.
+- Web `UploadThumb.jsx`: comment updated (only occurrence in web source).
+- Tests: `SchemaMigrationTest` (test name + assertions), `UploadHandlerTest` (two assertions),
+  `E2EncryptedUploadTest` (two assertions).
+
+**Web EXIF extraction:**
+- `exifr ^7.1.3` added to `package.json` (pure JS, no WASM).
+- `buildEncryptedMetadata(file)` added to `GardenPage.jsx`: reads GPS, camera make/model,
+  lens model, focal length, ISO, shutter, aperture from JPEG EXIF via `exifr`. ExposureTime
+  split into numerator/denominator (`et >= 1` → long-exposure branch, otherwise `1/round(1/et)`).
+  Videos stay all-null. Wrapped in try/catch — EXIF failure silently produces all-null blob.
+- `confirmEncryptedUpload` in `api.js` updated to accept and pass `encryptedMetadataB64` +
+  `encryptedMetadataFormat`. Server already stored the blob; client was the gap.
+
+**Onboarding copy:**
+- Android `VaultSetupScreen`: headline "Heirlooms" → "Your vault"; sub-copy → "Your
+  passphrase unlocks your vault on any device. Keep it somewhere safe."; button "Save
+  passphrase" → "Protect vault".
+- Web `VaultUnlockPage` Case C sub-label: "Your passphrase protects your vault if you ever
+  lose access to this device." → "Your passphrase unlocks your vault from any browser. Keep
+  it somewhere safe." Cases A + B sub-label unchanged ("Your passphrase protects your vault.").
+
+### Deployment issues found and fixed
+
+**GCS CORS missing.** The Plant button's `putBlob` call is a direct browser PUT to a GCS
+signed URL. GCS requires explicit CORS configuration to allow cross-origin PUTs from a browser.
+The bucket had none — because direct browser upload had never been tested end-to-end before E5.
+Fixed with `gsutil cors set` (method: PUT, origins: heirlooms.digital +
+heirlooms-web Cloud Run URL).
+
+**Wrong web Docker image.** When running server and web Docker builds in parallel (from the
+same terminal session), the web image was accidentally built from `HeirloomsServer/` instead of
+`HeirloomsWeb/` because the working directory had been set by the preceding `cd`. Fixed by
+always using an explicit `cd` before `docker build`. The bad image produced a "container failed
+to start on port 80" Cloud Run error immediately on deploy — caught before any traffic routed.
+
+**Upload error never cleared.** After a failed upload attempt (the CORS error), the error
+message persisted indefinitely — there was no dismiss button and the next file picker open
+called `setUploadError(null)` but only at the start of the next upload. Fixed: auto-clear
+via `setTimeout(..., 4000)` in the catch block.
+
+### Test results
+
+- 102/102 web tests pass.
+- `npm run build` clean (exifr bundled without issue, 428 kB JS bundle).
+
+### Deployment
+
+- Server `heirlooms-server-00035-qwc` (V16 migration ran on first startup).
+- Web `heirlooms-web-00039-g86` (error auto-clear fix; CORS applied at bucket level, not
+  per-revision).
+- End-to-end confirmed: planted a JPEG from the web; Garden showed decrypted thumbnail.
+
+**M7 complete. Next: M8 — multi-user.**
