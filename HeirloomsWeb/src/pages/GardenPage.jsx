@@ -28,7 +28,8 @@ const JUST_ARRIVED_SENTINEL = '__just_arrived__'
 
 // ---- Thumbnail card for horizontal plot row --------------------------------
 
-function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, isNew, onArrivalComplete }) {
+function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, onImagePreview, isNew, onArrivalComplete }) {
+  const navigate = useNavigate()
   const isImage = upload.mimeType?.startsWith('image/')
   const isVideo = upload.mimeType?.startsWith('video/')
   const displayUrl = upload.thumbnailKey
@@ -92,6 +93,13 @@ function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, isNe
         >
           {thumbnailContent}
         </button>
+      ) : onImagePreview ? (
+        <button
+          onClick={(e) => stop(e, () => onImagePreview(upload))}
+          className="w-full h-full rounded overflow-hidden border border-forest-08 bg-forest-04 block cursor-pointer relative"
+        >
+          {thumbnailContent}
+        </button>
       ) : (
         <Link
           to={`/photos/${upload.id}?from=garden`}
@@ -116,6 +124,19 @@ function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, isNe
           </svg>
         </button>
       )}
+
+      {/* Pencil — go to detail page, appears on hover next to tag button */}
+      <button
+        onClick={(e) => stop(e, () => navigate(`/photos/${upload.id}?from=garden`, { state: { upload } }))}
+        className="absolute top-1 right-7 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity bg-black/40 rounded p-0.5"
+        title="View details"
+        aria-label="View details"
+      >
+        <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+        </svg>
+      </button>
 
       {/* Tag quick action — appears on hover */}
       {onTagClick && !isComposted && (
@@ -147,7 +168,7 @@ function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, isNe
 
 // ---- Horizontal scrolling row of items for one plot ------------------------
 
-function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey, excludeIds }) {
+function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, onImagePreview, refreshKey, excludeIds }) {
   const [items, setItems] = useState([])
   const [nextCursor, setNextCursor] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -257,7 +278,7 @@ function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey, exclu
     <div ref={rowRef} className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
       {visibleItems.map((upload) => (
         <PlotThumbCard key={upload.id} upload={upload} apiKey={apiKey}
-          onTagClick={onTagClick} onVideoPlay={onVideoPlay} onRotate={handleRotateItem}
+          onTagClick={onTagClick} onVideoPlay={onVideoPlay} onImagePreview={onImagePreview} onRotate={handleRotateItem}
           isNew={newlyArrivedIds.has(upload.id)}
           onArrivalComplete={() => setNewlyArrivedIds((prev) => {
             const next = new Set(prev); next.delete(upload.id); return next
@@ -456,23 +477,56 @@ function QuickVideoModal({ upload, apiKey, onClose }) {
   )
 }
 
+// ---- Quick image preview modal (from garden thumbnail) ---------------------
+
+function QuickImageModal({ upload, apiKey, onClose }) {
+  const [blobUrl, setBlobUrl] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    let ownUrl = null
+    fetch(`${API_URL}/api/content/uploads/${upload.id}/file`, { headers: { 'X-Api-Key': apiKey } })
+      .then((r) => r.ok ? r.blob() : Promise.reject())
+      .then((blob) => { ownUrl = URL.createObjectURL(blob); setBlobUrl(ownUrl); setLoading(false) })
+      .catch(() => { setError(true); setLoading(false) })
+    return () => { if (ownUrl) URL.revokeObjectURL(ownUrl) }
+  }, [upload.id, apiKey])
+
+  const rotate = upload.rotation ? { transform: `rotate(${upload.rotation}deg)` } : {}
+
+  return (
+    <BrandModal onClose={onClose} width="max-w-3xl">
+      <div className="p-2 flex items-center justify-center min-h-[200px]">
+        {loading && <WorkingDots size="lg" />}
+        {error && (
+          <p className="font-serif italic text-earth py-8">Couldn't load image.</p>
+        )}
+        {blobUrl && (
+          <img src={blobUrl} alt="" className="max-w-full max-h-[75vh] object-contain" style={rotate} />
+        )}
+      </div>
+    </BrandModal>
+  )
+}
+
 // ---- System (Just arrived) plot row — no DnD, no gear ----------------------
 
-function SystemPlotRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey, excludeIds }) {
+function SystemPlotRow({ plot, apiKey, onTagClick, onVideoPlay, onImagePreview, refreshKey, excludeIds }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
         <h2 className="font-serif italic text-forest text-base">Just arrived</h2>
       </div>
       <PlotItemsRow plot={plot} apiKey={apiKey}
-        onTagClick={onTagClick} onVideoPlay={onVideoPlay} refreshKey={refreshKey} excludeIds={excludeIds} />
+        onTagClick={onTagClick} onVideoPlay={onVideoPlay} onImagePreview={onImagePreview} refreshKey={refreshKey} excludeIds={excludeIds} />
     </div>
   )
 }
 
 // ---- Sortable user plot row ------------------------------------------------
 
-function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMoveUp, onMoveDown, onTagClick, onVideoPlay, refreshKey, excludeIds }) {
+function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMoveUp, onMoveDown, onTagClick, onVideoPlay, onImagePreview, refreshKey, excludeIds }) {
   const {
     attributes,
     listeners,
@@ -512,7 +566,7 @@ function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMo
         />
       </div>
       <PlotItemsRow plot={plot} apiKey={apiKey}
-        onTagClick={onTagClick} onVideoPlay={onVideoPlay} refreshKey={refreshKey} excludeIds={excludeIds} />
+        onTagClick={onTagClick} onVideoPlay={onVideoPlay} onImagePreview={onImagePreview} refreshKey={refreshKey} excludeIds={excludeIds} />
     </div>
   )
 }
@@ -532,6 +586,7 @@ export function GardenPage() {
   const [plotSavedMsg] = useState(() => location.state?.plotSaved ?? null)
   const [quickTagUpload, setQuickTagUpload] = useState(null)
   const [videoUpload, setVideoUpload] = useState(null)
+  const [previewUpload, setPreviewUpload] = useState(null)
   const [plotRefreshKey, setPlotRefreshKey] = useState(0)
   const [justArrivedExclude, setJustArrivedExclude] = useState(new Set())
 
@@ -673,7 +728,7 @@ export function GardenPage() {
       <div className="space-y-8">
         {systemPlot && (
           <SystemPlotRow plot={systemPlot} apiKey={apiKey}
-            onTagClick={setQuickTagUpload} onVideoPlay={setVideoUpload}
+            onTagClick={setQuickTagUpload} onVideoPlay={setVideoUpload} onImagePreview={setPreviewUpload}
             refreshKey={plotRefreshKey} excludeIds={justArrivedExclude} />
         )}
 
@@ -693,6 +748,7 @@ export function GardenPage() {
                   onMoveDown={() => handleMoveDown(plot.id)}
                   onTagClick={setQuickTagUpload}
                   onVideoPlay={setVideoUpload}
+                  onImagePreview={setPreviewUpload}
                   refreshKey={plotRefreshKey}
                 />
               ))}
@@ -743,6 +799,14 @@ export function GardenPage() {
           upload={videoUpload}
           apiKey={apiKey}
           onClose={() => setVideoUpload(null)}
+        />
+      )}
+
+      {previewUpload && (
+        <QuickImageModal
+          upload={previewUpload}
+          apiKey={apiKey}
+          onClose={() => setPreviewUpload(null)}
         />
       )}
     </main>
