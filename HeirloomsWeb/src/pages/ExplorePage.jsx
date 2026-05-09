@@ -254,6 +254,7 @@ function ExploreGrid({ uploads, sort, includeComposted }) {
 function ExploreThumb({ upload, isComposted }) {
   const { apiKey } = useAuth()
   const isImage = upload.mimeType?.startsWith('image/')
+  const isVideo = upload.mimeType?.startsWith('video/')
   const displayUrl = upload.thumbnailKey
     ? `${API_URL}/api/content/uploads/${upload.id}/thumb`
     : (isImage ? `${API_URL}/api/content/uploads/${upload.id}/file` : null)
@@ -276,13 +277,23 @@ function ExploreThumb({ upload, isComposted }) {
   const rotate = upload.rotation ? { transform: `rotate(${upload.rotation}deg)` } : {}
   const saturate = isComposted ? { filter: 'saturate(0.35) opacity(0.75)' } : {}
 
-  if (blobUrl) {
-    return <img src={blobUrl} alt="" className="w-full h-full object-cover" style={{ ...rotate, ...saturate }} />
-  }
   return (
-    <div className="w-full h-full bg-forest-08 flex items-center justify-center">
-      <span className="text-text-muted text-xs">…</span>
-    </div>
+    <>
+      {blobUrl ? (
+        <img src={blobUrl} alt="" className="w-full h-full object-cover" style={{ ...rotate, ...saturate }} />
+      ) : (
+        <div className="w-full h-full bg-forest-08 flex items-center justify-center">
+          <span className="text-text-muted text-xs">…</span>
+        </div>
+      )}
+      {isVideo && (
+        <div className="absolute bottom-0 right-0 bg-forest-75 rounded-tl p-0.5 pointer-events-none">
+          <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </div>
+      )}
+    </>
   )
 }
 
