@@ -2732,7 +2732,7 @@ and display correctly in the web client. `legacy_plaintext` uploads are unchange
 
 ### Brief
 
-`docs/M7_E4_brief.md` written before implementation. Key design decisions recorded there:
+`docs/briefs/M7_E4_brief.md` written before implementation. Key design decisions recorded there:
 passphrase-as-unlock-mechanism (no hardware keystore on web), one-device-per-browser via
 IndexedDB-persisted P-256 keypair, WebCrypto for all symmetric + asymmetric ops, Argon2id
 via `@noble/hashes` (only new runtime dependency), EXIF deferred to E5.

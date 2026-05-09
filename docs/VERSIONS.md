@@ -102,7 +102,7 @@ Three bugs found during hands-on device testing of v0.28.0:
 - BouncyCastle 1.79 added to `build.gradle.kts` (production + test); packaging options silence
   META-INF signature conflicts.
 - 14 new `VaultCryptoTest` unit tests (JVM); 0 failures. All 92 existing tests continue to pass.
-- `docs/M7_E3_brief.md` added.
+- `docs/briefs/M7_E3_brief.md` added.
 
 ---
 
