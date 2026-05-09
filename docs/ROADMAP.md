@@ -229,24 +229,165 @@ now than to retrofit. Inserted before the originally-planned Milestone 6 (delive
 now Milestone 8) because delivery deserves to land on a settled foundation rather
 than a flat surface that's about to change shape.
 
-**Milestone 7 — Multi-user access**
-Per-user accounts and data isolation. The current single-user/shared-API-key model
-becomes per-user authentication. Bret backfilled as the existing user during the
-migration. Cross-user reads return 404 (privacy-preserving — a probing attacker
-can't distinguish "doesn't exist" from "exists but isn't yours"). Two-user
-isolation tests across every endpoint are the milestone's non-negotiable
-correctness property.
+**Milestone 7 — Vault E2EE**
+The brand promise — "we cannot read your data" — becomes a cryptographic
+property rather than an operational one.
 
-After M7 ships, the first non-Bret human (a friend tester) is onboarded.
+Two-layer envelope encryption applied to the vault: every photo and video is
+encrypted under a random per-file data encryption key (DEK); each DEK is
+wrapped under the user's master key and stored as metadata. The server never
+sees plaintext bytes or unwrapped DEKs. Heirlooms staff with full database
+and bucket access see only ciphertext.
 
-**Milestone 8 — Milestone delivery**
-Scheduled delivery of a capsule on a specific date. The feature that makes this
-more than cloud storage. Designed against real recipient accounts that exist
-post-M7, including a resolution UI for capsules sealed with free-text recipients
-before M7 (see IDEAS.md). Email is the baseline notification channel; in-app
-delivery is the canonical surface; print-on-delivery and other physical-world
-integrations are recorded as a second wave (see IDEAS.md, "Third-party delivery
-integrations").
+The master key is high-entropy, generated on the user's first device, and
+never leaves any device in plaintext. Each device — Android (Keystore), web
+(non-extractable WebCrypto) — has its own keypair; the master key is wrapped
+to each device's public key separately. Adding a device follows a Signal-style
+linked-device flow where a trusted device decrypts its master-key copy
+locally, re-wraps to the new device's pubkey, and uploads. The server is a
+dumb relay throughout.
+
+Open capsules sit in the vault under the same model. Sealed capsules remain
+a database-flag state in M7; cryptographic sealing is M9 work.
+
+Recovery is a first-class feature. Three options offered, with the recommended
+default shifting at M9 once a connections graph exists:
+
+- *24-word recovery phrase* — generated and shown once at first-device setup,
+  with required acknowledgement. The "I don't trust anyone" escape hatch.
+- *Passphrase-wrapped server backup* — mandatory for any user who wants the
+  web client. Argon2id derivation, server holds the wrapped blob.
+- *Social recovery via Shamir shares* — deferred to M9, since single-user
+  has no contacts graph.
+
+Versioned envelope format with explicit algorithm and version identifiers in
+every blob. Crypto agility is non-negotiable from v1, not a future-work item.
+The DEK rotation path is documented in M7's brief: incremental, file-by-file,
+old and new envelopes coexist during migration. AES-256-GCM is the v1
+primitive; the format admits successors.
+
+The web client is a session-only peer device: its private key is non-extractable;
+its master-key copy is not persisted across sessions; it is re-derived each
+login from the passphrase. Sealing happens phone-only (sealing is the
+cryptographically heavy moment); reading is allowed on the web. The login
+screen says "Type your Heirlooms passphrase," not "Sign in" — the asymmetry
+between phone and web is a feature rather than something to hide.
+
+Existing data is discarded; M7 starts from a clean slate. Friend tester does
+not arrive yet — they wait for M8.
+
+**Milestone 8 — Multi-user access**
+Per-user accounts and data isolation. The current single-user/shared-API-key
+model becomes per-user authentication. Bret backfilled as the existing user
+during the migration. Cross-user reads return 404 (privacy-preserving — a
+probing attacker can't distinguish "doesn't exist" from "exists but isn't
+yours"). Two-user isolation tests across every endpoint are the milestone's
+non-negotiable correctness property.
+
+The users table includes device-pubkey columns from day one so M9's strong
+sealing doesn't have to migrate. The wrapped-keys table M7 introduced extends
+naturally to multiple users.
+
+After M8 ships, the first non-Bret human (a friend tester) is onboarded.
+M7's E2EE means the tester's data is end-to-end encrypted from first upload —
+there is no "we'll add encryption later" caveat.
+
+**Milestone 9 — Strong sealing + social recovery**
+*Sealed* becomes a cryptographic state, not a database flag.
+
+Sealed capsules carry up to three independent unlock paths, each defending
+against a different failure mode:
+
+- The per-capsule key is wrapped to the recipient's pubkey at sealing time.
+  After sealing, only the recipient can unwrap it — the author cannot, even
+  from their own device. This is what makes "sealed" cryptographically
+  meaningful.
+- For date-conditioned capsules, the per-capsule key is also tlock-encrypted
+  against the drand round corresponding to the unlock date. Time itself
+  becomes a cryptographic gate; until the round publishes, no party — author,
+  recipient, Heirlooms, drand — can decrypt.
+- The per-capsule key (or master key, depending on configuration) is split
+  via Shamir's Secret Sharing across nominated executors. Threshold of
+  executors plus death verification recovers the key.
+
+The redundancy is the design's most important property. Each path defends
+against a different failure mode of the others — recipient credential loss,
+drand chain retirement or BLS12-381 break, author death without prior
+configuration.
+
+The connections data model lands here: identity for capsule recipients,
+executor nominations, and recovery shareholders are the same people, modelled
+once. Free-text recipients from earlier milestones evolve into named
+connections.
+
+Social recovery via Shamir replaces the recovery phrase as the recommended
+default for vault master-key recovery — the same connections graph that holds
+capsule recipients also holds recovery shares. The 24-word phrase remains as
+the deeper escape hatch.
+
+The time-lock layer is pluggable: the capsule format records which scheme
+(drand chain ID, or future alternatives) it was sealed under, so new schemes
+can be added later. tlock is one tool in the kit, not the foundation — the
+multi-layer wrapping is what defends against any single primitive failing
+over a multi-decade horizon.
+
+UX commitments: defaults guide users to configurations that tolerate realistic
+attrition (3-of-N with N ≥ 7 for multi-decade capsules). Periodic check-ins
+prompt users to verify executors are still reachable. Honest copy at the
+moment of capsule sealing makes clear which guarantees apply to this specific
+capsule.
+
+**Milestone 10 — Milestone delivery**
+Scheduled delivery of a capsule on a specific date. The feature that makes
+Heirlooms more than cloud storage.
+
+Lands on the M9 foundation: recipient pubkey wrapping has happened at sealing,
+tlock has held the gate cryptographically, executor shares are configured for
+capsules that need them. Delivery is the moment where Heirlooms's role — keep
+the ciphertext available, notify the recipient on the date — is exactly what
+the cryptographic design asked of it: nothing more.
+
+Includes the resolution UI for capsules sealed with free-text recipients
+before M8/M9 (see IDEAS.md). Email is the baseline notification channel;
+in-app delivery is the canonical surface. Print-on-delivery and other
+physical-world integrations are recorded as a second wave (see IDEAS.md,
+"Third-party delivery integrations").
+
+**Milestone 11 — Posthumous delivery**
+Executor-mediated unlock for capsules whose release is conditioned on the
+user's death rather than on a date. The product's deepest promise — a video
+for a daughter on her 18th birthday, sealed by a parent who knows they may
+not be there — kept honestly through a mechanism where Heirlooms itself never
+holds enough material to unlock anything. The executors collectively do.
+
+Death-verification mechanism designed alongside the cryptographic unlock —
+they are the same system. Conservative defaults, clear UX about what's
+happening, and a periodic check-in that asks living users to confirm their
+executor cohort is still reachable.
+
+Onboarding for posthumous-only capsules refuses to seal until executor shares
+are configured. Pure cryptographic guarantee meets a UX-level guard: the
+product will not let users create capsules they can foresee being unrecoverable.
+
+---
+
+## Retired milestones
+
+**Milestone 3 — Self-hosted deployment (retired May 2026)**
+Originally planned as a single `docker-compose.yml` that a non-developer
+could run on a home server or cheap VPS. The trust argument — "you don't
+have to trust us, you can run it yourself" — was the motivation.
+
+Two things absorbed it. The GCP/Cloud Run deployment path took over the
+operational shape; the self-hosted bundle would have been a parallel
+maintenance burden with no realistic users. And M7's vault E2EE delivers a
+stronger version of the same trust property — the operator cannot read your
+data regardless of who runs the server. "Run it yourself" stops being the
+strongest version of the trust story when the server can't read your data
+anyway.
+
+Could be revived as a much-later enterprise/family-server SKU if the demand
+materialises. Off the active roadmap.
 
 ---
 
