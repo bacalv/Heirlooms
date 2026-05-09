@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../AuthContext'
 import { API_URL } from '../api'
+import { getThumb } from '../thumbCache'
 
 function Thumb({ upload, apiKey, selected, onSelect, linkTo }) {
   const fileUrl = `${API_URL}/api/content/uploads/${upload.id}/file`
@@ -13,18 +14,18 @@ function Thumb({ upload, apiKey, selected, onSelect, linkTo }) {
 
   useEffect(() => {
     if (!needsFetch) return
-    fetch(displayUrl, { headers: { 'X-Api-Key': apiKey } })
-      .then((r) => r.ok ? r.blob() : Promise.reject())
-      .then((blob) => {
-        const url = URL.createObjectURL(blob)
-        blobRef.current = url
-        setBlobUrl(url)
+    let cancelled = false
+    getThumb(upload.id, displayUrl, apiKey)
+      .then((url) => {
+        if (!cancelled) { blobRef.current = url; setBlobUrl(url) }
+        else URL.revokeObjectURL(url)
       })
       .catch(() => {})
     return () => {
-      if (blobRef.current) URL.revokeObjectURL(blobRef.current)
+      cancelled = true
+      if (blobRef.current) { URL.revokeObjectURL(blobRef.current); blobRef.current = null }
     }
-  }, [displayUrl, apiKey, needsFetch])
+  }, [upload.id, displayUrl, apiKey, needsFetch])
 
   const inner = blobUrl ? (
     <img

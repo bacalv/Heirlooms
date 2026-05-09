@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react' // useMemo removed with PlotForm
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { BrandModal } from '../components/BrandModal'
+import { OliveBranchArrival } from '../brand/OliveBranchArrival'
+import { getThumb } from '../thumbCache'
 import {
   DndContext,
   PointerSensor,
@@ -26,7 +28,7 @@ const JUST_ARRIVED_SENTINEL = '__just_arrived__'
 
 // ---- Thumbnail card for horizontal plot row --------------------------------
 
-function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate }) {
+function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, isNew, onArrivalComplete }) {
   const isImage = upload.mimeType?.startsWith('image/')
   const isVideo = upload.mimeType?.startsWith('video/')
   const displayUrl = upload.thumbnailKey
@@ -39,14 +41,15 @@ function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate }) {
   useEffect(() => {
     if (!displayUrl) return
     let cancelled = false
-    fetch(displayUrl, { headers: { 'X-Api-Key': apiKey } })
-      .then((r) => r.ok ? r.blob() : Promise.reject())
-      .then((blob) => {
-        if (!cancelled) setBlobUrl(URL.createObjectURL(blob))
+    let ownUrl = null
+    getThumb(upload.id, displayUrl, apiKey)
+      .then((url) => {
+        if (!cancelled) { ownUrl = url; setBlobUrl(url) }
+        else URL.revokeObjectURL(url)
       })
       .catch(() => {})
-    return () => { cancelled = true }
-  }, [displayUrl, apiKey])
+    return () => { cancelled = true; if (ownUrl) URL.revokeObjectURL(ownUrl) }
+  }, [upload.id, displayUrl, apiKey])
 
   const saturate = isComposted ? { filter: 'saturate(0.4) opacity(0.7)' } : {}
   const rotate = upload.rotation ? { transform: `rotate(${upload.rotation}deg)` } : {}
@@ -128,6 +131,16 @@ function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate }) {
           </svg>
         </button>
       )}
+
+      {/* Arrival animation overlay — shown for newly arrived items */}
+      {isNew && (
+        <div
+          className="absolute inset-0 rounded overflow-hidden flex items-center justify-center pointer-events-none"
+          style={{ background: 'rgba(242, 238, 223, 0.88)' }}
+        >
+          <OliveBranchArrival withWordmark={false} width={80} onComplete={onArrivalComplete} />
+        </div>
+      )}
     </div>
   )
 }
@@ -139,7 +152,11 @@ function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey, exclu
   const [nextCursor, setNextCursor] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [newlyArrivedIds, setNewlyArrivedIds] = useState(new Set())
   const rowRef = useRef(null)
+  // Tracks IDs seen in the last fetch; null until the initial load completes.
+  const knownIdsRef = useRef(null)
+  const isJustArrived = plot.name === JUST_ARRIVED_SENTINEL
 
   const buildUrl = useCallback((cursor) => {
     const params = new URLSearchParams({ limit: '50' })
@@ -157,9 +174,16 @@ function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey, exclu
     setLoading(true)
     setItems([])
     setNextCursor(null)
+    knownIdsRef.current = null
     apiFetch(buildUrl(null), apiKey)
       .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then((data) => { setItems(data.items ?? []); setNextCursor(data.next_cursor ?? null) })
+      .then((data) => {
+        const newItems = data.items ?? []
+        setItems(newItems)
+        setNextCursor(data.next_cursor ?? null)
+        // Seed known IDs — no animation on initial load.
+        if (isJustArrived) knownIdsRef.current = new Set(newItems.map((i) => i.id))
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [buildUrl, apiKey])
@@ -169,7 +193,18 @@ function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey, exclu
     if (refreshKey === 0) return
     apiFetch(buildUrl(null), apiKey)
       .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((data) => { setItems(data.items ?? []); setNextCursor(data.next_cursor ?? null) })
+      .then((data) => {
+        const newItems = data.items ?? []
+        setItems(newItems)
+        setNextCursor(data.next_cursor ?? null)
+        if (isJustArrived && knownIdsRef.current !== null) {
+          const arrived = newItems.filter((i) => !knownIdsRef.current.has(i.id))
+          if (arrived.length > 0) {
+            setNewlyArrivedIds((prev) => new Set([...prev, ...arrived.map((i) => i.id)]))
+          }
+          knownIdsRef.current = new Set(newItems.map((i) => i.id))
+        }
+      })
       .catch(() => {})
   }, [refreshKey])
 
@@ -222,7 +257,11 @@ function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, refreshKey, exclu
     <div ref={rowRef} className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
       {visibleItems.map((upload) => (
         <PlotThumbCard key={upload.id} upload={upload} apiKey={apiKey}
-          onTagClick={onTagClick} onVideoPlay={onVideoPlay} onRotate={handleRotateItem} />
+          onTagClick={onTagClick} onVideoPlay={onVideoPlay} onRotate={handleRotateItem}
+          isNew={newlyArrivedIds.has(upload.id)}
+          onArrivalComplete={() => setNewlyArrivedIds((prev) => {
+            const next = new Set(prev); next.delete(upload.id); return next
+          })} />
       ))}
       {nextCursor && (
         <button
@@ -504,6 +543,12 @@ export function GardenPage() {
   const systemPlot = plots.find((p) => p.is_system_defined)
   const userPlots = plots.filter((p) => !p.is_system_defined)
   const userPlotIds = userPlots.map((p) => p.id)
+
+  // Poll all plot rows every 30 seconds to pick up newly arrived items.
+  useEffect(() => {
+    const id = setInterval(() => setPlotRefreshKey((k) => k + 1), 30_000)
+    return () => clearInterval(id)
+  }, [])
 
   useEffect(() => {
     document.title = 'Garden · Heirlooms'

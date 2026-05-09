@@ -6,6 +6,37 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-09 — Web: Just arrived fixes + thumbnail cache
+
+Three bugs in the webapp's Garden / Just arrived view, mirroring issues previously
+fixed in the Android app:
+
+**30-second polling.** `GardenPage` had `plotRefreshKey` wired correctly but nothing
+ever incremented it on a timer. Added a `setInterval` (30 000 ms) in a `useEffect`
+that bumps the key; all plot rows silently re-fetch on each tick.
+
+**Arrival animation.** `OliveBranchArrival` existed but was never used in the Garden.
+Added `knownIdsRef` (a `useRef`, seeded on initial load) and `newlyArrivedIds` state
+to `PlotItemsRow`. On each silent refresh, items not seen in the previous fetch are
+added to `newlyArrivedIds`; each matching `PlotThumbCard` renders an `OliveBranchArrival`
+overlay (88% parchment background, `withWordmark=false`, `pointer-events-none`) that
+dismisses itself after the 3 s animation. Animation-only for the Just arrived system
+plot — user-defined plot rows refresh silently without animation. `OliveBranchArrival`'s
+`useEffect` now depends on `[]` (runs once on mount) with a `onCompleteRef` kept in
+sync on every render, so per-tile inline callbacks no longer restart the animation.
+
+**Thumbnail cache.** New `src/thumbCache.js`: module-level in-memory LRU Map (300
+Blob entries, oldest evicted) backed by the browser's Cache API (500 entries,
+`heirlooms-thumbs-v1`). `getThumb(uploadId, fetchUrl, apiKey)` returns a fresh
+object URL on each call — callers own it and revoke it. Memory layer eliminates
+re-fetches when navigating away and back within a session; Cache API layer survives
+page reloads (equivalent to Coil's 50 MB disk cache on Android). Used in both
+`PlotThumbCard` (GardenPage) and `Thumb` (PhotoGrid / Explore).
+
+Deployed to Cloud Run (heirlooms-web).
+
+---
+
 ## Session — 2026-05-09 — v0.26.1: Explore filter tags use TagInputField
 
 The Explore filter sheet's Tags section was still using `FilterChip` toggles

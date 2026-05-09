@@ -18,6 +18,10 @@ export function OliveBranchArrival({
   style,
 }) {
   const svgRef = useRef(null)
+  // Keep a ref so the animation effect (which runs once) always calls the
+  // latest onComplete without restarting when the callback reference changes.
+  const onCompleteRef = useRef(onComplete)
+  useEffect(() => { onCompleteRef.current = onComplete })
 
   useEffect(() => {
     const svg = svgRef.current
@@ -33,7 +37,7 @@ export function OliveBranchArrival({
 
     if (prefersReducedMotion()) {
       applyProgress(svg, 1)
-      const t = setTimeout(() => onComplete?.(), 0)
+      const t = setTimeout(() => onCompleteRef.current?.(), 0)
       return () => clearTimeout(t)
     }
 
@@ -45,12 +49,13 @@ export function OliveBranchArrival({
       if (t < 1) {
         raf = requestAnimationFrame(tick)
       } else {
-        onComplete?.()
+        onCompleteRef.current?.()
       }
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [onComplete])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <svg
