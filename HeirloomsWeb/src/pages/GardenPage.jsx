@@ -854,6 +854,7 @@ export function GardenPage() {
       } catch (err) {
         setUploadError(`Couldn't upload "${file.name}".`)
         setUploadStatus('')
+        setTimeout(() => setUploadError(null), 4000)
       }
     }
   }
