@@ -312,9 +312,9 @@ function ExploreFlavour({ upload, blobUrl, capsules, isComposted, composting, co
             />
           )}
         </div>
-        {upload.capturedAt && (
+        {upload.takenAt && (
           <p className="text-sm text-text-body">
-            Taken {formatUploadDate(upload.capturedAt)}
+            Taken {formatUploadDate(upload.takenAt)}
           </p>
         )}
         <p className="text-sm text-text-muted">Uploaded {formatUploadDate(upload.uploadedAt)}</p>

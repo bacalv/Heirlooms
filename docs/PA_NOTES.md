@@ -145,6 +145,48 @@ re-run; the script is idempotent so successfully imported rows are skipped on re
 
 ---
 
+## M7 E2EE — key design decisions
+
+**Algorithm ID registry (M7):** Four IDs are defined in `AlgorithmIds` in `EnvelopeFormat.kt`:
+`aes256gcm-v1`, `master-aes256gcm-v1`, `p256-ecdh-hkdf-aes256gcm-v1`, `argon2id-aes256gcm-v1`.
+Unknown IDs fail loudly. Symmetric and asymmetric IDs are in disjoint sets; calling the wrong
+validator with the wrong ID throws immediately.
+
+**BouncyCastle is test-only:** The server never decrypts. BouncyCastle appears only in
+`testImplementation` and is used by `EnvelopeFormatTest` and `SchemaMigrationTest` to generate
+reference envelopes. Production code has no crypto library dependency beyond `javax.crypto` (for
+the server-side Flyway / DB operations, not crypto). The `EnvelopeFormat` library only validates
+structure.
+
+**`pending_blobs` table (V12):** Tracks GCS objects uploaded but not yet confirmed (both from
+direct-upload initiate and from migration new-blob uploads). Rows are deleted on successful
+`/confirm` or `/migrate`. A background job (E2) deletes rows older than 24h and their blobs. This
+is the answer to orphaned-blob accumulation from any failure between upload and confirm.
+
+**`user_id = NULL` as M7 sentinel for `wrapped_keys`:** Same pattern as `owner_user_id = NULL`
+for plots in v0.23.0. All `wrapped_keys` rows in M7 have `user_id = NULL`. At M8, this becomes
+`NOT NULL` with a FK to the users table. Search for `user_id` in `wrapped_keys` when implementing
+M8.
+
+**`recovery_passphrase` M8 upgrade path is rough:** The single-row constraint (`id INTEGER DEFAULT 1
+CHECK (id = 1)`) works for M7 but the M8 upgrade requires a non-trivial migration: add `user_id`
+column, drop `id` column, make `user_id` the PK. It's a single row so data migration is trivial,
+but the schema change needs explicit planning. Flag this in the M8 brief.
+
+**Dedup skipped for encrypted uploads:** `findByContentHash` dedup guard is not called for
+`storage_class='encrypted'` uploads. Ciphertext is non-deterministic (different DEK + nonce each
+time), so the hash never matches. Plaintext-based dedup is incompatible with E2EE; accepted
+trade-off is that duplicate uploads produce duplicate rows. Implemented in E2.
+
+**Testcontainers Docker API version note:** The schema migration tests (`SchemaMigrationTest`) use
+testcontainers 2.0.5 (same as HeirloomsTest) with `GenericContainer("postgres:16")` rather than
+`PostgreSQLContainer`. Reason: testcontainers 1.x bundles docker-java that requests Docker API
+v1.32, which Docker Engine 29.x rejects (minimum 1.40). testcontainers 2.0.5 uses docker-java
+3.7.x which negotiates correctly. The `postgresql` module has no 2.0.5 release; `GenericContainer`
+with manual env vars achieves the same result.
+
+---
+
 ## Things that tripped us up (don't repeat)
 
 - ~/.testcontainers.properties must use docker.raw.sock not docker.sock

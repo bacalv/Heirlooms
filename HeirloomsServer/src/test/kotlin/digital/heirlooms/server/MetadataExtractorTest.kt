@@ -96,7 +96,7 @@ class MetadataExtractorTest {
     fun `unsupported MIME type returns all nulls`() {
         val result = extractor.extract(byteArrayOf(1, 2, 3), "audio/mpeg")
 
-        assertNull(result.capturedAt)
+        assertNull(result.takenAt)
         assertNull(result.latitude)
         assertNull(result.longitude)
         assertNull(result.altitude)

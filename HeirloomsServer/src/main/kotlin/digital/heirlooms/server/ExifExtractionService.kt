@@ -32,7 +32,7 @@ class ExifExtractionService(
 
             database.updateExif(
                 id,
-                capturedAt  = meta.capturedAt,
+                takenAt  = meta.takenAt,
                 latitude    = meta.latitude,
                 longitude   = meta.longitude,
                 altitude    = meta.altitude,

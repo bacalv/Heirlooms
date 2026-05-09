@@ -455,7 +455,7 @@ internal fun ExploreFlavour(
         }
 
         Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
-            upload.capturedAt?.let {
+            upload.takenAt?.let {
                 Text("Taken ${formatInstantDate(it)}", style = MaterialTheme.typography.bodyMedium, color = Forest)
                 Spacer(Modifier.height(4.dp))
             }

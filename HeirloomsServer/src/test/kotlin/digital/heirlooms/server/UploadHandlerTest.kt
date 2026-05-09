@@ -849,42 +849,42 @@ class FinUploadHandlerTest {
     @Test
     fun `GET uploads with tag param passes tag to database`() {
         val tagged = knownRecord.copy(tags = listOf("family"))
-        every { mockDatabase.listUploadsPaginated(any(), any(), tag = "family", excludeTag = null) } returns UploadPage(listOf(tagged), null)
+        every { mockDatabase.listUploadsPaginated(any(), any(), tags = listOf("family"), excludeTag = null) } returns UploadPage(listOf(tagged), null)
         every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads?tag=family"))
 
         assertEquals(OK, response.status)
         assertTrue(response.bodyString().contains("family"))
-        verify { mockDatabase.listUploadsPaginated(any(), any(), tag = "family", excludeTag = null) }
+        verify { mockDatabase.listUploadsPaginated(any(), any(), tags = listOf("family"), excludeTag = null) }
     }
 
     @Test
     fun `GET uploads with exclude_tag param passes excludeTag to database`() {
-        every { mockDatabase.listUploadsPaginated(any(), any(), tag = null, excludeTag = "trash") } returns UploadPage(listOf(knownRecord), null)
+        every { mockDatabase.listUploadsPaginated(any(), any(), tags = emptyList(), excludeTag = "trash") } returns UploadPage(listOf(knownRecord), null)
         every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads?exclude_tag=trash"))
 
         assertEquals(OK, response.status)
-        verify { mockDatabase.listUploadsPaginated(any(), any(), tag = null, excludeTag = "trash") }
+        verify { mockDatabase.listUploadsPaginated(any(), any(), tags = emptyList(), excludeTag = "trash") }
     }
 
     @Test
     fun `GET uploads with both tag and exclude_tag passes both to database`() {
         val tagged = knownRecord.copy(tags = listOf("family"))
-        every { mockDatabase.listUploadsPaginated(any(), any(), tag = "family", excludeTag = "trash") } returns UploadPage(listOf(tagged), null)
+        every { mockDatabase.listUploadsPaginated(any(), any(), tags = listOf("family"), excludeTag = "trash") } returns UploadPage(listOf(tagged), null)
         every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads?tag=family&exclude_tag=trash"))
 
         assertEquals(OK, response.status)
-        verify { mockDatabase.listUploadsPaginated(any(), any(), tag = "family", excludeTag = "trash") }
+        verify { mockDatabase.listUploadsPaginated(any(), any(), tags = listOf("family"), excludeTag = "trash") }
     }
 
     @Test
     fun `GET uploads with unknown tag returns empty items`() {
-        every { mockDatabase.listUploadsPaginated(any(), any(), tag = "nonexistent", excludeTag = null) } returns UploadPage(emptyList(), null)
+        every { mockDatabase.listUploadsPaginated(any(), any(), tags = listOf("nonexistent"), excludeTag = null) } returns UploadPage(emptyList(), null)
         every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads?tag=nonexistent"))

@@ -1,6 +1,6 @@
 # Heirlooms — Idioms & Brand Language
 
-**Status:** established at v0.17.0, 7 May 2026; vocabulary cleanup at v0.20.3, 10 May 2026; plot system at v0.24.0, 8 May 2026.
+**Status:** established at v0.17.0, 7 May 2026; vocabulary cleanup at v0.20.3, 10 May 2026; plot system at v0.24.0, 8 May 2026; E2EE terms at v0.26.0, 9 May 2026.
 **Purpose:** A working glossary of the product's vocabulary — what each term
 means in this world, where it appears, and what it should never be confused with.
 Consult this when writing copy, naming things in code, or deciding what to call
@@ -497,3 +497,77 @@ with a separator between it and the positive actions above.
 
 If none of the above, a neutral technical name is fine — but record the choice
 here if it's user-facing.
+
+---
+
+## E2EE concepts (M7 onwards)
+
+The following terms apply to the vault encryption system added in M7. They are internal/technical
+vocabulary — not user-facing except where noted. User-facing copy for the recovery and onboarding
+flows is in BRAND.md.
+
+### Envelope
+
+The binary container format wrapping any encrypted blob in Heirlooms. Each envelope carries its
+version byte and algorithm identifier so it is fully self-describing. The format is specified in
+full in `docs/envelope_format.md`. All encrypted blobs — file bytes, thumbnails, metadata, capsule
+messages, wrapped keys — use the same envelope format.
+
+**Appears in:** code (`EnvelopeFormat.kt`), `docs/envelope_format.md`.
+
+**Does not appear in:** user-facing copy.
+
+---
+
+### DEK (Data Encryption Key)
+
+A randomly generated 256-bit AES key used to encrypt the bytes of a single upload (file content,
+thumbnail, and sensitive EXIF metadata). One DEK per upload. The DEK is never stored in plaintext
+— it is always wrapped (encrypted) under the master key before being stored in `uploads.wrapped_dek`.
+
+**Appears in:** code (`wrapped_dek`, `dek_format`, `wrapped_thumbnail_dek`).
+
+**Does not appear in:** user-facing copy.
+
+---
+
+### Master key
+
+A single 256-bit random key that acts as the root of the user's encryption hierarchy. DEKs are
+wrapped under the master key. The master key is generated on first device setup and is never stored
+in plaintext on the server. It lives in hardware (Android Keystore, iOS Secure Enclave) on the
+primary device and in memory only on the web client (re-derived from passphrase each session).
+
+The master key and the 24-word recovery phrase are the same thing in different presentations.
+
+**Appears in:** internal code, onboarding flow (as "your master key").
+
+**Does not appear in:** routine user-facing copy; users see the recovery phrase, not the key itself.
+
+---
+
+### Wrapped key
+
+A key encrypted under another key. Used to describe any instance where one key secures another:
+the DEK wrapped under the master key, or the master key wrapped under a device public key. Stored
+in `uploads.wrapped_dek` and `wrapped_keys.wrapped_master_key` respectively.
+
+**Appears in:** code, schema column names, `docs/envelope_format.md`.
+
+---
+
+### Storage class
+
+A first-class property of every upload and capsule message that records how its content is stored.
+M7 values:
+
+- `encrypted` — content is E2EE; server holds ciphertext only. Default for all new uploads.
+- `legacy_plaintext` — pre-M7 content; server can read it. Cannot be created via API; exists only
+  on rows backfilled at M7 deploy time. Retired by client-driven migration.
+- `public` — admitted in the schema; rejected at the API layer until a later milestone.
+
+**Appears in:** `uploads.storage_class`, `capsule_messages.storage_class`, API responses,
+client display dispatch logic.
+
+**Does not appear in:** user-facing copy (users see encrypted/unencrypted states via UI treatment,
+not raw class names).

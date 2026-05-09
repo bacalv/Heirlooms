@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "digital.heirlooms"
-version = "0.13.0"
+version = "0.26.0"
 
 repositories {
     mavenCentral()
@@ -49,6 +49,10 @@ dependencies {
     testImplementation("org.http4k:http4k-testing-hamkrest:$http4kVersion")
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.1")
     testImplementation("io.mockk:mockk:1.13.9")
+    testImplementation("org.bouncycastle:bcprov-jdk18on:1.79")
+    testImplementation("org.testcontainers:testcontainers:2.0.5")
+    testImplementation("org.testcontainers:testcontainers-junit-jupiter:2.0.5")
+    testImplementation("org.slf4j:slf4j-simple:2.0.13")
 }
 
 application {
@@ -57,6 +61,15 @@ application {
 
 tasks.test {
     useJUnitPlatform()
+
+    environment("TESTCONTAINERS_RYUK_DISABLED", "true")
+
+    val dockerHost = System.getenv("DOCKER_HOST")
+        ?: "unix:///Users/bac/Library/Containers/com.docker.docker/Data/docker.raw.sock"
+    val dockerSocket = System.getenv("TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE")
+        ?: dockerHost.removePrefix("unix://")
+    environment("DOCKER_HOST", dockerHost)
+    environment("TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE", dockerSocket)
 }
 
 kotlin {

@@ -10,7 +10,7 @@ const mockUpload = {
   mimeType: 'image/jpeg',
   fileSize: 2048,
   uploadedAt: '2026-05-01T10:00:00Z',
-  capturedAt: '2026-04-28T08:00:00Z',
+  takenAt: '2026-04-28T08:00:00Z',
   latitude: 51.5074,
   longitude: -0.1278,
   rotation: 0,

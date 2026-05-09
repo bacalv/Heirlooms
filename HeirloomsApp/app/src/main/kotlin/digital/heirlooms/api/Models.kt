@@ -10,7 +10,7 @@ data class Upload(
     val thumbnailKey: String?,
     val tags: List<String>,
     val compostedAt: String?,
-    val capturedAt: String?,
+    val takenAt: String?,
     val latitude: Double?,
     val longitude: Double?,
     val lastViewedAt: String?,

@@ -19,7 +19,7 @@ private val METADATA_VIDEO_MIME_TYPES = setOf("video/mp4", "video/quicktime", "v
 val METADATA_SUPPORTED_MIME_TYPES = METADATA_IMAGE_MIME_TYPES + METADATA_VIDEO_MIME_TYPES
 
 data class MediaMetadata(
-    val capturedAt: Instant? = null,
+    val takenAt: Instant? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
     val altitude: Double? = null,
@@ -58,13 +58,13 @@ class MetadataExtractor {
                 }
             } else null
 
-            val capturedAt = extractCapturedAt(metadata)
+            val takenAt = extractTakenAt(metadata)
 
             val ifd0 = metadata.getFirstDirectoryOfType(ExifIFD0Directory::class.java)
             val make = ifd0?.getString(ExifIFD0Directory.TAG_MAKE)?.trim()?.takeIf { it.isNotBlank() }
             val model = ifd0?.getString(ExifIFD0Directory.TAG_MODEL)?.trim()?.takeIf { it.isNotBlank() }
 
-            MediaMetadata(capturedAt, latitude, longitude, altitude, make, model)
+            MediaMetadata(takenAt, latitude, longitude, altitude, make, model)
         } catch (_: Exception) {
             MediaMetadata()
         }
@@ -101,7 +101,7 @@ class MetadataExtractor {
             val root = mapper.readTree(json)
             val tags = root.path("format").path("tags")
 
-            val capturedAt = tags.path("creation_time").takeIf { !it.isMissingOrNull() }?.asText()?.let { parseInstant(it) }
+            val takenAt = tags.path("creation_time").takeIf { !it.isMissingOrNull() }?.asText()?.let { parseInstant(it) }
 
             val locationStr = tags.path("location").takeIf { !it.isMissingOrNull() }?.asText()
                 ?: tags.path("com.apple.quicktime.location.ISO6709").takeIf { !it.isMissingOrNull() }?.asText()
@@ -110,13 +110,13 @@ class MetadataExtractor {
             val make = tags.path("com.apple.quicktime.make").takeIf { !it.isMissingOrNull() }?.asText()?.trim()?.takeIf { it.isNotBlank() }
             val model = tags.path("com.apple.quicktime.model").takeIf { !it.isMissingOrNull() }?.asText()?.trim()?.takeIf { it.isNotBlank() }
 
-            MediaMetadata(capturedAt, latitude, longitude, altitude, make, model)
+            MediaMetadata(takenAt, latitude, longitude, altitude, make, model)
         } catch (_: Exception) {
             MediaMetadata()
         }
     }
 
-    private fun extractCapturedAt(metadata: com.drew.metadata.Metadata): Instant? {
+    private fun extractTakenAt(metadata: com.drew.metadata.Metadata): Instant? {
         val utc = TimeZone.getTimeZone("UTC")
         // 1. SubIFD DateTimeOriginal — standard capture time tag
         metadata.getFirstDirectoryOfType(ExifSubIFDDirectory::class.java)

@@ -198,7 +198,7 @@ fun ExploreScreen(
                         items(s.uploads, key = { it.id }) { upload ->
                             UploadThumbnail(
                                 upload = upload,
-                                showNoDateBadge = sortByTaken && upload.capturedAt == null,
+                                showNoDateBadge = sortByTaken && upload.takenAt == null,
                                 onClick = { onPhotoTap(upload.id) },
                             )
                         }

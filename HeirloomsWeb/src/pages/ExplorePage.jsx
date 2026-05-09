@@ -243,7 +243,7 @@ function ExploreGrid({ uploads, sort, includeComposted }) {
             className="relative aspect-square overflow-hidden rounded border border-forest-08 block hover:opacity-90 transition-opacity"
           >
             <ExploreThumb upload={upload} isComposted={isComposted} />
-            {showNoDate && !upload.capturedAt && <NoMetadataTag />}
+            {showNoDate && !upload.takenAt && <NoMetadataTag />}
           </Link>
         )
       })}

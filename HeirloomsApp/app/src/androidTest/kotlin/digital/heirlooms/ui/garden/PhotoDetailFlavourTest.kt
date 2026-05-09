@@ -40,7 +40,7 @@ class PhotoDetailFlavourTest {
         thumbnailKey = null,
         tags = emptyList(),
         compostedAt = null,
-        capturedAt = null,
+        takenAt = null,
         latitude = null,
         longitude = null,
         lastViewedAt = null,

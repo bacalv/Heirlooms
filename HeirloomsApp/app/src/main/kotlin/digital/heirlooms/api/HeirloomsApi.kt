@@ -182,7 +182,7 @@ class HeirloomsApi(
         thumbnailKey = optString("thumbnailKey").takeIf { it.isNotEmpty() && it != "null" },
         tags = getJSONArray("tags").let { arr -> (0 until arr.length()).map { arr.getString(it) } },
         compostedAt = optString("compostedAt").takeIf { it.isNotEmpty() && it != "null" },
-        capturedAt = optString("capturedAt").takeIf { it.isNotEmpty() && it != "null" },
+        takenAt = optString("takenAt").takeIf { it.isNotEmpty() && it != "null" },
         latitude = if (has("latitude") && !isNull("latitude")) getDouble("latitude") else null,
         longitude = if (has("longitude") && !isNull("longitude")) getDouble("longitude") else null,
         lastViewedAt = optString("lastViewedAt").takeIf { it.isNotEmpty() && it != "null" },

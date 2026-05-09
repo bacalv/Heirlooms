@@ -2,6 +2,21 @@
 
 ---
 
+## v0.26.0 — M7 E1: schema foundations + envelope format (9 May 2026)
+
+- Renamed `captured_at` → `taken_at` across schema, server, Android, and web. API JSON
+  field is now `takenAt`.
+- V12: renamed column; added `wrapped_keys`, `recovery_passphrase`, `pending_blobs` tables.
+- V13: added `storage_class` + E2EE columns to `uploads`; existing rows backfilled as
+  `legacy_plaintext`; storage-class consistency constraint added.
+- V14: added `storage_class` + E2EE columns to `capsule_messages`; `body` made nullable.
+- `EnvelopeFormat.kt`: server-side structural validator for encrypted envelopes; no
+  production crypto dependency.
+- 22 new tests (envelope format unit tests + schema canary tests).
+- Fixed 6 pre-existing stale MockK matchers in `UploadHandlerTest` (`tag` → `tags`).
+
+---
+
 ## v0.25.7 — Video player: auth + sizing (8 May 2026)
 
 - `VideoPlayer` used ExoPlayer's default HTTP stack — no `X-Api-Key` header, so every

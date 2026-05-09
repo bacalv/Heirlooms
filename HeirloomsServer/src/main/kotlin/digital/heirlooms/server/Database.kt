@@ -54,7 +54,7 @@ data class UploadRecord(
     val uploadedAt: Instant = Instant.now(),
     val contentHash: String? = null,
     val thumbnailKey: String? = null,
-    val capturedAt: Instant? = null,
+    val takenAt: Instant? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
     val altitude: Double? = null,
@@ -103,7 +103,7 @@ class Database(private val dataSource: DataSource) {
             conn.prepareStatement(
                 """INSERT INTO uploads
                    (id, storage_key, mime_type, file_size, content_hash, thumbnail_key,
-                    captured_at, latitude, longitude, altitude, device_make, device_model,
+                    taken_at, latitude, longitude, altitude, device_make, device_model,
                     exif_processed_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
             ).use { stmt ->
@@ -113,7 +113,7 @@ class Database(private val dataSource: DataSource) {
                 stmt.setLong(4, record.fileSize)
                 stmt.setString(5, record.contentHash)
                 stmt.setString(6, record.thumbnailKey)
-                stmt.setTimestamp(7, record.capturedAt?.let { Timestamp.from(it) })
+                stmt.setTimestamp(7, record.takenAt?.let { Timestamp.from(it) })
                 stmt.setObject(8, record.latitude)
                 stmt.setObject(9, record.longitude)
                 stmt.setObject(10, record.altitude)
@@ -129,7 +129,7 @@ class Database(private val dataSource: DataSource) {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
-                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
+                          taken_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
                           composted_at, exif_processed_at, last_viewed_at
                    FROM uploads WHERE content_hash = ? LIMIT 1"""
             ).use { stmt ->
@@ -145,7 +145,7 @@ class Database(private val dataSource: DataSource) {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
-                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
+                          taken_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
                           composted_at, exif_processed_at, last_viewed_at
                    FROM uploads WHERE id = ?"""
             ).use { stmt ->
@@ -176,7 +176,7 @@ class Database(private val dataSource: DataSource) {
             val where = "WHERE ${conditions.joinToString(" AND ")}"
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
-                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
+                          taken_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
                           composted_at, exif_processed_at, last_viewed_at
                    FROM uploads $where ORDER BY uploaded_at DESC"""
             ).use { stmt ->
@@ -195,7 +195,7 @@ class Database(private val dataSource: DataSource) {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
-                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
+                          taken_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
                           composted_at, exif_processed_at, last_viewed_at
                    FROM uploads WHERE composted_at IS NOT NULL ORDER BY composted_at DESC"""
             ).use { stmt ->
@@ -218,7 +218,7 @@ class Database(private val dataSource: DataSource) {
         withTransaction { conn ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
-                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
+                          taken_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
                           composted_at
                    FROM uploads WHERE id = ? FOR UPDATE"""
             ).use { stmt ->
@@ -266,7 +266,7 @@ class Database(private val dataSource: DataSource) {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
-                          captured_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
+                          taken_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
                           composted_at, exif_processed_at, last_viewed_at
                    FROM uploads WHERE composted_at < NOW() - INTERVAL '90 days'"""
             ).use { stmt ->
@@ -683,7 +683,7 @@ class Database(private val dataSource: DataSource) {
     private fun queryUploadsForCapsule(conn: Connection, capsuleId: UUID): List<UploadRecord> =
         conn.prepareStatement(
             """SELECT u.id, u.storage_key, u.mime_type, u.file_size, u.uploaded_at, u.content_hash,
-                      u.thumbnail_key, u.captured_at, u.latitude, u.longitude, u.altitude,
+                      u.thumbnail_key, u.taken_at, u.latitude, u.longitude, u.altitude,
                       u.device_make, u.device_model, u.rotation, u.tags, u.composted_at,
                       u.exif_processed_at, u.last_viewed_at
                FROM uploads u
@@ -811,13 +811,13 @@ class Database(private val dataSource: DataSource) {
             val orderBy = when (effectiveSort) {
                 UploadSort.UPLOAD_NEWEST -> "ORDER BY uploaded_at DESC, id DESC"
                 UploadSort.UPLOAD_OLDEST -> "ORDER BY uploaded_at ASC, id ASC"
-                UploadSort.TAKEN_NEWEST  -> "ORDER BY captured_at DESC NULLS LAST, id DESC"
-                UploadSort.TAKEN_OLDEST  -> "ORDER BY captured_at ASC NULLS LAST, id ASC"
+                UploadSort.TAKEN_NEWEST  -> "ORDER BY taken_at DESC NULLS LAST, id DESC"
+                UploadSort.TAKEN_OLDEST  -> "ORDER BY taken_at ASC NULLS LAST, id ASC"
             }
 
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash,
-                          thumbnail_key, captured_at, latitude, longitude, altitude,
+                          thumbnail_key, taken_at, latitude, longitude, altitude,
                           device_make, device_model, rotation, tags, composted_at, exif_processed_at,
                           last_viewed_at
                    FROM uploads $where $orderBy LIMIT ?"""
@@ -857,12 +857,12 @@ class Database(private val dataSource: DataSource) {
         UploadSort.TAKEN_NEWEST -> {
             if (cursor.sortKeyMs != null) {
                 val ts = Timestamp.from(Instant.ofEpochMilli(cursor.sortKeyMs))
-                "(captured_at < ? OR (captured_at = ? AND id < ?::uuid) OR captured_at IS NULL)" to { stmt, idx ->
+                "(taken_at < ? OR (taken_at = ? AND id < ?::uuid) OR taken_at IS NULL)" to { stmt, idx ->
                     stmt.setTimestamp(idx, ts); stmt.setTimestamp(idx + 1, ts)
                     stmt.setString(idx + 2, cursor.id.toString()); idx + 3
                 }
             } else {
-                "(captured_at IS NULL AND id < ?::uuid)" to { stmt, idx ->
+                "(taken_at IS NULL AND id < ?::uuid)" to { stmt, idx ->
                     stmt.setString(idx, cursor.id.toString()); idx + 1
                 }
             }
@@ -870,12 +870,12 @@ class Database(private val dataSource: DataSource) {
         UploadSort.TAKEN_OLDEST -> {
             if (cursor.sortKeyMs != null) {
                 val ts = Timestamp.from(Instant.ofEpochMilli(cursor.sortKeyMs))
-                "(captured_at > ? OR (captured_at = ? AND id > ?::uuid) OR captured_at IS NULL)" to { stmt, idx ->
+                "(taken_at > ? OR (taken_at = ? AND id > ?::uuid) OR taken_at IS NULL)" to { stmt, idx ->
                     stmt.setTimestamp(idx, ts); stmt.setTimestamp(idx + 1, ts)
                     stmt.setString(idx + 2, cursor.id.toString()); idx + 3
                 }
             } else {
-                "(captured_at IS NULL AND id > ?::uuid)" to { stmt, idx ->
+                "(taken_at IS NULL AND id > ?::uuid)" to { stmt, idx ->
                     stmt.setString(idx, cursor.id.toString()); idx + 1
                 }
             }
@@ -892,7 +892,7 @@ class Database(private val dataSource: DataSource) {
                 "WHERE composted_at IS NOT NULL"
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash,
-                          thumbnail_key, captured_at, latitude, longitude, altitude,
+                          thumbnail_key, taken_at, latitude, longitude, altitude,
                           device_make, device_model, rotation, tags, composted_at, exif_processed_at,
                           last_viewed_at
                    FROM uploads $where
@@ -947,7 +947,7 @@ class Database(private val dataSource: DataSource) {
 
     fun updateExif(
         id: UUID,
-        capturedAt: Instant?,
+        takenAt: Instant?,
         latitude: Double?,
         longitude: Double?,
         altitude: Double?,
@@ -957,11 +957,11 @@ class Database(private val dataSource: DataSource) {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
                 """UPDATE uploads
-                   SET captured_at = ?, latitude = ?, longitude = ?, altitude = ?,
+                   SET taken_at = ?, latitude = ?, longitude = ?, altitude = ?,
                        device_make = ?, device_model = ?, exif_processed_at = NOW()
                    WHERE id = ?"""
             ).use { stmt ->
-                stmt.setTimestamp(1, capturedAt?.let { Timestamp.from(it) })
+                stmt.setTimestamp(1, takenAt?.let { Timestamp.from(it) })
                 stmt.setObject(2, latitude)
                 stmt.setObject(3, longitude)
                 stmt.setObject(4, altitude)
@@ -1164,7 +1164,7 @@ class Database(private val dataSource: DataSource) {
     private fun encodeCursor(record: UploadRecord, sort: UploadSort): String {
         val sortKeyMs = when (sort) {
             UploadSort.UPLOAD_NEWEST, UploadSort.UPLOAD_OLDEST -> record.uploadedAt.toEpochMilli()
-            UploadSort.TAKEN_NEWEST, UploadSort.TAKEN_OLDEST   -> record.capturedAt?.toEpochMilli()
+            UploadSort.TAKEN_NEWEST, UploadSort.TAKEN_OLDEST   -> record.takenAt?.toEpochMilli()
         }
         val raw = "${sort.name}:${sortKeyMs ?: "null"}:${record.id}"
         return Base64.getUrlEncoder().withoutPadding().encodeToString(raw.toByteArray())
@@ -1245,7 +1245,7 @@ internal fun UploadRecord.toJson(): String {
     if (thumbnailKey != null) node.put("thumbnailKey", thumbnailKey) else node.putNull("thumbnailKey")
     val tagsNode = node.putArray("tags")
     tags.forEach { tagsNode.add(it) }
-    if (capturedAt != null) node.put("capturedAt", capturedAt.toString())
+    if (takenAt != null) node.put("takenAt", takenAt.toString())
     if (latitude != null) node.put("latitude", latitude)
     if (longitude != null) node.put("longitude", longitude)
     if (altitude != null) node.put("altitude", altitude)
@@ -1275,7 +1275,7 @@ private fun java.sql.ResultSet.toUploadRecord() = UploadRecord(
     uploadedAt = getTimestamp("uploaded_at").toInstant(),
     contentHash = getString("content_hash"),
     thumbnailKey = getString("thumbnail_key"),
-    capturedAt = getTimestamp("captured_at")?.toInstant(),
+    takenAt = getTimestamp("taken_at")?.toInstant(),
     latitude = getDouble("latitude").takeUnless { wasNull() },
     longitude = getDouble("longitude").takeUnless { wasNull() },
     altitude = getDouble("altitude").takeUnless { wasNull() },
