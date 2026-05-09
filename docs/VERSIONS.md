@@ -2,6 +2,32 @@
 
 ---
 
+## v0.31.0 — Android: Garden Plant button (10 May 2026)
+
+First Android APK release since v0.28.1. Also picks up the E5 Android changes
+(VaultSetupScreen copy, storageClass rename) that shipped in v0.30.0 server/web but
+had no corresponding APK at the time.
+
+- **Plant FAB** — Forest-coloured floating action button (bottom-right of Garden).
+  Tapping opens a `ModalBottomSheet` with three options: Photo, Video, File.
+- **Photo capture** — launches system camera via `TakePicture`; on return shows
+  `PlantPreviewOverlay` with the captured JPEG rendered full-screen via Coil. "Retake"
+  re-launches the camera immediately. "Plant" enqueues an `UploadWorker` job using the
+  file written to `cacheDir` by the camera — no copy needed.
+- **Video capture** — same flow via `CaptureVideo`; preview plays back in-app via
+  ExoPlayer (already a dep from `PhotoDetailScreen`).
+- **File picker** — `OpenDocument(*/*)`; any file type accepted. Preview shows the file
+  name resolved from `OpenableColumns.DISPLAY_NAME` and a drive-file icon. File is
+  copied to `cacheDir` before enqueueing (content URI access is only valid while the
+  Activity is alive).
+- **Back gesture** — `BackHandler` resets the plant flow at any point without uploading.
+- **FileProvider** — added to `AndroidManifest.xml` with a `cache-path` provider; required
+  for passing a writable output URI to the system camera.
+- Upload appears in Just Arrived via the existing 30-second poll — no new API.
+- versionCode 33. Installed on Samsung Galaxy A02s (SM-A025F, Android 12).
+
+---
+
 ## v0.30.0 — M7 E5: storage class rename, web EXIF, onboarding copy (9–10 May 2026)
 
 Final M7 increment. No new cryptographic operations; no new API endpoints.

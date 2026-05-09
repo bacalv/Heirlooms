@@ -2921,3 +2921,67 @@ via `setTimeout(..., 4000)` in the catch block.
 - End-to-end confirmed: planted a JPEG from the web; Garden showed decrypted thumbnail.
 
 **M7 complete. Next: M8 — multi-user.**
+
+---
+
+## Session — 10 May 2026 (Android: Garden Plant button — v0.31.0)
+
+### What was built
+
+A Plant FAB in the Android Garden that lets the user capture and upload directly in-app —
+no camera app, no share sheet required. Three source options: Photo, Video, File (any type).
+
+### Brief
+
+`docs/briefs/plant_button_android.md` written before implementation. Key design decisions:
+in-screen state machine (no new Nav destination — avoids URI serialisation across Nav and
+simplifies retake flow); system camera intents (`TakePicture` / `CaptureVideo`) rather than
+CameraX (no CAMERA permission needed); ExoPlayer reused from `PhotoDetailScreen` for video
+preview; `copyContentUriToCache` for file-picker URIs mirrors `ShareActivity.copyToTempFile`.
+
+### New files
+
+- `PlantSheet.kt` — `ModalBottomSheet` with Photo / Video / File options. Also defines
+  `PlantType` enum and `PlantState` sealed class (`Idle`, `Preview(uri, mimeType, isFile)`,
+  `Queuing`) used by `GardenScreen`.
+- `PlantPreviewOverlay.kt` — full-screen composable. Photo: Coil `AsyncImage` with
+  `ContentScale.Fit`. Video: ExoPlayer wrapped in `AndroidView` (no auth interceptor needed
+  for local URIs). File: display name resolved from `OpenableColumns.DISPLAY_NAME` via
+  `LaunchedEffect` + `Dispatchers.IO`; drive-file icon shown. Bottom bar: "Retake" (photo
+  and video only) + "Plant".
+- `res/xml/file_provider_paths.xml` — `<cache-path name="captures" path="." />` covering
+  the `cacheDir` temp files written before launching the system camera.
+
+### Modified files
+
+- `GardenScreen.kt` — plant state vars, three `rememberLauncherForActivityResult` launchers
+  (OpenDocument, TakePicture, CaptureVideo), `launchCamera` local function (creates temp
+  file, gets FileProvider URI, stores reference for zero-copy upload), `BackHandler`,
+  FAB, `PlantSheet` conditional, `AnimatedVisibility` overlay switching between `Preview`
+  and `Queuing` states, `copyContentUriToCache` private suspend function at file bottom.
+  WorkManager enqueue mirrors `ShareActivity` (BackoffPolicy, UploadWorker.TAG, session tag).
+- `AndroidManifest.xml` — `FileProvider` declaration with `${applicationId}.fileprovider`
+  authority.
+- `app/build.gradle.kts` — versionCode 33, versionName "0.31.0".
+
+### Design decisions made
+
+**System camera, no CAMERA permission.** `TakePicture` / `CaptureVideo` launch the system
+camera app, which holds its own camera permission. Our app does not need to declare or
+request `CAMERA` — the system camera handles all of it transparently.
+
+**Zero-copy for camera captures.** The file is created before launching the camera (so we
+have the path). `TakePicture` writes directly into it. `onPlant` passes the absolute path
+straight to `UploadWorker` — no second copy. File-picker URIs (content://) do require a
+copy since `UploadWorker` needs a stable file path and content URI access expires with the
+Activity.
+
+**State machine in GardenScreen, not GardenViewModel.** Plant state is ephemeral UI — it
+doesn't survive config changes and doesn't need to (the camera intent will also re-trigger
+on rotation). Keeping it in the composable avoids adding VM complexity for a transient flow.
+
+### Test results
+
+- `./gradlew :app:compileDebugKotlin` — BUILD SUCCESSFUL, zero warnings.
+- Installed on Samsung Galaxy A02s (SM-A025F, Android 12) via USB. Photo capture,
+  preview, Plant, and Just Arrived appearance all confirmed working.

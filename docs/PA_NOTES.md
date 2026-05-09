@@ -24,7 +24,8 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.30.0 (9 May 2026) — M7 E5: storage class rename, web EXIF, onboarding copy. M7 complete.
+- Current version: v0.31.0 (10 May 2026) — Android: Garden Plant button (camera + file picker).
+  v0.30.0 = M7 E5: storage class rename, web EXIF, onboarding copy (server + web + minor Android).
   v0.29.0 = M7 E4: web client encryption. v0.28.1 = post-E3 device testing fixes.
   v0.28.0 = M7 E3: Android client encryption. v0.27.0 = M7 E2: backend API for E2EE.
   v0.26.0 = M7 E1: schema + envelope format. v0.25.x = M6 D4 Android + post-ship fixes.
