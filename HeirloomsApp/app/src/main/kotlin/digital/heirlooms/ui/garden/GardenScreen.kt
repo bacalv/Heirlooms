@@ -61,6 +61,7 @@ import digital.heirlooms.api.Upload
 import digital.heirlooms.ui.brand.OliveBranchArrival
 import digital.heirlooms.ui.common.HeirloomsImage
 import digital.heirlooms.ui.common.LocalHeirloomsApi
+import digital.heirlooms.ui.common.UploadThumbnail
 import digital.heirlooms.ui.common.TagInputField
 import digital.heirlooms.ui.share.RecentTagsStore
 import digital.heirlooms.ui.theme.Forest
@@ -263,8 +264,8 @@ private fun PlotRowSection(
                                     )
                                 }
                         ) {
-                            HeirloomsImage(
-                                url = LocalHeirloomsApi.current.thumbUrl(upload.id),
+                            UploadThumbnail(
+                                upload = upload,
                                 contentDescription = null,
                                 modifier = Modifier.fillMaxSize(),
                                 rotation = upload.rotation,

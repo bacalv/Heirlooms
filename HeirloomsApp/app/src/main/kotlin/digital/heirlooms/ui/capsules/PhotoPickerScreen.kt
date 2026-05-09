@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import digital.heirlooms.api.Upload
 import digital.heirlooms.ui.common.HeirloomsImage
+import digital.heirlooms.ui.common.UploadThumbnail
 import digital.heirlooms.ui.common.LocalHeirloomsApi
 import digital.heirlooms.ui.theme.Bloom
 import digital.heirlooms.ui.theme.Forest
@@ -161,8 +162,8 @@ fun PhotoPickerScreen(
                             else selectedIds + upload.id
                         }
                 ) {
-                    HeirloomsImage(
-                        url = api.thumbUrl(upload.id),
+                    UploadThumbnail(
+                        upload = upload,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                     )

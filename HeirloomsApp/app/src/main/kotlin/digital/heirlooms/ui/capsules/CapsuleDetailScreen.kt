@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import digital.heirlooms.api.CapsuleDetail
 import digital.heirlooms.ui.brand.AnimatedWaxSeal
 import digital.heirlooms.ui.common.HeirloomsImage
+import digital.heirlooms.ui.common.UploadThumbnail
 import digital.heirlooms.ui.common.LocalHeirloomsApi
 import digital.heirlooms.ui.common.formatInstantDate
 import digital.heirlooms.ui.common.formatOffsetDate
@@ -210,8 +211,8 @@ fun CapsuleDetailScreen(
                             maxItemsInEachRow = 2,
                         ) {
                             c.uploads.forEach { upload ->
-                                HeirloomsImage(
-                                    url = api.thumbUrl(upload.id),
+                                UploadThumbnail(
+                                    upload = upload,
                                     contentDescription = null,
                                     modifier = Modifier
                                         .weight(1f)

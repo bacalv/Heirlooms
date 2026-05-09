@@ -205,10 +205,8 @@ class UploadFilterApiTest {
     // ---- Just arrived -------------------------------------------------------
 
     @Test
-    fun `just_arrived=true returns only untagged unviewed items`() {
-        // A fresh upload with no tags should appear
+    fun `just_arrived=true returns untagged items and excludes tagged items`() {
         val untaggedId = uploadImage()
-        // A tagged upload should NOT appear
         val taggedId = uploadImage(tag = "d3-just-arrived-tagged")
 
         val data = listUploads("just_arrived=true")
@@ -218,22 +216,20 @@ class UploadFilterApiTest {
     }
 
     @Test
-    fun `just_arrived=true excludes item after it has been viewed`() {
+    fun `just_arrived=true keeps item after it has been viewed`() {
         val id = uploadImage()
-        // Verify it appears before viewing
         val before = listUploads("just_arrived=true")
         assertThat(itemIds(before)).contains(id)
 
-        // Record a view
+        // Record a view — should NOT remove from just_arrived
         val viewResp = client.newCall(
             Request.Builder().url("$base/api/content/uploads/$id/view")
                 .post("".toRequestBody()).build()
         ).execute()
         assertThat(viewResp.code).isEqualTo(204)
 
-        // Should no longer appear in just_arrived
         val after = listUploads("just_arrived=true")
-        assertThat(itemIds(after)).doesNotContain(id)
+        assertThat(itemIds(after)).contains(id)
     }
 
     // ---- Multi-filter combination -------------------------------------------

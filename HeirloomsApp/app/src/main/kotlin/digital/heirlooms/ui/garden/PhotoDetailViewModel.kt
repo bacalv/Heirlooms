@@ -53,6 +53,7 @@ class PhotoDetailViewModel(
     val stagedTags: StateFlow<List<String>?> = _stagedTags.asStateFlow()
 
     private val _stagedRotation = MutableStateFlow<Int?>(null)
+    val stagedRotation: StateFlow<Int?> = _stagedRotation.asStateFlow()
 
     val isDirty: StateFlow<Boolean> = combine(_stagedTags, _stagedRotation) { t, r ->
         t != null || r != null

@@ -68,6 +68,7 @@ import digital.heirlooms.api.Upload
 import digital.heirlooms.ui.common.HeirloomsImage
 import digital.heirlooms.ui.common.LocalHeirloomsApi
 import digital.heirlooms.ui.common.TagInputField
+import digital.heirlooms.ui.common.UploadThumbnail as CommonUploadThumbnail
 import digital.heirlooms.ui.garden.DidntTake
 import digital.heirlooms.ui.share.RecentTagsStore
 import digital.heirlooms.ui.theme.Forest
@@ -261,8 +262,8 @@ private fun UploadThumbnail(upload: Upload, showNoDateBadge: Boolean, onClick: (
             .clip(RoundedCornerShape(2.dp))
             .clickable(onClick = onClick)
     ) {
-        HeirloomsImage(
-            url = LocalHeirloomsApi.current.thumbUrl(upload.id),
+        CommonUploadThumbnail(
+            upload = upload,
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
             rotation = upload.rotation,

@@ -223,7 +223,7 @@ class Database(private val dataSource: DataSource) {
     fun recordView(id: UUID): Boolean {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
-                "UPDATE uploads SET last_viewed_at = NOW() WHERE id = ? AND last_viewed_at IS NULL"
+                "UPDATE uploads SET last_viewed_at = NOW() WHERE id = ?"
             ).use { stmt ->
                 stmt.setObject(1, id)
                 return stmt.executeUpdate() > 0
@@ -826,7 +826,6 @@ class Database(private val dataSource: DataSource) {
             val setters = mutableListOf<(PreparedStatement, Int) -> Int>()
 
             if (justArrived) {
-                conditions += "last_viewed_at IS NULL"
                 conditions += "tags = '{}'::text[]"
                 conditions += "composted_at IS NULL"
                 conditions += """NOT EXISTS (

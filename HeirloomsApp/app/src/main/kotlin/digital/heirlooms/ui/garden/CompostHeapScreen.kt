@@ -46,6 +46,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import digital.heirlooms.api.Upload
 import digital.heirlooms.ui.brand.compostHeapEmptyStateLines
 import digital.heirlooms.ui.common.HeirloomsImage
+import digital.heirlooms.ui.common.UploadThumbnail
 import digital.heirlooms.ui.common.LocalHeirloomsApi
 import digital.heirlooms.ui.common.daysUntilDeletion
 import digital.heirlooms.ui.common.formatInstantDate
@@ -130,8 +131,8 @@ private fun HeapRow(upload: Upload, onRestore: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        HeirloomsImage(
-            url = api.thumbUrl(upload.id),
+        UploadThumbnail(
+            upload = upload,
             contentDescription = null,
             modifier = Modifier.size(72.dp).clip(RoundedCornerShape(4.dp)),
             contentScale = ContentScale.Crop,
