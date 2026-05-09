@@ -341,6 +341,10 @@ internal fun GardenFlavour(
             )
 
             Spacer(Modifier.height(12.dp))
+            upload.takenAt?.let {
+                Text("Taken ${formatInstantDate(it)}", style = MaterialTheme.typography.bodyMedium, color = Forest)
+                Spacer(Modifier.height(4.dp))
+            }
             Text("Uploaded ${formatInstantDate(upload.uploadedAt)}", style = MaterialTheme.typography.bodySmall, color = TextMuted)
 
             val activeCapsules = capsuleRefs.filter { it.state == "open" || it.state == "sealed" }
