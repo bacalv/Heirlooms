@@ -2,6 +2,34 @@
 
 ---
 
+## v0.27.0 — M7 E2: backend API for E2EE (9 May 2026)
+
+- V15: `pending_device_links` table for the trusted-device key-wrap handshake.
+- `UploadRecord` extended with 9 E2EE fields; all SELECT queries updated to include them.
+- `POST /api/content/uploads/initiate` — E2EE-aware slot creation; creates two
+  `pending_blobs` rows for encrypted uploads (content + thumbnail), one for legacy.
+- `POST /api/content/uploads/confirm` — extended to accept encrypted path with envelope
+  validation (`EnvelopeFormat.validateSymmetric`); dedup guard bypassed for encrypted.
+- `POST /api/content/uploads/{id}/migrate` — atomically replaces a `legacy_plaintext`
+  upload with its encrypted equivalent; deletes old plaintext blobs from GCS.
+- `GET /uploads`, `GET /uploads/{id}`: `storageClass` field present on all rows;
+  E2EE fields (Base64-encoded) present on encrypted rows only.
+- `GET /uploads/{id}/thumb`: serves `thumbnailStorageKey` for encrypted rows.
+- `KeysHandler.kt` — full `/api/keys/` contract: device CRUD, passphrase CRUD,
+  4-step device-link flow (initiate → register → status poll → wrap).
+- `PendingBlobsCleanupService` — pending blob TTL cleanup (every 6 h) and dormant
+  device pruning >180 d (every 24 h); both jobs run at startup.
+- `S3FileStore` gains `DirectUploadSupport` — presigned PUT/GET URLs via `S3Presigner`
+  with path-style addressing (required for MinIO and S3 endpoint-override scenarios).
+- `run-tests.sh` fixed: was calling `./gradlew jar`; changed to `./gradlew shadowJar`
+  so the Docker image picks up the correct fat JAR.
+- 218 unit tests pass; 9/9 E2EE integration tests pass (BouncyCastle round-trip canary
+  + migration + device-link + edge cases). 8 pre-existing integration test failures
+  remain (`JSONArray` tests from before the paginated list was introduced) — unchanged.
+- Deployed: Cloud Run revision `heirlooms-server-00033-dqp`.
+
+---
+
 ## v0.26.0 — M7 E1: schema foundations + envelope format (9 May 2026)
 
 - Renamed `captured_at` → `taken_at` across schema, server, Android, and web. API JSON

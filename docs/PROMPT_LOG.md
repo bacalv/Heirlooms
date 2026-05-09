@@ -2506,3 +2506,93 @@ protocol without rewriting it.
 
 **Not in scope:** the M7 implementation brief itself; resolution of the
 three open questions still pending Bret's input.
+
+---
+
+## Session — 9 May 2026 (M7 E2: backend API for E2EE)
+
+**Prompt:** "Let's implement M7 E2."
+
+**What was built:** Full backend implementation of the E2EE API layer (v0.27.0),
+ready for the E3 Android client. Backend-only; no client changes.
+
+### New files
+
+- `V15__m7_device_links.sql` — `pending_device_links` table and index for the
+  trusted-device key-wrap state machine.
+- `KeysHandler.kt` — `/api/keys/` contract: device CRUD (register, list, retire,
+  touch), passphrase CRUD, and a 4-step device-link flow (initiate → register
+  → status poll → wrap). Each step is a separate endpoint; the server is a dumb
+  relay throughout the wrap flow.
+- `PendingBlobsCleanupService.kt` — coroutine-based background service running two
+  periodic jobs: pending-blob TTL cleanup (24 h TTL, 6 h interval) and dormant
+  device pruning (180 d last_used_at, 24 h interval). Both jobs run at startup.
+- `KeysHandlerTest.kt` — 13 unit tests covering device CRUD and passphrase CRUD.
+- `E2EncryptedUploadTest.kt` — 9 integration tests including the BouncyCastle
+  round-trip canary (test 26), migration canary (test 29), and device-link happy
+  path (test 35).
+
+### Modified files
+
+- `Database.kt` — `UploadRecord` + 9 E2EE fields; 3 new record types; all SELECT
+  queries updated; new DB operations for pending_blobs, wrapped_keys, passphrase,
+  device-links, and `migrateUploadToEncrypted`; `toUploadRecord()` and `toJson()`
+  extended.
+- `UploadHandler.kt` — `POST /uploads/initiate`, extended `POST /uploads/confirm`
+  (encrypted path with envelope validation + dedup bypass), `POST /uploads/{id}/migrate`,
+  encrypted thumbnail serving on `/thumb`, encrypted thumbnail compost cleanup.
+  OpenAPI spec merges now include the keys contract.
+- `S3FileStore.kt` — added `DirectUploadSupport` implementation using `S3Presigner`
+  with path-style addressing. Content-type is NOT included in the signed headers
+  (avoids 403 when client PUTs with a different type).
+- `Main.kt` — `PendingBlobsCleanupService` started at boot.
+- `run-tests.sh` — fixed `./gradlew jar` → `./gradlew shadowJar`.
+- `HeirloomsTest/build.gradle.kts` — added BouncyCastle 1.79 and AWS SDK S3 2.25.11.
+- `docker-compose.yml` (test) — MinIO port 9000 exposed for integration test signed-URL flows.
+- `HeirloomTestEnvironment.kt` — `minioBaseUrl` and `minioS3Client` added; test helper
+  `putToMinio()` for direct credential-based PUT (presigned URL host validation fails
+  across Docker network boundaries).
+- `UploadHandlerTest.kt` — 12 new unit tests (tests 14–25).
+- `S3FileStoreTest.kt` — updated to inject mock `S3Presigner`.
+
+### Key decisions made during implementation
+
+**Dedup bypass for encrypted confirms:** `findByContentHash` not called when
+`storage_class = "encrypted"` — ciphertext hashes are non-deterministic (different DEK
++ nonce each time), so the guard provides no value and would incorrectly block re-uploads.
+
+**S3 presigned URL + MinIO integration test gap:** MinIO validates the `host` in the
+presigned URL signature, but the test client rewrites `minio:9000` to `localhost:{port}`.
+The mismatch produces a 403. Fixed by having the test PUT directly to MinIO using the
+AWS SDK S3 client with credentials, bypassing the presigned URL signature check. The
+server logic (initiate / confirm / migrate) is still fully exercised.
+
+**`run-tests.sh` stale JAR bug:** Script called `./gradlew jar` (thin JAR) but the
+Dockerfile copies `*-all.jar` (shadow/fat JAR). Image was running the previous version's
+fat JAR. Fixed by changing to `./gradlew shadowJar`.
+
+**http4k two-level lambda `return` limitation:** In double-lambda contract handlers
+(`bindContract POST to { param -> { req -> ... } }`), early returns from the inner
+lambda require extracting to a named function. See `KeysHandler.kt`.
+
+### Infrastructure gaps surfaced and fixed
+
+1. `S3FileStore` didn't implement `DirectUploadSupport` — `/initiate` returned 501.
+2. `S3Presigner` missing `pathStyleAccessEnabled(true)` — presigned URLs used
+   virtual-hosted format (`{bucket}.host`) which fails DNS on MinIO.
+3. Content-type in presigned headers caused 403 — removed from the `PutObjectRequest`
+   used to generate the signature.
+4. `run-tests.sh` called `./gradlew jar` not `shadowJar` — Docker image used stale code.
+
+### Test results
+
+- 218 unit tests pass (HeirloomsServer); 0 failures.
+- 9/9 E2EE integration tests pass; 8 pre-existing failures remain (JSONArray tests
+  written before paginated list was introduced — not E2 regressions).
+
+### Deployment
+
+Deployed to Cloud Run as revision `heirlooms-server-00033-dqp`. Health confirmed
+(`/health` → `ok`). V15 migration applied automatically at startup (Flyway).
+
+**Next:** E3 — Android client encryption + migration flow.

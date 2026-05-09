@@ -58,4 +58,14 @@ Three Gradle subprojects under `/Users/bac/IdeaProjects/Heirlooms/`:
 - Always run `./gradlew clean shadowJar` (not just `shadowJar`) before `docker build`.
   The Dockerfile glob matches all `*-all.jar` files; without `clean`, an older JAR
   with a higher version string (e.g. `0.9.0` > `0.11.0` lexicographically) gets
-  packed into the image instead of the latest one.
+  packed into the image instead of the latest one. `run-tests.sh` now calls
+  `shadowJar` correctly (was `jar` — fixed in v0.27.0).
+- `S3FileStore` implements `DirectUploadSupport` (added in v0.27.0). The `S3Presigner`
+  requires `S3Configuration.builder().pathStyleAccessEnabled(true)` when using an
+  endpoint override (MinIO / any non-AWS S3 endpoint), otherwise the presigner generates
+  virtual-hosted URLs (`{bucket}.{host}`) that fail DNS resolution. Presigned PUT URLs
+  should not include `contentType` in the signed headers — clients may PUT with any
+  content type and the signature will verify correctly.
+- In http4k two-level contract lambdas (`bindContract METHOD to { param: T, _ -> { req -> ... } }`),
+  `return` from the inner lambda does not compile as non-local. Extract the inner body
+  to a named function and use regular `return` — see `KeysHandler.kt`.
