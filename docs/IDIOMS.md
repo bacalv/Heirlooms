@@ -163,11 +163,11 @@ is the **technical state** — the database state, the API field, the capsule
 lifecycle position. Both refer to the same event from different angles.
 
 Use *bloom* in copy that describes the moment (*"Something has bloomed for you."* —
-Milestone 6 future copy). Use *delivered* in copy that describes the state
+Milestone 10 future copy). Use *delivered* in copy that describes the state
 (*"Delivered on 14 May 2042."* in capsule detail metadata; *Delivered* as a filter
 option in the capsule list).
 
-Reserved for Milestone 6 (delivery). Used now only as a colour name (`bloom`) and
+Reserved for Milestone 10 (delivery). Used now only as a colour name (`bloom`) and
 the future-tense promise.
 
 **Do not use prematurely.** The verb *bloomed* is held for the delivery moment;
@@ -227,7 +227,7 @@ specific, narrow meaning here.
 
 ### Recipients
 
-The people a capsule is addressed to. Free-text names at v1 (Milestone 7
+The people a capsule is addressed to. Free-text names at v1 (Milestone 9
 will introduce proper connections). A capsule must have at least one recipient.
 
 **Appears in:** capsule identity (*For Sophie*, *For Sophie and James*),
@@ -343,7 +343,7 @@ and rejected — the brand doesn't need one.
 Vocabulary decisions deferred to future milestones. Recorded here so the next
 session doesn't have to rediscover them.
 
-### The *open* overload (Milestone 6)
+### The *open* overload (Milestone 10)
 
 *Open* currently has three meanings in the product:
 - **Capsule shape:** *open* (contents editable until delivery) vs *sealed*
@@ -353,7 +353,7 @@ session doesn't have to rediscover them.
 - **User-facing date phrase:** *To open on [date]* — when the capsule
   becomes available to recipients.
 
-Milestone 6 (delivery) will introduce a fourth meaning: the recipient's action
+Milestone 10 (delivery) will introduce a fourth meaning: the recipient's action
 of *opening* a delivered capsule. This will conflict with the existing *open*
 meanings and force a vocabulary decision.
 
@@ -362,12 +362,12 @@ Possible resolutions: rename the recipient action (*read*, *receive*, *unwrap*,
 from*); accept that *open* is context-disambiguated and only the recipient action
 gets a new word.
 
-No commitment yet. Settle when Milestone 6 design starts.
+No commitment yet. Settle when Milestone 10 design starts.
 
-### The *recipients-as-categories* question (Milestone 7)
+### The *recipients-as-categories* question (Milestone 9)
 
 The current *For [Name]* phrasing assumes named individuals. As recipients
-evolve from free-text to connections (Milestone 7), the phrasing may want to
+evolve from free-text to connections (Milestone 9), the phrasing may want to
 handle categories (*for the family*, *for my children*) and self-future (*for
 my future self*). Worth flagging; the *for* construction is brand-defining and
 should be examined rather than reflexively extended.
