@@ -127,14 +127,14 @@ private fun PassphraseEntryContent(onSubmit: (CharArray) -> Unit) {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
-            text = "Heirlooms",
+            text = "Your vault",
             style = androidx.compose.material3.MaterialTheme.typography.headlineMedium,
             fontStyle = FontStyle.Italic,
             color = Forest,
         )
 
         Text(
-            text = "Your passphrase protects your vault if you ever lose this phone.",
+            text = "Your passphrase unlocks your vault on any device. Keep it somewhere safe.",
             fontStyle = FontStyle.Italic,
             color = Forest.copy(alpha = 0.7f),
         )
@@ -175,7 +175,7 @@ private fun PassphraseEntryContent(onSubmit: (CharArray) -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = Forest),
         ) {
-            Text("Save passphrase")
+            Text("Protect vault")
         }
     }
 }

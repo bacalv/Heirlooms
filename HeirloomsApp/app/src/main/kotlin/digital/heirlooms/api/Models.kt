@@ -15,7 +15,7 @@ data class Upload(
     val longitude: Double?,
     val lastViewedAt: String?,
     // E2EE fields — present only when storageClass == "encrypted"
-    val storageClass: String = "legacy_plaintext",
+    val storageClass: String = "public",
     val envelopeVersion: Int? = null,
     val wrappedDek: ByteArray? = null,
     val dekFormat: String? = null,

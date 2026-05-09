@@ -1033,7 +1033,7 @@ class FinUploadHandlerTest {
         )
 
         assertEquals(CREATED, response.status)
-        assertEquals("legacy_plaintext", capturedRecord.captured.storageClass)
+        assertEquals("public", capturedRecord.captured.storageClass)
     }
 
     @Test
@@ -1086,7 +1086,7 @@ class FinUploadHandlerTest {
 
         assertEquals(OK, response.status)
         val body = response.bodyString()
-        assertTrue(body.contains("\"storageClass\":\"legacy_plaintext\""))
+        assertTrue(body.contains("\"storageClass\":\"public\""))
         assertTrue(!body.contains("wrappedDek"))
         assertTrue(!body.contains("dekFormat"))
     }

@@ -69,12 +69,12 @@ class SchemaMigrationTest {
         }
     }
 
-    // ---- 1. After migration, all existing uploads are legacy_plaintext ----
+    // ---- 1. After V16 rename migration, all existing uploads are public ----
 
     @Test
-    fun `all uploads after migration have storage_class legacy_plaintext`() {
-        val n = count("SELECT COUNT(*) FROM uploads WHERE storage_class != 'legacy_plaintext'")
-        assertEquals(0, n, "expected all uploads to be legacy_plaintext after V13 migration")
+    fun `all uploads after migration have storage_class public`() {
+        val n = count("SELECT COUNT(*) FROM uploads WHERE storage_class != 'public'")
+        assertEquals(0, n, "expected all uploads to be public after V16 rename migration")
     }
 
     // ---- 2. Public storage class can be inserted directly at the DB level ----
@@ -106,15 +106,15 @@ class SchemaMigrationTest {
         }
     }
 
-    // ---- 4. Legacy_plaintext row with non-null wrapped_dek is rejected by the constraint ----
+    // ---- 4. Public row with non-null wrapped_dek is rejected by the constraint ----
 
     @Test
-    fun `legacy_plaintext storage class with non-null wrapped_dek violates constraint`() {
+    fun `public storage class with non-null wrapped_dek violates constraint`() {
         val id = UUID.randomUUID()
         assertThrows<SQLException> {
             exec("""
                 INSERT INTO uploads (id, storage_key, mime_type, file_size, storage_class, wrapped_dek, dek_format)
-                VALUES ('$id', 'test/leg-$id.jpg', 'image/jpeg', 1024, 'legacy_plaintext',
+                VALUES ('$id', 'test/leg-$id.jpg', 'image/jpeg', 1024, 'public',
                         decode('deadbeef', 'hex'), 'aes256gcm-v1')
             """.trimIndent())
         }

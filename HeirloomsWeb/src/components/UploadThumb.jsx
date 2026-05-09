@@ -7,7 +7,7 @@ import { unwrapDekWithMasterKey, decryptSymmetric, fromB64 } from '../crypto/vau
 import { OliveBranchIcon } from '../brand/OliveBranchIcon'
 
 // Drop-in replacement for <img> wherever an `upload` object is in scope.
-// Handles encrypted and legacy_plaintext storage classes transparently.
+// Handles encrypted and public storage classes transparently.
 export function UploadThumb({ upload, className, style, alt = '', rotation }) {
   if (!upload) return <div className={`bg-forest-08 ${className ?? ''}`} style={style} />
   if (upload.storageClass === 'encrypted') {

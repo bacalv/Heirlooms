@@ -274,8 +274,8 @@ class HeirloomsApi(
         latitude = if (has("latitude") && !isNull("latitude")) getDouble("latitude") else null,
         longitude = if (has("longitude") && !isNull("longitude")) getDouble("longitude") else null,
         lastViewedAt = optString("lastViewedAt").takeIf { it.isNotEmpty() && it != "null" },
-        storageClass = optString("storageClass", "legacy_plaintext").let {
-            if (it.isEmpty() || it == "null") "legacy_plaintext" else it
+        storageClass = optString("storageClass", "public").let {
+            if (it.isEmpty() || it == "null") "public" else it
         },
         envelopeVersion = if (has("envelopeVersion") && !isNull("envelopeVersion")) getInt("envelopeVersion") else null,
         wrappedDek = optString("wrappedDek").takeIf { it.isNotEmpty() && it != "null" }

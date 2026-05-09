@@ -28,6 +28,7 @@ import {
   generateDek, encryptSymmetric, wrapDekUnderMasterKey, ALG_AES256GCM_V1, ALG_MASTER_AES256GCM_V1,
   decryptSymmetric, unwrapDekWithMasterKey, fromB64, toB64,
 } from '../crypto/vaultCrypto'
+import { parse as parseExif } from 'exifr'
 
 const JUST_ARRIVED_SENTINEL = '__just_arrived__'
 
@@ -637,6 +638,36 @@ async function generateThumbnail(file) {
   }
 }
 
+async function buildEncryptedMetadata(file) {
+  let exif = null
+  if (file.type.startsWith('image/')) {
+    try {
+      exif = await parseExif(file, {
+        gps: true,
+        exif: true,
+        ifd0: true,
+        pick: ['GPSLatitude', 'GPSLongitude', 'GPSAltitude', 'Make', 'Model',
+               'LensModel', 'FocalLength', 'ISO', 'ExposureTime', 'FNumber'],
+      })
+    } catch { /* leave null — all-null blob is valid */ }
+  }
+  const et = exif?.ExposureTime ?? null
+  return JSON.stringify({
+    v: 1,
+    gps_lat:         exif?.latitude      ?? null,
+    gps_lon:         exif?.longitude     ?? null,
+    gps_alt:         exif?.GPSAltitude   ?? null,
+    camera_make:     exif?.Make          ?? null,
+    camera_model:    exif?.Model         ?? null,
+    lens_model:      exif?.LensModel     ?? null,
+    focal_length_mm: exif?.FocalLength   ?? null,
+    iso:             exif?.ISO           ?? null,
+    exposure_num:    et !== null ? (et >= 1 ? Math.round(et) : 1) : null,
+    exposure_den:    et !== null ? (et >= 1 ? 1 : Math.round(1 / et)) : null,
+    aperture:        exif?.FNumber       ?? null,
+  })
+}
+
 async function encryptAndUpload(file, apiKey, onStatus) {
   onStatus('Encrypting…')
   const fileBytes = new Uint8Array(await file.arrayBuffer())
@@ -648,6 +679,9 @@ async function encryptAndUpload(file, apiKey, onStatus) {
   const masterKey = getMasterKey()
   const wrappedDek = await wrapDekUnderMasterKey(contentDek, masterKey)
   const wrappedThumbDek = await wrapDekUnderMasterKey(thumbDek, masterKey)
+  const metaJson = await buildEncryptedMetadata(file)
+  const metaBytes = new TextEncoder().encode(metaJson)
+  const metaEnvelope = await encryptSymmetric(ALG_AES256GCM_V1, contentDek, metaBytes)
 
   onStatus('Uploading…')
   const { storageKey, uploadUrl, thumbnailStorageKey, thumbnailUploadUrl } =
@@ -666,6 +700,8 @@ async function encryptAndUpload(file, apiKey, onStatus) {
     thumbnailStorageKey,
     wrappedThumbnailDekB64: toB64(wrappedThumbDek),
     thumbnailDekFormat: ALG_MASTER_AES256GCM_V1,
+    encryptedMetadataB64: toB64(metaEnvelope),
+    encryptedMetadataFormat: ALG_AES256GCM_V1,
     takenAt,
     tags: [],
   })

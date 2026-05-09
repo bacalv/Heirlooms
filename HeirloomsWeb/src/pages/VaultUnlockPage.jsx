@@ -184,7 +184,7 @@ export function VaultUnlockPage({ apiKey, onUnlocked }) {
             </div>
             <p className="font-serif italic text-text-muted text-xs">
               {isSetup
-                ? 'Your passphrase protects your vault if you ever lose access to this device.'
+                ? 'Your passphrase unlocks your vault from any browser. Keep it somewhere safe.'
                 : 'Your passphrase protects your vault.'}
             </p>
           </div>

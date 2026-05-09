@@ -223,7 +223,7 @@ class E2EncryptedUploadTest {
             Request.Builder().url("$base/api/content/uploads/$id").get().build()
         ).execute()
         val detailJson = JSONObject(detail.body!!.string())
-        assertThat(detailJson.getString("storageClass")).isEqualTo("legacy_plaintext")
+        assertThat(detailJson.getString("storageClass")).isEqualTo("public")
         assertThat(detailJson.has("wrappedDek")).isFalse
     }
 
@@ -258,7 +258,7 @@ class E2EncryptedUploadTest {
         assertThat(encryptedItem).isNotNull
         assertThat(legacyItem).isNotNull
         assertThat(encryptedItem!!.getString("storageClass")).isEqualTo("encrypted")
-        assertThat(legacyItem!!.getString("storageClass")).isEqualTo("legacy_plaintext")
+        assertThat(legacyItem!!.getString("storageClass")).isEqualTo("public")
     }
 
     @Test

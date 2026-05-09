@@ -65,7 +65,7 @@ data class UploadRecord(
     val compostedAt: Instant? = null,
     val exifProcessedAt: Instant? = null,
     val lastViewedAt: Instant? = null,
-    val storageClass: String = "legacy_plaintext",
+    val storageClass: String = "public",
     val envelopeVersion: Int? = null,
     val wrappedDek: ByteArray? = null,
     val dekFormat: String? = null,
@@ -167,7 +167,7 @@ class Database(private val dataSource: DataSource) {
                 stmt.setObject(10, record.altitude)
                 stmt.setString(11, record.deviceMake)
                 stmt.setString(12, record.deviceModel)
-                stmt.setTimestamp(13, if (record.storageClass == "legacy_plaintext") Timestamp.from(Instant.now()) else null)
+                stmt.setTimestamp(13, if (record.storageClass == "public") Timestamp.from(Instant.now()) else null)
                 stmt.setString(14, record.storageClass)
                 stmt.setObject(15, record.envelopeVersion)
                 stmt.setBytes(16, record.wrappedDek)
@@ -1596,7 +1596,7 @@ class Database(private val dataSource: DataSource) {
                        device_make = NULL,
                        device_model = NULL,
                        thumbnail_key = NULL
-                   WHERE id = ? AND storage_class = 'legacy_plaintext'"""
+                   WHERE id = ? AND storage_class = 'public'"""
             ).use { stmt ->
                 stmt.setString(1, newStorageKey)
                 stmt.setString(2, newContentHash)
@@ -1713,7 +1713,7 @@ private fun java.sql.ResultSet.toUploadRecord() = UploadRecord(
     compostedAt = getTimestamp("composted_at")?.toInstant(),
     exifProcessedAt = try { getTimestamp("exif_processed_at")?.toInstant() } catch (_: Exception) { null },
     lastViewedAt = try { getTimestamp("last_viewed_at")?.toInstant() } catch (_: Exception) { null },
-    storageClass = try { getString("storage_class") ?: "legacy_plaintext" } catch (_: Exception) { "legacy_plaintext" },
+    storageClass = try { getString("storage_class") ?: "public" } catch (_: Exception) { "public" },
     envelopeVersion = try { getObject("envelope_version") as? Int } catch (_: Exception) { null },
     wrappedDek = try { getBytes("wrapped_dek") } catch (_: Exception) { null },
     dekFormat = try { getString("dek_format") } catch (_: Exception) { null },

@@ -572,7 +572,7 @@ private fun migrateUploadContractRoute(storage: FileStore, database: Database): 
     val id = Path.uuid().of("id")
     return "/uploads" / id / "migrate" meta {
         summary = "Migrate a legacy upload to encrypted"
-        description = "Atomically replaces a legacy_plaintext upload's bytes with an encrypted envelope. Returns 409 if already encrypted. Returns 410 if the record was concurrently migrated."
+        description = "Atomically replaces a public upload's bytes with an encrypted envelope. Returns 409 if already encrypted. Returns 410 if the record was concurrently migrated."
     } bindContract POST to { uploadId: UUID, _: String ->
         { request: Request ->
             migrateUploadHandler(uploadId, request, storage, database)
@@ -592,12 +592,6 @@ private fun initiateUploadHandler(directUpload: DirectUploadSupport?, database: 
             when {
                 mimeType.isNullOrBlank() ->
                     Response(BAD_REQUEST).body("Missing or invalid mimeType in request body")
-                storageClassRaw == "public" ->
-                    Response(BAD_REQUEST).header("Content-Type", "application/json")
-                        .body("""{"error":"public storage class is not yet supported"}""")
-                storageClassRaw == "legacy_plaintext" ->
-                    Response(BAD_REQUEST).header("Content-Type", "application/json")
-                        .body("""{"error":"cannot explicitly request legacy_plaintext storage class"}""")
                 storageClassRaw == "encrypted" -> {
                     val content = directUpload.prepareUpload(mimeType)
                     val thumb = directUpload.prepareUpload("application/octet-stream")
@@ -607,7 +601,7 @@ private fun initiateUploadHandler(directUpload: DirectUploadSupport?, database: 
                     Response(OK).header("Content-Type", "application/json").body(json)
                 }
                 else -> {
-                    // Legacy shape: no storage_class or unrecognised value
+                    // Public shape: no storage_class or unrecognised value — server-assigned
                     val prepared = directUpload.prepareUpload(mimeType)
                     database.insertPendingBlob(prepared.storageKey.value)
                     val json = """{"storageKey":"${prepared.storageKey}","uploadUrl":"${prepared.uploadUrl}"}"""
@@ -624,7 +618,7 @@ private fun migrateUploadHandler(uploadId: UUID, request: Request, storage: File
     return try {
         val existing = database.getUploadById(uploadId)
             ?: return Response(NOT_FOUND)
-        if (existing.storageClass != "legacy_plaintext")
+        if (existing.storageClass != "public")
             return Response(CONFLICT).header("Content-Type", "application/json")
                 .body("""{"error":"upload is already migrated or wrong storage class"}""")
 
@@ -779,10 +773,6 @@ private fun confirmUpload(
         ?.map { it.asText() }
         ?.filter { it.isNotBlank() }
         ?: emptyList()
-
-    if (storageClassRaw == "public")
-        return Response(BAD_REQUEST).header("Content-Type", "application/json")
-            .body("""{"error":"public storage class is not yet supported"}""")
 
     val tagValidation = validateTags(tags)
     if (storageKey.isNullOrBlank() || mimeType.isNullOrBlank() || fileSize == null)
