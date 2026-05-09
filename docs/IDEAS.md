@@ -7,21 +7,21 @@ aren't yet ready to become roadmap items. Maintained by the PA.
 
 ## Deferred from Milestone 5 (Capsules, Increment 1) — 8 May 2026
 
-### 1. Tag-rule capsules (Milestone 8)
+### 1. Tag-rule capsules (Milestone 10)
 
 The v1 schema uses a fixed upload list per capsule. A natural extension: capsule contents
 become a *predicate* (a tag query) rather than a fixed set, evaluated at delivery time.
 A new `capsule_content_rules` table referencing tags, plus a flag on `capsules` indicating
 which mechanism applies. Cleanly stackable on the v1 schema.
 
-### 2. Per-recipient delivery state (Milestone 8)
+### 2. Per-recipient delivery state (Milestone 10)
 
 Each `capsule_recipients` row gains `opened_at TIMESTAMPTZ` (nullable). Required for the
 recipient-side UX showing who has and hasn't opened their capsule.
 
-### 3. Recipient timezone resolution (Milestone 8)
+### 3. Recipient timezone resolution (Milestone 10)
 
-`unlock_at` is currently anchored to the sender's timezone. Milestone 7 may want to
+`unlock_at` is currently anchored to the sender's timezone. Milestone 8 may want to
 resolve to each recipient's timezone at delivery time, given sufficient recipient profile
 data.
 
@@ -40,7 +40,7 @@ The Android app currently does only share-sheet uploads; everything else lives o
 Add read-only Gallery and Capsules views to Android together with the Android capsule
 share-sheet extension. This is a developer-tool increment — same single-user/API-key auth
 model as today, just a richer UI for Bret's own use. Not the family-facing app (which is
-a Milestone 7 conversation, possibly built fresh rather than evolved from the developer
+a Milestone 8 conversation, possibly built fresh rather than evolved from the developer
 tool). Capsule web UI (Milestone 5 Increment 2) and compost heap (v0.20.0) both shipped
 before this increment, which is the right sequencing — the Android UI will be built against
 a settled schema and feature set.
@@ -144,7 +144,7 @@ client-side from the gallery's existing upload data. For the current single-user
 deployment this is correct: the gallery already holds every upload, so a
 dedicated `GET /tags` endpoint would be a redundant round-trip.
 
-### What changes at Milestone 7
+### What changes at Milestone 8
 Once beneficiary accounts arrive, a beneficiary won't see every upload — only
 ones shared with them via tag-based sharing rules. Their tag autocomplete
 should be scoped to "tags I have access to", not the global tag set. That
@@ -161,7 +161,7 @@ The Increment 2 plan specified this endpoint but it was deliberately dropped
 during build in favour of client-side derivation. That was the right call
 for v0.16.0 but means the gap is invisible in the codebase — no TODO, no
 stub, nothing pointing at it. Recording the reasoning here so a future
-Milestone 7 session doesn't have to reverse-engineer why the endpoint
+Milestone 8 session doesn't have to reverse-engineer why the endpoint
 isn't there.
 
 ---
@@ -217,7 +217,7 @@ mind:
   works under either framing, but the test cases now include lighter
   moments, not only grief moments. *A photo from this day five years ago*
   is just as likely to be a holiday snap as a photo of someone now gone.
-- *M8 milestone delivery*: the design space is *moments worth marking*,
+- *M10 milestone delivery*: the design space is *moments worth marking*,
   not specifically *posthumous delivery*. Easier to design, less morbid,
   broader applicability, and the recipient-resolution UI applies equally
   to capsules sent to alive recipients.
@@ -234,14 +234,14 @@ case stays. It's just no longer the whole product.
 
 ---
 
-## Capsule recipient resolution at delivery (M8)
+## Capsule recipient resolution at delivery (M10)
 
-Capsules sealed before M7 (multi-user) carry free-text recipient strings —
-"my daughter", "Sophie". When delivery lands at M8, there is no automatic
+Capsules sealed before M8 (multi-user) carry free-text recipient strings —
+"my daughter", "Sophie". When delivery lands at M10, there is no automatic
 way to bind those strings to real accounts. Delivery cannot proceed for
 unresolved capsules without a UI to do the binding.
 
-Required as part of the M8 delivery brief:
+Required as part of the M10 delivery brief:
 - For each sealed capsule, show free-text recipients alongside any auto-matched
   connections.
 - Let the user resolve unmatched recipients to specific connections (or send
@@ -249,22 +249,22 @@ Required as part of the M8 delivery brief:
 - Surface capsules with unresolved recipients past their unlock date in a
   *needs attention* list. Block delivery until resolved.
 
-Without this, pre-M7 capsules either deliver to nobody (broken promise) or
-deliver into a void (worse). Worth designing the resolution UI early in M8,
+Without this, pre-M8 capsules either deliver to nobody (broken promise) or
+deliver into a void (worse). Worth designing the resolution UI early in M10,
 not late.
 
 ---
 
-## Per-user view tracking (post-M7, likely M9)
+## Per-user view tracking (post-M8, likely M11+)
 
 `last_viewed_at` on `uploads` is a global column today. Per-user view tracking —
-a junction table keyed on `(upload_id, user_id)` — is post-M7 work, likely M9,
-not part of M7 itself.
+a junction table keyed on `(upload_id, user_id)` — is post-M8 work, likely M11+,
+not part of M8 itself.
 
-The deferral only stays honest if M7's ownership model never lets a user read
+The deferral only stays honest if M8's ownership model never lets a user read
 another user's upload outside of capsule delivery. The moment a second viewer
 enters the picture, global view tracking starts lying — *Just arrived* no longer
-means what it says. The M7 brief must guarantee single-owner reads or this
+means what it says. The M8 brief must guarantee single-owner reads or this
 deferral collapses.
 
 The *Just arrived* predicate currently uses the `idx_uploads_just_arrived`
@@ -278,10 +278,10 @@ is the likely shape.
 
 ## Friend-tester sequencing and API key rotation
 
-The first non-Bret human in the system is onboarded after M7 ships.
+The first non-Bret human in the system is onboarded after M8 ships.
 Implications:
 
-- M7's two-user isolation tests are the only thing standing between the tester
+- M8's two-user isolation tests are the only thing standing between the tester
   and a privacy incident. Every read endpoint needs a "B reads A's resource →
   404" case; every write endpoint needs the same; every list endpoint needs a
   "B's list excludes A's resources" case. Roughly 20–30 new tests across
@@ -289,8 +289,8 @@ Implications:
 - 404 not 403 on cross-user reads — privacy-preserving (a probing attacker
   can't distinguish "doesn't exist" from "exists but isn't yours").
 - API key rotation: the existing key briefly lives as plaintext in a deployment
-  environment during the M7 migration that backfills Bret as the existing user.
-  Rotate it post-shipping. Pre-M7 it was infrastructure plumbing; post-M7 it's
+  environment during the M8 migration that backfills Bret as the existing user.
+  Rotate it post-shipping. Pre-M8 it was infrastructure plumbing; post-M8 it's
   a user credential, and that distinction matters.
 
 ---
@@ -305,7 +305,7 @@ and D4 because the codebase was there and the brand work was fresh — not
 because mobile-native browsing was strictly necessary. The web is where the
 brand work primarily lives; the Android app trails it.
 
-When iOS enters the picture (post-M7, when the family-experience product
+When iOS enters the picture (post-M8, when the family-experience product
 starts being designed for non-technical users), the question is whether to
 build a second full-featured native app or take a different shape.
 
@@ -318,7 +318,7 @@ Three things, and every option below should be evaluated against them:
    upload action.
 2. **Background uploads.** Large videos that keep uploading when the user
    pockets their phone and the screen locks.
-3. **Push notifications.** Future delivery moments (M8), capsule unlocks,
+3. **Push notifications.** Future delivery moments (M10), capsule unlocks,
    friend-tester invites.
 
 Browsing, filtering, and photo detail — everything in Garden, Explore, and
@@ -364,7 +364,7 @@ Not recommended.
 **Option 4: PWA primary + minimal iOS share extension app.** Web is the
 primary surface, installed as a PWA on iOS and Android. iOS app exists
 *only* to put Heirlooms in the iOS share sheet. Android app stays as-is
-through M6/M7; future Android effort favours web over Android-native
+through M6/M8; future Android effort favours web over Android-native
 parity unless the friction of not having a feature on Android becomes
 real. This matches the developer-tool/family-experience distinction
 already recorded in IDEAS.md: the developer tool is what Android already
@@ -373,7 +373,7 @@ product.
 
 ### Recommendation
 
-Option 4. Don't commit to it now — this is post-M7 work, after multi-user
+Option 4. Don't commit to it now — this is post-M8 work, after multi-user
 lands and the friend tester is onboarded — but the shape is worth
 recording so it isn't rediscovered cold.
 
@@ -393,7 +393,7 @@ recording so it isn't rediscovered cold.
 - **Apple Developer account is £79/year.** Review can take days. Minimal
   app shape reduces review surface and rejection risk.
 
-### The M8 notification question (open)
+### The M10 notification question (open)
 
 The capsule unlock moment is a brand-defining moment of the product. PWA
 push works on iOS 16.4+ but requires home-screen install and has a more
@@ -403,9 +403,9 @@ If the unlock notification needs to feel ceremonial — to actually arrive
 with weight on a recipient's phone, on the morning of someone's wedding
 day, ten years after their grandmother's letter was sealed — native push
 may be worth the extra surface area in the iOS app. That would push the
-iOS app slightly past pure-share-extension at M8.
+iOS app slightly past pure-share-extension at M10.
 
-Worth deciding when the M8 delivery brief is being written, not now. But
+Worth deciding when the M10 delivery brief is being written, not now. But
 flag it: the minimal-iOS-app strategy has a known soft spot at the
 delivery moment, and that's exactly where the brand has the most to lose
 if it lands wrong.
@@ -547,7 +547,7 @@ multi-user accounts and the connection model are real.
 
 ---
 
-## Trust posture and encryption (long horizon, M12+)
+## Trust posture and encryption (Milestone 7)
 
 Today, the CTO can read any photo any user uploads. This is fine for a
 developer tool. It is fundamentally inadequate for the family-experience
@@ -555,59 +555,144 @@ product, where the most emotionally loaded content (a parent's last letter
 to their child, a sealed capsule for a wedding day, a private message
 between spouses) is also the most sensitive.
 
-### The eventual default state
+This section captures the design rationale for end-to-end encryption as the
+default product posture. The architectural decisions are now lived in
+Milestones 7-11; the implementation specifics will land in the M7 brief.
+
+### The default state
 
 End-to-end encryption — sealed-from-host, where Heirlooms staff cannot read
-user content — should be the *default* state of the product, not a paid
-upsell.
+user content — is the *default* state of the product, not a paid upsell.
 
-This is the inverse of how it'd naturally be priced. The gold-tier offering
+This is the inverse of how it would naturally be priced. The gold-tier offering
 is not "we encrypt your stuff." If a paid tier exists in this space, it goes
-the other way: the user *opts out* of encryption to enable server-side
-features that require unencrypted access (search, AI-assisted memory book,
-auto-tagging, etc.).
+the other way: the user *opts out* of encryption to enable server-side features
+that require unencrypted access (search, AI-assisted memory book, auto-tagging,
+etc.).
 
 This matches Signal, ProtonMail, and 1Password — the trust-product playbook.
-Heirlooms, given what it's storing, should follow it.
+Heirlooms, given what it stores, should follow it.
 
-### Why this is recorded but not roadmapped
+### Engineering realities, now addressed
 
-End-to-end encryption is a Milestone 12+ feature. Get the basics right first.
-Recording it now as a planned default-state direction so it shapes
-architectural decisions made between here and there.
+The original speculative entry flagged four engineering realities that
+"E2EE-by-default" would have to confront. Each now has a home in the
+roadmap:
 
-### Engineering realities (flagged, not solved)
+- **Key management.** A high-entropy master key generated per-user, wrapped
+  per-device, with three independent recovery paths (24-word phrase,
+  passphrase-wrapped server backup, social recovery via Shamir). M7 ships
+  the first two; M9 lights up Shamir once the connections graph exists.
+- **No server-side processing on encrypted content.** EXIF extraction
+  becomes a client-side operation (the device that uploads also extracts
+  and supplies the structured metadata, encrypted alongside everything
+  else). Thumbnails likewise — generated client-side at upload, encrypted,
+  stored under their own DEKs. Tag-rule capsule evaluation operates on
+  encrypted-but-indexed metadata. Search defers to the per-encrypted-tier
+  posture: included by default, server-side, on the explicit-opt-out
+  unencrypted tier.
+- **Capsule delivery.** Three independent unlock paths handle this cleanly:
+  recipient pubkey at sealing time, tlock-against-drand for date-conditioned
+  capsules, and executor-held Shamir shares as the dead-man backstop.
+  Heirlooms' role at delivery is to hold the ciphertext and fire the
+  notification — no decryption material ever transits Heirlooms' systems.
+- **AI-assisted features (the memory book concept).** Genuinely incompatible
+  with sealed-from-host content. This is the place the design accepts a real
+  product cost. AI features either move client-side (less capable but
+  cryptographically clean) or live behind the explicit-opt-out unencrypted
+  tier. The memory book, if it ever ships, will likely be the latter.
 
-- **Key management.** If the user loses their key, their data is gone forever.
-  Ironic for a long-time-horizon product. Social recovery (M of N trusted
-  contacts hold key shares) is the answer here, and it's a substantial
-  engineering project.
-- **No server-side processing on encrypted content.** EXIF extraction,
-  thumbnails, tag-rule capsule evaluation, search — all currently happen
-  server-side. Under sealed-from-host, all of them must move client-side.
-- **Capsule delivery becomes harder.** The recipient needs the key at delivery
-  time, which means key escrow tied to the unlock event — itself a sensitive
-  piece of engineering, and one that interacts with M8 in ways worth thinking
-  about *before* M8 ships if encryption is a credible direction.
-- **AI-assisted features (the memory book concept from the founding session)
-  become impossible** on encrypted content. That's a real product cost and
-  has to be weighed against the trust gain.
+### Architectural commitments inherited from this design
 
-### Architectural foreshadowing
+These shape decisions made now and onwards:
 
-Decisions made between now and M12 should not actively block this direction:
+- Server-side content access is not part of the default product. Features
+  that require unencrypted access live behind explicit user opt-out.
+- Client-side capability is healthy and stays that way. The web is one of
+  two equal decryption surfaces alongside Android.
+- Versioned envelopes, algorithm identifiers, and a re-wrap path baked in
+  from M7 — crypto agility is non-negotiable on a multi-decade product.
+- The connections data model in M9 is also the key-sharing graph. Recipients,
+  executors, and recovery shareholders are instances of the same thing.
 
-- Don't bake server-side content access into core product features unless
-  there's no alternative.
-- Keep client-side capability healthy (the web is where decryption would
-  happen).
-- When designing the connection model in M9+, think about how key sharing
-  between users would work — connections are also key-sharing relationships
-  in an encrypted world.
+### What this is not
 
-These aren't constraints that should block near-term work. They're a
-sanity-check filter: if a near-term decision makes M12 encryption
-substantially harder, that's a question worth asking before committing.
+E2EE is not a defence against the user's own device being compromised, a
+malicious dependency in the web client, or a cryptographic primitive being
+broken on a 20-year horizon. The architecture's job is to degrade gracefully
+when these happen, not to pretend they can't.
+
+The honest claim that emerges: Heirlooms staff cannot read your photos, your
+messages, or your sealed capsules. The only people who can unlock your archive
+in your absence are the people you nominated to do so. That is a defensible,
+true, and brand-aligned promise — stronger than what almost any consumer
+cloud offers, and weaker (in the right way) than Signal, because Heirlooms
+is a product about persistence, not ephemerality.
+
+---
+
+## Open questions for the M7 implementation brief
+
+The Vault E2EE design has settled at the architectural level. Three product
+decisions remain open before the M7 implementation brief is drafted; settling
+each shapes part of the brief.
+
+### Web posture
+
+The recommended path is *session-only peer device*: the web has its own
+keypair, can decrypt content, but its master-key copy is re-derived each
+session from a passphrase rather than persisted. This makes passphrase-wrapped
+server backup mandatory in M7's scope.
+
+The alternative worth genuinely considering before committing is *web is
+read-only metadata only* — the web shows the Garden, lists capsules, edits
+tags, manages plots, but cannot decrypt photos or capsule message bodies.
+Decryption happens only on Android (and eventually iOS).
+
+The metadata-only path produces the strongest cryptographic property — plaintext
+media never lives in a browser, full stop — and removes the XSS-as-fatal class
+of risk entirely. The cost is a meaningfully worse product: "I want to look
+at my photos on my laptop" is a reasonable user desire and this option says no.
+
+The recommendation stands at session-only peer device; the alternative is
+recorded so the decision is conscious, not default.
+
+### Asymmetric scheme for device keypairs
+
+The two realistic candidates:
+
+- **X25519 (with HKDF for ECDH-derived wrapping keys).** Smaller keys, faster,
+  modern. Supported in Android Keystore and WebCrypto, though WebCrypto support
+  arrived relatively recently — current browser support needs verification at
+  brief-writing time.
+- **RSA-OAEP.** Older, well-supported everywhere, larger keys and slower.
+  No surprises in cross-platform behaviour.
+
+The choice has implications for envelope size (modest), performance (modest),
+and post-quantum migration shape (both face the same problem; neither is
+quantum-safe). X25519 is the modern default; RSA-OAEP is the safe default.
+Worth a deliberate decision rather than a reflexive pick.
+
+### Brand voice on the recovery-failure copy
+
+The architecture means a user who loses every device, forgets their passphrase,
+and never wrote down their recovery phrase has lost their data permanently.
+Heirlooms cannot help and shouldn't pretend it can. The onboarding copy at the
+moment of recovery setup needs to be honest about this in a way that the rest
+of the product isn't.
+
+Something close to: *"Heirlooms cannot read your photos or messages, by design.
+This means we also cannot help you recover them if you lose your keys."*
+
+That sentence is outside the warm Heirlooms register. The question for the
+brand: does it stay outside, on the grounds that recovery setup is the one
+moment where the asymmetry is genuinely warranted? Or does the brand find a
+way to be honest *and* warm in the same breath?
+
+This is a writing problem more than an engineering one, but it sets the tone
+for the recovery surface and several adjacent moments (changing a passphrase,
+periodic recovery check-ins). Worth resolving before the M7 brief specifies
+any user-facing copy.
 
 ---
 
@@ -657,23 +742,23 @@ have gone into trophies goes here instead.
 
 - `uploaded_at` is the basis for *photo from N years ago*.
 - `unlock_at` on capsules is the basis for unlock countdowns.
-- `last_viewed_at` (when it becomes per-user at M9) is the basis for *the
+- `last_viewed_at` (when it becomes per-user at M11+) is the basis for *the
   garden has things you haven't seen*.
 
 None of these are immediate features. Recorded as a feature space worth
 exploring when the user base reaches the point where reach-out becomes
-meaningful — likely post-M8, when delivery has matured and there are real
+meaningful — likely post-M10, when delivery has matured and there are real
 moments to surface.
 
 ---
 
-## Third-party delivery integrations (M8+ second wave)
+## Third-party delivery integrations (M10+ second wave)
 
-Capsule delivery at M8 starts simple — a notification, the recipient logs in,
+Capsule delivery at M10 starts simple — a notification, the recipient logs in,
 they see their capsule. This is the right first step.
 
 This entry is about the *second wave* of delivery integrations, after that
-basic flow has matured. Not part of the M8 brief; recorded so the design
+basic flow has matured. Not part of the M10 brief; recorded so the design
 space is visible.
 
 ### The shape
@@ -682,8 +767,8 @@ Capsules can be delivered in forms the recipient encounters away from the
 app:
 
 - **Email delivery.** The capsule arrives as an email with a secure link.
-  Probably the actual M8 baseline rather than the second wave — recorded
-  here for completeness, but the M8 brief should treat email as the default
+  Probably the actual M10 baseline rather than the second wave — recorded
+  here for completeness, but the M10 brief should treat email as the default
   notification channel.
 - **Print-on-delivery (Moonpig, Photobox, similar).** The capsule arrives as
   a physical photo book on the recipient's doorstep on the unlock date.
@@ -702,7 +787,7 @@ app:
 
 Each integration has per-transaction cost and a per-provider engineering
 investment. Each one needs design work to land in brand voice rather than
-as a generic e-commerce checkout. The M8 baseline (in-app delivery + email)
+as a generic e-commerce checkout. The M10 baseline (in-app delivery + email)
 needs to be solid first, both as a product surface and as a thing the
 recipient has come to trust, before adding physical-world delivery.
 
