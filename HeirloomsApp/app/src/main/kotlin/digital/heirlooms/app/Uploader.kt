@@ -1,5 +1,12 @@
 package digital.heirlooms.app
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.ThumbnailUtils
+import android.os.Build
+import android.util.Base64
+import android.util.Size
+import digital.heirlooms.crypto.VaultCrypto
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -7,6 +14,7 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okio.BufferedSink
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
@@ -281,6 +289,182 @@ class Uploader(
         } catch (e: IOException) {
             UploadResult.Failure("Confirm error: ${e.message}")
         }
+    }
+
+    /**
+     * Encrypted upload flow:
+     * 1. Generate content DEK + thumbnail DEK
+     * 2. Encrypt file bytes (AES-256-GCM) → content envelope
+     * 3. Generate + encrypt thumbnail → thumbnail envelope
+     * 4. Wrap both DEKs under masterKey
+     * 5. POST /uploads/initiate (storage_class: "encrypted") → two signed URLs
+     * 6. PUT encrypted content (with progress callback)
+     * 7. PUT encrypted thumbnail
+     * 8. POST /uploads/confirm with all E2EE fields
+     */
+    fun uploadEncryptedViaSigned(
+        baseUrl: String?,
+        file: File,
+        mimeType: String,
+        masterKey: ByteArray,
+        apiKey: String? = null,
+        tags: List<String> = emptyList(),
+        onProgress: ((bytesWritten: Long, totalBytes: Long) -> Unit)? = null,
+        onConfirming: (() -> Unit)? = null,
+    ): UploadResult {
+        if (!isValidEndpoint(baseUrl)) return UploadResult.Failure("No endpoint configured")
+        if (!file.exists() || file.length() == 0L) return UploadResult.Failure("File is empty")
+
+        val base = baseUrl!!.trimEnd('/')
+
+        // Step 1: encrypt file
+        val fileBytes = try {
+            file.readBytes()
+        } catch (e: Exception) {
+            return UploadResult.Failure("Failed to read file: ${e.message}")
+        }
+
+        val contentDek = VaultCrypto.generateDek()
+        val contentNonce = VaultCrypto.generateNonce()
+        val encryptedContent = try {
+            val ct = VaultCrypto.aesGcmEncrypt(contentDek, contentNonce, fileBytes)
+            VaultCrypto.buildSymmetricEnvelope(VaultCrypto.ALG_AES256GCM_V1, contentNonce, ct)
+        } catch (e: Exception) {
+            return UploadResult.Failure("Content encryption failed: ${e.message}")
+        }
+
+        // Step 2: generate + encrypt thumbnail
+        val thumbnailDek = VaultCrypto.generateDek()
+        val (encryptedThumbnail, thumbMimeType) = try {
+            val thumbBytes = generateThumbnail(file, mimeType)
+                ?: makeFallbackThumbnail()
+            val thumbNonce = VaultCrypto.generateNonce()
+            val ct = VaultCrypto.aesGcmEncrypt(thumbnailDek, thumbNonce, thumbBytes)
+            VaultCrypto.buildSymmetricEnvelope(VaultCrypto.ALG_AES256GCM_V1, thumbNonce, ct) to "image/jpeg"
+        } catch (e: Exception) {
+            return UploadResult.Failure("Thumbnail encryption failed: ${e.message}")
+        }
+
+        // Step 3: wrap DEKs under master key
+        val wrappedContentDek = VaultCrypto.wrapDekUnderMasterKey(contentDek, masterKey)
+        val wrappedThumbnailDek = VaultCrypto.wrapDekUnderMasterKey(thumbnailDek, masterKey)
+
+        // Step 4: initiate
+        val initiateRequest = Request.Builder()
+            .url("$base/api/content/uploads/initiate")
+            .post("""{"mimeType":"$mimeType","storage_class":"encrypted"}""".toRequestBody("application/json".toMediaType()))
+            .apply { if (!apiKey.isNullOrBlank()) header("X-Api-Key", apiKey) }
+            .build()
+
+        val initiateResponse = try {
+            httpClient.newCall(initiateRequest).execute().use { response ->
+                if (!response.isSuccessful) return UploadResult.Failure("Initiate failed: HTTP ${response.code}", response.code)
+                response.body?.string() ?: return UploadResult.Failure("Empty initiate response")
+            }
+        } catch (e: IOException) {
+            return UploadResult.Failure("Initiate error: ${e.message}")
+        }
+
+        val contentStorageKey = parseJsonStringField(initiateResponse, "storageKey")
+            ?: return UploadResult.Failure("Missing storageKey in initiate response")
+        val contentUploadUrl = parseJsonStringField(initiateResponse, "uploadUrl")
+            ?: return UploadResult.Failure("Missing uploadUrl in initiate response")
+        val thumbStorageKey = parseJsonStringField(initiateResponse, "thumbnailStorageKey")
+            ?: return UploadResult.Failure("Missing thumbnailStorageKey in initiate response")
+        val thumbUploadUrl = parseJsonStringField(initiateResponse, "thumbnailUploadUrl")
+            ?: return UploadResult.Failure("Missing thumbnailUploadUrl in initiate response")
+
+        // Step 5: PUT encrypted content
+        val contentBody: RequestBody = if (onProgress != null)
+            ProgressRequestBody(encryptedContent, "application/octet-stream") { bw, total -> onProgress(bw, total) }
+        else
+            encryptedContent.toRequestBody("application/octet-stream".toMediaType())
+
+        try {
+            httpClient.newCall(
+                Request.Builder().url(contentUploadUrl).put(contentBody).build()
+            ).execute().use { response ->
+                if (!response.isSuccessful) return UploadResult.Failure("Content PUT failed: HTTP ${response.code}", response.code)
+            }
+        } catch (e: IOException) {
+            return UploadResult.Failure("Content PUT error: ${e.message}")
+        }
+
+        // Step 6: PUT encrypted thumbnail
+        try {
+            httpClient.newCall(
+                Request.Builder()
+                    .url(thumbUploadUrl)
+                    .put(encryptedThumbnail.toRequestBody("application/octet-stream".toMediaType()))
+                    .build()
+            ).execute().use { response ->
+                if (!response.isSuccessful) return UploadResult.Failure("Thumbnail PUT failed: HTTP ${response.code}", response.code)
+            }
+        } catch (e: IOException) {
+            return UploadResult.Failure("Thumbnail PUT error: ${e.message}")
+        }
+
+        // Step 7: confirm
+        onConfirming?.invoke()
+        val wrappedDekB64 = Base64.encodeToString(wrappedContentDek, Base64.NO_WRAP)
+        val wrappedThumbDekB64 = Base64.encodeToString(wrappedThumbnailDek, Base64.NO_WRAP)
+        val tagsJson = if (tags.isEmpty()) "" else ""","tags":[${tags.joinToString(",") { "\"$it\"" }}]"""
+        val confirmBody = """{"storageKey":"$contentStorageKey","mimeType":"$mimeType","fileSize":${encryptedContent.size},"storage_class":"encrypted","envelopeVersion":1,"wrappedDek":"$wrappedDekB64","dekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}","thumbnailStorageKey":"$thumbStorageKey","wrappedThumbnailDek":"$wrappedThumbDekB64","thumbnailDekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}"$tagsJson}"""
+
+        return try {
+            httpClient.newCall(
+                Request.Builder()
+                    .url("$base/api/content/uploads/confirm")
+                    .post(confirmBody.toRequestBody("application/json".toMediaType()))
+                    .apply { if (!apiKey.isNullOrBlank()) header("X-Api-Key", apiKey) }
+                    .build()
+            ).execute().use { response ->
+                val code = response.code
+                when {
+                    response.isSuccessful -> UploadResult.Success("Encrypted upload complete", code, 1)
+                    else -> UploadResult.Failure("Confirm failed: HTTP $code", code)
+                }
+            }
+        } catch (e: IOException) {
+            UploadResult.Failure("Confirm error: ${e.message}")
+        }
+    }
+
+    private fun generateThumbnail(file: File, mimeType: String): ByteArray? {
+        val bitmap: Bitmap? = when {
+            mimeType.startsWith("image/") -> {
+                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(file.path, opts)
+                val maxDim = 400
+                val scale = maxOf(opts.outWidth, opts.outHeight) / maxDim
+                opts.inJustDecodeBounds = false
+                opts.inSampleSize = maxOf(1, scale)
+                BitmapFactory.decodeFile(file.path, opts)
+            }
+            mimeType.startsWith("video/") -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ThumbnailUtils.createVideoThumbnail(file, Size(400, 400), null)
+                } else {
+                    @Suppress("DEPRECATION")
+                    ThumbnailUtils.createVideoThumbnail(file.path, android.provider.MediaStore.Video.Thumbnails.MINI_KIND)
+                }
+            }
+            else -> null
+        } ?: return null
+
+        val maxDim = 400
+        val bmp = bitmap ?: return null
+        val scaled = if (bmp.width > maxDim || bmp.height > maxDim) {
+            val ratio = minOf(maxDim.toFloat() / bmp.width, maxDim.toFloat() / bmp.height)
+            Bitmap.createScaledBitmap(bmp, (bmp.width * ratio).toInt(), (bmp.height * ratio).toInt(), true)
+        } else bmp
+
+        return ByteArrayOutputStream().also { scaled.compress(Bitmap.CompressFormat.JPEG, 80, it) }.toByteArray()
+    }
+
+    private fun makeFallbackThumbnail(): ByteArray {
+        val bmp = Bitmap.createBitmap(1, 1, Bitmap.Config.RGB_565)
+        return ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.JPEG, 80, it) }.toByteArray()
     }
 }
 

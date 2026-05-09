@@ -14,8 +14,16 @@ data class Upload(
     val latitude: Double?,
     val longitude: Double?,
     val lastViewedAt: String?,
+    // E2EE fields — present only when storageClass == "encrypted"
+    val storageClass: String = "legacy_plaintext",
+    val envelopeVersion: Int? = null,
+    val wrappedDek: ByteArray? = null,
+    val dekFormat: String? = null,
+    val wrappedThumbnailDek: ByteArray? = null,
+    val thumbnailDekFormat: String? = null,
 ) {
     val isVideo: Boolean get() = mimeType.startsWith("video/")
+    val isEncrypted: Boolean get() = storageClass == "encrypted"
 }
 
 data class UploadPage(

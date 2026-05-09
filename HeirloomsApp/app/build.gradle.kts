@@ -13,8 +13,8 @@ android {
         applicationId = "digital.heirlooms.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 31
-        versionName = "0.26.0"
+        versionCode = 32
+        versionName = "0.28.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -36,6 +36,14 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    packaging {
+        resources.excludes += "META-INF/BC*.DSA"
+        resources.excludes += "META-INF/BC*.SF"
+        resources.excludes += "META-INF/BCEL.SF"
+        resources.excludes += "META-INF/BCEL.DSA"
+        resources.excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
     }
 }
 
@@ -74,7 +82,11 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.4.1")
     implementation("androidx.media3:media3-datasource-okhttp:1.4.1")
 
+    // BouncyCastle — Argon2id for passphrase key derivation.
+    implementation("org.bouncycastle:bcprov-jdk18on:1.79")
+
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.bouncycastle:bcprov-jdk18on:1.79")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 

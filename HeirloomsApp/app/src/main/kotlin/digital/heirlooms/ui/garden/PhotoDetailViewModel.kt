@@ -1,11 +1,19 @@
 package digital.heirlooms.ui.garden
 
+import android.content.Context
+import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import digital.heirlooms.api.CapsuleRef
 import digital.heirlooms.api.HeirloomsApi
 import digital.heirlooms.api.Upload
+import digital.heirlooms.crypto.VaultCrypto
+import digital.heirlooms.crypto.VaultSession
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -13,6 +21,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 sealed class PhotoDetailState {
     object Loading : PhotoDetailState()
@@ -26,6 +36,13 @@ class PhotoDetailViewModel(
 
     private val _state = MutableStateFlow<PhotoDetailState>(PhotoDetailState.Loading)
     val state: StateFlow<PhotoDetailState> = _state
+
+    // Decrypted full content for encrypted uploads (null = not yet loaded / plaintext)
+    private val _decryptedBitmap = MutableStateFlow<ImageBitmap?>(null)
+    val decryptedBitmap: StateFlow<ImageBitmap?> = _decryptedBitmap.asStateFlow()
+
+    private val _decryptedVideoUri = MutableStateFlow<Uri?>(null)
+    val decryptedVideoUri: StateFlow<Uri?> = _decryptedVideoUri.asStateFlow()
 
     // All tags in the user's library — for TagInputField suggestions.
     private val _availableTags = MutableStateFlow<List<String>>(emptyList())
@@ -43,21 +60,53 @@ class PhotoDetailViewModel(
 
     private var viewTracked = false
 
-    fun load(api: HeirloomsApi, uploadId: String) {
+    fun load(api: HeirloomsApi, uploadId: String, context: Context? = null) {
         viewModelScope.launch {
             _state.value = PhotoDetailState.Loading
             _stagedTags.value = null
             _stagedRotation.value = null
+            _decryptedBitmap.value = null
+            _decryptedVideoUri.value = null
             try {
                 val upload = api.getUpload(uploadId)
                 val refs = api.getCapsulesForUpload(uploadId)
                 _state.value = PhotoDetailState.Ready(upload, refs)
+                if (upload.isEncrypted && context != null) {
+                    loadEncryptedContent(api, upload, context)
+                }
             } catch (e: Exception) {
                 _state.value = PhotoDetailState.Error(e.message ?: "Couldn't load")
             }
         }
         viewModelScope.launch {
             try { _availableTags.value = api.listTags() } catch (_: Exception) {}
+        }
+    }
+
+    private fun loadEncryptedContent(api: HeirloomsApi, upload: Upload, context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val wrappedDek = upload.wrappedDek ?: return@runCatching
+                val mk = VaultSession.masterKey
+                val dek = VaultCrypto.unwrapDekWithMasterKey(wrappedDek, mk)
+                val encryptedBytes = api.fetchBytes(api.fileUrl(upload.id))
+                val decryptedBytes = VaultCrypto.decryptSymmetric(encryptedBytes, dek)
+
+                if (upload.isVideo) {
+                    val ext = when {
+                        upload.mimeType.contains("mp4") -> "mp4"
+                        upload.mimeType.contains("mov") -> "mov"
+                        else -> "bin"
+                    }
+                    val tempDir = File(context.cacheDir, "vault_temp").also { it.mkdirs() }
+                    val tempFile = File(tempDir, "${upload.id}.$ext")
+                    tempFile.writeBytes(decryptedBytes)
+                    _decryptedVideoUri.value = Uri.fromFile(tempFile)
+                } else {
+                    val bmp = BitmapFactory.decodeByteArray(decryptedBytes, 0, decryptedBytes.size)
+                    _decryptedBitmap.value = bmp?.asImageBitmap()
+                }
+            }
         }
     }
 

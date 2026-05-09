@@ -5,6 +5,7 @@ package digital.heirlooms.ui.garden
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -57,6 +58,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -68,6 +70,8 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import digital.heirlooms.api.CapsuleRef
 import digital.heirlooms.api.CapsuleSummary
 import digital.heirlooms.api.Upload
@@ -104,11 +108,13 @@ fun PhotoDetailScreen(
     val availableTags by vm.availableTags.collectAsState()
     val stagedTags by vm.stagedTags.collectAsState()
     val isDirty by vm.isDirty.collectAsState()
+    val decryptedBitmap by vm.decryptedBitmap.collectAsState()
+    val decryptedVideoUri by vm.decryptedVideoUri.collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
     LaunchedEffect(uploadId) {
-        vm.load(api, uploadId)
+        vm.load(api, uploadId, context)
         vm.trackView(api, uploadId)
     }
 
@@ -213,6 +219,8 @@ fun PhotoDetailScreen(
                         onTagsChange = { vm.stageTags(it) },
                         onRotate = { vm.stageRotate() },
                         onCapsuleTap = onCapsuleTap,
+                        decryptedBitmap = decryptedBitmap,
+                        decryptedVideoUri = decryptedVideoUri,
                     )
                     else -> GardenFlavour(
                         upload = u,
@@ -226,6 +234,8 @@ fun PhotoDetailScreen(
                         onRotate = { vm.stageRotate() },
                         onCapsuleTap = onCapsuleTap,
                         onStartCapsule = { onStartCapsuleWithPhoto(uploadId) },
+                        decryptedBitmap = decryptedBitmap,
+                        decryptedVideoUri = decryptedVideoUri,
                         onCompost = {
                             scope.launch {
                                 try { api.compostUpload(uploadId); onBack() } catch (_: Exception) {}
@@ -239,20 +249,52 @@ fun PhotoDetailScreen(
 }
 
 @Composable
-private fun MediaArea(upload: Upload, rotation: Int, modifier: Modifier = Modifier) {
-    if (upload.isVideo) {
-        VideoPlayer(
-            videoUrl = LocalHeirloomsApi.current.fileUrl(upload.id),
-            modifier = modifier,
-        )
-    } else {
-        HeirloomsImage(
-            url = LocalHeirloomsApi.current.fileUrl(upload.id),
-            contentDescription = null,
-            modifier = modifier,
-            contentScale = ContentScale.FillWidth,
-            rotation = rotation,
-        )
+private fun MediaArea(
+    upload: Upload,
+    rotation: Int,
+    modifier: Modifier = Modifier,
+    decryptedBitmap: ImageBitmap? = null,
+    decryptedVideoUri: Uri? = null,
+) {
+    when {
+        upload.isEncrypted && upload.isVideo -> {
+            if (decryptedVideoUri != null) {
+                VideoPlayer(videoUrl = decryptedVideoUri.toString(), modifier = modifier)
+            } else {
+                Box(modifier.aspectRatio(16f / 9f), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Forest)
+                }
+            }
+        }
+        upload.isEncrypted -> {
+            if (decryptedBitmap != null) {
+                Image(
+                    bitmap = decryptedBitmap,
+                    contentDescription = null,
+                    modifier = if (rotation != 0) modifier.graphicsLayer { rotationZ = rotation.toFloat() } else modifier,
+                    contentScale = ContentScale.FillWidth,
+                )
+            } else {
+                Box(modifier, contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Forest)
+                }
+            }
+        }
+        upload.isVideo -> {
+            VideoPlayer(
+                videoUrl = LocalHeirloomsApi.current.fileUrl(upload.id),
+                modifier = modifier,
+            )
+        }
+        else -> {
+            HeirloomsImage(
+                url = LocalHeirloomsApi.current.fileUrl(upload.id),
+                contentDescription = null,
+                modifier = modifier,
+                contentScale = ContentScale.FillWidth,
+                rotation = rotation,
+            )
+        }
     }
 }
 
@@ -302,6 +344,8 @@ internal fun GardenFlavour(
     onCapsuleTap: (String) -> Unit,
     onStartCapsule: () -> Unit,
     onCompost: () -> Unit,
+    decryptedBitmap: ImageBitmap? = null,
+    decryptedVideoUri: Uri? = null,
 ) {
     var showAddToCapsule by remember { mutableStateOf(false) }
     var showCompostConfirm by remember { mutableStateOf(false) }
@@ -314,7 +358,10 @@ internal fun GardenFlavour(
             .verticalScroll(rememberScrollState())
     ) {
         Box {
-            MediaArea(upload = upload, rotation = rotation, modifier = Modifier.fillMaxWidth())
+            MediaArea(
+                upload = upload, rotation = rotation, modifier = Modifier.fillMaxWidth(),
+                decryptedBitmap = decryptedBitmap, decryptedVideoUri = decryptedVideoUri,
+            )
             if (!upload.isVideo) {
                 IconButton(
                     onClick = onRotate,
@@ -432,6 +479,8 @@ internal fun ExploreFlavour(
     onTagsChange: (List<String>) -> Unit,
     onRotate: () -> Unit,
     onCapsuleTap: (String) -> Unit,
+    decryptedBitmap: ImageBitmap? = null,
+    decryptedVideoUri: Uri? = null,
 ) {
     Column(
         Modifier
@@ -440,7 +489,10 @@ internal fun ExploreFlavour(
             .verticalScroll(rememberScrollState())
     ) {
         Box {
-            MediaArea(upload = upload, rotation = rotation, modifier = Modifier.fillMaxWidth())
+            MediaArea(
+                upload = upload, rotation = rotation, modifier = Modifier.fillMaxWidth(),
+                decryptedBitmap = decryptedBitmap, decryptedVideoUri = decryptedVideoUri,
+            )
             if (!upload.isVideo) {
                 IconButton(
                     onClick = onRotate,

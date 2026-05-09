@@ -2,6 +2,48 @@
 
 ---
 
+## v0.28.0 — M7 E3: Android client encryption (9 May 2026)
+
+- `VaultCrypto.kt` — pure-Kotlin crypto utilities: AES-256-GCM encrypt/decrypt, symmetric and
+  asymmetric envelope builder/parser (matching server's `EnvelopeFormat`), HKDF-SHA256 (RFC 5869,
+  manual implementation — no dependency), Argon2id passphrase key derivation (BouncyCastle 1.79).
+- `DeviceKeyManager.kt` — Android Keystore AES-256 key wraps the master key at rest; software
+  P-256 device keypair (private key wrapped by Keystore key) used for server registration.
+  `setupVault()` one-time setup; `loadMasterKey()` auto-unlocks from Keystore on process restart.
+- `VaultSession.kt` — singleton holding the master key in memory and a thumbnail cache
+  (`ConcurrentHashMap<String, ImageBitmap>`).
+- `VaultSetupScreen.kt` + `VaultSetupViewModel.kt` — first-launch vault setup: generates master
+  key, registers device with server (`POST /api/keys/devices`), uploads passphrase backup
+  (`PUT /api/keys/passphrase` with Argon2id-derived KEK). Shown once; guarded by
+  `DeviceKeyManager.isVaultSetUp()`.
+- `MainApp.kt` — vault setup gate inserted between welcome/API-key screens and main navigation;
+  auto-unlock on process restart.
+- `Uploader.uploadEncryptedViaSigned()` — encrypted upload path: generates content DEK +
+  thumbnail DEK, AES-256-GCM encrypts file + client-generated thumbnail, wraps both DEKs under
+  master key, calls `/api/content/uploads/initiate` (storage_class: "encrypted"), PUTs two
+  ciphertext blobs, calls `/confirm` with full E2EE envelope fields.
+- `UploadWorker.kt` — auto-unlocks vault and calls `uploadEncryptedViaSigned()` when vault is set
+  up; falls back to legacy `uploadViaSigned()` if vault not yet configured.
+- `HeirloomsApi.kt` — new methods: `registerDevice`, `putPassphrase`, `initiateEncryptedUpload`,
+  `confirmEncryptedUpload`, `fetchBytes`; `toUpload()` decodes E2EE fields from base64.
+- `Models.kt` — `Upload` gains `storageClass`, `envelopeVersion`, `wrappedDek`, `dekFormat`,
+  `wrappedThumbnailDek`, `thumbnailDekFormat`; `isEncrypted` computed property.
+- `HeirloomsImage.kt` — new `UploadThumbnail` composable: for encrypted uploads, fetches
+  encrypted bytes, decrypts with thumbnail DEK, displays decrypted bitmap; `legacy_plaintext`
+  uploads use existing Coil path unchanged. In-memory thumbnail cache via `VaultSession`.
+- `PhotoDetailViewModel.kt` — `loadEncryptedContent()` fetches and decrypts full content for
+  encrypted uploads; images decoded to `ImageBitmap`, videos decrypted to temp file and exposed
+  as `Uri` for ExoPlayer.
+- `PhotoDetailScreen.kt` — `MediaArea` updated to render from `decryptedBitmap`/
+  `decryptedVideoUri` for encrypted uploads; `GardenFlavour` and `ExploreFlavour` accept and
+  thread these params.
+- BouncyCastle 1.79 added to `build.gradle.kts` (production + test); packaging options silence
+  META-INF signature conflicts.
+- 14 new `VaultCryptoTest` unit tests (JVM); 0 failures. All 92 existing tests continue to pass.
+- `docs/M7_E3_brief.md` added.
+
+---
+
 ## v0.27.0 — M7 E2: backend API for E2EE (9 May 2026)
 
 - V15: `pending_device_links` table for the trusted-device key-wrap handshake.

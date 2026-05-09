@@ -2596,3 +2596,90 @@ Deployed to Cloud Run as revision `heirlooms-server-00033-dqp`. Health confirmed
 (`/health` → `ok`). V15 migration applied automatically at startup (Flyway).
 
 **Next:** E3 — Android client encryption + migration flow.
+
+---
+
+## Session — 9 May 2026 (M7 E3: Android client encryption)
+
+**Prompt:** "Let's start the next phase."
+
+**What was built:** Full Android client implementation of vault E2EE (v0.28.0). Android-only;
+no server or web changes.
+
+### New files
+
+- `crypto/VaultCrypto.kt` — pure-Kotlin crypto utilities: AES-256-GCM, HKDF-SHA256 (manual
+  RFC 5869 implementation), Argon2id (BouncyCastle), symmetric + asymmetric envelope
+  builder/parser matching the server's `EnvelopeFormat`. No Android dependencies; fully testable
+  on JVM.
+- `crypto/DeviceKeyManager.kt` — Android Keystore AES-256 key for local master key wrapping;
+  software P-256 device keypair (private wrapped by Keystore key, public plaintext) for server
+  registration. `setupVault()` is one-time; `loadMasterKey()` auto-unlocks on process restart.
+  `wrapMasterKeyForServer()` produces a `p256-ecdh-hkdf-aes256gcm-v1` asymmetric envelope.
+- `crypto/VaultSession.kt` — top-level singleton holding the in-memory master key and a
+  thumbnail cache (`ConcurrentHashMap<String, ImageBitmap>`).
+- `ui/main/VaultSetupViewModel.kt` — orchestrates first-launch setup: generate master key,
+  register device with `/api/keys/devices`, upload passphrase backup to `/api/keys/passphrase`,
+  unlock `VaultSession`. `Factory` pattern for `apiKey` injection.
+- `ui/main/VaultSetupScreen.kt` — three-state UI: generating keys → passphrase entry (2×
+  `OutlinedTextField`, match-check, show/hide toggle, "Save passphrase" CTA) → saving.
+- `test/.../crypto/VaultCryptoTest.kt` — 14 JVM unit tests covering all crypto round-trips,
+  wrong-key failure cases, HKDF determinism, Argon2id round-trip, asymmetric ECDH end-to-end.
+
+### Modified files
+
+- `build.gradle.kts` — BouncyCastle `bcprov-jdk18on:1.79` added (production + test); packaging
+  options exclude BC META-INF signature files; versionCode 32, versionName "0.28.0".
+- `api/Models.kt` — `Upload` gains `storageClass` (default "legacy_plaintext"), `envelopeVersion`,
+  `wrappedDek`, `dekFormat`, `wrappedThumbnailDek`, `thumbnailDekFormat` (all `ByteArray?`);
+  `isEncrypted` computed property.
+- `api/HeirloomsApi.kt` — `put()` method added; `toUpload()` decodes E2EE fields from base64;
+  new methods: `registerDevice`, `putPassphrase`, `initiateEncryptedUpload`, `confirmEncryptedUpload`,
+  `fetchBytes`. `jsonEsc()` helper for label quoting.
+- `app/Uploader.kt` — `uploadEncryptedViaSigned()`: generates content + thumbnail DEKs, encrypts
+  file (AES-256-GCM symmetric envelope), generates thumbnail (`BitmapFactory` for images,
+  `ThumbnailUtils` for video, max 400px JPEG), encrypts thumbnail, wraps DEKs under master key,
+  calls `/initiate` + two presigned PUTs + `/confirm` with full E2EE fields. Fallback: 1×1
+  white JPEG if thumbnail generation fails.
+- `app/UploadWorker.kt` — auto-unlocks vault via `DeviceKeyManager.loadMasterKey()` on worker
+  start; calls `uploadEncryptedViaSigned()` when vault is set up, `uploadViaSigned()` otherwise.
+- `ui/main/MainApp.kt` — vault setup gate inserted (shows `VaultSetupScreen` when
+  `!deviceKeyManager.isVaultSetUp()`); auto-unlocks `VaultSession` on entry to main nav.
+- `ui/common/HeirloomsImage.kt` — new `UploadThumbnail(upload)` composable: for encrypted uploads,
+  fetches encrypted bytes, decrypts with thumbnail DEK, decodes to `ImageBitmap`, caches in
+  `VaultSession.thumbnailCache`; plaintext uploads delegate to `HeirloomsImage(url)`. `rotated()`
+  helper extracted to avoid duplication.
+- `ui/garden/PhotoDetailViewModel.kt` — `load()` accepts `context` parameter; if upload is
+  encrypted, calls `loadEncryptedContent()` which fetches+decrypts the full file: images →
+  `ImageBitmap` via `_decryptedBitmap`; videos → decrypted to `context.cacheDir/vault_temp/`
+  then exposed as `Uri` via `_decryptedVideoUri`.
+- `ui/garden/PhotoDetailScreen.kt` — `MediaArea` updated with `decryptedBitmap`/`decryptedVideoUri`
+  params; renders decrypted content for encrypted uploads, shows progress spinner while loading;
+  `GardenFlavour` and `ExploreFlavour` accept and thread these params down to `MediaArea`.
+
+### Design decisions made
+
+**Existing `legacy_plaintext` items become "public".** ROADMAP said "clean slate" but Bret
+clarified existing items should remain accessible as an unencrypted storage class. No migration
+run; client treats `storageClass != "encrypted"` as plaintext. No data loss.
+
+**Keystore AES-256 for local key wrapping (not Keystore ECDH).** `PURPOSE_AGREE_KEY` requires
+API 31; app minSdk is 26. Using Keystore `PURPOSE_ENCRYPT | PURPOSE_DECRYPT` (AES-256-GCM)
+to wrap the master key at rest — works on all supported API levels. P-256 keypair generated in
+software (private key wrapped by Keystore AES key, public stored plaintext). ECDH for the
+server's wrapped master key uses software ECDH (`ephemeral_private × device_static_public`),
+not Keystore ECDH.
+
+**Encrypted video streaming deferred.** Large videos are fully decrypted to a temp file before
+ExoPlayer plays them. Noted as a known limitation; streaming decryption is a future increment.
+
+**No migration UI in E3.** `/migrate` endpoint exists on server but is unused. Bret will
+re-upload existing content via the new encrypted path.
+
+### Test results
+
+- 14/14 `VaultCryptoTest` pass (new).
+- 78/78 existing Android unit tests pass (no regressions).
+- Total: 92 Android unit tests, 0 failures.
+
+**Next:** E4 — Web client vault (passphrase-based unlock, encrypted upload/download in browser).

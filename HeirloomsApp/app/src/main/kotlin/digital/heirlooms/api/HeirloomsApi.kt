@@ -1,5 +1,7 @@
 package digital.heirlooms.api
 
+import android.util.Base64
+import digital.heirlooms.crypto.VaultCrypto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -42,6 +44,18 @@ class HeirloomsApi(
             .url("$baseUrl$path")
             .withAuth()
             .post(body.toRequestBody("application/json".toMediaType()))
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code}: ${response.body?.string()}")
+            response.body?.string() ?: ""
+        }
+    }
+
+    private suspend fun put(path: String, body: String): String = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$baseUrl$path")
+            .withAuth()
+            .put(body.toRequestBody("application/json".toMediaType()))
             .build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IOException("HTTP ${response.code}: ${response.body?.string()}")
@@ -162,6 +176,80 @@ class HeirloomsApi(
     suspend fun cancelCapsule(id: String): CapsuleDetail =
         JSONObject(post("/api/capsules/$id/cancel")).toCapsuleDetail()
 
+    // ── Keys / device registration ───────────────────────────────────────────
+
+    suspend fun registerDevice(
+        deviceId: String,
+        deviceLabel: String,
+        pubkeyB64: String,
+        wrappedMasterKeyB64: String,
+    ) {
+        val body = """{"deviceId":"$deviceId","deviceLabel":${deviceLabel.jsonEsc()},"deviceKind":"android","pubkeyFormat":"p256-spki","pubkey":"$pubkeyB64","wrappedMasterKey":"$wrappedMasterKeyB64","wrapFormat":"${VaultCrypto.ALG_P256_ECDH_HKDF_V1}"}"""
+        post("/api/keys/devices", body)
+    }
+
+    suspend fun putPassphrase(
+        wrappedMasterKeyB64: String,
+        saltB64: String,
+        params: VaultCrypto.Argon2Params,
+    ) {
+        val argon2Json = """{"m":${params.m},"t":${params.t},"p":${params.p}}"""
+        val body = """{"wrappedMasterKey":"$wrappedMasterKeyB64","wrapFormat":"${VaultCrypto.ALG_ARGON2ID_AES256GCM_V1}","argon2Params":$argon2Json,"salt":"$saltB64"}"""
+        put("/api/keys/passphrase", body)
+    }
+
+    // ── Encrypted upload ─────────────────────────────────────────────────────
+
+    data class InitiateResponse(
+        val storageKey: String,
+        val uploadUrl: String,
+        val thumbnailStorageKey: String,
+        val thumbnailUploadUrl: String,
+    )
+
+    suspend fun initiateEncryptedUpload(mimeType: String): InitiateResponse {
+        val body = post("/api/content/uploads/initiate", """{"mimeType":"$mimeType","storage_class":"encrypted"}""")
+        val json = JSONObject(body)
+        return InitiateResponse(
+            storageKey = json.getString("storageKey"),
+            uploadUrl = json.getString("uploadUrl"),
+            thumbnailStorageKey = json.getString("thumbnailStorageKey"),
+            thumbnailUploadUrl = json.getString("thumbnailUploadUrl"),
+        )
+    }
+
+    suspend fun confirmEncryptedUpload(
+        storageKey: String,
+        mimeType: String,
+        fileSize: Long,
+        envelopeVersion: Int,
+        wrappedDekB64: String,
+        dekFormat: String,
+        thumbnailStorageKey: String,
+        wrappedThumbnailDekB64: String,
+        thumbnailDekFormat: String,
+        takenAt: String?,
+        tags: List<String>,
+    ): Upload {
+        val tagsJson = "[${tags.joinToString(",") { "\"${it.replace("\"", "\\\"")}\"" }}]"
+        val takenAtJson = if (takenAt != null) ""","takenAt":"$takenAt"""" else ""
+        val body = """{"storageKey":"$storageKey","mimeType":"$mimeType","fileSize":$fileSize,"storage_class":"encrypted","envelopeVersion":$envelopeVersion,"wrappedDek":"$wrappedDekB64","dekFormat":"$dekFormat","thumbnailStorageKey":"$thumbnailStorageKey","wrappedThumbnailDek":"$wrappedThumbnailDekB64","thumbnailDekFormat":"$thumbnailDekFormat","tags":$tagsJson$takenAtJson}"""
+        return JSONObject(post("/api/content/uploads/confirm", body)).toUpload()
+    }
+
+    // ── Raw byte fetch (for decrypting encrypted content) ────────────────────
+
+    suspend fun fetchBytes(url: String): ByteArray = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url(url)
+            .withAuth()
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+            response.body?.bytes() ?: throw IOException("Empty response")
+        }
+    }
+
     // ── JSON → model helpers ─────────────────────────────────────────────────
 
     private fun JSONObject.toUploadPage() = UploadPage(
@@ -186,6 +274,16 @@ class HeirloomsApi(
         latitude = if (has("latitude") && !isNull("latitude")) getDouble("latitude") else null,
         longitude = if (has("longitude") && !isNull("longitude")) getDouble("longitude") else null,
         lastViewedAt = optString("lastViewedAt").takeIf { it.isNotEmpty() && it != "null" },
+        storageClass = optString("storageClass", "legacy_plaintext").let {
+            if (it.isEmpty() || it == "null") "legacy_plaintext" else it
+        },
+        envelopeVersion = if (has("envelopeVersion") && !isNull("envelopeVersion")) getInt("envelopeVersion") else null,
+        wrappedDek = optString("wrappedDek").takeIf { it.isNotEmpty() && it != "null" }
+            ?.let { Base64.decode(it, Base64.DEFAULT) },
+        dekFormat = optString("dekFormat").takeIf { it.isNotEmpty() && it != "null" },
+        wrappedThumbnailDek = optString("wrappedThumbnailDek").takeIf { it.isNotEmpty() && it != "null" }
+            ?.let { Base64.decode(it, Base64.DEFAULT) },
+        thumbnailDekFormat = optString("thumbnailDekFormat").takeIf { it.isNotEmpty() && it != "null" },
     )
 
     private fun JSONArray.toPlotList(): List<Plot> =
@@ -242,6 +340,7 @@ class HeirloomsApi(
     )
 
     private fun String.encodeParam() = java.net.URLEncoder.encode(this, "UTF-8")
+    private fun String.jsonEsc(): String = "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
     companion object {
         const val BASE_URL = "https://api.heirlooms.digital"

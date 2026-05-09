@@ -9,6 +9,8 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import digital.heirlooms.crypto.DeviceKeyManager
+import digital.heirlooms.crypto.VaultSession
 import okhttp3.OkHttpClient
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -36,19 +38,44 @@ class UploadWorker(
         val file = File(filePath)
         if (!file.exists()) return Result.failure()
 
-        val result = uploader.uploadViaSigned(
-            baseUrl = BASE_URL,
-            file = file,
-            mimeType = mimeType,
-            apiKey = apiKey,
-            tags = tags,
-            onProgress = { bytesWritten, fileTotal ->
-                setProgressAsync(workDataOf(
-                    KEY_BYTES_WRITTEN to bytesWritten,
-                    KEY_TOTAL_BYTES to fileTotal,
-                ))
-            },
-        )
+        // Auto-unlock vault if process was restarted since the user last foregrounded the app.
+        val deviceKeyManager = DeviceKeyManager(context)
+        if (!VaultSession.isUnlocked && deviceKeyManager.isVaultSetUp()) {
+            val mk = deviceKeyManager.loadMasterKey()
+                ?: return Result.failure(workDataOf("error" to "Failed to unlock vault"))
+            VaultSession.unlock(mk)
+        }
+
+        val result = if (VaultSession.isUnlocked) {
+            uploader.uploadEncryptedViaSigned(
+                baseUrl = BASE_URL,
+                file = file,
+                mimeType = mimeType,
+                masterKey = VaultSession.masterKey,
+                apiKey = apiKey,
+                tags = tags,
+                onProgress = { bytesWritten, fileTotal ->
+                    setProgressAsync(workDataOf(
+                        KEY_BYTES_WRITTEN to bytesWritten,
+                        KEY_TOTAL_BYTES to fileTotal,
+                    ))
+                },
+            )
+        } else {
+            uploader.uploadViaSigned(
+                baseUrl = BASE_URL,
+                file = file,
+                mimeType = mimeType,
+                apiKey = apiKey,
+                tags = tags,
+                onProgress = { bytesWritten, fileTotal ->
+                    setProgressAsync(workDataOf(
+                        KEY_BYTES_WRITTEN to bytesWritten,
+                        KEY_TOTAL_BYTES to fileTotal,
+                    ))
+                },
+            )
+        }
 
         return when {
             result is Uploader.UploadResult.Success -> {
