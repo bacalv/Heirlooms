@@ -410,13 +410,28 @@ export function PhotoDetailPage() {
 
   useEffect(() => {
     if (!upload) return
-    const displayUrl = upload.thumbnailKey
-      ? `${API_URL}/api/content/uploads/${upload.id}/thumb`
-      : `${API_URL}/api/content/uploads/${upload.id}/file`
-    fetch(displayUrl, { headers: { 'X-Api-Key': apiKey } })
-      .then((r) => r.ok ? r.blob() : Promise.reject())
-      .then((blob) => setBlobUrl(URL.createObjectURL(blob)))
-      .catch(() => {})
+    const isVideo = upload.mimeType?.startsWith('video/')
+    if (isVideo) {
+      // Try a signed URL first so the browser can stream and seek natively.
+      // Fall back to downloading the whole file as a blob if that fails.
+      apiFetch(`/api/content/uploads/${upload.id}/url`, apiKey)
+        .then((r) => r.ok ? r.json() : Promise.reject())
+        .then((data) => setBlobUrl(data.url))
+        .catch(() => {
+          fetch(`${API_URL}/api/content/uploads/${upload.id}/file`, { headers: { 'X-Api-Key': apiKey } })
+            .then((r) => r.ok ? r.blob() : Promise.reject())
+            .then((blob) => setBlobUrl(URL.createObjectURL(blob)))
+            .catch(() => {})
+        })
+    } else {
+      const displayUrl = upload.thumbnailKey
+        ? `${API_URL}/api/content/uploads/${upload.id}/thumb`
+        : `${API_URL}/api/content/uploads/${upload.id}/file`
+      fetch(displayUrl, { headers: { 'X-Api-Key': apiKey } })
+        .then((r) => r.ok ? r.blob() : Promise.reject())
+        .then((blob) => setBlobUrl(URL.createObjectURL(blob)))
+        .catch(() => {})
+    }
   }, [apiKey, upload])
 
   useEffect(() => {
