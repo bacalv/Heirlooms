@@ -131,7 +131,7 @@ Do **not** use it for:
 - Upload complete sub: "{n} photos saved to your garden."
 - Upload failed: plain operational copy — *"Couldn't upload. Try again."* Sans, earth colour, retry affordance. No brand verb.
 - Capsule create opening line: "Keep something for someone."
-- Milestone delivery (future, Milestone 6): "Something has bloomed for you."
+- Milestone delivery (future, Milestone 10): "Something has bloomed for you."
 - Compost-heap empty state (randomised per session): see the `compostHeapEmptyState`
   array in `HeirloomsWeb/src/brand/brandStrings.js`. Five lines; pool can be
   expanded with PA review.
@@ -159,7 +159,7 @@ motion vocabulary, different surface.
 | State              | Visual                                                    |
 | ------------------ | --------------------------------------------------------- |
 | sealing            | Wax-seal olive forms in top-left of capsule card, ~700ms. |
-| delivering         | Wax-seal olive grows from corner to fill, card background washes from parchment to bloom-tinted, ~2.5s. Reserved for Milestone 6. |
+| delivering         | Wax-seal olive grows from corner to fill, card background washes from parchment to bloom-tinted, ~2.5s. Reserved for Milestone 10. |
 
 ## Capsule states
 
@@ -363,9 +363,9 @@ The animation is short and deliberate — sealing is a single committed
 gesture, not a slow growth. Faster than the arrival animation, which
 runs ~3 seconds.
 
-#### Delivery transition (Milestone 6 territory)
+#### Delivery transition (Milestone 10 territory)
 
-When a capsule is delivered (Milestone 6, scheduled at unlock_at):
+When a capsule is delivered (Milestone 10, scheduled at unlock_at):
 
 - Duration: ~2.5s.
 - The wax-seal olive *grows* from its corner-size to fill the card.
@@ -377,7 +377,7 @@ This is the moment the brand has been promising the entire time the
 capsule was sealed. The bloom colour fulfils its second appearance —
 the seal becoming the bloom.
 
-The recipient-side delivery moment — when a recipient (Milestone 7+)
+The recipient-side delivery moment — when a recipient (Milestone 8+)
 opens their bloomed capsule for the first time — is the strongest
 brand moment in the whole product. Specific motion design for that
 moment is reserved for the milestone where it ships.
@@ -391,5 +391,5 @@ matching the existing arrival animation's reduced-motion behaviour.
 ## What is NOT in this document
 
 - The custom-drawn wordmark (still in stand-in form, future milestone).
-- Milestone delivery brand language (Milestone 6).
+- Milestone delivery brand language (Milestone 10).
 - App store listing graphics, marketing site, email templates.
