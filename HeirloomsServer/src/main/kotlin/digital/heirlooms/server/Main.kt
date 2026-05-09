@@ -50,6 +50,10 @@ fun main() {
     val exifService = ExifExtractionService(database, storage, exifScope)
     exifService.recoverPending()
 
+    val cleanupService = PendingBlobsCleanupService(database, storage)
+    cleanupService.startPeriodicCleanup()
+    println("PendingBlobsCleanupService started")
+
     val app = buildApp(storage, database)
     val server = corsFilter().then(
         if (config.apiKey.isNotEmpty()) {

@@ -65,9 +65,55 @@ data class UploadRecord(
     val compostedAt: Instant? = null,
     val exifProcessedAt: Instant? = null,
     val lastViewedAt: Instant? = null,
+    val storageClass: String = "legacy_plaintext",
+    val envelopeVersion: Int? = null,
+    val wrappedDek: ByteArray? = null,
+    val dekFormat: String? = null,
+    val encryptedMetadata: ByteArray? = null,
+    val encryptedMetadataFormat: String? = null,
+    val thumbnailStorageKey: String? = null,
+    val wrappedThumbnailDek: ByteArray? = null,
+    val thumbnailDekFormat: String? = null,
 )
 
 data class UploadPage(val items: List<UploadRecord>, val nextCursor: String?)
+
+data class WrappedKeyRecord(
+    val id: UUID,
+    val deviceId: String,
+    val deviceLabel: String,
+    val deviceKind: String,
+    val pubkeyFormat: String,
+    val pubkey: ByteArray,
+    val wrappedMasterKey: ByteArray,
+    val wrapFormat: String,
+    val createdAt: Instant,
+    val lastUsedAt: Instant,
+    val retiredAt: Instant?,
+)
+
+data class RecoveryPassphraseRecord(
+    val wrappedMasterKey: ByteArray,
+    val wrapFormat: String,
+    val argon2Params: String,
+    val salt: ByteArray,
+    val createdAt: Instant,
+    val updatedAt: Instant,
+)
+
+data class PendingDeviceLinkRecord(
+    val id: UUID,
+    val oneTimeCode: String,
+    val expiresAt: Instant,
+    val state: String,
+    val newDeviceId: String?,
+    val newDeviceLabel: String?,
+    val newDeviceKind: String?,
+    val newPubkeyFormat: String?,
+    val newPubkey: ByteArray?,
+    val wrappedMasterKey: ByteArray?,
+    val wrapFormat: String?,
+)
 
 // ---- Sort options for uploads -------------------------------------------
 
@@ -104,8 +150,10 @@ class Database(private val dataSource: DataSource) {
                 """INSERT INTO uploads
                    (id, storage_key, mime_type, file_size, content_hash, thumbnail_key,
                     taken_at, latitude, longitude, altitude, device_make, device_model,
-                    exif_processed_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+                    exif_processed_at, storage_class, envelope_version, wrapped_dek, dek_format,
+                    encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
+                    wrapped_thumbnail_dek, thumbnail_dek_format)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
             ).use { stmt ->
                 stmt.setObject(1, record.id)
                 stmt.setString(2, record.storageKey)
@@ -119,7 +167,16 @@ class Database(private val dataSource: DataSource) {
                 stmt.setObject(10, record.altitude)
                 stmt.setString(11, record.deviceMake)
                 stmt.setString(12, record.deviceModel)
-                stmt.setTimestamp(13, Timestamp.from(Instant.now()))
+                stmt.setTimestamp(13, if (record.storageClass == "legacy_plaintext") Timestamp.from(Instant.now()) else null)
+                stmt.setString(14, record.storageClass)
+                stmt.setObject(15, record.envelopeVersion)
+                stmt.setBytes(16, record.wrappedDek)
+                stmt.setString(17, record.dekFormat)
+                stmt.setBytes(18, record.encryptedMetadata)
+                stmt.setString(19, record.encryptedMetadataFormat)
+                stmt.setString(20, record.thumbnailStorageKey)
+                stmt.setBytes(21, record.wrappedThumbnailDek)
+                stmt.setString(22, record.thumbnailDekFormat)
                 stmt.executeUpdate()
             }
         }
@@ -130,7 +187,10 @@ class Database(private val dataSource: DataSource) {
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
                           taken_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
-                          composted_at, exif_processed_at, last_viewed_at
+                          composted_at, exif_processed_at, last_viewed_at,
+                          storage_class, envelope_version, wrapped_dek, dek_format,
+                          encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
+                          wrapped_thumbnail_dek, thumbnail_dek_format
                    FROM uploads WHERE content_hash = ? LIMIT 1"""
             ).use { stmt ->
                 stmt.setString(1, hash)
@@ -146,7 +206,10 @@ class Database(private val dataSource: DataSource) {
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
                           taken_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
-                          composted_at, exif_processed_at, last_viewed_at
+                          composted_at, exif_processed_at, last_viewed_at,
+                          storage_class, envelope_version, wrapped_dek, dek_format,
+                          encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
+                          wrapped_thumbnail_dek, thumbnail_dek_format
                    FROM uploads WHERE id = ?"""
             ).use { stmt ->
                 stmt.setObject(1, id)
@@ -177,7 +240,10 @@ class Database(private val dataSource: DataSource) {
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
                           taken_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
-                          composted_at, exif_processed_at, last_viewed_at
+                          composted_at, exif_processed_at, last_viewed_at,
+                          storage_class, envelope_version, wrapped_dek, dek_format,
+                          encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
+                          wrapped_thumbnail_dek, thumbnail_dek_format
                    FROM uploads $where ORDER BY uploaded_at DESC"""
             ).use { stmt ->
                 var idx = 1
@@ -196,7 +262,10 @@ class Database(private val dataSource: DataSource) {
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
                           taken_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
-                          composted_at, exif_processed_at, last_viewed_at
+                          composted_at, exif_processed_at, last_viewed_at,
+                          storage_class, envelope_version, wrapped_dek, dek_format,
+                          encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
+                          wrapped_thumbnail_dek, thumbnail_dek_format
                    FROM uploads WHERE composted_at IS NOT NULL ORDER BY composted_at DESC"""
             ).use { stmt ->
                 val rs = stmt.executeQuery()
@@ -267,7 +336,10 @@ class Database(private val dataSource: DataSource) {
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
                           taken_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
-                          composted_at, exif_processed_at, last_viewed_at
+                          composted_at, exif_processed_at, last_viewed_at,
+                          storage_class, envelope_version, wrapped_dek, dek_format,
+                          encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
+                          wrapped_thumbnail_dek, thumbnail_dek_format
                    FROM uploads WHERE composted_at < NOW() - INTERVAL '90 days'"""
             ).use { stmt ->
                 val rs = stmt.executeQuery()
@@ -685,7 +757,10 @@ class Database(private val dataSource: DataSource) {
             """SELECT u.id, u.storage_key, u.mime_type, u.file_size, u.uploaded_at, u.content_hash,
                       u.thumbnail_key, u.taken_at, u.latitude, u.longitude, u.altitude,
                       u.device_make, u.device_model, u.rotation, u.tags, u.composted_at,
-                      u.exif_processed_at, u.last_viewed_at
+                      u.exif_processed_at, u.last_viewed_at,
+                      u.storage_class, u.envelope_version, u.wrapped_dek, u.dek_format,
+                      u.encrypted_metadata, u.encrypted_metadata_format, u.thumbnail_storage_key,
+                      u.wrapped_thumbnail_dek, u.thumbnail_dek_format
                FROM uploads u
                JOIN capsule_contents cc ON u.id = cc.upload_id
                WHERE cc.capsule_id = ?
@@ -819,7 +894,10 @@ class Database(private val dataSource: DataSource) {
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash,
                           thumbnail_key, taken_at, latitude, longitude, altitude,
                           device_make, device_model, rotation, tags, composted_at, exif_processed_at,
-                          last_viewed_at
+                          last_viewed_at,
+                          storage_class, envelope_version, wrapped_dek, dek_format,
+                          encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
+                          wrapped_thumbnail_dek, thumbnail_dek_format
                    FROM uploads $where $orderBy LIMIT ?"""
             ).use { stmt ->
                 var idx = 1
@@ -894,7 +972,10 @@ class Database(private val dataSource: DataSource) {
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash,
                           thumbnail_key, taken_at, latitude, longitude, altitude,
                           device_make, device_model, rotation, tags, composted_at, exif_processed_at,
-                          last_viewed_at
+                          last_viewed_at,
+                          storage_class, envelope_version, wrapped_dek, dek_format,
+                          encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
+                          wrapped_thumbnail_dek, thumbnail_dek_format
                    FROM uploads $where
                    ORDER BY composted_at DESC, id DESC
                    LIMIT ?"""
@@ -1199,6 +1280,341 @@ class Database(private val dataSource: DataSource) {
         }
     } catch (_: Exception) { null }
 
+    // ---- Pending blobs -------------------------------------------------------
+
+    fun insertPendingBlob(storageKey: String): UUID {
+        val id = UUID.randomUUID()
+        dataSource.connection.use { conn ->
+            conn.prepareStatement("INSERT INTO pending_blobs (id, storage_key) VALUES (?, ?)").use { stmt ->
+                stmt.setObject(1, id)
+                stmt.setString(2, storageKey)
+                stmt.executeUpdate()
+            }
+        }
+        return id
+    }
+
+    fun deletePendingBlob(storageKey: String) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement("DELETE FROM pending_blobs WHERE storage_key = ?").use { stmt ->
+                stmt.setString(1, storageKey)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    fun deleteStalePendingBlobs(olderThan: Instant): List<String> {
+        dataSource.connection.use { conn ->
+            val keys = mutableListOf<String>()
+            conn.prepareStatement("SELECT storage_key FROM pending_blobs WHERE created_at < ?").use { stmt ->
+                stmt.setTimestamp(1, Timestamp.from(olderThan))
+                val rs = stmt.executeQuery()
+                while (rs.next()) keys.add(rs.getString("storage_key"))
+            }
+            if (keys.isNotEmpty()) {
+                conn.prepareStatement("DELETE FROM pending_blobs WHERE created_at < ?").use { stmt ->
+                    stmt.setTimestamp(1, Timestamp.from(olderThan))
+                    stmt.executeUpdate()
+                }
+            }
+            return keys
+        }
+    }
+
+    // ---- Wrapped keys --------------------------------------------------------
+
+    fun insertWrappedKey(record: WrappedKeyRecord) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """INSERT INTO wrapped_keys (id, device_id, device_label, device_kind, pubkey_format,
+                       pubkey, wrapped_master_key, wrap_format, created_at, last_used_at, retired_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+            ).use { stmt ->
+                stmt.setObject(1, record.id)
+                stmt.setString(2, record.deviceId)
+                stmt.setString(3, record.deviceLabel)
+                stmt.setString(4, record.deviceKind)
+                stmt.setString(5, record.pubkeyFormat)
+                stmt.setBytes(6, record.pubkey)
+                stmt.setBytes(7, record.wrappedMasterKey)
+                stmt.setString(8, record.wrapFormat)
+                stmt.setTimestamp(9, Timestamp.from(record.createdAt))
+                stmt.setTimestamp(10, Timestamp.from(record.lastUsedAt))
+                stmt.setTimestamp(11, record.retiredAt?.let { Timestamp.from(it) })
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    fun listWrappedKeys(includeRetired: Boolean = false): List<WrappedKeyRecord> {
+        dataSource.connection.use { conn ->
+            val sql = if (includeRetired)
+                "SELECT id, device_id, device_label, device_kind, pubkey_format, pubkey, wrapped_master_key, wrap_format, created_at, last_used_at, retired_at FROM wrapped_keys ORDER BY created_at DESC"
+            else
+                "SELECT id, device_id, device_label, device_kind, pubkey_format, pubkey, wrapped_master_key, wrap_format, created_at, last_used_at, retired_at FROM wrapped_keys WHERE retired_at IS NULL ORDER BY created_at DESC"
+            conn.prepareStatement(sql).use { stmt ->
+                val rs = stmt.executeQuery()
+                val list = mutableListOf<WrappedKeyRecord>()
+                while (rs.next()) list.add(rs.toWrappedKeyRecord())
+                return list
+            }
+        }
+    }
+
+    fun getWrappedKeyByDeviceId(deviceId: String): WrappedKeyRecord? {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "SELECT id, device_id, device_label, device_kind, pubkey_format, pubkey, wrapped_master_key, wrap_format, created_at, last_used_at, retired_at FROM wrapped_keys WHERE device_id = ?"
+            ).use { stmt ->
+                stmt.setString(1, deviceId)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return null
+                return rs.toWrappedKeyRecord()
+            }
+        }
+    }
+
+    fun retireWrappedKey(id: UUID, retiredAt: Instant = Instant.now()) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement("UPDATE wrapped_keys SET retired_at = ? WHERE id = ?").use { stmt ->
+                stmt.setTimestamp(1, Timestamp.from(retiredAt))
+                stmt.setObject(2, id)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    fun touchWrappedKey(id: UUID) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement("UPDATE wrapped_keys SET last_used_at = NOW() WHERE id = ? AND retired_at IS NULL").use { stmt ->
+                stmt.setObject(1, id)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    fun retireDormantWrappedKeys(dormantBefore: Instant): Int {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "UPDATE wrapped_keys SET retired_at = NOW() WHERE retired_at IS NULL AND last_used_at < ?"
+            ).use { stmt ->
+                stmt.setTimestamp(1, Timestamp.from(dormantBefore))
+                return stmt.executeUpdate()
+            }
+        }
+    }
+
+    // ---- Recovery passphrase -------------------------------------------------
+
+    fun getRecoveryPassphrase(): RecoveryPassphraseRecord? {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "SELECT wrapped_master_key, wrap_format, argon2_params, salt, created_at, updated_at FROM recovery_passphrase WHERE id = 1"
+            ).use { stmt ->
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return null
+                return rs.toRecoveryPassphraseRecord()
+            }
+        }
+    }
+
+    fun upsertRecoveryPassphrase(record: RecoveryPassphraseRecord) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """INSERT INTO recovery_passphrase (id, wrapped_master_key, wrap_format, argon2_params, salt, created_at, updated_at)
+                   VALUES (1, ?, ?, ?::jsonb, ?, NOW(), NOW())
+                   ON CONFLICT (id) DO UPDATE SET
+                       wrapped_master_key = EXCLUDED.wrapped_master_key,
+                       wrap_format = EXCLUDED.wrap_format,
+                       argon2_params = EXCLUDED.argon2_params,
+                       salt = EXCLUDED.salt,
+                       updated_at = NOW()"""
+            ).use { stmt ->
+                stmt.setBytes(1, record.wrappedMasterKey)
+                stmt.setString(2, record.wrapFormat)
+                stmt.setString(3, record.argon2Params)
+                stmt.setBytes(4, record.salt)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    fun deleteRecoveryPassphrase(): Boolean {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement("DELETE FROM recovery_passphrase WHERE id = 1").use { stmt ->
+                return stmt.executeUpdate() > 0
+            }
+        }
+    }
+
+    // ---- Device links --------------------------------------------------------
+
+    fun insertPendingDeviceLink(record: PendingDeviceLinkRecord) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "INSERT INTO pending_device_links (id, one_time_code, expires_at, state) VALUES (?, ?, ?, ?)"
+            ).use { stmt ->
+                stmt.setObject(1, record.id)
+                stmt.setString(2, record.oneTimeCode)
+                stmt.setTimestamp(3, Timestamp.from(record.expiresAt))
+                stmt.setString(4, record.state)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    fun getPendingDeviceLink(id: UUID): PendingDeviceLinkRecord? {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """SELECT id, one_time_code, expires_at, state, new_device_id, new_device_label,
+                          new_device_kind, new_pubkey_format, new_pubkey, wrapped_master_key, wrap_format
+                   FROM pending_device_links WHERE id = ?"""
+            ).use { stmt ->
+                stmt.setObject(1, id)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return null
+                return rs.toPendingDeviceLinkRecord()
+            }
+        }
+    }
+
+    fun getPendingDeviceLinkByCode(code: String): PendingDeviceLinkRecord? {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """SELECT id, one_time_code, expires_at, state, new_device_id, new_device_label,
+                          new_device_kind, new_pubkey_format, new_pubkey, wrapped_master_key, wrap_format
+                   FROM pending_device_links WHERE one_time_code = ?"""
+            ).use { stmt ->
+                stmt.setString(1, code)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return null
+                return rs.toPendingDeviceLinkRecord()
+            }
+        }
+    }
+
+    fun registerNewDevice(
+        id: UUID, deviceId: String, deviceLabel: String,
+        deviceKind: String, pubkeyFormat: String, pubkey: ByteArray,
+    ) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """UPDATE pending_device_links SET
+                       state = 'device_registered',
+                       new_device_id = ?, new_device_label = ?, new_device_kind = ?,
+                       new_pubkey_format = ?, new_pubkey = ?
+                   WHERE id = ?"""
+            ).use { stmt ->
+                stmt.setString(1, deviceId)
+                stmt.setString(2, deviceLabel)
+                stmt.setString(3, deviceKind)
+                stmt.setString(4, pubkeyFormat)
+                stmt.setBytes(5, pubkey)
+                stmt.setObject(6, id)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    fun completeDeviceLink(
+        id: UUID, wrappedMasterKey: ByteArray, wrapFormat: String,
+        deviceId: String, deviceLabel: String, deviceKind: String,
+        pubkeyFormat: String, pubkey: ByteArray,
+    ) {
+        withTransaction { conn ->
+            conn.prepareStatement(
+                "UPDATE pending_device_links SET state = 'wrap_complete', wrapped_master_key = ?, wrap_format = ? WHERE id = ?"
+            ).use { stmt ->
+                stmt.setBytes(1, wrappedMasterKey)
+                stmt.setString(2, wrapFormat)
+                stmt.setObject(3, id)
+                stmt.executeUpdate()
+            }
+            val now = Instant.now()
+            conn.prepareStatement(
+                """INSERT INTO wrapped_keys (id, device_id, device_label, device_kind, pubkey_format,
+                       pubkey, wrapped_master_key, wrap_format, created_at, last_used_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+            ).use { stmt ->
+                stmt.setObject(1, UUID.randomUUID())
+                stmt.setString(2, deviceId)
+                stmt.setString(3, deviceLabel)
+                stmt.setString(4, deviceKind)
+                stmt.setString(5, pubkeyFormat)
+                stmt.setBytes(6, pubkey)
+                stmt.setBytes(7, wrappedMasterKey)
+                stmt.setString(8, wrapFormat)
+                stmt.setTimestamp(9, Timestamp.from(now))
+                stmt.setTimestamp(10, Timestamp.from(now))
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    fun deleteExpiredDeviceLinks(before: Instant): Int {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "DELETE FROM pending_device_links WHERE expires_at < ? AND state != 'wrap_complete'"
+            ).use { stmt ->
+                stmt.setTimestamp(1, Timestamp.from(before))
+                return stmt.executeUpdate()
+            }
+        }
+    }
+
+    // ---- Upload migration ---------------------------------------------------
+
+    fun migrateUploadToEncrypted(
+        id: UUID,
+        newStorageKey: String,
+        newContentHash: String?,
+        envelopeVersion: Int?,
+        wrappedDek: ByteArray,
+        dekFormat: String,
+        encryptedMetadata: ByteArray?,
+        encryptedMetadataFormat: String?,
+        thumbnailStorageKey: String?,
+        wrappedThumbnailDek: ByteArray?,
+        thumbnailDekFormat: String?,
+    ): Boolean {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """UPDATE uploads SET
+                       storage_class = 'encrypted',
+                       storage_key = ?,
+                       content_hash = ?,
+                       envelope_version = ?,
+                       wrapped_dek = ?,
+                       dek_format = ?,
+                       encrypted_metadata = ?,
+                       encrypted_metadata_format = ?,
+                       thumbnail_storage_key = ?,
+                       wrapped_thumbnail_dek = ?,
+                       thumbnail_dek_format = ?,
+                       latitude = NULL,
+                       longitude = NULL,
+                       altitude = NULL,
+                       device_make = NULL,
+                       device_model = NULL,
+                       thumbnail_key = NULL
+                   WHERE id = ? AND storage_class = 'legacy_plaintext'"""
+            ).use { stmt ->
+                stmt.setString(1, newStorageKey)
+                stmt.setString(2, newContentHash)
+                stmt.setObject(3, envelopeVersion)
+                stmt.setBytes(4, wrappedDek)
+                stmt.setString(5, dekFormat)
+                stmt.setBytes(6, encryptedMetadata)
+                stmt.setString(7, encryptedMetadataFormat)
+                stmt.setString(8, thumbnailStorageKey)
+                stmt.setBytes(9, wrappedThumbnailDek)
+                stmt.setString(10, thumbnailDekFormat)
+                stmt.setObject(11, id)
+                return stmt.executeUpdate() > 0
+            }
+        }
+    }
+
     private inline fun <T> withTransaction(block: (Connection) -> T): T {
         val conn = dataSource.connection
         conn.autoCommit = false
@@ -1235,9 +1651,11 @@ class Database(private val dataSource: DataSource) {
 }
 
 internal fun UploadRecord.toJson(): String {
+    val enc = java.util.Base64.getEncoder()
     val node = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode()
     node.put("id", id.toString())
     node.put("storageKey", storageKey)
+    node.put("storageClass", storageClass)
     node.put("mimeType", mimeType)
     node.put("fileSize", fileSize)
     node.put("uploadedAt", uploadedAt.toString())
@@ -1245,13 +1663,23 @@ internal fun UploadRecord.toJson(): String {
     if (thumbnailKey != null) node.put("thumbnailKey", thumbnailKey) else node.putNull("thumbnailKey")
     val tagsNode = node.putArray("tags")
     tags.forEach { tagsNode.add(it) }
-    if (takenAt != null) node.put("takenAt", takenAt.toString())
-    if (latitude != null) node.put("latitude", latitude)
-    if (longitude != null) node.put("longitude", longitude)
-    if (altitude != null) node.put("altitude", altitude)
-    if (deviceMake != null) node.put("deviceMake", deviceMake)
-    if (deviceModel != null) node.put("deviceModel", deviceModel)
+    if (takenAt != null) node.put("takenAt", takenAt.toString()) else node.putNull("takenAt")
+    if (latitude != null) node.put("latitude", latitude) else node.putNull("latitude")
+    if (longitude != null) node.put("longitude", longitude) else node.putNull("longitude")
+    if (altitude != null) node.put("altitude", altitude) else node.putNull("altitude")
+    if (deviceMake != null) node.put("deviceMake", deviceMake) else node.putNull("deviceMake")
+    if (deviceModel != null) node.put("deviceModel", deviceModel) else node.putNull("deviceModel")
     if (compostedAt != null) node.put("compostedAt", compostedAt.toString()) else node.putNull("compostedAt")
+    if (storageClass == "encrypted") {
+        if (envelopeVersion != null) node.put("envelopeVersion", envelopeVersion)
+        if (wrappedDek != null) node.put("wrappedDek", enc.encodeToString(wrappedDek))
+        if (dekFormat != null) node.put("dekFormat", dekFormat)
+        if (encryptedMetadata != null) node.put("encryptedMetadata", enc.encodeToString(encryptedMetadata))
+        if (encryptedMetadataFormat != null) node.put("encryptedMetadataFormat", encryptedMetadataFormat)
+        if (thumbnailStorageKey != null) node.put("thumbnailStorageKey", thumbnailStorageKey)
+        if (wrappedThumbnailDek != null) node.put("wrappedThumbnailDek", enc.encodeToString(wrappedThumbnailDek))
+        if (thumbnailDekFormat != null) node.put("thumbnailDekFormat", thumbnailDekFormat)
+    }
     return node.toString()
 }
 
@@ -1286,4 +1714,50 @@ private fun java.sql.ResultSet.toUploadRecord() = UploadRecord(
     compostedAt = getTimestamp("composted_at")?.toInstant(),
     exifProcessedAt = try { getTimestamp("exif_processed_at")?.toInstant() } catch (_: Exception) { null },
     lastViewedAt = try { getTimestamp("last_viewed_at")?.toInstant() } catch (_: Exception) { null },
+    storageClass = try { getString("storage_class") ?: "legacy_plaintext" } catch (_: Exception) { "legacy_plaintext" },
+    envelopeVersion = try { getObject("envelope_version") as? Int } catch (_: Exception) { null },
+    wrappedDek = try { getBytes("wrapped_dek") } catch (_: Exception) { null },
+    dekFormat = try { getString("dek_format") } catch (_: Exception) { null },
+    encryptedMetadata = try { getBytes("encrypted_metadata") } catch (_: Exception) { null },
+    encryptedMetadataFormat = try { getString("encrypted_metadata_format") } catch (_: Exception) { null },
+    thumbnailStorageKey = try { getString("thumbnail_storage_key") } catch (_: Exception) { null },
+    wrappedThumbnailDek = try { getBytes("wrapped_thumbnail_dek") } catch (_: Exception) { null },
+    thumbnailDekFormat = try { getString("thumbnail_dek_format") } catch (_: Exception) { null },
+)
+
+private fun java.sql.ResultSet.toWrappedKeyRecord() = WrappedKeyRecord(
+    id = getObject("id", UUID::class.java),
+    deviceId = getString("device_id"),
+    deviceLabel = getString("device_label"),
+    deviceKind = getString("device_kind"),
+    pubkeyFormat = getString("pubkey_format"),
+    pubkey = getBytes("pubkey"),
+    wrappedMasterKey = getBytes("wrapped_master_key"),
+    wrapFormat = getString("wrap_format"),
+    createdAt = getTimestamp("created_at").toInstant(),
+    lastUsedAt = getTimestamp("last_used_at").toInstant(),
+    retiredAt = getTimestamp("retired_at")?.toInstant(),
+)
+
+private fun java.sql.ResultSet.toRecoveryPassphraseRecord() = RecoveryPassphraseRecord(
+    wrappedMasterKey = getBytes("wrapped_master_key"),
+    wrapFormat = getString("wrap_format"),
+    argon2Params = getString("argon2_params"),
+    salt = getBytes("salt"),
+    createdAt = getTimestamp("created_at").toInstant(),
+    updatedAt = getTimestamp("updated_at").toInstant(),
+)
+
+private fun java.sql.ResultSet.toPendingDeviceLinkRecord() = PendingDeviceLinkRecord(
+    id = getObject("id", UUID::class.java),
+    oneTimeCode = getString("one_time_code"),
+    expiresAt = getTimestamp("expires_at").toInstant(),
+    state = getString("state"),
+    newDeviceId = getString("new_device_id"),
+    newDeviceLabel = getString("new_device_label"),
+    newDeviceKind = getString("new_device_kind"),
+    newPubkeyFormat = getString("new_pubkey_format"),
+    newPubkey = getBytes("new_pubkey"),
+    wrappedMasterKey = getBytes("wrapped_master_key"),
+    wrapFormat = getString("wrap_format"),
 )

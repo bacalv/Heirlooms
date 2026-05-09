@@ -20,6 +20,8 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-params:5.10.1")
     testImplementation("org.assertj:assertj-core:3.25.3")
     testImplementation("org.slf4j:slf4j-simple:2.0.13")
+    testImplementation("org.bouncycastle:bcprov-jdk18on:1.79")
+    testImplementation("software.amazon.awssdk:s3:2.25.11")
 }
 
 kotlin {

@@ -5,7 +5,14 @@ import org.junit.jupiter.api.extension.BeforeAllCallback
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.testcontainers.containers.ComposeContainer
 import org.testcontainers.containers.wait.strategy.Wait
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
+import software.amazon.awssdk.core.async.AsyncRequestBody
+import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.services.s3.S3AsyncClient
+import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import java.io.File
+import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.time.Duration
@@ -25,13 +32,27 @@ class HeirloomsTestEnvironment : BeforeAllCallback, ExtensionContext.Store.Close
         lateinit var baseUrl: String
             private set
 
+        @Volatile
+        lateinit var minioBaseUrl: String
+            private set
+
         lateinit var httpClient: OkHttpClient
             private set
+
+        lateinit var minioS3Client: S3AsyncClient
+            private set
+
+        fun putToMinio(bucket: String, key: String, bytes: ByteArray) {
+            val req = PutObjectRequest.builder().bucket(bucket).key(key).contentLength(bytes.size.toLong()).build()
+            minioS3Client.putObject(req, AsyncRequestBody.fromBytes(bytes)).get()
+        }
 
         private var composeInstance: Any? = null
 
         private const val SERVICE_NAME = "heirloom-server"
         private const val SERVICE_PORT = 8080
+        private const val MINIO_SERVICE_NAME = "minio"
+        private const val MINIO_PORT = 9000
 
         private fun findDockerSocket(): String {
             val home = System.getProperty("user.home")
@@ -86,6 +107,7 @@ class HeirloomsTestEnvironment : BeforeAllCallback, ExtensionContext.Store.Close
                     .forStatusCode(200)
                     .withStartupTimeout(Duration.ofSeconds(120))
             )
+            .withExposedService(MINIO_SERVICE_NAME, MINIO_PORT)
 
         composeInstance = container
         container.start()
@@ -93,6 +115,20 @@ class HeirloomsTestEnvironment : BeforeAllCallback, ExtensionContext.Store.Close
         val host = container.getServiceHost(SERVICE_NAME, SERVICE_PORT)
         val port = container.getServicePort(SERVICE_NAME, SERVICE_PORT)
         baseUrl = "http://$host:$port"
+
+        val minioHost = container.getServiceHost(MINIO_SERVICE_NAME, MINIO_PORT)
+        val minioPort = container.getServicePort(MINIO_SERVICE_NAME, MINIO_PORT)
+        minioBaseUrl = "http://$minioHost:$minioPort"
+        println("[HeirloomsTestEnvironment] minioBaseUrl=$minioBaseUrl")
+
+        minioS3Client = S3AsyncClient.builder()
+            .region(Region.US_EAST_1)
+            .credentialsProvider(StaticCredentialsProvider.create(
+                AwsBasicCredentials.create("minioadmin", "minioadmin")
+            ))
+            .endpointOverride(URI.create(minioBaseUrl))
+            .forcePathStyle(true)
+            .build()
 
         httpClient = OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)

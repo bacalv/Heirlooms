@@ -16,6 +16,7 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest
 import software.amazon.awssdk.services.s3.model.GetObjectResponse
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import software.amazon.awssdk.services.s3.model.PutObjectResponse
+import software.amazon.awssdk.services.s3.presigner.S3Presigner
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 
@@ -23,10 +24,12 @@ class S3FileStoreTest {
 
     private val fixedUuid = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
     private val mockClient = mockk<S3AsyncClient>()
+    private val mockPresigner = mockk<S3Presigner>(relaxed = true)
 
     private fun storeWithFixedUuid() = S3FileStore(
         bucket = "my-heirloom-bucket",
         client = mockClient,
+        presigner = mockPresigner,
         uuidProvider = { fixedUuid },
     )
 
@@ -63,7 +66,7 @@ class S3FileStoreTest {
             UUID.fromString("22222222-2222-2222-2222-222222222222"),
         )
         val iter = uuids.iterator()
-        val store = S3FileStore("bucket", mockClient) { iter.next() }
+        val store = S3FileStore("bucket", mockClient, mockPresigner) { iter.next() }
 
         val key1 = store.save("a".toByteArray(), "image/jpeg")
         val key2 = store.save("b".toByteArray(), "image/jpeg")

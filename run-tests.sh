@@ -59,7 +59,7 @@ ensure_wrapper_jar "$TEST_DIR"
 
 echo "=== Building HeirloomsServer Docker image ($IMAGE) ==="
 cd "$SERVER_DIR"
-GRADLE_OPTS="-Dorg.gradle.native=false" ./gradlew jar --no-daemon -q
+GRADLE_OPTS="-Dorg.gradle.native=false" ./gradlew shadowJar --no-daemon -q
 docker build -t "$IMAGE" .
 
 echo ""

@@ -9,7 +9,12 @@ import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
 import software.amazon.awssdk.services.s3.model.GetObjectRequest
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
+import software.amazon.awssdk.services.s3.S3Configuration
+import software.amazon.awssdk.services.s3.presigner.S3Presigner
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest
+import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest
 import java.net.URI
+import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.ExecutionException
 
@@ -23,8 +28,9 @@ import java.util.concurrent.ExecutionException
 class S3FileStore(
     private val bucket: String,
     private val client: S3AsyncClient,
+    private val presigner: S3Presigner,
     private val uuidProvider: () -> UUID = UUID::randomUUID,
-) : FileStore {
+) : FileStore, DirectUploadSupport {
 
     override fun save(bytes: ByteArray, mimeType: String): StorageKey {
         val key = "${uuidProvider()}.${mimeTypeToExtension(mimeType)}"
@@ -80,6 +86,24 @@ class S3FileStore(
         }
     }
 
+    override fun prepareUpload(mimeType: String): PreparedUpload {
+        val key = "uploads/${uuidProvider()}.${mimeTypeToExtension(mimeType)}"
+        val presignRequest = PutObjectPresignRequest.builder()
+            .signatureDuration(Duration.ofHours(1))
+            .putObjectRequest { it.bucket(bucket).key(key) }
+            .build()
+        val url = presigner.presignPutObject(presignRequest).url().toString()
+        return PreparedUpload(StorageKey(key), url)
+    }
+
+    override fun generateReadUrl(key: StorageKey): String {
+        val presignRequest = GetObjectPresignRequest.builder()
+            .signatureDuration(Duration.ofHours(1))
+            .getObjectRequest { it.bucket(bucket).key(key.value) }
+            .build()
+        return presigner.presignGetObject(presignRequest).url().toString()
+    }
+
     companion object {
         fun create(
             bucket: String,
@@ -89,16 +113,26 @@ class S3FileStore(
             endpointOverride: String = "",
         ): S3FileStore {
             val credentials = AwsBasicCredentials.create(accessKey, secretKey)
-            val builder = S3AsyncClient.builder()
-                .region(Region.of(region))
-                .credentialsProvider(StaticCredentialsProvider.create(credentials))
-                .forcePathStyle(true) // required for MinIO
+            val credProvider = StaticCredentialsProvider.create(credentials)
+            val awsRegion = Region.of(region)
+
+            val clientBuilder = S3AsyncClient.builder()
+                .region(awsRegion)
+                .credentialsProvider(credProvider)
+                .forcePathStyle(true)
+            val s3Config = S3Configuration.builder().pathStyleAccessEnabled(true).build()
+            val presignerBuilder = S3Presigner.builder()
+                .region(awsRegion)
+                .credentialsProvider(credProvider)
+                .serviceConfiguration(s3Config)
 
             if (endpointOverride.isNotEmpty()) {
-                builder.endpointOverride(URI.create(endpointOverride))
+                val uri = URI.create(endpointOverride)
+                clientBuilder.endpointOverride(uri)
+                presignerBuilder.endpointOverride(uri)
             }
 
-            return S3FileStore(bucket, builder.build())
+            return S3FileStore(bucket, clientBuilder.build(), presignerBuilder.build())
         }
     }
 }

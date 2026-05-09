@@ -903,4 +903,218 @@ class FinUploadHandlerTest {
         assertEquals(OK, response.status)
         assertTrue(response.bodyString().contains(knownRecord.storageKey))
     }
+
+    // -------------------------------------------------------------------------
+    // Initiate endpoint (E2EE)
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `POST uploads initiate with encrypted storage_class returns two signed URLs`() {
+        every { (mockDirectStorage as DirectUploadSupport).prepareUpload("image/jpeg") } returns
+            PreparedUpload(StorageKey("uploads/uuid-content.bin"), "https://minio/content-url")
+        every { (mockDirectStorage as DirectUploadSupport).prepareUpload("application/octet-stream") } returns
+            PreparedUpload(StorageKey("uploads/uuid-thumb.bin"), "https://minio/thumb-url")
+        every { mockDatabase.insertPendingBlob(any()) } returns UUID.randomUUID()
+
+        val response = appWithDirectUpload(
+            Request(POST, "/api/content/uploads/initiate")
+                .header("Content-Type", "application/json")
+                .body("""{"mimeType":"image/jpeg","storage_class":"encrypted"}""")
+        )
+
+        assertEquals(OK, response.status)
+        val body = response.bodyString()
+        assertTrue(body.contains("storageKey"))
+        assertTrue(body.contains("uploadUrl"))
+        assertTrue(body.contains("thumbnailStorageKey"))
+        assertTrue(body.contains("thumbnailUploadUrl"))
+        verify(exactly = 2) { mockDatabase.insertPendingBlob(any()) }
+    }
+
+    @Test
+    fun `POST uploads initiate with public storage_class returns 400`() {
+        val response = appWithDirectUpload(
+            Request(POST, "/api/content/uploads/initiate")
+                .header("Content-Type", "application/json")
+                .body("""{"mimeType":"image/jpeg","storage_class":"public"}""")
+        )
+
+        assertEquals(BAD_REQUEST, response.status)
+        assertTrue(response.bodyString().contains("public storage class"))
+    }
+
+    @Test
+    fun `POST uploads initiate with legacy body returns single signed URL`() {
+        every { (mockDirectStorage as DirectUploadSupport).prepareUpload("video/mp4") } returns
+            PreparedUpload(StorageKey("uploads/uuid.mp4"), "https://minio/video-url")
+        every { mockDatabase.insertPendingBlob(any()) } returns UUID.randomUUID()
+
+        val response = appWithDirectUpload(
+            Request(POST, "/api/content/uploads/initiate")
+                .header("Content-Type", "application/json")
+                .body("""{"mimeType":"video/mp4"}""")
+        )
+
+        assertEquals(OK, response.status)
+        val body = response.bodyString()
+        assertTrue(body.contains("storageKey"))
+        assertTrue(body.contains("uploadUrl"))
+        assertTrue(!body.contains("thumbnailStorageKey"))
+        verify(exactly = 1) { mockDatabase.insertPendingBlob(any()) }
+    }
+
+    // -------------------------------------------------------------------------
+    // Confirm endpoint — encrypted path
+    // -------------------------------------------------------------------------
+
+    private fun makeSymmetricEnvelope(algId: String = AlgorithmIds.MASTER_AES256GCM_V1): ByteArray {
+        val algBytes = algId.toByteArray()
+        val buf = ByteArray(1 + 1 + algBytes.size + 12 + 0 + 16)
+        buf[0] = 1  // version
+        buf[1] = algBytes.size.toByte()
+        algBytes.copyInto(buf, 2)
+        // nonce at offset 2+algBytes.size, then 0-byte ciphertext, then 16-byte auth tag — all zeros is fine for validation
+        return buf
+    }
+
+    @Test
+    fun `POST uploads confirm with encrypted storage_class and valid envelopes returns 201`() {
+        every { mockDatabase.recordUpload(any()) } just runs
+        every { mockDatabase.deletePendingBlob(any()) } just runs
+
+        val wrappedDek = makeSymmetricEnvelope(AlgorithmIds.MASTER_AES256GCM_V1)
+        val enc = java.util.Base64.getEncoder()
+
+        val response = app(
+            Request(POST, "/api/content/uploads/confirm")
+                .header("Content-Type", "application/json")
+                .body("""{"storageKey":"uploads/uuid.bin","mimeType":"image/jpeg","fileSize":1000,"storage_class":"encrypted","envelopeVersion":1,"wrappedDek":"${enc.encodeToString(wrappedDek)}","dekFormat":"master-aes256gcm-v1"}""")
+        )
+
+        assertEquals(CREATED, response.status)
+        verify { mockDatabase.recordUpload(match { it.storageClass == "encrypted" }) }
+    }
+
+    @Test
+    fun `POST uploads confirm encrypted with invalid wrappedDek envelope returns 400`() {
+        val response = app(
+            Request(POST, "/api/content/uploads/confirm")
+                .header("Content-Type", "application/json")
+                .body("""{"storageKey":"uploads/uuid.bin","mimeType":"image/jpeg","fileSize":1000,"storage_class":"encrypted","envelopeVersion":1,"wrappedDek":"${java.util.Base64.getEncoder().encodeToString(byteArrayOf(99, 5))}","dekFormat":"master-aes256gcm-v1"}""")
+        )
+
+        assertEquals(BAD_REQUEST, response.status)
+        assertTrue(response.bodyString().contains("wrappedDek envelope invalid"))
+    }
+
+    @Test
+    fun `POST uploads confirm encrypted with missing wrappedDek returns 400`() {
+        val response = app(
+            Request(POST, "/api/content/uploads/confirm")
+                .header("Content-Type", "application/json")
+                .body("""{"storageKey":"uploads/uuid.bin","mimeType":"image/jpeg","fileSize":1000,"storage_class":"encrypted","envelopeVersion":1}""")
+        )
+
+        assertEquals(BAD_REQUEST, response.status)
+    }
+
+    @Test
+    fun `POST uploads confirm with legacy body behaves as today`() {
+        val capturedRecord = slot<UploadRecord>()
+        every { mockDatabase.findByContentHash(any()) } returns null
+        every { mockDatabase.recordUpload(capture(capturedRecord)) } just runs
+        every { mockStorage.get(any()) } returns ByteArray(0)
+        every { mockDatabase.deletePendingBlob(any()) } just runs
+
+        val response = app(
+            Request(POST, "/api/content/uploads/confirm")
+                .header("Content-Type", "application/json")
+                .body("""{"storageKey":"uuid.mp4","mimeType":"video/mp4","fileSize":1000}""")
+        )
+
+        assertEquals(CREATED, response.status)
+        assertEquals("legacy_plaintext", capturedRecord.captured.storageClass)
+    }
+
+    @Test
+    fun `POST uploads confirm encrypted skips dedup check`() {
+        every { mockDatabase.recordUpload(any()) } just runs
+        every { mockDatabase.deletePendingBlob(any()) } just runs
+
+        val wrappedDek = makeSymmetricEnvelope(AlgorithmIds.MASTER_AES256GCM_V1)
+        val enc = java.util.Base64.getEncoder()
+
+        app(
+            Request(POST, "/api/content/uploads/confirm")
+                .header("Content-Type", "application/json")
+                .body("""{"storageKey":"uploads/uuid.bin","mimeType":"image/jpeg","fileSize":1000,"storage_class":"encrypted","envelopeVersion":1,"wrappedDek":"${enc.encodeToString(wrappedDek)}","dekFormat":"master-aes256gcm-v1","contentHash":"abcd1234"}""")
+        )
+
+        verify(exactly = 0) { mockDatabase.findByContentHash(any()) }
+    }
+
+    // -------------------------------------------------------------------------
+    // Upload detail — E2EE fields in response
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `GET uploads id returns E2EE fields for encrypted row`() {
+        val enc = java.util.Base64.getEncoder()
+        val wrappedDek = ByteArray(64) { 5 }
+        val encryptedRecord = knownRecord.copy(
+            storageClass = "encrypted",
+            envelopeVersion = 1,
+            wrappedDek = wrappedDek,
+            dekFormat = "master-aes256gcm-v1",
+        )
+        every { mockDatabase.getUploadById(knownId) } returns encryptedRecord
+
+        val response = app(Request(GET, "/api/content/uploads/$knownId"))
+
+        assertEquals(OK, response.status)
+        val body = response.bodyString()
+        assertTrue(body.contains("\"storageClass\":\"encrypted\""))
+        assertTrue(body.contains("\"wrappedDek\":\"${enc.encodeToString(wrappedDek)}\""))
+        assertTrue(body.contains("\"dekFormat\":\"master-aes256gcm-v1\""))
+    }
+
+    @Test
+    fun `GET uploads id for legacy row has no E2EE fields`() {
+        every { mockDatabase.getUploadById(knownId) } returns knownRecord
+
+        val response = app(Request(GET, "/api/content/uploads/$knownId"))
+
+        assertEquals(OK, response.status)
+        val body = response.bodyString()
+        assertTrue(body.contains("\"storageClass\":\"legacy_plaintext\""))
+        assertTrue(!body.contains("wrappedDek"))
+        assertTrue(!body.contains("dekFormat"))
+    }
+
+    @Test
+    fun `GET uploads list includes storageClass on all items`() {
+        every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(listOf(knownRecord), null)
+        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+
+        val response = app(Request(GET, "/api/content/uploads"))
+
+        assertEquals(OK, response.status)
+        assertTrue(response.bodyString().contains("storageClass"))
+    }
+
+    @Test
+    fun `GET uploads id thumb for encrypted row serves thumbnailStorageKey bytes`() {
+        val encryptedRecord = knownRecord.copy(
+            storageClass = "encrypted",
+            thumbnailStorageKey = "uploads/uuid-thumb.bin",
+        )
+        every { mockDatabase.getUploadById(knownId) } returns encryptedRecord
+        every { mockStorage.get(StorageKey("uploads/uuid-thumb.bin")) } returns byteArrayOf(7, 8, 9)
+
+        val response = app(Request(GET, "/api/content/uploads/$knownId/thumb"))
+
+        assertEquals(OK, response.status)
+        assertTrue(response.body.payload.array().contentEquals(byteArrayOf(7, 8, 9)))
+        verify { mockStorage.get(StorageKey("uploads/uuid-thumb.bin")) }
+    }
 }
