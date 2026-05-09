@@ -62,11 +62,14 @@ import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import digital.heirlooms.api.Upload
 import digital.heirlooms.ui.common.HeirloomsImage
 import digital.heirlooms.ui.common.LocalHeirloomsApi
+import digital.heirlooms.ui.common.TagInputField
 import digital.heirlooms.ui.garden.DidntTake
+import digital.heirlooms.ui.share.RecentTagsStore
 import digital.heirlooms.ui.theme.Forest
 import digital.heirlooms.ui.theme.Forest15
 import digital.heirlooms.ui.theme.HeirloomsSerifItalic
@@ -301,6 +304,8 @@ private fun FilterSheet(
     onApply: (ExploreFilters) -> Unit,
 ) {
     var draft by remember { mutableStateOf(filters) }
+    val context = LocalContext.current
+    val recentTags = remember(context) { RecentTagsStore(context).load().take(5) }
 
     val sortOptions = listOf(
         "upload_newest" to "Newest upload",
@@ -342,30 +347,14 @@ private fun FilterSheet(
             }
 
             // Tags
-            if (availableTags.isNotEmpty()) {
-                FilterSection("Tags") {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        availableTags.forEach { tag ->
-                            val selected = tag in draft.tags
-                            FilterChip(
-                                selected = selected,
-                                onClick = {
-                                    draft = draft.copy(
-                                        tags = if (selected) draft.tags - tag else draft.tags + tag
-                                    )
-                                },
-                                label = { Text(tag, style = MaterialTheme.typography.bodySmall) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = Forest,
-                                    selectedLabelColor = Parchment,
-                                ),
-                            )
-                        }
-                    }
-                }
+            FilterSection("Tags") {
+                TagInputField(
+                    tags = draft.tags,
+                    onTagsChange = { draft = draft.copy(tags = it) },
+                    availableTags = availableTags,
+                    recentTags = recentTags,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
 
             // In capsule

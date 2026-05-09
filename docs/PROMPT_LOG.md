@@ -6,6 +6,16 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-09 — v0.26.1: Explore filter tags use TagInputField
+
+The Explore filter sheet's Tags section was still using `FilterChip` toggles
+from v0.25.8. Replaced with `TagInputField` — now consistent with the Garden
+quick-tag sheet and photo detail. `RecentTagsStore` used for suggestions.
+`InputChip` import restored (used by the active-filter summary chips, not by
+the Tags section that was replaced).
+
+---
+
 ## Session — 2026-05-09 — v0.26.0: Unified TagInputField + staged photo detail edits
 
 **New shared `TagInputField` composable** (`ui/common/TagInputField.kt`).
