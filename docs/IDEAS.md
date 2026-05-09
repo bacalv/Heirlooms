@@ -392,6 +392,15 @@ recording so it isn't rediscovered cold.
   full review.
 - **Apple Developer account is £79/year.** Review can take days. Minimal
   app shape reduces review surface and rejection risk.
+- **Secure Enclave curve support shapes the M7 asymmetric-scheme choice.**
+  iOS Secure Enclave historically supports only P-256 for ECDH and signing,
+  not X25519. If M7 picks X25519 (the modern default for Android and web),
+  iOS will need either software-Keychain key storage (weaker than Android
+  Keystore equivalent) or a per-device envelope variant. The M7 envelope
+  format is committed to being curve-agnostic regardless, so this isn't
+  blocking — but it's an input the M7 brief needs to weigh. See "Open
+  questions for the M7 implementation brief" → "Asymmetric scheme for
+  device keypairs."
 
 ### The M10 notification question (open)
 
@@ -659,19 +668,41 @@ recorded so the decision is conscious, not default.
 
 ### Asymmetric scheme for device keypairs
 
-The two realistic candidates:
+Three realistic candidates, each with different hardware-enclave support
+across the three platforms Heirlooms targets (Android, web, iOS):
 
+- **P-256 (secp256r1, with HKDF for ECDH-derived wrapping keys).** The only
+  curve hardware-supported in all three enclaves: Android Keystore, WebCrypto,
+  and the iOS Secure Enclave. Older than X25519; classical security is
+  comparable; performance is fine. The conservative default if iOS support
+  matters.
 - **X25519 (with HKDF for ECDH-derived wrapping keys).** Smaller keys, faster,
-  modern. Supported in Android Keystore and WebCrypto, though WebCrypto support
-  arrived relatively recently — current browser support needs verification at
-  brief-writing time.
+  modern. Supported in Android Keystore and WebCrypto, though WebCrypto
+  support arrived relatively recently — current browser support needs
+  verification at brief-writing time. Historically *not* supported inside
+  the iOS Secure Enclave; iOS would need to use software-Keychain storage
+  or a different envelope variant. Worth re-checking Apple's current support
+  when the M7 brief is drafted.
 - **RSA-OAEP.** Older, well-supported everywhere, larger keys and slower.
-  No surprises in cross-platform behaviour.
+  No surprises in cross-platform behaviour. Supported in all three enclaves.
 
 The choice has implications for envelope size (modest), performance (modest),
-and post-quantum migration shape (both face the same problem; neither is
-quantum-safe). X25519 is the modern default; RSA-OAEP is the safe default.
-Worth a deliberate decision rather than a reflexive pick.
+post-quantum migration shape (all three face the same problem; none are
+quantum-safe), and — most consequentially — the iOS path. If iOS is on the
+roadmap, picking X25519 means iOS devices will either store keys in software
+(weaker than Android Keystore equivalent) or the envelope format has to admit
+a per-device variant. P-256 sidesteps this entirely; RSA-OAEP also does, at
+the cost of envelope size.
+
+P-256 is the conservative answer; X25519 is the modern answer; RSA-OAEP is
+the safe answer. Worth a deliberate decision rather than a reflexive pick.
+
+**Regardless of which scheme is chosen,** the M7 envelope format must record
+which asymmetric scheme was used to wrap each per-device master-key copy,
+not assume one scheme. Algorithm identifiers in metadata (already a M7
+commitment for crypto agility) handle this naturally and let future devices
+use a different scheme without an envelope migration. This is cheap to do
+in M7 and expensive to retrofit.
 
 ### Brand voice on the recovery-failure copy
 

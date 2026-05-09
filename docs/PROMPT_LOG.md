@@ -2465,3 +2465,44 @@ None — the brief was complete and accurate. All edits landed as described.
 
 **Docs updated:** ROADMAP.md, IDEAS.md, PA_NOTES.md, BRAND.md, IDIOMS.md,
 PROMPT_LOG.md (this entry).
+
+---
+
+## Session: iOS Secure Enclave curve note for M7 asymmetric-scheme question — 9 May 2026
+
+**Brief:** Small follow-up to the E2EE roadmap reshape session. iOS Secure
+Enclave historically supports only P-256 for ECDH and signing, not X25519.
+This is a material input to the M7 asymmetric-scheme decision that was
+missing from the original "Open questions" write-up.
+
+**What was changed:**
+
+- IDEAS.md "Open questions for the M7 implementation brief" → "Asymmetric
+  scheme for device keypairs" subsection extended to include P-256 as a
+  third candidate alongside X25519 and RSA-OAEP. Hardware-enclave support
+  across Android Keystore, WebCrypto, and iOS Secure Enclave is now
+  explicit. Added a "regardless of choice" commitment that the M7 envelope
+  format must be curve-agnostic, so iOS can later use a different scheme
+  without an envelope migration.
+- IDEAS.md "iOS strategy" → "Things to flag for the eventual iOS brief"
+  gains a new bullet cross-referencing the asymmetric-scheme question.
+
+**Decision rationale:**
+
+The cleanest architectural response to iOS's enclave constraints is to bake
+curve-agnosticism into the envelope format from M7 day one, rather than
+trying to pick a single scheme that works everywhere in hardware. P-256 is
+the only curve hardware-supported on all three platforms today, but committing
+the protocol to one scheme limits future agility. Algorithm identifiers in
+envelope metadata — already a M7 commitment for crypto agility — handle the
+multi-scheme case naturally.
+
+The M7 brief will still pick a default scheme (likely P-256 for conservatism,
+or X25519 if Apple has shipped Secure Enclave support since this was last
+verified). The point is that whichever it picks, iOS later can join the
+protocol without rewriting it.
+
+**Docs updated:** IDEAS.md, PROMPT_LOG.md (this entry).
+
+**Not in scope:** the M7 implementation brief itself; resolution of the
+three open questions still pending Bret's input.
