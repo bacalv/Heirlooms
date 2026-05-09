@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
 import { apiFetch, API_URL } from '../api'
 import { PhotoGrid } from '../components/PhotoGrid'
 import { WorkingDots } from '../brand/WorkingDots'
+import { getThumb } from '../thumbCache'
 
 // ---- Multi-tag picker for filter chrome ------------------------------------
 
@@ -235,14 +236,15 @@ function ExploreGrid({ uploads, sort, includeComposted }) {
       {uploads.map((upload) => {
         const isComposted = showCompostedStyle && !!upload.compostedAt
         return (
-          <a
+          <Link
             key={upload.id}
-            href={`/photos/${upload.id}?from=explore`}
+            to={`/photos/${upload.id}?from=explore`}
+            state={{ upload }}
             className="relative aspect-square overflow-hidden rounded border border-forest-08 block hover:opacity-90 transition-opacity"
           >
             <ExploreThumb upload={upload} isComposted={isComposted} />
             {showNoDate && !upload.capturedAt && <NoMetadataTag />}
-          </a>
+          </Link>
         )
       })}
     </div>
@@ -261,12 +263,15 @@ function ExploreThumb({ upload, isComposted }) {
   useEffect(() => {
     if (!displayUrl) return
     let cancelled = false
-    fetch(displayUrl, { headers: { 'X-Api-Key': apiKey } })
-      .then((r) => r.ok ? r.blob() : Promise.reject())
-      .then((blob) => { if (!cancelled) setBlobUrl(URL.createObjectURL(blob)) })
+    let ownUrl = null
+    getThumb(upload.id, displayUrl, apiKey)
+      .then((url) => {
+        if (!cancelled) { ownUrl = url; setBlobUrl(url) }
+        else URL.revokeObjectURL(url)
+      })
       .catch(() => {})
-    return () => { cancelled = true }
-  }, [displayUrl, apiKey])
+    return () => { cancelled = true; if (ownUrl) URL.revokeObjectURL(ownUrl) }
+  }, [upload.id, displayUrl, apiKey])
 
   const rotate = upload.rotation ? { transform: `rotate(${upload.rotation}deg)` } : {}
   const saturate = isComposted ? { filter: 'saturate(0.35) opacity(0.75)' } : {}
