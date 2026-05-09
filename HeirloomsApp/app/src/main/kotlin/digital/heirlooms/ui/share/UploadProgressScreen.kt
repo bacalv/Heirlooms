@@ -30,7 +30,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -66,13 +65,12 @@ fun UploadProgressScreen(
     ) {
         when {
             session.allDone -> {
-                // All jobs finished — auto-prune terminal records so they don't reappear
-                // in the next session's upload list, then show the done state.
-                LaunchedEffect(Unit) { vm.pruneFinished() }
+                // Prune is deferred to button tap so the done state stays visible;
+                // pruning immediately would make files go empty → blank Box race.
                 DoneState(
                     fromShare = fromShare,
-                    onGoToGarden = onGoToGarden,
-                    onGoBack = onContinueInBackground,
+                    onGoToGarden = { vm.pruneFinished(); onGoToGarden() },
+                    onGoBack = { vm.pruneFinished(); onContinueInBackground() },
                 )
             }
             session.files.isEmpty() -> {
