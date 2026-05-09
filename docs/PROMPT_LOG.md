@@ -37,6 +37,33 @@ Deployed to Cloud Run (heirlooms-web).
 
 ---
 
+## Session — 2026-05-09 — Web: Garden tile actions (preview, pencil, compost)
+
+**Image preview modal.** Clicking an image thumbnail in the Garden previously
+navigated directly to the photo detail page. Changed to open a `QuickImageModal`
+(full-size image, max 75vh, loading spinner) so the user stays in context.
+`onImagePreview` prop threaded through `PlotItemsRow` → `SystemPlotRow` /
+`SortablePlotRow` → `GardenPage`. Follows the same pattern as `onVideoPlay` /
+`QuickVideoModal` already in place for videos.
+
+**Pencil / detail button.** A hover-reveal pencil icon added at `top-1 right-7`
+(immediately left of the tag button) on every Garden tile — images and videos.
+Uses `useNavigate` directly in `PlotThumbCard` to avoid an extra prop. Videos
+now have a path to the detail page without having to avoid the player; images
+have a path to detail without going through the preview modal.
+
+**Compost button on Garden tiles.** Hover-reveal trash icon at `bottom-1 left-1`
+(earth/70 background) on eligible tiles. Clicking raises a `ConfirmDialog`
+("Compost this item? / Keep it") before any action is taken. On confirm, POSTs
+to `/api/content/uploads/:id/compost` and triggers a silent plot re-fetch to
+remove the item. API errors shown inline in the dialog. Button is hidden when
+`upload.tags?.length > 0` — items with tags cannot be composted, consistent with
+the `compostDisabled` check on the photo detail page. Capsule membership is not
+checked on the tile (no data available); the API rejects those cases and the error
+surfaces in the dialog.
+
+---
+
 ## Session — 2026-05-09 — Web: Explore nav fix, video playback, video badge
 
 **Explore → photo detail redirected via login screen.**
