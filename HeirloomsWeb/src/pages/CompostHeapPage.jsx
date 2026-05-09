@@ -1,33 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
-import { apiFetch, formatCompactDate, formatUploadDate, daysUntilPurge, API_URL } from '../api'
+import { apiFetch, formatCompactDate, formatUploadDate, daysUntilPurge } from '../api'
 import { WorkingDots } from '../brand/WorkingDots'
 import { compostHeapEmptyState } from '../brand/brandStrings'
-
-function ThumbImage({ upload, apiKey }) {
-  const [blobUrl, setBlobUrl] = useState(null)
-
-  useEffect(() => {
-    const url = upload.thumbnailKey
-      ? `${API_URL}/api/content/uploads/${upload.id}/thumb`
-      : `${API_URL}/api/content/uploads/${upload.id}/file`
-    fetch(url, { headers: { 'X-Api-Key': apiKey } })
-      .then((r) => r.ok ? r.blob() : Promise.reject())
-      .then((blob) => setBlobUrl(URL.createObjectURL(blob)))
-      .catch(() => {})
-    return () => { if (blobUrl) URL.revokeObjectURL(blobUrl) }
-  }, [upload.id, apiKey])
-
-  if (!blobUrl) return <div className="w-20 h-20 rounded bg-forest-08 flex-shrink-0" />
-  return (
-    <img
-      src={blobUrl}
-      alt={upload.storageKey}
-      className="w-20 h-20 object-cover rounded border border-forest-08 flex-shrink-0"
-    />
-  )
-}
+import { UploadThumb } from '../components/UploadThumb'
 
 export function CompostHeapPage() {
   const { apiKey } = useAuth()
@@ -97,7 +74,7 @@ export function CompostHeapPage() {
                 {i > 0 && <div className="border-t border-forest-08" />}
                 <div className="py-4 flex items-center gap-4">
                   <Link to={`/photos/${upload.id}`} className="flex-shrink-0">
-                    <ThumbImage upload={upload} apiKey={apiKey} />
+                    <UploadThumb upload={upload} className="w-20 h-20 object-cover rounded border border-forest-08" alt={upload.storageKey} />
                   </Link>
                   <div className="flex-1 min-w-0">
                     <Link to={`/photos/${upload.id}`} className="block">

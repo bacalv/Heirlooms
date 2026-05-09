@@ -7,6 +7,80 @@ export async function apiFetch(path, apiKey, options = {}) {
   return fetch(`${API_URL}${path}`, { ...options, headers })
 }
 
+// ---- Keys API ---------------------------------------------------------------
+
+export async function putPassphrase(apiKey, { wrappedMasterKeyB64, wrapFormat, argon2Params, saltB64 }) {
+  const r = await apiFetch('/api/keys/passphrase', apiKey, {
+    method: 'PUT',
+    body: JSON.stringify({
+      wrappedMasterKey: wrappedMasterKeyB64,
+      wrapFormat,
+      argon2Params,
+      salt: saltB64,
+    }),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+}
+
+export async function registerDevice(apiKey, { deviceId, deviceLabel, deviceKind, pubkeyFormat, pubkeyB64, wrappedMasterKeyB64, wrapFormat }) {
+  const r = await apiFetch('/api/keys/devices', apiKey, {
+    method: 'POST',
+    body: JSON.stringify({
+      deviceId,
+      deviceLabel,
+      deviceKind,
+      pubkeyFormat,
+      pubkey: pubkeyB64,
+      wrappedMasterKey: wrappedMasterKeyB64,
+      wrapFormat,
+    }),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+}
+
+// ---- Encrypted upload -------------------------------------------------------
+
+export async function initiateEncryptedUpload(apiKey, mimeType) {
+  const r = await apiFetch('/api/content/uploads/initiate', apiKey, {
+    method: 'POST',
+    body: JSON.stringify({ mimeType, storage_class: 'encrypted' }),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json()
+}
+
+// PUT raw bytes to a signed URL — no auth header, no Content-Type.
+export async function putBlob(signedUrl, bytes) {
+  const r = await fetch(signedUrl, { method: 'PUT', body: bytes })
+  if (!r.ok) throw new Error(`Blob PUT failed: ${r.status}`)
+}
+
+export async function confirmEncryptedUpload(apiKey, {
+  storageKey, mimeType, fileSize,
+  envelopeVersion, wrappedDekB64, dekFormat,
+  thumbnailStorageKey, wrappedThumbnailDekB64, thumbnailDekFormat,
+  takenAt, tags,
+}) {
+  const r = await apiFetch('/api/content/uploads/confirm', apiKey, {
+    method: 'POST',
+    body: JSON.stringify({
+      storageKey, mimeType, fileSize, storage_class: 'encrypted',
+      envelopeVersion, wrappedDek: wrappedDekB64, dekFormat,
+      thumbnailStorageKey, wrappedThumbnailDek: wrappedThumbnailDekB64, thumbnailDekFormat,
+      takenAt, tags,
+    }),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json()
+}
+
+// Fetch arbitrary URL with auth header and return raw bytes.
+export async function fetchBytes(url, apiKey) {
+  const r = await fetch(url, { headers: { 'X-Api-Key': apiKey } })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return new Uint8Array(await r.arrayBuffer())
+}
+
 export function formatUnlockDate(isoString) {
   return new Date(isoString).toLocaleDateString('en-GB', {
     day: 'numeric',

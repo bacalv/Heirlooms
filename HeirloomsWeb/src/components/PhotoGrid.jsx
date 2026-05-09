@@ -1,43 +1,13 @@
-import { useState, useEffect, useRef } from 'react'
-import { useAuth } from '../AuthContext'
-import { API_URL } from '../api'
-import { getThumb } from '../thumbCache'
+import { UploadThumb } from './UploadThumb'
 
-function Thumb({ upload, apiKey, selected, onSelect, linkTo }) {
-  const fileUrl = `${API_URL}/api/content/uploads/${upload.id}/file`
-  const displayUrl = upload.thumbnailKey
-    ? `${API_URL}/api/content/uploads/${upload.id}/thumb`
-    : fileUrl
-  const needsFetch = upload.mimeType?.startsWith('image/') || !!upload.thumbnailKey
-  const [blobUrl, setBlobUrl] = useState(null)
-  const blobRef = useRef(null)
-
-  useEffect(() => {
-    if (!needsFetch) return
-    let cancelled = false
-    getThumb(upload.id, displayUrl, apiKey)
-      .then((url) => {
-        if (!cancelled) { blobRef.current = url; setBlobUrl(url) }
-        else URL.revokeObjectURL(url)
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-      if (blobRef.current) { URL.revokeObjectURL(blobRef.current); blobRef.current = null }
-    }
-  }, [upload.id, displayUrl, apiKey, needsFetch])
-
-  const inner = blobUrl ? (
-    <img
-      src={blobUrl}
-      alt=""
+function Thumb({ upload, selected, onSelect, linkTo }) {
+  const inner = (
+    <UploadThumb
+      upload={upload}
       className="w-full h-full object-cover"
-      style={upload.rotation ? { transform: `rotate(${upload.rotation}deg)` } : undefined}
+      rotation={upload.rotation}
+      alt=""
     />
-  ) : (
-    <div className="w-full h-full bg-forest-08 flex items-center justify-center">
-      <span className="text-text-muted text-xs">…</span>
-    </div>
   )
 
   if (onSelect) {
@@ -76,9 +46,7 @@ function Thumb({ upload, apiKey, selected, onSelect, linkTo }) {
   )
 }
 
-export function PhotoGrid({ uploads = [], apiKey: keyProp, selectable = false, selectedIds = new Set(), onSelect, getPhotoHref, cols = '3' }) {
-  const { apiKey: ctxKey } = useAuth()
-  const apiKey = keyProp ?? ctxKey
+export function PhotoGrid({ uploads = [], selectable = false, selectedIds = new Set(), onSelect, getPhotoHref, cols = '3' }) {
   const colClass = cols === '4' ? 'grid-cols-3 sm:grid-cols-4' : cols === '5' ? 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5' : 'grid-cols-2 sm:grid-cols-3'
 
   if (uploads.length === 0) return null
@@ -89,7 +57,6 @@ export function PhotoGrid({ uploads = [], apiKey: keyProp, selectable = false, s
         <Thumb
           key={upload.id}
           upload={upload}
-          apiKey={apiKey}
           selected={selectable ? selectedIds.has(upload.id) : false}
           onSelect={selectable ? onSelect : null}
           linkTo={getPhotoHref ? getPhotoHref(upload.id) : null}

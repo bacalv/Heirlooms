@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
-import { apiFetch, daysUntilPurge, formatCompactDate, formatUploadDate, capsuleTitle } from '../api'
+import { apiFetch, daysUntilPurge, formatCompactDate, formatUploadDate, capsuleTitle, API_URL } from '../api'
 import { WaxSealOlive } from '../brand/WaxSealOlive'
 import { WorkingDots } from '../brand/WorkingDots'
 import { AddToCapsuleModal } from '../components/AddToCapsuleModal'
 import { Toast } from '../components/Toast'
-import { API_URL } from '../api'
+import { getMasterKey } from '../crypto/vaultSession'
+import { unwrapDekWithMasterKey, decryptSymmetric, fromB64 } from '../crypto/vaultCrypto'
 
 function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`
@@ -410,29 +411,63 @@ export function PhotoDetailPage() {
 
   useEffect(() => {
     if (!upload) return
-    const isVideo = upload.mimeType?.startsWith('video/')
-    if (isVideo) {
-      // Try a signed URL first so the browser can stream and seek natively.
-      // Fall back to downloading the whole file as a blob if that fails.
-      apiFetch(`/api/content/uploads/${upload.id}/url`, apiKey)
-        .then((r) => r.ok ? r.json() : Promise.reject())
-        .then((data) => setBlobUrl(data.url))
-        .catch(() => {
-          fetch(`${API_URL}/api/content/uploads/${upload.id}/file`, { headers: { 'X-Api-Key': apiKey } })
-            .then((r) => r.ok ? r.blob() : Promise.reject())
-            .then((blob) => setBlobUrl(URL.createObjectURL(blob)))
-            .catch(() => {})
+    let objectUrl = null
+    let cancelled = false
+
+    async function loadContent() {
+      const isVideo = upload.mimeType?.startsWith('video/')
+      const isEncrypted = upload.storageClass === 'encrypted'
+
+      if (isEncrypted) {
+        // Always fetch full file and decrypt on-device.
+        const r = await fetch(`${API_URL}/api/content/uploads/${upload.id}/file`, {
+          headers: { 'X-Api-Key': apiKey },
         })
-    } else {
-      const displayUrl = upload.thumbnailKey
-        ? `${API_URL}/api/content/uploads/${upload.id}/thumb`
-        : `${API_URL}/api/content/uploads/${upload.id}/file`
-      fetch(displayUrl, { headers: { 'X-Api-Key': apiKey } })
-        .then((r) => r.ok ? r.blob() : Promise.reject())
-        .then((blob) => setBlobUrl(URL.createObjectURL(blob)))
-        .catch(() => {})
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        const encBytes = new Uint8Array(await r.arrayBuffer())
+        const masterKey = getMasterKey()
+        const raw = upload.wrappedDek
+        if (!raw) throw new Error('Missing wrappedDek')
+        const wrappedDek = typeof raw === 'string' ? fromB64(raw) : raw
+        const dek = await unwrapDekWithMasterKey(wrappedDek, masterKey)
+        const plainBytes = await decryptSymmetric(encBytes, dek)
+        const blob = new Blob([plainBytes], { type: upload.mimeType })
+        objectUrl = URL.createObjectURL(blob)
+        if (!cancelled) setBlobUrl(objectUrl)
+      } else if (isVideo) {
+        // Plaintext video: try signed URL for native streaming, fall back to blob.
+        try {
+          const data = await apiFetch(`/api/content/uploads/${upload.id}/url`, apiKey)
+            .then((r) => r.ok ? r.json() : Promise.reject())
+          if (!cancelled) setBlobUrl(data.url)
+        } catch {
+          const r = await fetch(`${API_URL}/api/content/uploads/${upload.id}/file`, {
+            headers: { 'X-Api-Key': apiKey },
+          })
+          if (!r.ok) throw new Error(`HTTP ${r.status}`)
+          const blob = await r.blob()
+          objectUrl = URL.createObjectURL(blob)
+          if (!cancelled) setBlobUrl(objectUrl)
+        }
+      } else {
+        // Plaintext image: prefer thumbnail for the detail view.
+        const displayUrl = upload.thumbnailKey
+          ? `${API_URL}/api/content/uploads/${upload.id}/thumb`
+          : `${API_URL}/api/content/uploads/${upload.id}/file`
+        const r = await fetch(displayUrl, { headers: { 'X-Api-Key': apiKey } })
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        const blob = await r.blob()
+        objectUrl = URL.createObjectURL(blob)
+        if (!cancelled) setBlobUrl(objectUrl)
+      }
     }
-  }, [apiKey, upload])
+
+    loadContent().catch(() => {})
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [apiKey, upload?.id])
 
   useEffect(() => {
     apiFetch(`/api/content/uploads/${id}/capsules`, apiKey)

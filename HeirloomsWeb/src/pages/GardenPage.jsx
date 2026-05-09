@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { BrandModal } from '../components/BrandModal'
 import { OliveBranchArrival } from '../brand/OliveBranchArrival'
-import { getThumb } from '../thumbCache'
+import { UploadThumb } from '../components/UploadThumb'
 import {
   DndContext,
   PointerSensor,
@@ -20,9 +20,14 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useAuth } from '../AuthContext'
-import { API_URL, apiFetch } from '../api'
+import { API_URL, apiFetch, initiateEncryptedUpload, putBlob, confirmEncryptedUpload } from '../api'
 import { WorkingDots } from '../brand/WorkingDots'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { getMasterKey } from '../crypto/vaultSession'
+import {
+  generateDek, encryptSymmetric, wrapDekUnderMasterKey, ALG_AES256GCM_V1, ALG_MASTER_AES256GCM_V1,
+  decryptSymmetric, unwrapDekWithMasterKey, fromB64, toB64,
+} from '../crypto/vaultCrypto'
 
 const JUST_ARRIVED_SENTINEL = '__just_arrived__'
 
@@ -32,34 +37,22 @@ function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, onIm
   const navigate = useNavigate()
   const isImage = upload.mimeType?.startsWith('image/')
   const isVideo = upload.mimeType?.startsWith('video/')
-  const displayUrl = upload.thumbnailKey
-    ? `${API_URL}/api/content/uploads/${upload.id}/thumb`
-    : (isImage ? `${API_URL}/api/content/uploads/${upload.id}/file` : null)
-
-  const [blobUrl, setBlobUrl] = useState(null)
   const isComposted = !!upload.compostedAt
-
-  useEffect(() => {
-    if (!displayUrl) return
-    let cancelled = false
-    let ownUrl = null
-    getThumb(upload.id, displayUrl, apiKey)
-      .then((url) => {
-        if (!cancelled) { ownUrl = url; setBlobUrl(url) }
-        else URL.revokeObjectURL(url)
-      })
-      .catch(() => {})
-    return () => { cancelled = true; if (ownUrl) URL.revokeObjectURL(ownUrl) }
-  }, [upload.id, displayUrl, apiKey])
+  const isEncrypted = upload.storageClass === 'encrypted'
 
   const saturate = isComposted ? { filter: 'saturate(0.4) opacity(0.7)' } : {}
-  const rotate = upload.rotation ? { transform: `rotate(${upload.rotation}deg)` } : {}
 
   function stop(e, fn) { e.preventDefault(); e.stopPropagation(); fn() }
 
-  const thumbnailContent = blobUrl ? (
-    <>
-      <img src={blobUrl} alt="" className="w-full h-full object-cover" style={{ ...rotate, ...saturate }} />
+  const thumbnailContent = (
+    <div className="relative w-full h-full">
+      <UploadThumb
+        upload={upload}
+        className="w-full h-full object-cover"
+        style={isComposted ? saturate : undefined}
+        rotation={upload.rotation}
+        alt=""
+      />
       {isVideo && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/25 pointer-events-none">
           <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
@@ -69,31 +62,20 @@ function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, onIm
           </div>
         </div>
       )}
-    </>
-  ) : isVideo ? (
-    <div className="w-full h-full flex items-center justify-center bg-forest-08">
-      <svg className="w-10 h-10 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
-      </svg>
-    </div>
-  ) : (
-    <div className="w-full h-full bg-forest-08 flex items-center justify-center">
-      <span className="text-text-muted text-xs">…</span>
     </div>
   )
 
   return (
     <div className="flex-shrink-0 w-40 h-40 relative group">
-      {/* Video: clicking the play icon opens modal; clicking elsewhere navigates */}
-      {isVideo && onVideoPlay ? (
+      {/* Encrypted uploads: always navigate to detail page (no quick modal for ciphertext) */}
+      {isVideo && onVideoPlay && !isEncrypted ? (
         <button
           onClick={(e) => stop(e, () => onVideoPlay(upload))}
           className="w-full h-full rounded overflow-hidden border border-forest-08 bg-forest-04 block cursor-pointer relative"
         >
           {thumbnailContent}
         </button>
-      ) : onImagePreview ? (
+      ) : onImagePreview && !isEncrypted ? (
         <button
           onClick={(e) => stop(e, () => onImagePreview(upload))}
           className="w-full h-full rounded overflow-hidden border border-forest-08 bg-forest-04 block cursor-pointer relative"
@@ -588,6 +570,108 @@ function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMo
 
 // ---- Main GardenPage -------------------------------------------------------
 
+async function generateThumbnail(file) {
+  const MAX_DIM = 400
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
+  try {
+    if (file.type.startsWith('image/')) {
+      const img = await createImageBitmap(file)
+      const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height))
+      canvas.width = Math.round(img.width * scale)
+      canvas.height = Math.round(img.height * scale)
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      img.close()
+    } else {
+      const url = URL.createObjectURL(file)
+      const video = document.createElement('video')
+      video.src = url
+      video.muted = true
+      await new Promise((resolve) => { video.onloadeddata = resolve; video.load() })
+      video.currentTime = 1
+      await new Promise((resolve) => { video.onseeked = resolve })
+      const scale = Math.min(1, MAX_DIM / Math.max(video.videoWidth || 1, video.videoHeight || 1))
+      canvas.width = Math.round((video.videoWidth || 1) * scale)
+      canvas.height = Math.round((video.videoHeight || 1) * scale)
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      URL.revokeObjectURL(url)
+    }
+    return await new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) { reject(new Error('thumbnail generation failed')); return }
+        blob.arrayBuffer().then((ab) => resolve(new Uint8Array(ab)))
+      }, 'image/jpeg', 0.8)
+    })
+  } catch {
+    // 1×1 white JPEG fallback
+    return new Uint8Array([
+      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+      0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xff, 0xdb, 0x00, 0x43,
+      0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08, 0x07, 0x07, 0x07, 0x09,
+      0x09, 0x08, 0x0a, 0x0c, 0x14, 0x0d, 0x0c, 0x0b, 0x0b, 0x0c, 0x19, 0x12,
+      0x13, 0x0f, 0x14, 0x1d, 0x1a, 0x1f, 0x1e, 0x1d, 0x1a, 0x1c, 0x1c, 0x20,
+      0x24, 0x2e, 0x27, 0x20, 0x22, 0x2c, 0x23, 0x1c, 0x1c, 0x28, 0x37, 0x29,
+      0x2c, 0x30, 0x31, 0x34, 0x34, 0x34, 0x1f, 0x27, 0x39, 0x3d, 0x38, 0x32,
+      0x3c, 0x2e, 0x33, 0x34, 0x32, 0xff, 0xc0, 0x00, 0x0b, 0x08, 0x00, 0x01,
+      0x00, 0x01, 0x01, 0x01, 0x11, 0x00, 0xff, 0xc4, 0x00, 0x1f, 0x00, 0x00,
+      0x01, 0x05, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+      0x09, 0x0a, 0x0b, 0xff, 0xc4, 0x00, 0xb5, 0x10, 0x00, 0x02, 0x01, 0x03,
+      0x03, 0x02, 0x04, 0x03, 0x05, 0x05, 0x04, 0x04, 0x00, 0x00, 0x01, 0x7d,
+      0x01, 0x02, 0x03, 0x00, 0x04, 0x11, 0x05, 0x12, 0x21, 0x31, 0x41, 0x06,
+      0x13, 0x51, 0x61, 0x07, 0x22, 0x71, 0x14, 0x32, 0x81, 0x91, 0xa1, 0x08,
+      0x23, 0x42, 0xb1, 0xc1, 0x15, 0x52, 0xd1, 0xf0, 0x24, 0x33, 0x62, 0x72,
+      0x82, 0x09, 0x0a, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x25, 0x26, 0x27, 0x28,
+      0x29, 0x2a, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x43, 0x44, 0x45,
+      0x46, 0x47, 0x48, 0x49, 0x4a, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59,
+      0x5a, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x73, 0x74, 0x75,
+      0x76, 0x77, 0x78, 0x79, 0x7a, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89,
+      0x8a, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9a, 0xa2, 0xa3,
+      0xa4, 0xa5, 0xa6, 0xa7, 0xa8, 0xa9, 0xaa, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6,
+      0xb7, 0xb8, 0xb9, 0xba, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7, 0xc8, 0xc9,
+      0xca, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7, 0xd8, 0xd9, 0xda, 0xe1, 0xe2,
+      0xe3, 0xe4, 0xe5, 0xe6, 0xe7, 0xe8, 0xe9, 0xea, 0xf1, 0xf2, 0xf3, 0xf4,
+      0xf5, 0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xff, 0xda, 0x00, 0x08, 0x01, 0x01,
+      0x00, 0x00, 0x3f, 0x00, 0xfb, 0xd3, 0xff, 0xd9,
+    ])
+  }
+}
+
+async function encryptAndUpload(file, apiKey, onStatus) {
+  onStatus('Encrypting…')
+  const fileBytes = new Uint8Array(await file.arrayBuffer())
+  const contentDek = generateDek()
+  const contentEnvelope = await encryptSymmetric(ALG_AES256GCM_V1, contentDek, fileBytes)
+  const thumbBytes = await generateThumbnail(file)
+  const thumbDek = generateDek()
+  const thumbEnvelope = await encryptSymmetric(ALG_AES256GCM_V1, thumbDek, thumbBytes)
+  const masterKey = getMasterKey()
+  const wrappedDek = await wrapDekUnderMasterKey(contentDek, masterKey)
+  const wrappedThumbDek = await wrapDekUnderMasterKey(thumbDek, masterKey)
+
+  onStatus('Uploading…')
+  const { storageKey, uploadUrl, thumbnailStorageKey, thumbnailUploadUrl } =
+    await initiateEncryptedUpload(apiKey, file.type)
+  await putBlob(uploadUrl, contentEnvelope)
+  await putBlob(thumbnailUploadUrl, thumbEnvelope)
+
+  const takenAt = new Date(file.lastModified).toISOString()
+  const upload = await confirmEncryptedUpload(apiKey, {
+    storageKey,
+    mimeType: file.type,
+    fileSize: fileBytes.length,
+    envelopeVersion: 1,
+    wrappedDekB64: toB64(wrappedDek),
+    dekFormat: ALG_MASTER_AES256GCM_V1,
+    thumbnailStorageKey,
+    wrappedThumbnailDekB64: toB64(wrappedThumbDek),
+    thumbnailDekFormat: ALG_MASTER_AES256GCM_V1,
+    takenAt,
+    tags: [],
+  })
+  return upload
+}
+
 export function GardenPage() {
   const { apiKey } = useAuth()
   const location = useLocation()
@@ -607,6 +691,9 @@ export function GardenPage() {
   const [compostError, setCompostError] = useState(null)
   const [plotRefreshKey, setPlotRefreshKey] = useState(0)
   const [justArrivedExclude, setJustArrivedExclude] = useState(new Set())
+  const [uploadStatus, setUploadStatus] = useState('')   // '', 'Encrypting…', 'Uploading…', 'Done'
+  const [uploadError, setUploadError] = useState(null)
+  const fileInputRef = useRef(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -717,6 +804,24 @@ export function GardenPage() {
     }
   }
 
+  async function handlePlant(e) {
+    const files = Array.from(e.target.files ?? [])
+    e.target.value = ''
+    if (!files.length) return
+    setUploadError(null)
+    for (const file of files) {
+      try {
+        await encryptAndUpload(file, apiKey, setUploadStatus)
+        setUploadStatus('Done')
+        setTimeout(() => setUploadStatus(''), 1500)
+        setPlotRefreshKey((k) => k + 1)
+      } catch (err) {
+        setUploadError(`Couldn't upload "${file.name}".`)
+        setUploadStatus('')
+      }
+    }
+  }
+
   async function handleDeletePlot(plot) {
     try {
       const r = await apiFetch(`/api/plots/${plot.id}`, apiKey, { method: 'DELETE' })
@@ -748,16 +853,39 @@ export function GardenPage() {
 
   return (
     <main className="max-w-7xl mx-auto px-4 py-8">
-      {showCompostedMsg && (
-        <p className="font-serif italic text-forest text-sm mb-6">
-          Composted. Find it in the compost heap below.
-        </p>
-      )}
-      {plotSavedMsg && (
-        <p className="font-serif italic text-forest text-sm mb-6">
-          "{plotSavedMsg}" saved as a plot.
-        </p>
-      )}
+      <div className="flex items-center justify-between mb-6">
+        <div className="space-y-1">
+          {showCompostedMsg && (
+            <p className="font-serif italic text-forest text-sm">Composted. Find it in the compost heap below.</p>
+          )}
+          {plotSavedMsg && (
+            <p className="font-serif italic text-forest text-sm">"{plotSavedMsg}" saved as a plot.</p>
+          )}
+        </div>
+        <div className="flex items-center gap-3 flex-shrink-0">
+          {uploadStatus && (
+            <span className="text-xs text-text-muted font-serif italic">{uploadStatus}</span>
+          )}
+          {uploadError && (
+            <span className="text-xs text-earth font-serif italic">{uploadError}</span>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,video/*"
+            multiple
+            className="hidden"
+            onChange={handlePlant}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={!!uploadStatus && uploadStatus !== 'Done'}
+            className="text-sm font-sans text-parchment bg-forest border border-forest rounded-button px-3 py-1.5 hover:opacity-90 transition-opacity disabled:opacity-40"
+          >
+            Plant
+          </button>
+        </div>
+      </div>
       <div className="space-y-8">
         {systemPlot && (
           <SystemPlotRow plot={systemPlot} apiKey={apiKey}

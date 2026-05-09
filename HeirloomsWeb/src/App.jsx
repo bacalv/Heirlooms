@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import { AuthContext, useAuth } from './AuthContext'
 import { AuthLayout } from './AuthLayout'
 import { LoginPage } from './pages/LoginPage'
+import { VaultUnlockPage } from './pages/VaultUnlockPage'
 import { GardenPage } from './pages/GardenPage'
 import { PhotoDetailPage } from './pages/PhotoDetailPage'
 import { CapsulesListPage } from './pages/capsules/CapsulesListPage'
@@ -10,22 +11,38 @@ import { CapsuleDetailPage } from './pages/capsules/CapsuleDetailPage'
 import { CapsuleCreatePage } from './pages/capsules/CapsuleCreatePage'
 import { CompostHeapPage } from './pages/CompostHeapPage'
 import { ExplorePage } from './pages/ExplorePage'
+import { lock } from './crypto/vaultSession'
 
 function RequireAuth() {
-  const { apiKey } = useAuth()
+  const { apiKey, vaultUnlocked, onVaultUnlocked } = useAuth()
   const location = useLocation()
   if (!apiKey) {
     const from = location.pathname + location.search
     return <Navigate to="/login" state={{ from }} replace />
+  }
+  if (!vaultUnlocked) {
+    return <VaultUnlockPage apiKey={apiKey} onUnlocked={onVaultUnlocked} />
   }
   return <AuthLayout />
 }
 
 export default function App() {
   const [apiKey, setApiKey] = useState(null)
+  const [vaultUnlocked, setVaultUnlocked] = useState(false)
+
+  function handleSignOut() {
+    lock()
+    setApiKey(null)
+    setVaultUnlocked(false)
+  }
 
   return (
-    <AuthContext.Provider value={{ apiKey, onSignOut: () => setApiKey(null) }}>
+    <AuthContext.Provider value={{
+      apiKey,
+      vaultUnlocked,
+      onVaultUnlocked: () => setVaultUnlocked(true),
+      onSignOut: handleSignOut,
+    }}>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage onLogin={setApiKey} />} />

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
-import { apiFetch, API_URL } from '../api'
+import { apiFetch } from '../api'
 import { PhotoGrid } from '../components/PhotoGrid'
 import { WorkingDots } from '../brand/WorkingDots'
-import { getThumb } from '../thumbCache'
+import { UploadThumb } from '../components/UploadThumb'
 
 // ---- Multi-tag picker for filter chrome ------------------------------------
 
@@ -252,40 +252,18 @@ function ExploreGrid({ uploads, sort, includeComposted }) {
 }
 
 function ExploreThumb({ upload, isComposted }) {
-  const { apiKey } = useAuth()
-  const isImage = upload.mimeType?.startsWith('image/')
   const isVideo = upload.mimeType?.startsWith('video/')
-  const displayUrl = upload.thumbnailKey
-    ? `${API_URL}/api/content/uploads/${upload.id}/thumb`
-    : (isImage ? `${API_URL}/api/content/uploads/${upload.id}/file` : null)
-
-  const [blobUrl, setBlobUrl] = useState(null)
-
-  useEffect(() => {
-    if (!displayUrl) return
-    let cancelled = false
-    let ownUrl = null
-    getThumb(upload.id, displayUrl, apiKey)
-      .then((url) => {
-        if (!cancelled) { ownUrl = url; setBlobUrl(url) }
-        else URL.revokeObjectURL(url)
-      })
-      .catch(() => {})
-    return () => { cancelled = true; if (ownUrl) URL.revokeObjectURL(ownUrl) }
-  }, [upload.id, displayUrl, apiKey])
-
-  const rotate = upload.rotation ? { transform: `rotate(${upload.rotation}deg)` } : {}
-  const saturate = isComposted ? { filter: 'saturate(0.35) opacity(0.75)' } : {}
+  const saturate = isComposted ? { filter: 'saturate(0.35) opacity(0.75)' } : undefined
 
   return (
     <>
-      {blobUrl ? (
-        <img src={blobUrl} alt="" className="w-full h-full object-cover" style={{ ...rotate, ...saturate }} />
-      ) : (
-        <div className="w-full h-full bg-forest-08 flex items-center justify-center">
-          <span className="text-text-muted text-xs">…</span>
-        </div>
-      )}
+      <UploadThumb
+        upload={upload}
+        className="w-full h-full object-cover"
+        style={saturate}
+        rotation={upload.rotation}
+        alt=""
+      />
       {isVideo && (
         <div className="absolute bottom-0 right-0 bg-forest-75 rounded-tl p-0.5 pointer-events-none">
           <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24">
