@@ -2683,3 +2683,39 @@ re-upload existing content via the new encrypted path.
 - Total: 92 Android unit tests, 0 failures.
 
 **Next:** E4 — Web client vault (passphrase-based unlock, encrypted upload/download in browser).
+
+---
+
+## Session — 9 May 2026 (post-E3 device testing fixes — v0.28.1)
+
+Three bugs found during hands-on testing of v0.28.0 on Samsung Galaxy A02s.
+
+**1. Encrypted thumbnails not displaying in Garden.**
+All five thumbnail call sites (Garden, Explore, Compost heap, Photo picker, Capsule detail)
+were still calling `HeirloomsImage(url = api.thumbUrl(upload.id))` directly. For encrypted
+uploads this fetches raw ciphertext that Coil cannot decode — images showed blank.
+Fix: updated all five to `UploadThumbnail(upload)`, which dispatches to `EncryptedThumbnail`
+for encrypted rows (fetches, decrypts, decodes) and to `HeirloomsImage` for plaintext rows.
+Upload was confirmed encrypted server-side before diagnosing the display path.
+
+**2. Rotate button not updating the image immediately.**
+Pressing rotate saved the rotation to the server (visible after restart) but the image
+didn't visually update. Root cause: `_stagedRotation` was a private `MutableStateFlow`
+not directly observed by the screen. The screen only collected `isDirty` (a boolean);
+the first rotate press changes `isDirty` from false → true and does trigger a recomposition,
+but any subsequent press leaves `isDirty = true → true` with no recomposition. Fix: expose
+`stagedRotation: StateFlow<Int?>` as a public property on the ViewModel; collect it directly
+in `PhotoDetailScreen`; replace `vm.effectiveRotation()` (a plain function call) with
+`stagedRotation ?: u.rotation` (a reactive expression).
+
+**3. Just arrived drops items on view.**
+Opening any photo from Just arrived silently removed it from the row — not on save, but
+immediately on open. Root cause: `trackView()` fires on every `PhotoDetailScreen` open,
+setting `last_viewed_at = NOW()`. The `just_arrived=true` server predicate included
+`last_viewed_at IS NULL`, so any viewed item stopped qualifying.
+Fix: remove `last_viewed_at IS NULL` from the `just_arrived` predicate. Items now leave
+Just arrived only when tagged or composted (i.e., actually acted on). Also removed the
+`AND last_viewed_at IS NULL` guard from the `trackView` UPDATE so subsequent views keep
+`last_viewed_at` current. Two integration tests updated to match the new contract:
+`just_arrived=true keeps item after it has been viewed` (was: excludes after view).
+Deployed: Cloud Run revision `heirlooms-server-00034-frz`.

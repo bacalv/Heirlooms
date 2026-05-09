@@ -2,6 +2,30 @@
 
 ---
 
+## v0.28.1 — Post-E3 fixes: thumbnail display, rotate UI, Just arrived (9 May 2026)
+
+Three bugs found during hands-on device testing of v0.28.0:
+
+- **Thumbnail display.** Five call sites (Garden, Explore, Compost heap, Photo picker,
+  Capsule detail) were still calling `HeirloomsImage(url = thumbUrl())` directly. For
+  encrypted uploads this fetches raw ciphertext that Coil cannot decode. All five updated
+  to `UploadThumbnail(upload)`, which transparently decrypts before display.
+
+- **Rotate button.** `_stagedRotation` was a private `MutableStateFlow` not directly
+  observed by the screen. Only `isDirty` (a boolean) was collected; a second rotate press
+  left `isDirty = true → true` with no recomposition. Fix: expose `stagedRotation` as a
+  public `StateFlow<Int?>` and collect it directly so every press triggers an immediate
+  visual update.
+
+- **Just arrived drops items on view.** The `just_arrived=true` predicate included
+  `last_viewed_at IS NULL`, so opening any photo detail (which calls `trackView`) silently
+  removed it from Just arrived. Fix: remove that condition. Items now leave Just arrived
+  only when tagged or composted. `trackView` no longer has the IS NULL guard — every view
+  updates `last_viewed_at` (useful future signal). Integration tests updated.
+  Deployed: Cloud Run revision `heirlooms-server-00034-frz`.
+
+---
+
 ## v0.28.0 — M7 E3: Android client encryption (9 May 2026)
 
 - `VaultCrypto.kt` — pure-Kotlin crypto utilities: AES-256-GCM encrypt/decrypt, symmetric and
