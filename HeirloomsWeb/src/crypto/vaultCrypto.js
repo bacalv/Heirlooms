@@ -96,6 +96,7 @@ export const DEFAULT_ARGON2_PARAMS = { m: 65536, t: 3, p: 1 }
 export async function wrapMasterKeyWithPassphrase(masterKey, passphrase, params = DEFAULT_ARGON2_PARAMS) {
   const salt = generateSalt(16)
   const pw = new TextEncoder().encode(passphrase)
+  await new Promise(resolve => setTimeout(resolve, 0))
   const kek = argon2id(pw, salt, { m: params.m, t: params.t, p: params.p, dkLen: 32 })
   const envelope = await encryptSymmetric(ALG_ARGON2ID_AES256GCM_V1, kek, masterKey)
   return { envelope, salt, params }
@@ -103,6 +104,9 @@ export async function wrapMasterKeyWithPassphrase(masterKey, passphrase, params 
 
 export async function unwrapMasterKeyWithPassphrase(envelope, passphrase, salt, params) {
   const pw = new TextEncoder().encode(passphrase)
+  // Yield so any pending setState re-render (e.g. "Unlocking…") fires before
+  // the synchronous Argon2id KDF blocks the main thread.
+  await new Promise(resolve => setTimeout(resolve, 0))
   const kek = argon2id(pw, salt, { m: params.m, t: params.t, p: params.p, dkLen: 32 })
   try {
     return await decryptSymmetric(envelope, kek)
