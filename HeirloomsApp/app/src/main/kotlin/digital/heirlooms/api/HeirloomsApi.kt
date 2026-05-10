@@ -178,6 +178,39 @@ class HeirloomsApi(
 
     // ── Keys / device registration ───────────────────────────────────────────
 
+    data class PassphraseBackup(
+        val wrappedMasterKey: ByteArray,
+        val salt: ByteArray,
+        val params: VaultCrypto.Argon2Params,
+    )
+
+    // Returns null if no passphrase backup exists (404), throws on other errors.
+    suspend fun getPassphrase(): PassphraseBackup? = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$baseUrl/api/keys/passphrase")
+            .withAuth()
+            .build()
+        client.newCall(request).execute().use { response ->
+            when (response.code) {
+                404 -> null
+                in 200..299 -> {
+                    val json = JSONObject(response.body?.string() ?: throw IOException("Empty response"))
+                    val p = json.optJSONObject("argon2Params")
+                    PassphraseBackup(
+                        wrappedMasterKey = Base64.decode(json.getString("wrappedMasterKey"), Base64.NO_WRAP),
+                        salt = Base64.decode(json.getString("salt"), Base64.NO_WRAP),
+                        params = VaultCrypto.Argon2Params(
+                            m = p?.optInt("m", 65536) ?: 65536,
+                            t = p?.optInt("t", 3) ?: 3,
+                            p = p?.optInt("p", 1) ?: 1,
+                        ),
+                    )
+                }
+                else -> throw IOException("HTTP ${response.code}")
+            }
+        }
+    }
+
     suspend fun registerDevice(
         deviceId: String,
         deviceLabel: String,

@@ -70,17 +70,22 @@ fun VaultSetupScreen(
         contentAlignment = Alignment.Center,
     ) {
         when (val s = state) {
+            is VaultSetupViewModel.SetupState.Checking -> {
+                SpinnerContent("Checking your vault…")
+            }
+
+            is VaultSetupViewModel.SetupState.AwaitingUnlock -> {
+                PassphraseUnlockContent(
+                    errorMessage = s.errorMessage,
+                    onSubmit = { vm.submitUnlock(it) },
+                )
+            }
+
             is VaultSetupViewModel.SetupState.GeneratingKeys,
             is VaultSetupViewModel.SetupState.Saving -> {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = Forest, modifier = Modifier.size(40.dp))
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        text = if (s is VaultSetupViewModel.SetupState.GeneratingKeys)
-                            "Setting up your vault…" else "Saving…",
-                        color = Forest.copy(alpha = 0.7f),
-                    )
-                }
+                SpinnerContent(
+                    if (s is VaultSetupViewModel.SetupState.GeneratingKeys) "Setting up your vault…" else "Saving…"
+                )
             }
 
             is VaultSetupViewModel.SetupState.AwaitingPassphrase -> {
@@ -88,7 +93,6 @@ fun VaultSetupScreen(
             }
 
             is VaultSetupViewModel.SetupState.Done -> {
-                // LaunchedEffect above calls onComplete; show nothing while transitioning.
                 Box(Modifier.fillMaxSize())
             }
 
@@ -97,7 +101,7 @@ fun VaultSetupScreen(
                     OliveBranchIcon(Modifier.size(48.dp))
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        text = "Couldn't save. Try again.",
+                        text = "Couldn't connect. Try again.",
                         color = Earth,
                         fontStyle = FontStyle.Italic,
                     )
@@ -110,6 +114,72 @@ fun VaultSetupScreen(
                     ) { Text("Try again") }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SpinnerContent(label: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        CircularProgressIndicator(color = Forest, modifier = Modifier.size(40.dp))
+        Spacer(Modifier.height(16.dp))
+        Text(text = label, color = Forest.copy(alpha = 0.7f))
+    }
+}
+
+@Composable
+private fun PassphraseUnlockContent(
+    errorMessage: String?,
+    onSubmit: (CharArray) -> Unit,
+) {
+    var passphrase by rememberSaveable { mutableStateOf("") }
+    var showPassphrase by remember { mutableStateOf(false) }
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = "Your vault",
+            style = androidx.compose.material3.MaterialTheme.typography.headlineMedium,
+            fontStyle = FontStyle.Italic,
+            color = Forest,
+        )
+
+        Text(
+            text = "Enter your passphrase to add this device to your vault.",
+            fontStyle = FontStyle.Italic,
+            color = Forest.copy(alpha = 0.7f),
+        )
+
+        OutlinedTextField(
+            value = passphrase,
+            onValueChange = { passphrase = it },
+            label = { Text("Passphrase") },
+            modifier = Modifier.fillMaxWidth(),
+            visualTransformation = if (showPassphrase) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            isError = errorMessage != null,
+            supportingText = if (errorMessage != null) {
+                { Text(errorMessage, color = Earth) }
+            } else null,
+            trailingIcon = {
+                IconButton(onClick = { showPassphrase = !showPassphrase }) {
+                    Icon(
+                        imageVector = if (showPassphrase) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                        contentDescription = if (showPassphrase) "Hide passphrase" else "Show passphrase",
+                    )
+                }
+            },
+        )
+
+        Button(
+            onClick = { onSubmit(passphrase.toCharArray()) },
+            enabled = passphrase.isNotEmpty(),
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = Forest),
+        ) {
+            Text("Unlock vault")
         }
     }
 }
