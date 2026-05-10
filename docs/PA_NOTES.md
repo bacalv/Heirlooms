@@ -24,13 +24,13 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.32.0 (10 May 2026) — Diagnostics screen + Fire OS FreeTime detection.
+- Current version: v0.33.0 (10 May 2026) — Streaming encryption for large files (server + Android + web).
+  v0.32.0 = Diagnostics screen + Fire OS FreeTime detection.
   v0.31.0 = Android: Garden Plant button (camera + file picker).
   v0.30.0 = M7 E5: storage class rename, web EXIF, onboarding copy (server + web + minor Android).
   v0.29.0 = M7 E4: web client encryption. v0.28.1 = post-E3 device testing fixes.
   v0.28.0 = M7 E3: Android client encryption. v0.27.0 = M7 E2: backend API for E2EE.
   v0.26.0 = M7 E1: schema + envelope format. v0.25.x = M6 D4 Android + post-ship fixes.
-  Streaming encryption for large files is next (brief: docs/briefs/streaming_encryption.md).
 - One-time machine setup required: ~/.testcontainers.properties with
   docker.raw.sock path — see PROMPT_LOG.md for details
 

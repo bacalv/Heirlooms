@@ -34,6 +34,21 @@ object VaultCrypto {
         return cipher.doFinal(plaintext)
     }
 
+    // AES-256-GCM encrypt with AAD. Returns ciphertext || auth_tag.
+    // length allows encrypting a prefix of plaintext without copying (used for the last streaming chunk).
+    fun aesGcmEncryptWithAad(
+        key: ByteArray,
+        nonce: ByteArray,
+        aad: ByteArray,
+        plaintext: ByteArray,
+        length: Int = plaintext.size,
+    ): ByteArray {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(AUTH_TAG_BITS, nonce))
+        cipher.updateAAD(aad)
+        return cipher.doFinal(plaintext, 0, length)
+    }
+
     // AES-256-GCM decrypt. Input is ciphertext || auth_tag as returned by aesGcmEncrypt.
     fun aesGcmDecrypt(key: ByteArray, nonce: ByteArray, ciphertextWithTag: ByteArray): ByteArray {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")

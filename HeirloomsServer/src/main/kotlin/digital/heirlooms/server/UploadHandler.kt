@@ -97,6 +97,7 @@ fun buildApp(
             getUploadByIdContractRoute(database),
             prepareUploadContractRoute(directUpload),
             initiateUploadContractRoute(directUpload, database),
+            resumableUploadContractRoute(directUpload),
             confirmUploadContractRoute(storage, database, thumbnailGenerator, metadataExtractor),
             migrateUploadContractRoute(storage, database),
             fileProxyContractRoute(storage, database),
@@ -599,6 +600,40 @@ private fun initiateUploadContractRoute(directUpload: DirectUploadSupport?, data
         description = "Returns signed upload URL(s). For encrypted: two URLs (content + thumbnail). For legacy: one URL. Body: {\"mimeType\":\"...\",\"storage_class\":\"encrypted\"} or {\"mimeType\":\"...\"}."
     } bindContract POST to initiateUploadHandler(directUpload, database)
 
+private fun resumableUploadContractRoute(directUpload: DirectUploadSupport?): ContractRoute =
+    "/uploads/resumable" meta {
+        summary = "Initiate a resumable (chunked) upload"
+        description = "Creates a GCS resumable upload session and returns the session URI. Body: {\"storageKey\":\"...\",\"totalBytes\":...,\"contentType\":\"...\"}. The client PUTs ciphertext chunks directly to the returned URI."
+    } bindContract POST to resumableUploadHandler(directUpload)
+
+private fun resumableUploadHandler(directUpload: DirectUploadSupport?): HttpHandler = { request ->
+    if (directUpload == null) {
+        Response(NOT_IMPLEMENTED).body("Resumable uploads not supported by the current storage backend")
+    } else {
+        try {
+            val node = ObjectMapper().readTree(request.bodyString())
+            val storageKey = node?.get("storageKey")?.asText()
+            val totalBytes = node?.get("totalBytes")?.asLong()
+            val contentType = node?.get("contentType")?.asText()
+
+            when {
+                storageKey.isNullOrBlank() || totalBytes == null || contentType.isNullOrBlank() ->
+                    Response(BAD_REQUEST).body("Missing storageKey, totalBytes, or contentType in request body")
+                totalBytes <= 0 ->
+                    Response(BAD_REQUEST).body("totalBytes must be positive")
+                else -> {
+                    val resumableUri = directUpload.initiateResumableUpload(StorageKey(storageKey), totalBytes, contentType)
+                    Response(OK)
+                        .header("Content-Type", "application/json")
+                        .body("""{"resumableUri":"$resumableUri"}""")
+                }
+            }
+        } catch (e: Exception) {
+            Response(INTERNAL_SERVER_ERROR).body("Failed to initiate resumable upload: ${e.message}")
+        }
+    }
+}
+
 private fun migrateUploadContractRoute(storage: FileStore, database: Database): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id / "migrate" meta {
@@ -623,6 +658,8 @@ private fun initiateUploadHandler(directUpload: DirectUploadSupport?, database: 
             when {
                 mimeType.isNullOrBlank() ->
                     Response(BAD_REQUEST).body("Missing or invalid mimeType in request body")
+                storageClassRaw == "public" ->
+                    Response(BAD_REQUEST).body("Cannot use public storage class — omit storage_class or use encrypted")
                 storageClassRaw == "encrypted" -> {
                     val content = directUpload.prepareUpload(mimeType)
                     val thumb = directUpload.prepareUpload("application/octet-stream")

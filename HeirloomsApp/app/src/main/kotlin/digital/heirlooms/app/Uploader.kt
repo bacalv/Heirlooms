@@ -47,6 +47,9 @@ class Uploader(
         const val DEFAULT_INITIAL_DELAY_MS = 1_000L
         private const val FALLBACK_MIME_TYPE = "application/octet-stream"
 
+        const val CHUNK_SIZE = 4 * 1024 * 1024
+        const val LARGE_FILE_THRESHOLD = 10 * 1024 * 1024L
+
         fun isValidEndpoint(endpoint: String?): Boolean {
             val trimmed = endpoint?.trim() ?: return false
             return trimmed.startsWith("http://") || trimmed.startsWith("https://")
@@ -81,6 +84,25 @@ class Uploader(
             }
             return digest.digest().joinToString("") { "%02x".format(it) }
         }
+
+        // Total GCS object size for a streaming-encrypted file:
+        // 4-byte header + per-chunk (12-byte nonce + plaintext + 16-byte tag)
+        fun computeTotalCiphertextSize(fileSize: Long, chunkSize: Int): Long {
+            val numChunks = (fileSize + chunkSize - 1) / chunkSize
+            return 4L + numChunks * 28L + fileSize
+        }
+
+        // Deterministic 12-byte nonce: [4-byte uploadId prefix][8-byte big-endian chunkIndex]
+        fun buildChunkNonce(uploadIdPrefix: ByteArray, chunkIndex: Long): ByteArray {
+            val nonce = ByteArray(12)
+            uploadIdPrefix.copyInto(nonce, destinationOffset = 0)
+            for (i in 0..7) nonce[4 + i] = ((chunkIndex ushr (56 - i * 8)) and 0xFF).toByte()
+            return nonce
+        }
+
+        // AAD binds each chunk to its position; same structure as the nonce.
+        fun buildChunkAad(uploadIdPrefix: ByteArray, chunkIndex: Long): ByteArray =
+            buildChunkNonce(uploadIdPrefix, chunkIndex)
     }
 
     fun upload(endpoint: String?, fileBytes: ByteArray?, mimeType: String, apiKey: String? = null): UploadResult {
@@ -293,14 +315,12 @@ class Uploader(
 
     /**
      * Encrypted upload flow:
-     * 1. Generate content DEK + thumbnail DEK
-     * 2. Encrypt file bytes (AES-256-GCM) → content envelope
-     * 3. Generate + encrypt thumbnail → thumbnail envelope
-     * 4. Wrap both DEKs under masterKey
-     * 5. POST /uploads/initiate (storage_class: "encrypted") → two signed URLs
-     * 6. PUT encrypted content (with progress callback)
-     * 7. PUT encrypted thumbnail
-     * 8. POST /uploads/confirm with all E2EE fields
+     * 1. POST /uploads/initiate (storage_class: "encrypted") → two signed URLs + storage keys
+     * 2. For large files (> 10 MB): GET /uploads/resumable URI, stream-encrypt+PUT chunks
+     *    For small files: encrypt in-memory, PUT via signed URL
+     * 3. Generate + encrypt thumbnail (always small → always in-memory)
+     * 4. PUT encrypted thumbnail
+     * 5. POST /uploads/confirm with all E2EE fields
      */
     fun uploadEncryptedViaSigned(
         baseUrl: String?,
@@ -317,47 +337,18 @@ class Uploader(
 
         val base = baseUrl!!.trimEnd('/')
 
-        // Step 1: encrypt file
-        val fileBytes = try {
-            file.readBytes()
-        } catch (e: Exception) {
-            return UploadResult.Failure("Failed to read file: ${e.message}")
-        }
-
         val contentDek = VaultCrypto.generateDek()
-        val contentNonce = VaultCrypto.generateNonce()
-        val encryptedContent = try {
-            val ct = VaultCrypto.aesGcmEncrypt(contentDek, contentNonce, fileBytes)
-            VaultCrypto.buildSymmetricEnvelope(VaultCrypto.ALG_AES256GCM_V1, contentNonce, ct)
-        } catch (e: Exception) {
-            return UploadResult.Failure("Content encryption failed: ${e.message}")
-        }
-
-        // Step 2: generate + encrypt thumbnail
         val thumbnailDek = VaultCrypto.generateDek()
-        val (encryptedThumbnail, thumbMimeType) = try {
-            val thumbBytes = generateThumbnail(file, mimeType)
-                ?: makeFallbackThumbnail()
-            val thumbNonce = VaultCrypto.generateNonce()
-            val ct = VaultCrypto.aesGcmEncrypt(thumbnailDek, thumbNonce, thumbBytes)
-            VaultCrypto.buildSymmetricEnvelope(VaultCrypto.ALG_AES256GCM_V1, thumbNonce, ct) to "image/jpeg"
-        } catch (e: Exception) {
-            return UploadResult.Failure("Thumbnail encryption failed: ${e.message}")
-        }
 
-        // Step 3: wrap DEKs under master key
-        val wrappedContentDek = VaultCrypto.wrapDekUnderMasterKey(contentDek, masterKey)
-        val wrappedThumbnailDek = VaultCrypto.wrapDekUnderMasterKey(thumbnailDek, masterKey)
-
-        // Step 4: initiate
-        val initiateRequest = Request.Builder()
-            .url("$base/api/content/uploads/initiate")
-            .post("""{"mimeType":"$mimeType","storage_class":"encrypted"}""".toRequestBody("application/json".toMediaType()))
-            .apply { if (!apiKey.isNullOrBlank()) header("X-Api-Key", apiKey) }
-            .build()
-
+        // Step 1: initiate (get signed URLs and storage keys before reading file)
         val initiateResponse = try {
-            httpClient.newCall(initiateRequest).execute().use { response ->
+            httpClient.newCall(
+                Request.Builder()
+                    .url("$base/api/content/uploads/initiate")
+                    .post("""{"mimeType":"$mimeType","storage_class":"encrypted"}""".toRequestBody("application/json".toMediaType()))
+                    .apply { if (!apiKey.isNullOrBlank()) header("X-Api-Key", apiKey) }
+                    .build()
+            ).execute().use { response ->
                 if (!response.isSuccessful) return UploadResult.Failure("Initiate failed: HTTP ${response.code}", response.code)
                 response.body?.string() ?: return UploadResult.Failure("Empty initiate response")
             }
@@ -374,23 +365,77 @@ class Uploader(
         val thumbUploadUrl = parseJsonStringField(initiateResponse, "thumbnailUploadUrl")
             ?: return UploadResult.Failure("Missing thumbnailUploadUrl in initiate response")
 
-        // Step 5: PUT encrypted content
-        val contentBody: RequestBody = if (onProgress != null)
-            ProgressRequestBody(encryptedContent, "application/octet-stream") { bw, total -> onProgress(bw, total) }
-        else
-            encryptedContent.toRequestBody("application/octet-stream".toMediaType())
+        // Step 2: encrypt + upload content
+        val encryptedContentSize: Long
 
-        try {
-            httpClient.newCall(
-                Request.Builder().url(contentUploadUrl).put(contentBody).build()
-            ).execute().use { response ->
-                if (!response.isSuccessful) return UploadResult.Failure("Content PUT failed: HTTP ${response.code}", response.code)
+        if (file.length() > LARGE_FILE_THRESHOLD) {
+            // Streaming path: initiate GCS resumable session, then encrypt+PUT chunks
+            val totalCiphertextBytes = computeTotalCiphertextSize(file.length(), CHUNK_SIZE)
+            val resumableBody = """{"storageKey":"$contentStorageKey","totalBytes":$totalCiphertextBytes,"contentType":"application/octet-stream"}"""
+            val resumableResponse = try {
+                httpClient.newCall(
+                    Request.Builder()
+                        .url("$base/api/content/uploads/resumable")
+                        .post(resumableBody.toRequestBody("application/json".toMediaType()))
+                        .apply { if (!apiKey.isNullOrBlank()) header("X-Api-Key", apiKey) }
+                        .build()
+                ).execute().use { response ->
+                    if (!response.isSuccessful) return UploadResult.Failure("Resumable init failed: HTTP ${response.code}", response.code)
+                    response.body?.string() ?: return UploadResult.Failure("Empty resumable init response")
+                }
+            } catch (e: IOException) {
+                return UploadResult.Failure("Resumable init error: ${e.message}")
             }
-        } catch (e: IOException) {
-            return UploadResult.Failure("Content PUT error: ${e.message}")
+
+            val resumableUri = parseJsonStringField(resumableResponse, "resumableUri")
+                ?: return UploadResult.Failure("Missing resumableUri in resumable init response")
+
+            encryptAndUploadStreaming(file, contentDek, contentStorageKey, resumableUri, totalCiphertextBytes, onProgress)
+                ?.let { return it }
+            encryptedContentSize = totalCiphertextBytes
+        } else {
+            // In-memory path for small files
+            val fileBytes = try {
+                file.readBytes()
+            } catch (e: Exception) {
+                return UploadResult.Failure("Failed to read file: ${e.message}")
+            }
+            val contentNonce = VaultCrypto.generateNonce()
+            val encryptedContent = try {
+                val ct = VaultCrypto.aesGcmEncrypt(contentDek, contentNonce, fileBytes)
+                VaultCrypto.buildSymmetricEnvelope(VaultCrypto.ALG_AES256GCM_V1, contentNonce, ct)
+            } catch (e: Exception) {
+                return UploadResult.Failure("Content encryption failed: ${e.message}")
+            }
+
+            val contentBody: RequestBody = if (onProgress != null)
+                ProgressRequestBody(encryptedContent, "application/octet-stream") { bw, total -> onProgress(bw, total) }
+            else
+                encryptedContent.toRequestBody("application/octet-stream".toMediaType())
+
+            try {
+                httpClient.newCall(
+                    Request.Builder().url(contentUploadUrl).put(contentBody).build()
+                ).execute().use { response ->
+                    if (!response.isSuccessful) return UploadResult.Failure("Content PUT failed: HTTP ${response.code}", response.code)
+                }
+            } catch (e: IOException) {
+                return UploadResult.Failure("Content PUT error: ${e.message}")
+            }
+            encryptedContentSize = encryptedContent.size.toLong()
         }
 
-        // Step 6: PUT encrypted thumbnail
+        // Step 3: generate + encrypt thumbnail (always small)
+        val encryptedThumbnail = try {
+            val thumbBytes = generateThumbnail(file, mimeType) ?: makeFallbackThumbnail()
+            val thumbNonce = VaultCrypto.generateNonce()
+            val ct = VaultCrypto.aesGcmEncrypt(thumbnailDek, thumbNonce, thumbBytes)
+            VaultCrypto.buildSymmetricEnvelope(VaultCrypto.ALG_AES256GCM_V1, thumbNonce, ct)
+        } catch (e: Exception) {
+            return UploadResult.Failure("Thumbnail encryption failed: ${e.message}")
+        }
+
+        // Step 4: PUT encrypted thumbnail
         try {
             httpClient.newCall(
                 Request.Builder()
@@ -404,12 +449,14 @@ class Uploader(
             return UploadResult.Failure("Thumbnail PUT error: ${e.message}")
         }
 
-        // Step 7: confirm
+        // Step 5: confirm
         onConfirming?.invoke()
+        val wrappedContentDek = VaultCrypto.wrapDekUnderMasterKey(contentDek, masterKey)
+        val wrappedThumbnailDek = VaultCrypto.wrapDekUnderMasterKey(thumbnailDek, masterKey)
         val wrappedDekB64 = Base64.encodeToString(wrappedContentDek, Base64.NO_WRAP)
         val wrappedThumbDekB64 = Base64.encodeToString(wrappedThumbnailDek, Base64.NO_WRAP)
         val tagsJson = if (tags.isEmpty()) "" else ""","tags":[${tags.joinToString(",") { "\"$it\"" }}]"""
-        val confirmBody = """{"storageKey":"$contentStorageKey","mimeType":"$mimeType","fileSize":${encryptedContent.size},"storage_class":"encrypted","envelopeVersion":1,"wrappedDek":"$wrappedDekB64","dekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}","thumbnailStorageKey":"$thumbStorageKey","wrappedThumbnailDek":"$wrappedThumbDekB64","thumbnailDekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}"$tagsJson}"""
+        val confirmBody = """{"storageKey":"$contentStorageKey","mimeType":"$mimeType","fileSize":$encryptedContentSize,"storage_class":"encrypted","envelopeVersion":1,"wrappedDek":"$wrappedDekB64","dekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}","thumbnailStorageKey":"$thumbStorageKey","wrappedThumbnailDek":"$wrappedThumbDekB64","thumbnailDekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}"$tagsJson}"""
 
         return try {
             httpClient.newCall(
@@ -428,6 +475,93 @@ class Uploader(
         } catch (e: IOException) {
             UploadResult.Failure("Confirm error: ${e.message}")
         }
+    }
+
+    /**
+     * Encrypts [file] in [CHUNK_SIZE]-byte chunks and PUTs each to [resumableUri] via
+     * GCS resumable upload protocol (Content-Range headers). Returns null on success or
+     * a [UploadResult.Failure] on the first error.
+     *
+     * Chunk format on disk: [4-byte header][chunk_0: nonce+ct+tag][chunk_1: nonce+ct+tag]...
+     * The 4-byte header contains CHUNK_SIZE as a big-endian uint32 and doubles as a
+     * format discriminator for the decrypt path.
+     */
+    private fun encryptAndUploadStreaming(
+        file: File,
+        contentDek: ByteArray,
+        storageKey: String,
+        resumableUri: String,
+        totalCiphertextBytes: Long,
+        onProgress: ((Long, Long) -> Unit)?,
+    ): UploadResult.Failure? {
+        val uploadIdPrefix = storageKey.toByteArray(Charsets.UTF_8).let { raw ->
+            raw.copyOf(minOf(4, raw.size)).let { prefix ->
+                if (prefix.size < 4) prefix + ByteArray(4 - prefix.size) else prefix
+            }
+        }
+
+        val header = ByteArray(4).also { h ->
+            val cs = CHUNK_SIZE
+            h[0] = (cs ushr 24).toByte(); h[1] = (cs ushr 16).toByte()
+            h[2] = (cs ushr 8).toByte();  h[3] = cs.toByte()
+        }
+
+        val plainBuffer = ByteArray(CHUNK_SIZE)
+        var ciphertextOffset = 0L
+        var chunkIndex = 0L
+        var plainBytesConsumed = 0L
+        val plainBytesTotal = file.length()
+
+        file.inputStream().use { input ->
+            while (true) {
+                var totalRead = 0
+                while (totalRead < CHUNK_SIZE) {
+                    val n = input.read(plainBuffer, totalRead, CHUNK_SIZE - totalRead)
+                    if (n == -1) break
+                    totalRead += n
+                }
+                if (totalRead == 0) break
+
+                val nonce = buildChunkNonce(uploadIdPrefix, chunkIndex)
+                val aad = buildChunkAad(uploadIdPrefix, chunkIndex)
+                val cipherChunk = VaultCrypto.aesGcmEncryptWithAad(contentDek, nonce, aad, plainBuffer, totalRead)
+
+                // Chunk 0 gets the 4-byte file header prepended; subsequent chunks get nonce+ct only.
+                val chunkParts: List<ByteArray> = if (chunkIndex == 0L)
+                    listOf(header, nonce, cipherChunk)
+                else
+                    listOf(nonce, cipherChunk)
+
+                val chunkSize = chunkParts.sumOf { it.size }.toLong()
+                val chunkStart = ciphertextOffset
+                val chunkEnd = ciphertextOffset + chunkSize - 1
+                val isLast = (chunkEnd + 1) == totalCiphertextBytes
+
+                try {
+                    httpClient.newCall(
+                        Request.Builder()
+                            .url(resumableUri)
+                            .put(MultiByteArrayRequestBody(chunkParts, "application/octet-stream"))
+                            .header("Content-Range", "bytes $chunkStart-$chunkEnd/$totalCiphertextBytes")
+                            .build()
+                    ).execute().use { response ->
+                        val ok = if (isLast) response.isSuccessful else response.code == 308
+                        if (!ok) return UploadResult.Failure("Chunk $chunkIndex PUT failed: HTTP ${response.code}", response.code)
+                    }
+                } catch (e: IOException) {
+                    return UploadResult.Failure("Chunk $chunkIndex PUT error: ${e.message}")
+                }
+
+                ciphertextOffset += chunkSize
+                plainBytesConsumed += totalRead.toLong()
+                chunkIndex++
+                onProgress?.invoke(plainBytesConsumed, plainBytesTotal)
+
+                if (isLast) break
+            }
+        }
+
+        return null
     }
 
     private fun generateThumbnail(file: File, mimeType: String): ByteArray? {
@@ -490,6 +624,17 @@ private class ProgressRequestBody(
             onProgress(written.toLong(), total)
         }
     }
+}
+
+// Writes multiple byte arrays in sequence without allocating a combined copy.
+// Used by the streaming encrypt path to avoid a third CHUNK_SIZE allocation.
+private class MultiByteArrayRequestBody(
+    private val parts: List<ByteArray>,
+    private val mimeType: String,
+) : RequestBody() {
+    override fun contentType() = mimeType.toMediaType()
+    override fun contentLength() = parts.sumOf { it.size }.toLong()
+    override fun writeTo(sink: BufferedSink) = parts.forEach { sink.write(it) }
 }
 
 private class ProgressFileRequestBody(

@@ -20,13 +20,13 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useAuth } from '../AuthContext'
-import { API_URL, apiFetch, initiateEncryptedUpload, putBlob, putBlobWithProgress, confirmEncryptedUpload } from '../api'
+import { API_URL, apiFetch, initiateEncryptedUpload, initiateResumableUpload, putBlob, putBlobWithProgress, confirmEncryptedUpload } from '../api'
 import { WorkingDots } from '../brand/WorkingDots'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { getMasterKey } from '../crypto/vaultSession'
 import {
   generateDek, encryptSymmetric, wrapDekUnderMasterKey, ALG_AES256GCM_V1, ALG_MASTER_AES256GCM_V1,
-  decryptSymmetric, unwrapDekWithMasterKey, fromB64, toB64,
+  decryptSymmetric, unwrapDekWithMasterKey, fromB64, toB64, aesGcmEncryptWithAad,
 } from '../crypto/vaultCrypto'
 import { parse as parseExif } from 'exifr'
 
@@ -638,6 +638,78 @@ async function generateThumbnail(file) {
   }
 }
 
+const CHUNK_SIZE = 4 * 1024 * 1024
+const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024
+
+function computeTotalCiphertextSize(fileSize, chunkSize) {
+  const numChunks = Math.ceil(fileSize / chunkSize)
+  return 4 + numChunks * 28 + fileSize
+}
+
+// Deterministic 12-byte nonce: [4-byte uploadId prefix][8-byte big-endian chunkIndex]
+function buildChunkNonce(uploadIdPrefix, chunkIndex) {
+  const nonce = new Uint8Array(12)
+  nonce.set(uploadIdPrefix.slice(0, 4), 0)
+  const v = new DataView(nonce.buffer)
+  v.setUint32(4, Math.floor(chunkIndex / 0x100000000), false)
+  v.setUint32(8, chunkIndex >>> 0, false)
+  return nonce
+}
+
+function buildChunkAad(uploadIdPrefix, chunkIndex) {
+  return buildChunkNonce(uploadIdPrefix, chunkIndex)
+}
+
+function concatArrays(...arrays) {
+  const total = arrays.reduce((s, a) => s + a.length, 0)
+  const out = new Uint8Array(total)
+  let offset = 0
+  for (const a of arrays) { out.set(a, offset); offset += a.length }
+  return out
+}
+
+async function encryptAndUploadStreamingContent(file, contentDek, storageKey, resumableUri, totalCiphertextBytes, onProgress) {
+  const uploadIdPrefix = new TextEncoder().encode(storageKey).slice(0, 4)
+  const header = new Uint8Array(4)
+  new DataView(header.buffer).setUint32(0, CHUNK_SIZE, false)
+
+  let ciphertextOffset = 0
+  let chunkIndex = 0
+  let fileOffset = 0
+
+  while (fileOffset < file.size) {
+    const slice = file.slice(fileOffset, fileOffset + CHUNK_SIZE)
+    const plainChunk = new Uint8Array(await slice.arrayBuffer())
+
+    const nonce = buildChunkNonce(uploadIdPrefix, chunkIndex)
+    const aad = buildChunkAad(uploadIdPrefix, chunkIndex)
+    const cipherChunk = await aesGcmEncryptWithAad(contentDek, nonce, aad, plainChunk)
+
+    const chunkBytes = chunkIndex === 0
+      ? concatArrays(header, nonce, cipherChunk)
+      : concatArrays(nonce, cipherChunk)
+
+    const chunkStart = ciphertextOffset
+    const chunkEnd = ciphertextOffset + chunkBytes.length - 1
+    const isLast = (chunkEnd + 1) === totalCiphertextBytes
+
+    const r = await fetch(resumableUri, {
+      method: 'PUT',
+      body: chunkBytes,
+      headers: { 'Content-Range': `bytes ${chunkStart}-${chunkEnd}/${totalCiphertextBytes}` },
+    })
+
+    if (isLast ? !r.ok : r.status !== 308) {
+      throw new Error(`Chunk ${chunkIndex} PUT failed: ${r.status}`)
+    }
+
+    ciphertextOffset += chunkBytes.length
+    fileOffset += plainChunk.length
+    chunkIndex++
+    onProgress && onProgress(fileOffset)
+  }
+}
+
 async function buildEncryptedMetadata(file) {
   let exif = null
   if (file.type.startsWith('image/')) {
@@ -669,39 +741,53 @@ async function buildEncryptedMetadata(file) {
 }
 
 async function encryptAndUpload(file, apiKey, onStatus) {
-  onStatus('Encrypting…')
-  const fileBytes = new Uint8Array(await file.arrayBuffer())
   const contentDek = generateDek()
-  const contentEnvelope = await encryptSymmetric(ALG_AES256GCM_V1, contentDek, fileBytes)
-  const thumbBytes = await generateThumbnail(file)
   const thumbDek = generateDek()
-  const thumbEnvelope = await encryptSymmetric(ALG_AES256GCM_V1, thumbDek, thumbBytes)
   const masterKey = getMasterKey()
-  const wrappedDek = await wrapDekUnderMasterKey(contentDek, masterKey)
-  const wrappedThumbDek = await wrapDekUnderMasterKey(thumbDek, masterKey)
-  const metaJson = await buildEncryptedMetadata(file)
-  const metaBytes = new TextEncoder().encode(metaJson)
-  const metaEnvelope = await encryptSymmetric(ALG_AES256GCM_V1, contentDek, metaBytes)
 
+  // Step 1: initiate before reading file bytes
   onStatus('Uploading…')
   const { storageKey, uploadUrl, thumbnailStorageKey, thumbnailUploadUrl } =
     await initiateEncryptedUpload(apiKey, file.type)
 
-  const totalBytes = contentEnvelope.length + thumbEnvelope.length
-  let baseBytes = 0
-  await putBlobWithProgress(uploadUrl, contentEnvelope, (loaded) => {
-    onStatus(`Uploading (${Math.round((baseBytes + loaded) / totalBytes * 100)}%)…`)
-  })
-  baseBytes = contentEnvelope.length
-  await putBlobWithProgress(thumbnailUploadUrl, thumbEnvelope, (loaded) => {
-    onStatus(`Uploading (${Math.round((baseBytes + loaded) / totalBytes * 100)}%)…`)
-  })
+  // Step 2: encrypt + upload content (streaming for large files, in-memory for small)
+  let contentFileSize
+  if (file.size > LARGE_FILE_THRESHOLD) {
+    const totalCiphertextBytes = computeTotalCiphertextSize(file.size, CHUNK_SIZE)
+    const { resumableUri } = await initiateResumableUpload(apiKey, storageKey, totalCiphertextBytes, 'application/octet-stream')
+    await encryptAndUploadStreamingContent(file, contentDek, storageKey, resumableUri, totalCiphertextBytes, (consumed) => {
+      onStatus(`Uploading (${Math.round(consumed / file.size * 100)}%)…`)
+    })
+    contentFileSize = file.size
+  } else {
+    onStatus('Encrypting…')
+    const fileBytes = new Uint8Array(await file.arrayBuffer())
+    const contentEnvelope = await encryptSymmetric(ALG_AES256GCM_V1, contentDek, fileBytes)
+    contentFileSize = fileBytes.length
+    onStatus('Uploading…')
+    await putBlobWithProgress(uploadUrl, contentEnvelope, (loaded) => {
+      onStatus(`Uploading (${Math.round(loaded / contentEnvelope.length * 100)}%)…`)
+    })
+  }
 
+  // Step 3: thumbnail (always small, always in-memory)
+  const thumbBytes = await generateThumbnail(file)
+  const thumbEnvelope = await encryptSymmetric(ALG_AES256GCM_V1, thumbDek, thumbBytes)
+  await putBlob(thumbnailUploadUrl, thumbEnvelope)
+
+  // Step 4: encrypted metadata
+  const metaJson = await buildEncryptedMetadata(file)
+  const metaBytes = new TextEncoder().encode(metaJson)
+  const metaEnvelope = await encryptSymmetric(ALG_AES256GCM_V1, contentDek, metaBytes)
+
+  // Step 5: wrap DEKs and confirm
+  const wrappedDek = await wrapDekUnderMasterKey(contentDek, masterKey)
+  const wrappedThumbDek = await wrapDekUnderMasterKey(thumbDek, masterKey)
   const takenAt = new Date(file.lastModified).toISOString()
-  const upload = await confirmEncryptedUpload(apiKey, {
+  return confirmEncryptedUpload(apiKey, {
     storageKey,
     mimeType: file.type,
-    fileSize: fileBytes.length,
+    fileSize: contentFileSize,
     envelopeVersion: 1,
     wrappedDekB64: toB64(wrappedDek),
     dekFormat: ALG_MASTER_AES256GCM_V1,
@@ -713,7 +799,6 @@ async function encryptAndUpload(file, apiKey, onStatus) {
     takenAt,
     tags: [],
   })
-  return upload
 }
 
 export function GardenPage() {

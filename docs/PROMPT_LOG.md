@@ -6,6 +6,23 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-10 — v0.33.0: Streaming encryption for large files
+
+Implements the brief at `docs/briefs/streaming_encryption.md`. Three-platform change: server, Android, web.
+
+**Server.** New endpoint `POST /api/content/uploads/resumable` added to `UploadHandler.kt`. Accepts `storageKey`, `totalBytes`, `contentType`; returns `resumableUri`. `GcsFileStore` implements `initiateResumableUpload` via a direct HTTP POST to the GCS JSON upload API using service account credentials (scoped, refreshed via `OAuth2Credentials.refreshIfExpired()`). The method returns the GCS `Location` header. `DirectUploadSupport` interface gains the method with a default that throws `NotImplementedError`, so `S3FileStore` needs no change. Also fixed a pre-existing test failure: `POST /uploads/initiate` with `storage_class: "public"` now explicitly returns 400 (the test expected this but the validation was missing).
+
+**Android.** `uploadEncryptedViaSigned` in `Uploader.kt` restructured: `/initiate` is now the first network call (before any file reads). After `/initiate`, the function branches on `file.length() > 10 MB`:
+- *Large file path*: calls `/resumable` to get a session URI, then `encryptAndUploadStreaming` which reads and encrypts the file in 4 MB chunks. Each chunk: deterministic 12-byte nonce (`uploadIdPrefix[4] + chunkIndex[8 big-endian]`) + AES-256-GCM with matching AAD + PUT to GCS resumable URI with `Content-Range` header. GCS returns 308 for intermediate chunks and 200 for the last.
+- *Small file path*: existing in-memory encrypt+PUT via signed URL, unchanged.
+`VaultCrypto.aesGcmEncryptWithAad` added with optional `length` parameter to avoid copying the last partial chunk from the reusable plaintext buffer. `MultiByteArrayRequestBody` avoids a third CHUNK_SIZE allocation by writing header + nonce + ciphertext in sequence. Peak memory ~8 MB (2× CHUNK_SIZE) regardless of file size.
+
+**Web.** `encryptAndUpload` in `GardenPage.jsx` restructured identically: `/initiate` first, then size branch (same 10 MB threshold, same chunk format). `encryptAndUploadStreamingContent` uses `file.slice()` + `arrayBuffer()` per chunk (no full-file buffer). Chunks PUT via `fetch` with `Content-Range`. `aesGcmEncryptWithAad` added to `vaultCrypto.js` using WebCrypto `additionalData`. `initiateResumableUpload` added to `api.js`.
+
+**Chunk format.** `[4-byte big-endian header (= CHUNK_SIZE)]` prepended to the first chunk only. The header value `0x00400000` (4 MB) is astronomically unlikely to appear at the start of a legacy monolithic ciphertext (which begins with a random 12-byte IV envelope header), so it doubles as a format discriminator for the eventual streaming decrypt path. Decrypt path is deferred per the brief — all existing uploads remain decryptable via the legacy path.
+
+---
+
 ## Session — 2026-05-09 — Web: Just arrived fixes + thumbnail cache
 
 Three bugs in the webapp's Garden / Just arrived view, mirroring issues previously

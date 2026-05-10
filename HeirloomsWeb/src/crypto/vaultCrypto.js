@@ -27,6 +27,15 @@ export async function aesGcmEncrypt(key, nonce, plaintext) {
   return new Uint8Array(ct)
 }
 
+export async function aesGcmEncryptWithAad(key, nonce, aad, plaintext) {
+  const ck = await crypto.subtle.importKey('raw', key, 'AES-GCM', false, ['encrypt'])
+  const ct = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: nonce, tagLength: 128, additionalData: aad },
+    ck, plaintext,
+  )
+  return new Uint8Array(ct)
+}
+
 export async function aesGcmDecrypt(key, nonce, ciphertextWithTag) {
   const ck = await crypto.subtle.importKey('raw', key, 'AES-GCM', false, ['decrypt'])
   try {

@@ -2,6 +2,18 @@
 
 ---
 
+## v0.33.0 — Streaming encryption for large files (10 May 2026)
+
+Server + Android + Web. No schema changes.
+
+- **`POST /api/content/uploads/resumable`** — new server endpoint. Initiates a GCS resumable upload session for a given storageKey and returns the session URI. Called after `/initiate` for files above the 10 MB threshold; the client PUTs ciphertext chunks directly to GCS using `Content-Range` headers.
+- **Chunk format** — 4-byte big-endian header (chunk_size = 4 MB, doubles as format discriminator for the decrypt path) + per-chunk `[nonce(12)][ciphertext+tag(n+16)]`. Legacy single-buffer uploads are unchanged.
+- **Android** — `uploadEncryptedViaSigned` restructured: `/initiate` is called before reading any file bytes; files > 10 MB take the streaming path (peak memory ~8 MB), smaller files keep the existing in-memory path. `VaultCrypto.aesGcmEncryptWithAad` added for chunk-level AAD binding.
+- **Web** — `encryptAndUpload` restructured identically. `aesGcmEncryptWithAad` added to `vaultCrypto.js`. Streaming helpers in `GardenPage.jsx`.
+- Also fixes a pre-existing server test failure: `POST /uploads/initiate` with `storage_class: "public"` now returns 400 as the test expected.
+
+---
+
 ## v0.32.0 — Diagnostics screen + Fire OS FreeTime detection (10 May 2026)
 
 Android-only. No server data-path changes; new `diagnostic_events` table and two

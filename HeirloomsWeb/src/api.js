@@ -49,6 +49,15 @@ export async function initiateEncryptedUpload(apiKey, mimeType) {
   return r.json()
 }
 
+export async function initiateResumableUpload(apiKey, storageKey, totalBytes, contentType) {
+  const r = await apiFetch('/api/content/uploads/resumable', apiKey, {
+    method: 'POST',
+    body: JSON.stringify({ storageKey, totalBytes, contentType }),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json()
+}
+
 // PUT raw bytes to a signed URL — no auth header, no Content-Type.
 export async function putBlob(signedUrl, bytes) {
   const r = await fetch(signedUrl, { method: 'PUT', body: bytes })
