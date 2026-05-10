@@ -20,7 +20,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useAuth } from '../AuthContext'
-import { API_URL, apiFetch, initiateEncryptedUpload, putBlob, confirmEncryptedUpload } from '../api'
+import { API_URL, apiFetch, initiateEncryptedUpload, putBlob, putBlobWithProgress, confirmEncryptedUpload } from '../api'
 import { WorkingDots } from '../brand/WorkingDots'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { getMasterKey } from '../crypto/vaultSession'
@@ -686,8 +686,16 @@ async function encryptAndUpload(file, apiKey, onStatus) {
   onStatus('Uploading…')
   const { storageKey, uploadUrl, thumbnailStorageKey, thumbnailUploadUrl } =
     await initiateEncryptedUpload(apiKey, file.type)
-  await putBlob(uploadUrl, contentEnvelope)
-  await putBlob(thumbnailUploadUrl, thumbEnvelope)
+
+  const totalBytes = contentEnvelope.length + thumbEnvelope.length
+  let baseBytes = 0
+  await putBlobWithProgress(uploadUrl, contentEnvelope, (loaded) => {
+    onStatus(`Uploading (${Math.round((baseBytes + loaded) / totalBytes * 100)}%)…`)
+  })
+  baseBytes = contentEnvelope.length
+  await putBlobWithProgress(thumbnailUploadUrl, thumbEnvelope, (loaded) => {
+    onStatus(`Uploading (${Math.round((baseBytes + loaded) / totalBytes * 100)}%)…`)
+  })
 
   const takenAt = new Date(file.lastModified).toISOString()
   const upload = await confirmEncryptedUpload(apiKey, {

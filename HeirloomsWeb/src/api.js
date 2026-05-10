@@ -55,6 +55,21 @@ export async function putBlob(signedUrl, bytes) {
   if (!r.ok) throw new Error(`Blob PUT failed: ${r.status}`)
 }
 
+// Same as putBlob but fires onProgress(bytesLoaded) as the upload proceeds.
+export function putBlobWithProgress(signedUrl, bytes, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', signedUrl)
+    xhr.upload.onprogress = (e) => onProgress(e.loaded)
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve()
+      else reject(new Error(`Blob PUT failed: ${xhr.status}`))
+    }
+    xhr.onerror = () => reject(new Error('Blob PUT network error'))
+    xhr.send(bytes)
+  })
+}
+
 export async function confirmEncryptedUpload(apiKey, {
   storageKey, mimeType, fileSize,
   envelopeVersion, wrappedDekB64, dekFormat,
