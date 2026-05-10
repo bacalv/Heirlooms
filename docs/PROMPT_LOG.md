@@ -6,6 +6,24 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-10 — v0.35.0: Web encrypted video MSE streaming
+
+Implements Fix 2 from `docs/briefs/web_encrypted_video.md`. Web-only change.
+
+**Problem.** Fix 1 (v0.34.0) made large encrypted videos playable but still downloaded the whole file before playback. For a 30–100 MB video on mobile web this is a significant wait.
+
+**Fix.** Added `src/crypto/encryptedVideoStream.js`. For encrypted videos where `upload.fileSize > 10 MB` and `MediaSource` is available, `PhotoDetailPage` now creates a `MediaSource` and attaches it to the video element immediately, then begins fetching and decrypting 4 MiB ciphertext chunks in sequence in the background. Each decrypted chunk is fed to `mp4box` (new dependency, `^2.3.0`), which handles the moov → fMP4 remux required for MSE; it fires `onReady` with codec strings (so `addSourceBuffer` gets the correct MIME type) and `onSegment` with appendable fMP4 segments. Playback starts after the first couple of segments are buffered while fetching continues.
+
+**Abort/cleanup.** `openEncryptedVideoStream` returns a `cleanup()` function that aborts in-flight fetches (via `AbortController`) and revokes the `MediaSource` object URL. `PhotoDetailPage` calls it from the `useEffect` cleanup, replacing the previous `URL.revokeObjectURL` call for this path.
+
+**Bundle.** `mp4box` is dynamically imported (`await import('mp4box')`) so Vite code-splits it into a separate 142 KB (32 KB gzip) chunk. Users who never play large encrypted videos don't pay for it.
+
+**Fallback.** The full-download path (Fix 1) is preserved for: encrypted images, encrypted videos ≤ 10 MB (envelope format), and any browser where `MediaSource` is absent.
+
+`aesGcmDecryptWithAad` was promoted from private to exported in `vaultCrypto.js` so `encryptedVideoStream.js` can use it directly per chunk.
+
+---
+
 ## Session — 2026-05-10 — v0.34.0: Web encrypted video playback fix
 
 Implements Fix 1 from `docs/briefs/web_encrypted_video.md`. Web-only change.

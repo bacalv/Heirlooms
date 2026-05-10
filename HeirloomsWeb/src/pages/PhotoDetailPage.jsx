@@ -8,6 +8,7 @@ import { AddToCapsuleModal } from '../components/AddToCapsuleModal'
 import { Toast } from '../components/Toast'
 import { getMasterKey } from '../crypto/vaultSession'
 import { unwrapDekWithMasterKey, decryptSymmetric, decryptStreamingContent, fromB64 } from '../crypto/vaultCrypto'
+import { openEncryptedVideoStream } from '../crypto/encryptedVideoStream'
 
 function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`
@@ -414,12 +415,27 @@ export function PhotoDetailPage() {
     let objectUrl = null
     let cancelled = false
 
+    let streamCleanup = null
+
     async function loadContent() {
       const isVideo = upload.mimeType?.startsWith('video/')
       const isEncrypted = upload.storageClass === 'encrypted'
+      const LARGE = 10 * 1024 * 1024
 
-      if (isEncrypted) {
-        // Always fetch full file and decrypt on-device.
+      if (isEncrypted && isVideo && upload.fileSize > LARGE && typeof MediaSource !== 'undefined') {
+        // MSE streaming path: decrypt and buffer chunks progressively so playback
+        // starts before the full file is downloaded.
+        const masterKey = getMasterKey()
+        const raw = upload.wrappedDek
+        if (!raw) throw new Error('Missing wrappedDek')
+        const wrappedDek = typeof raw === 'string' ? fromB64(raw) : raw
+        const dek = await unwrapDekWithMasterKey(wrappedDek, masterKey)
+        const { msUrl, cleanup } = await openEncryptedVideoStream(upload, apiKey, dek)
+        streamCleanup = cleanup
+        objectUrl = msUrl
+        if (!cancelled) setBlobUrl(msUrl)
+      } else if (isEncrypted) {
+        // Full-download path: small files or non-video encrypted content.
         const r = await fetch(`${API_URL}/api/content/uploads/${upload.id}/file`, {
           headers: { 'X-Api-Key': apiKey },
         })
@@ -468,7 +484,8 @@ export function PhotoDetailPage() {
     loadContent().catch(() => {})
     return () => {
       cancelled = true
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
+      if (streamCleanup) streamCleanup()
+      else if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
   }, [apiKey, upload?.id])
 

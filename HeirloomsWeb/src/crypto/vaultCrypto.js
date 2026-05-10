@@ -46,7 +46,7 @@ export async function aesGcmDecrypt(key, nonce, ciphertextWithTag) {
   }
 }
 
-async function aesGcmDecryptWithAad(key, nonce, aad, ctWithTag) {
+export async function aesGcmDecryptWithAad(key, nonce, aad, ctWithTag) {
   const ck = await crypto.subtle.importKey('raw', key, 'AES-GCM', false, ['decrypt'])
   return crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonce, additionalData: aad }, ck, ctWithTag)
 }
