@@ -9,7 +9,9 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 class UploaderTest {
 
@@ -17,6 +19,9 @@ class UploaderTest {
 
     // Fast uploader: no real delays between retries in tests
     private lateinit var uploader: Uploader
+
+    @get:Rule
+    val tmp = TemporaryFolder()
 
     @Before
     fun setUp() {
@@ -458,5 +463,163 @@ class UploaderTest {
         val result = uploader.uploadViaSigned(null, "data".toByteArray(), "video/mp4")
         assertTrue(result is Uploader.UploadResult.Failure)
         assertEquals(0, server.requestCount)
+    }
+
+    // -------------------------------------------------------------------------
+    // parseJsonLongField
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `parseJsonLongField extracts integer field`() {
+        assertEquals(104858328L, Uploader.parseJsonLongField("""{"totalCiphertextBytes":104858328}""", "totalCiphertextBytes"))
+    }
+
+    @Test
+    fun `parseJsonLongField returns null for missing key`() {
+        assertNull(Uploader.parseJsonLongField("{}", "totalCiphertextBytes"))
+    }
+
+    @Test
+    fun `parseJsonLongField returns null for string value`() {
+        assertNull(Uploader.parseJsonLongField("""{"key":"notanumber"}""", "key"))
+    }
+
+    // -------------------------------------------------------------------------
+    // parseJsonStringList
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `parseJsonStringList returns empty for empty array`() {
+        assertEquals(emptyList<String>(), Uploader.parseJsonStringList("""{"tags":[]}""", "tags"))
+    }
+
+    @Test
+    fun `parseJsonStringList returns single element`() {
+        assertEquals(listOf("family"), Uploader.parseJsonStringList("""{"tags":["family"]}""", "tags"))
+    }
+
+    @Test
+    fun `parseJsonStringList returns multiple elements`() {
+        assertEquals(listOf("a", "b", "c"), Uploader.parseJsonStringList("""{"tags":["a","b","c"]}""", "tags"))
+    }
+
+    @Test
+    fun `parseJsonStringList returns empty for missing key`() {
+        assertEquals(emptyList<String>(), Uploader.parseJsonStringList("{}", "tags"))
+    }
+
+    // -------------------------------------------------------------------------
+    // CIPHERTEXT_CHUNK_SIZE
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `CIPHERTEXT_CHUNK_SIZE equals 4 MiB`() {
+        assertEquals(4 * 1024 * 1024, Uploader.CIPHERTEXT_CHUNK_SIZE)
+    }
+
+    @Test
+    fun `CIPHERTEXT_CHUNK_SIZE equals CHUNK_SIZE plus 28`() {
+        assertEquals(Uploader.CHUNK_SIZE + 28, Uploader.CIPHERTEXT_CHUNK_SIZE)
+    }
+
+    // -------------------------------------------------------------------------
+    // deleteCheckpointForFile
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `deleteCheckpointForFile removes the checkpoint file`() {
+        val media = tmp.newFile("video.mp4")
+        val checkpoint = tmp.newFile("video.upload_checkpoint.json")
+        checkpoint.writeText("{}")
+        assertTrue(checkpoint.exists())
+        uploader.deleteCheckpointForFile(media)
+        assertFalse(checkpoint.exists())
+    }
+
+    @Test
+    fun `deleteCheckpointForFile is a no-op when no checkpoint exists`() {
+        val media = tmp.newFile("video.mp4")
+        // Should not throw
+        uploader.deleteCheckpointForFile(media)
+    }
+
+    // -------------------------------------------------------------------------
+    // queryGcsSession (via MockWebServer)
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `queryGcsSession interprets 308 with Range header as Incomplete`() {
+        server.enqueue(MockResponse().setResponseCode(308).addHeader("Range", "bytes=0-4194303"))
+
+        // Access via reflection since queryGcsSession is private
+        val method = Uploader::class.java.getDeclaredMethod("queryGcsSession", String::class.java, Long::class.javaPrimitiveType)
+        method.isAccessible = true
+        val status = method.invoke(uploader, server.url("/resumable-session").toString(), 8388608L)
+
+        val incompleteClass = Class.forName("digital.heirlooms.app.Uploader\$GcsSessionStatus\$Incomplete")
+        assertTrue(incompleteClass.isInstance(status))
+        assertEquals(4194303L, incompleteClass.getDeclaredField("lastByteReceived").also { it.isAccessible = true }.get(status))
+    }
+
+    @Test
+    fun `queryGcsSession interprets 308 without Range as Incomplete with -1`() {
+        server.enqueue(MockResponse().setResponseCode(308))
+
+        val method = Uploader::class.java.getDeclaredMethod("queryGcsSession", String::class.java, Long::class.javaPrimitiveType)
+        method.isAccessible = true
+        val status = method.invoke(uploader, server.url("/resumable-session").toString(), 8388608L)
+
+        val incompleteClass = Class.forName("digital.heirlooms.app.Uploader\$GcsSessionStatus\$Incomplete")
+        assertTrue(incompleteClass.isInstance(status))
+        assertEquals(-1L, incompleteClass.getDeclaredField("lastByteReceived").also { it.isAccessible = true }.get(status))
+    }
+
+    @Test
+    fun `queryGcsSession interprets 200 as Complete`() {
+        server.enqueue(MockResponse().setResponseCode(200))
+
+        val method = Uploader::class.java.getDeclaredMethod("queryGcsSession", String::class.java, Long::class.javaPrimitiveType)
+        method.isAccessible = true
+        val status = method.invoke(uploader, server.url("/resumable-session").toString(), 8388608L)
+
+        val completeClass = Class.forName("digital.heirlooms.app.Uploader\$GcsSessionStatus\$Complete")
+        assertTrue(completeClass.isInstance(status))
+    }
+
+    @Test
+    fun `queryGcsSession interprets 404 as Expired`() {
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        val method = Uploader::class.java.getDeclaredMethod("queryGcsSession", String::class.java, Long::class.javaPrimitiveType)
+        method.isAccessible = true
+        val status = method.invoke(uploader, server.url("/resumable-session").toString(), 8388608L)
+
+        val expiredClass = Class.forName("digital.heirlooms.app.Uploader\$GcsSessionStatus\$Expired")
+        assertTrue(expiredClass.isInstance(status))
+    }
+
+    @Test
+    fun `queryGcsSession interprets 410 as Expired`() {
+        server.enqueue(MockResponse().setResponseCode(410))
+
+        val method = Uploader::class.java.getDeclaredMethod("queryGcsSession", String::class.java, Long::class.javaPrimitiveType)
+        method.isAccessible = true
+        val status = method.invoke(uploader, server.url("/resumable-session").toString(), 8388608L)
+
+        val expiredClass = Class.forName("digital.heirlooms.app.Uploader\$GcsSessionStatus\$Expired")
+        assertTrue(expiredClass.isInstance(status))
+    }
+
+    @Test
+    fun `queryGcsSession sends PUT with Content-Range bytes star slash total`() {
+        server.enqueue(MockResponse().setResponseCode(308))
+
+        val method = Uploader::class.java.getDeclaredMethod("queryGcsSession", String::class.java, Long::class.javaPrimitiveType)
+        method.isAccessible = true
+        method.invoke(uploader, server.url("/session").toString(), 12345L)
+
+        val req = server.takeRequest()
+        assertEquals("PUT", req.method)
+        assertEquals("bytes */12345", req.getHeader("Content-Range"))
     }
 }

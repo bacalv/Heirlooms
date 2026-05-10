@@ -50,6 +50,7 @@ class Uploader(
         // Plaintext size chosen so ciphertext chunk (nonce+ct+tag = CHUNK_SIZE+28) is
         // exactly 4 MiB = 16 × 256 KiB, satisfying GCS resumable upload alignment.
         const val CHUNK_SIZE = 4 * 1024 * 1024 - 28
+        const val CIPHERTEXT_CHUNK_SIZE = CHUNK_SIZE + 28  // = 4194304, exactly 4 MiB
         const val LARGE_FILE_THRESHOLD = 10 * 1024 * 1024L
 
         fun isValidEndpoint(endpoint: String?): Boolean {
@@ -70,6 +71,16 @@ class Uploader(
 
         fun parseJsonStringField(json: String, key: String): String? =
             Regex(""""$key"\s*:\s*"([^"]+)"""").find(json)?.groupValues?.get(1)
+
+        fun parseJsonLongField(json: String, key: String): Long? =
+            Regex(""""$key"\s*:\s*(\d+)""").find(json)?.groupValues?.get(1)?.toLongOrNull()
+
+        fun parseJsonStringList(json: String, key: String): List<String> {
+            val content = Regex(""""$key"\s*:\s*\[([^\]]*)]""").find(json)?.groupValues?.get(1)
+                ?: return emptyList()
+            if (content.isBlank()) return emptyList()
+            return Regex(""""([^"]*)"""").findAll(content).map { it.groupValues[1] }.toList()
+        }
 
         fun sha256Hex(bytes: ByteArray): String =
             MessageDigest.getInstance("SHA-256").digest(bytes)
@@ -340,6 +351,34 @@ class Uploader(
 
         val base = baseUrl!!.trimEnd('/')
 
+        // ---- Resume path: large files with a persisted checkpoint ----
+        if (file.length() > LARGE_FILE_THRESHOLD) {
+            val cp = readCheckpoint(file)
+            if (cp != null) {
+                when (val status = queryGcsSession(cp.resumableUri, cp.totalCiphertextBytes)) {
+                    is GcsSessionStatus.Expired -> deleteCheckpointForFile(file)  // fall through to full upload
+                    is GcsSessionStatus.Error -> return UploadResult.Failure(status.message, status.httpCode)
+                    is GcsSessionStatus.Complete -> {
+                        val result = resumeUploadThumbnailAndConfirm(base, file, cp, masterKey, apiKey, onConfirming)
+                        if (result is UploadResult.Success) deleteCheckpointForFile(file)
+                        return result
+                    }
+                    is GcsSessionStatus.Incomplete -> {
+                        val resumeChunkIndex = (status.lastByteReceived + 1L) / CIPHERTEXT_CHUNK_SIZE
+                        val contentDek = try {
+                            VaultCrypto.unwrapDekWithMasterKey(Base64.decode(cp.wrappedContentDekB64, Base64.NO_WRAP), masterKey)
+                        } catch (e: Exception) { return UploadResult.Failure("DEK unwrap failed: ${e.message}") }
+                        encryptAndUploadStreaming(file, contentDek, cp.storageKey, cp.resumableUri,
+                            cp.totalCiphertextBytes, onProgress, resumeChunkIndex, resumeChunkIndex * CIPHERTEXT_CHUNK_SIZE)
+                            ?.let { return it }
+                        val result = resumeUploadThumbnailAndConfirm(base, file, cp, masterKey, apiKey, onConfirming)
+                        if (result is UploadResult.Success) deleteCheckpointForFile(file)
+                        return result
+                    }
+                }
+            }
+        }
+
         val contentDek = VaultCrypto.generateDek()
         val thumbnailDek = VaultCrypto.generateDek()
 
@@ -392,6 +431,21 @@ class Uploader(
 
             val resumableUri = parseJsonStringField(resumableResponse, "resumableUri")
                 ?: return UploadResult.Failure("Missing resumableUri in resumable init response")
+
+            // Persist checkpoint before streaming so a retry can resume rather than restart.
+            val wrappedCpContentDek = VaultCrypto.wrapDekUnderMasterKey(contentDek, masterKey)
+            val wrappedCpThumbnailDek = VaultCrypto.wrapDekUnderMasterKey(thumbnailDek, masterKey)
+            writeCheckpoint(file, UploadCheckpoint(
+                storageKey = contentStorageKey,
+                thumbnailStorageKey = thumbStorageKey,
+                thumbnailUploadUrl = thumbUploadUrl,
+                wrappedContentDekB64 = Base64.encodeToString(wrappedCpContentDek, Base64.NO_WRAP),
+                wrappedThumbnailDekB64 = Base64.encodeToString(wrappedCpThumbnailDek, Base64.NO_WRAP),
+                resumableUri = resumableUri,
+                totalCiphertextBytes = totalCiphertextBytes,
+                mimeType = mimeType,
+                tags = tags,
+            ))
 
             encryptAndUploadStreaming(file, contentDek, contentStorageKey, resumableUri, totalCiphertextBytes, onProgress)
                 ?.let { return it }
@@ -471,7 +525,10 @@ class Uploader(
             ).execute().use { response ->
                 val code = response.code
                 when {
-                    response.isSuccessful -> UploadResult.Success("Encrypted upload complete", code, 1)
+                    response.isSuccessful -> {
+                        deleteCheckpointForFile(file)
+                        UploadResult.Success("Encrypted upload complete", code, 1)
+                    }
                     else -> UploadResult.Failure("Confirm failed: HTTP $code", code)
                 }
             }
@@ -492,6 +549,8 @@ class Uploader(
         resumableUri: String,
         totalCiphertextBytes: Long,
         onProgress: ((Long, Long) -> Unit)?,
+        startChunkIndex: Long = 0L,
+        startCiphertextOffset: Long = 0L,
     ): UploadResult.Failure? {
         val uploadIdPrefix = storageKey.toByteArray(Charsets.UTF_8).let { raw ->
             raw.copyOf(minOf(4, raw.size)).let { prefix ->
@@ -500,12 +559,21 @@ class Uploader(
         }
 
         val plainBuffer = ByteArray(CHUNK_SIZE)
-        var ciphertextOffset = 0L
-        var chunkIndex = 0L
-        var plainBytesConsumed = 0L
+        var ciphertextOffset = startCiphertextOffset
+        var chunkIndex = startChunkIndex
+        var plainBytesConsumed = startChunkIndex * CHUNK_SIZE.toLong()
         val plainBytesTotal = file.length()
 
         file.inputStream().use { input ->
+            if (startChunkIndex > 0L) {
+                val plaintextOffset = startChunkIndex * CHUNK_SIZE.toLong()
+                var skipped = 0L
+                while (skipped < plaintextOffset) {
+                    val n = input.skip(plaintextOffset - skipped)
+                    if (n <= 0L) break
+                    skipped += n
+                }
+            }
             while (true) {
                 var totalRead = 0
                 while (totalRead < CHUNK_SIZE) {
@@ -551,6 +619,148 @@ class Uploader(
         }
 
         return null
+    }
+
+    private data class UploadCheckpoint(
+        val storageKey: String,
+        val thumbnailStorageKey: String,
+        val thumbnailUploadUrl: String,
+        val wrappedContentDekB64: String,
+        val wrappedThumbnailDekB64: String,
+        val resumableUri: String,
+        val totalCiphertextBytes: Long,
+        val mimeType: String,
+        val tags: List<String>,
+    ) {
+        fun toJson(): String {
+            val tagsArr = tags.joinToString(",") { "\"$it\"" }
+            return """{"storageKey":"$storageKey","thumbnailStorageKey":"$thumbnailStorageKey","thumbnailUploadUrl":"$thumbnailUploadUrl","wrappedContentDekB64":"$wrappedContentDekB64","wrappedThumbnailDekB64":"$wrappedThumbnailDekB64","resumableUri":"$resumableUri","totalCiphertextBytes":$totalCiphertextBytes,"mimeType":"$mimeType","tags":[$tagsArr]}"""
+        }
+    }
+
+    private sealed class GcsSessionStatus {
+        object Complete : GcsSessionStatus()
+        data class Incomplete(val lastByteReceived: Long) : GcsSessionStatus()
+        object Expired : GcsSessionStatus()
+        data class Error(val httpCode: Int, val message: String) : GcsSessionStatus()
+    }
+
+    private fun checkpointFile(file: File): File =
+        File(file.parentFile ?: file.absoluteFile.parentFile, "${file.nameWithoutExtension}.upload_checkpoint.json")
+
+    private fun readCheckpoint(file: File): UploadCheckpoint? {
+        val f = checkpointFile(file)
+        if (!f.exists()) return null
+        return try {
+            val json = f.readText()
+            UploadCheckpoint(
+                storageKey = parseJsonStringField(json, "storageKey") ?: return null,
+                thumbnailStorageKey = parseJsonStringField(json, "thumbnailStorageKey") ?: return null,
+                thumbnailUploadUrl = parseJsonStringField(json, "thumbnailUploadUrl") ?: return null,
+                wrappedContentDekB64 = parseJsonStringField(json, "wrappedContentDekB64") ?: return null,
+                wrappedThumbnailDekB64 = parseJsonStringField(json, "wrappedThumbnailDekB64") ?: return null,
+                resumableUri = parseJsonStringField(json, "resumableUri") ?: return null,
+                totalCiphertextBytes = parseJsonLongField(json, "totalCiphertextBytes") ?: return null,
+                mimeType = parseJsonStringField(json, "mimeType") ?: return null,
+                tags = parseJsonStringList(json, "tags"),
+            )
+        } catch (_: Exception) { null }
+    }
+
+    private fun writeCheckpoint(file: File, checkpoint: UploadCheckpoint) {
+        try { checkpointFile(file).writeText(checkpoint.toJson()) } catch (_: Exception) {}
+    }
+
+    fun deleteCheckpointForFile(file: File) {
+        checkpointFile(file).delete()
+    }
+
+    private fun queryGcsSession(resumableUri: String, totalCiphertextBytes: Long): GcsSessionStatus {
+        return try {
+            httpClient.newCall(
+                Request.Builder()
+                    .url(resumableUri)
+                    .put(ByteArray(0).toRequestBody("application/octet-stream".toMediaType()))
+                    .header("Content-Range", "bytes */$totalCiphertextBytes")
+                    .build()
+            ).execute().use { response ->
+                when (response.code) {
+                    200, 201 -> GcsSessionStatus.Complete
+                    308 -> {
+                        val range = response.header("Range")
+                        if (range == null) {
+                            GcsSessionStatus.Incomplete(lastByteReceived = -1L)
+                        } else {
+                            val last = range.substringAfterLast("-").toLongOrNull()
+                                ?: return GcsSessionStatus.Error(308, "Unparseable Range header: $range")
+                            GcsSessionStatus.Incomplete(lastByteReceived = last)
+                        }
+                    }
+                    404, 410 -> GcsSessionStatus.Expired
+                    else -> GcsSessionStatus.Error(response.code, "GCS session query failed: HTTP ${response.code}")
+                }
+            }
+        } catch (e: IOException) {
+            GcsSessionStatus.Error(NO_HTTP_CODE, "GCS session query error: ${e.message}")
+        }
+    }
+
+    private fun resumeUploadThumbnailAndConfirm(
+        base: String,
+        file: File,
+        cp: UploadCheckpoint,
+        masterKey: ByteArray,
+        apiKey: String?,
+        onConfirming: (() -> Unit)?,
+    ): UploadResult {
+        val thumbnailDek = try {
+            VaultCrypto.unwrapDekWithMasterKey(Base64.decode(cp.wrappedThumbnailDekB64, Base64.NO_WRAP), masterKey)
+        } catch (e: Exception) { return UploadResult.Failure("Thumbnail DEK unwrap failed: ${e.message}") }
+
+        val encryptedThumbnail = try {
+            val thumbBytes = generateThumbnail(file, cp.mimeType) ?: makeFallbackThumbnail()
+            val thumbNonce = VaultCrypto.generateNonce()
+            val ct = VaultCrypto.aesGcmEncrypt(thumbnailDek, thumbNonce, thumbBytes)
+            VaultCrypto.buildSymmetricEnvelope(VaultCrypto.ALG_AES256GCM_V1, thumbNonce, ct)
+        } catch (e: Exception) { return UploadResult.Failure("Thumbnail encryption failed: ${e.message}") }
+
+        try {
+            httpClient.newCall(
+                Request.Builder()
+                    .url(cp.thumbnailUploadUrl)
+                    .put(encryptedThumbnail.toRequestBody("application/octet-stream".toMediaType()))
+                    .build()
+            ).execute().use { response ->
+                if (!response.isSuccessful) {
+                    if (response.code in 400..499) {
+                        // Signed URL expired — delete checkpoint so next attempt does a full restart.
+                        deleteCheckpointForFile(file)
+                        return UploadResult.Failure("Thumbnail URL expired, will restart", NO_HTTP_CODE)
+                    }
+                    return UploadResult.Failure("Thumbnail PUT failed: HTTP ${response.code}", response.code)
+                }
+            }
+        } catch (e: IOException) { return UploadResult.Failure("Thumbnail PUT error: ${e.message}") }
+
+        onConfirming?.invoke()
+        val tagsJson = if (cp.tags.isEmpty()) "" else ""","tags":[${cp.tags.joinToString(",") { "\"$it\"" }}]"""
+        val confirmBody = """{"storageKey":"${cp.storageKey}","mimeType":"${cp.mimeType}","fileSize":${cp.totalCiphertextBytes},"storage_class":"encrypted","envelopeVersion":1,"wrappedDek":"${cp.wrappedContentDekB64}","dekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}","thumbnailStorageKey":"${cp.thumbnailStorageKey}","wrappedThumbnailDek":"${cp.wrappedThumbnailDekB64}","thumbnailDekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}"$tagsJson}"""
+
+        return try {
+            httpClient.newCall(
+                Request.Builder()
+                    .url("$base/api/content/uploads/confirm")
+                    .post(confirmBody.toRequestBody("application/json".toMediaType()))
+                    .apply { if (!apiKey.isNullOrBlank()) header("X-Api-Key", apiKey) }
+                    .build()
+            ).execute().use { response ->
+                val code = response.code
+                when {
+                    response.isSuccessful -> UploadResult.Success("Encrypted upload complete (resumed)", code, 1)
+                    else -> UploadResult.Failure("Confirm failed: HTTP $code", code)
+                }
+            }
+        } catch (e: IOException) { UploadResult.Failure("Confirm error: ${e.message}") }
     }
 
     private fun generateThumbnail(file: File, mimeType: String): ByteArray? {

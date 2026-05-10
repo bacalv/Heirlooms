@@ -88,6 +88,7 @@ class UploadWorker(
             runAttemptCount < MAX_ATTEMPTS - 1 -> Result.retry()
             else -> {
                 file.delete()
+                uploader.deleteCheckpointForFile(file)
                 notifyResult(success = false)
                 Result.failure()
             }
