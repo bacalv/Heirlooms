@@ -24,7 +24,9 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.33.0 (10 May 2026) — Streaming encryption for large files (server + Android + web).
+- Current version: v0.35.0 (10 May 2026) — Web encrypted video playback + MSE streaming (web only).
+  v0.34.0 = Web: streaming-format decrypt fix for large encrypted videos.
+  v0.33.0 = Streaming encryption for large files (server + Android + web).
   v0.32.0 = Diagnostics screen + Fire OS FreeTime detection.
   v0.31.0 = Android: Garden Plant button (camera + file picker).
   v0.30.0 = M7 E5: storage class rename, web EXIF, onboarding copy (server + web + minor Android).

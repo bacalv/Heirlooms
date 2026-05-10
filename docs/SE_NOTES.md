@@ -69,3 +69,13 @@ Three Gradle subprojects under `/Users/bac/IdeaProjects/Heirlooms/`:
 - In http4k two-level contract lambdas (`bindContract METHOD to { param: T, _ -> { req -> ... } }`),
   `return` from the inner lambda does not compile as non-local. Extract the inner body
   to a named function and use regular `return` — see `KeysHandler.kt`.
+- **mp4box v2 (npm `mp4box ^2.3.0`) pitfalls (v0.35.0):**
+  - No `default` export — import as `const MP4Box = await import('mp4box')`, then `MP4Box.createFile()`.
+  - `initializeSegmentation()` returns `{ tracks, buffer }` (one combined init segment), NOT an iterable array.
+  - Do NOT use the segmentation API (`setSegmentOptions` / `initializeSegmentation` / `start` / `onSegment`)
+    for remuxing regular (non-fragmented) MP4. `initializeSegmentation()` calls `resetTables()` internally,
+    which deletes `trak.samples`; `start()` then finds no samples and `onSegment` never fires → empty
+    SourceBuffer → black screen.
+  - Safe use: feed chunks to a sniffer instance to get `onReady` (codec detection only), then append
+    raw decrypted bytes to the SourceBuffer directly. Works for faststart MP4 (moov before mdat).
+    For non-faststart (moov at end), fall back to full download + blob URL.

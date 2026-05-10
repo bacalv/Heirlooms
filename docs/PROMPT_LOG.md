@@ -10,17 +10,22 @@ important context or tradeoffs discovered along the way.
 
 Implements Fix 2 from `docs/briefs/web_encrypted_video.md`. Web-only change.
 
-**Problem.** Fix 1 (v0.34.0) made large encrypted videos playable but still downloaded the whole file before playback. For a 30–100 MB video on mobile web this is a significant wait.
+**Problem.** Fix 1 (v0.34.0) made large encrypted videos playable but required the entire file to be downloaded before playback could start.
 
-**Fix.** Added `src/crypto/encryptedVideoStream.js`. For encrypted videos where `upload.fileSize > 10 MB` and `MediaSource` is available, `PhotoDetailPage` now creates a `MediaSource` and attaches it to the video element immediately, then begins fetching and decrypting 4 MiB ciphertext chunks in sequence in the background. Each decrypted chunk is fed to `mp4box` (new dependency, `^2.3.0`), which handles the moov → fMP4 remux required for MSE; it fires `onReady` with codec strings (so `addSourceBuffer` gets the correct MIME type) and `onSegment` with appendable fMP4 segments. Playback starts after the first couple of segments are buffered while fetching continues.
+**What shipped.** `src/crypto/encryptedVideoStream.js` (new) + `PhotoDetailPage.jsx` update. `mp4box` added as a dependency (`^2.3.0`, dynamically imported → Vite code-splits it to a separate 32 KB gzip chunk). `aesGcmDecryptWithAad` promoted from private to exported in `vaultCrypto.js`.
 
-**Abort/cleanup.** `openEncryptedVideoStream` returns a `cleanup()` function that aborts in-flight fetches (via `AbortController`) and revokes the `MediaSource` object URL. `PhotoDetailPage` calls it from the `useEffect` cleanup, replacing the previous `URL.revokeObjectURL` call for this path.
+**Approach — faststart detection then two paths:**
 
-**Bundle.** `mp4box` is dynamically imported (`await import('mp4box')`) so Vite code-splits it into a separate 142 KB (32 KB gzip) chunk. Users who never play large encrypted videos don't pay for it.
+`openEncryptedVideoStream` downloads and decrypts chunk 0 first, then feeds a copy to a mp4box sniffer instance. For faststart MP4 (moov at the beginning, before mdat), mp4box fires `onReady` synchronously during that `appendBuffer` call, providing the codec string. For non-faststart (moov at the end), `onReady` does not fire.
 
-**Fallback.** The full-download path (Fix 1) is preserved for: encrypted images, encrypted videos ≤ 10 MB (envelope format), and any browser where `MediaSource` is absent.
+- **Faststart path** (`type: 'mse'`): create a `MediaSource`, return its URL immediately. A background `streamFaststart` function appends chunk 0 (which already contains `ftyp + moov + start of mdat`) to a `SourceBuffer`, then continues fetching and appending remaining chunks as they arrive. MSE accepts regular faststart MP4 as a contiguous byte stream; playback starts after the first chunk is buffered.
+- **Non-faststart path** (`type: 'blob'`): download all remaining chunks, decrypt them all, combine into a single `Uint8Array`, wrap in a `Blob`, return a blob URL. Same latency as Fix 1, but correct (Fix 1 still covers small files and images).
 
-`aesGcmDecryptWithAad` was promoted from private to exported in `vaultCrypto.js` so `encryptedVideoStream.js` can use it directly per chunk.
+**Why not mp4box segmentation API.** The initial implementation used `setSegmentOptions` / `initializeSegmentation` / `start` / `onSegment` to produce fMP4 segments. This failed because `initializeSegmentation()` internally calls `resetTables()` which deletes `trak.samples`. `start()` then finds no samples and `onSegment` never fires — SourceBuffer receives only the init segment, video plays black with no playback. Also: mp4box v2 `initializeSegmentation()` returns `{ tracks, buffer }` (not an iterable array), and there is no `default` export (module exports `createFile` directly).
+
+**Cleanup.** `openEncryptedVideoStream` returns `{ type: 'mse', msUrl, cleanup() }` or `{ type: 'blob', blobUrl }`. For MSE, `cleanup()` calls `abort.abort()` (cancels in-flight fetches) and `URL.revokeObjectURL(msUrl)`. `PhotoDetailPage` handles both return types and passes the `cleanup` function to the `useEffect` return value.
+
+**Faststart in practice.** Not all Android camera recordings are faststart — some older devices (and certain encoders) write the moov at the end. Those correctly fall through to the blob path and play after full download. Faststart videos get true progressive playback.
 
 ---
 
