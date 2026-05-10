@@ -217,7 +217,7 @@ export function VaultUnlockPage({ apiKey, onUnlocked }) {
             {isSetup ? 'Save passphrase' : 'Unlock vault'}
           </button>
         </form>
-        <p className="text-[10px] text-text-muted/40 text-right mt-4">{__COMMIT__}</p>
+        <p className="text-[10px] text-text-muted/40 text-right mt-4">{import.meta.env.VITE_COMMIT ?? 'dev'}</p>
       </div>
     </div>
   )
