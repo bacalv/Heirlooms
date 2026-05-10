@@ -659,14 +659,32 @@ private suspend fun copyContentUriToCache(context: android.content.Context, uri:
             mimeType.startsWith("video/") -> "mp4"
             else -> "tmp"
         }
-        val file = File(context.cacheDir, "plant-${UUID.randomUUID()}.$ext")
+        val dest = File(context.cacheDir, "plant-${UUID.randomUUID()}.$ext")
+
+        // Attempt 1: stream directly from the content resolver.
         try {
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                file.outputStream().use { input.copyTo(it) }
+            val stream = context.contentResolver.openInputStream(uri)
+            if (stream != null) {
+                stream.use { it.copyTo(dest.outputStream()) }
+                return@withContext dest.absolutePath
             }
-            file.absolutePath
-        } catch (_: Exception) {
-            file.delete()
-            null
-        }
+        } catch (_: Exception) { }
+
+        // Attempt 2: resolve the real file path via MediaStore (Fire OS / Android ≤10).
+        try {
+            val realPath = context.contentResolver.query(
+                uri,
+                arrayOf(android.provider.MediaStore.MediaColumns.DATA),
+                null, null, null,
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            }
+            if (realPath != null) {
+                java.io.File(realPath).inputStream().use { it.copyTo(dest.outputStream()) }
+                return@withContext dest.absolutePath
+            }
+        } catch (_: Exception) { }
+
+        dest.delete()
+        null
     }
