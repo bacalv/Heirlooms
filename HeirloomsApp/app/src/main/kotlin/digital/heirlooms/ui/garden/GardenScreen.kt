@@ -314,14 +314,14 @@ fun GardenScreen(
                         val snapshot = ps
                         plantState = PlantState.Queuing
                         scope.launch(Dispatchers.IO) {
-                            val filePath = if (!snapshot.isFile && captureFile?.exists() == true) {
-                                captureFile!!.absolutePath
+                            val (filePath, copyError) = if (!snapshot.isFile && captureFile?.exists() == true) {
+                                Pair(captureFile!!.absolutePath, "")
                             } else {
                                 copyContentUriToCache(context, snapshot.uri, snapshot.mimeType)
                             }
                             if (filePath == null) {
                                 withContext(Dispatchers.Main) {
-                                    Toast.makeText(context, "Couldn't read file. Try again.", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, copyError, Toast.LENGTH_LONG).show()
                                 }
                             }
                             if (filePath != null) {
@@ -662,7 +662,7 @@ internal fun DidntTake(onRetry: () -> Unit) {
     }
 }
 
-private suspend fun copyContentUriToCache(context: android.content.Context, uri: Uri, mimeType: String): String? =
+private suspend fun copyContentUriToCache(context: android.content.Context, uri: Uri, mimeType: String): Pair<String?, String> =
     withContext(Dispatchers.IO) {
         val ext = when {
             mimeType.startsWith("image/") -> "jpg"
@@ -676,11 +676,25 @@ private suspend fun copyContentUriToCache(context: android.content.Context, uri:
             val stream = context.contentResolver.openInputStream(uri)
             if (stream != null) {
                 stream.use { it.copyTo(dest.outputStream()) }
-                return@withContext dest.absolutePath
+                return@withContext Pair(dest.absolutePath, "")
             }
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            android.util.Log.w("Plant", "openInputStream failed: ${e.javaClass.simpleName}: ${e.message}")
+        }
 
-        // Attempt 2: resolve the real file path via MediaStore (Fire OS / Android ≤10).
+        // Attempt 2: file descriptor.
+        try {
+            val pfd = context.contentResolver.openFileDescriptor(uri, "r")
+            if (pfd != null) {
+                pfd.use { java.io.FileInputStream(it.fileDescriptor).use { s -> s.copyTo(dest.outputStream()) } }
+                return@withContext Pair(dest.absolutePath, "")
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("Plant", "openFileDescriptor failed: ${e.javaClass.simpleName}: ${e.message}")
+        }
+
+        // Attempt 3: resolve real path via MediaStore DATA column.
+        var lastError = "no path found"
         try {
             val realPath = context.contentResolver.query(
                 uri,
@@ -691,10 +705,13 @@ private suspend fun copyContentUriToCache(context: android.content.Context, uri:
             }
             if (realPath != null) {
                 java.io.File(realPath).inputStream().use { it.copyTo(dest.outputStream()) }
-                return@withContext dest.absolutePath
+                return@withContext Pair(dest.absolutePath, "")
             }
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            lastError = "${e.javaClass.simpleName}: ${e.message}"
+            android.util.Log.w("Plant", "MediaStore DATA failed: $lastError")
+        }
 
         dest.delete()
-        null
+        Pair(null, "URI=$uri err=$lastError")
     }
