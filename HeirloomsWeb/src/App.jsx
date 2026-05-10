@@ -27,8 +27,14 @@ function RequireAuth() {
 }
 
 export default function App() {
-  const [apiKey, setApiKey] = useState(null)
+  const [apiKey, setApiKeyState] = useState(() => localStorage.getItem('heirlooms-apiKey') ?? null)
   const [vaultUnlocked, setVaultUnlocked] = useState(false)
+
+  function setApiKey(key) {
+    if (key) localStorage.setItem('heirlooms-apiKey', key)
+    else localStorage.removeItem('heirlooms-apiKey')
+    setApiKeyState(key)
+  }
 
   function handleSignOut() {
     lock()
