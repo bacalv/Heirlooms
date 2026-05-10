@@ -9,39 +9,40 @@ export function computeCiphertextSize(plaintextSize) {
   return n * 28 + plaintextSize
 }
 
-// Open a MediaSource-backed URL for a large encrypted video.
-// Returns { msUrl, cleanup } — set <video src={msUrl}>, call cleanup() on unmount.
-// Strategy: use mp4box only for codec detection (onReady), then append raw decrypted
-// bytes directly to the SourceBuffer. MSE accepts regular (non-fragmented) faststart
-// MP4 as a contiguous byte stream: moov = init segment, mdat = media data.
+// Returns one of:
+//   { type: 'mse',  msUrl,   cleanup() }  — faststart: stream via MediaSource
+//   { type: 'blob', blobUrl }              — non-faststart: full decrypt, ready to play
+//
+// Strategy: download chunk 0 first to detect faststart (moov before mdat).
+// mp4box onReady fires synchronously during appendBuffer if the moov is in
+// chunk 0.  If it fires → faststart → raw-byte MSE streaming (works because
+// the SourceBuffer receives ftyp+moov+mdat in order).  If not → non-faststart
+// → download all chunks, decrypt, return a blob URL (same latency as Fix 1,
+// guaranteed correct).
+//
+// We deliberately avoid mp4box's segmentation API (setSegmentOptions / start /
+// onSegment) because initializeSegmentation() calls resetTables() which
+// deletes trak.samples, leaving start() with no samples to emit.
 export async function openEncryptedVideoStream(upload, apiKey, dek) {
   if (typeof MediaSource === 'undefined') throw new Error('MSE not supported')
 
-  const abort = new AbortController()
-  const mediaSource = new MediaSource()
-  const msUrl = URL.createObjectURL(mediaSource)
+  const totalCipher = computeCiphertextSize(upload.fileSize)
+  const chunk0End = Math.min(CIPHER_CHUNK, totalCipher) - 1
 
-  mediaSource.addEventListener('sourceopen', () => {
-    runStream(upload, apiKey, dek, mediaSource, abort.signal).catch(() => {
-      if (mediaSource.readyState === 'open') mediaSource.endOfStream('network')
-    })
-  }, { once: true })
+  // --- Chunk 0: decrypt + probe ---
+  const r0 = await fetch(`${API_URL}/api/content/uploads/${upload.id}/file`, {
+    headers: { 'X-Api-Key': apiKey, 'Range': `bytes=0-${chunk0End}` },
+  })
+  if (!r0.ok) throw new Error(`HTTP ${r0.status}`)
+  const bytes0 = new Uint8Array(await r0.arrayBuffer())
+  const plain0 = await aesGcmDecryptWithAad(dek, bytes0.slice(0, 12), bytes0.slice(0, 12), bytes0.slice(12))
 
-  return {
-    msUrl,
-    cleanup() { abort.abort(); URL.revokeObjectURL(msUrl) },
-  }
-}
-
-async function runStream(upload, apiKey, dek, mediaSource, signal) {
+  // Feed a copy to mp4box to detect the codec.  onReady fires synchronously
+  // here for faststart files (moov present in chunk 0).
   const MP4Box = await import('mp4box')
-  const mp4boxFile = MP4Box.createFile()
-
-  // mp4box is used only to detect the codec string via onReady.
-  // We do NOT use its segmentation API — we append raw decrypted bytes to the
-  // SourceBuffer directly (valid for faststart MP4 where moov precedes mdat).
+  const sniffer = MP4Box.createFile()
   let mime = null
-  mp4boxFile.onReady = (info) => {
+  sniffer.onReady = (info) => {
     const vt = info.videoTracks?.[0]
     const at = info.audioTracks?.[0]
     if (!vt) return
@@ -50,78 +51,95 @@ async function runStream(upload, apiKey, dek, mediaSource, signal) {
     mime = MediaSource.isTypeSupported(withAudio) ? withAudio
          : MediaSource.isTypeSupported(videoOnly) ? videoOnly
          : null
+    console.log('[heirlooms] chunk-0 probe — codec:', vt.codec, at?.codec ?? '(no audio)', '→', mime)
+  }
+  const probe = plain0.slice(0)   // copy so plain0 stays intact
+  probe.fileStart = 0
+  sniffer.appendBuffer(probe)
+
+  if (!mime) {
+    // Non-faststart (moov not in chunk 0): full download then blob URL.
+    console.log('[heirlooms] non-faststart → full download')
+    return fullDownload(upload, apiKey, dek, plain0, chunk0End + 1, totalCipher)
   }
 
-  let sourceBuffer = null
-  const pending = []  // decrypted ArrayBuffers accumulated before codec is known
-  const queue   = []  // ArrayBuffers waiting while SourceBuffer.updating is true
-  let allChunksFed = false
+  // Faststart: stream raw decrypted bytes into a SourceBuffer.
+  console.log('[heirlooms] faststart → MSE streaming with', mime)
+  const abort = new AbortController()
+  const mediaSource = new MediaSource()
+  const msUrl = URL.createObjectURL(mediaSource)
 
-  function drainQueue() {
-    if (!sourceBuffer) return
-    if (sourceBuffer.updating) return
-    if (queue.length > 0) {
-      sourceBuffer.appendBuffer(queue.shift())
-    } else if (allChunksFed && mediaSource.readyState === 'open') {
-      mediaSource.endOfStream()
-    }
+  mediaSource.addEventListener('sourceopen', () => {
+    streamFaststart(upload, apiKey, dek, mime, plain0, chunk0End + 1, totalCipher, mediaSource, abort.signal)
+      .catch(() => { if (mediaSource.readyState === 'open') mediaSource.endOfStream('network') })
+  }, { once: true })
+
+  return { type: 'mse', msUrl, cleanup() { abort.abort(); URL.revokeObjectURL(msUrl) } }
+}
+
+// Appends chunk 0 (already decrypted) then continues fetching from startCipherOff.
+async function streamFaststart(upload, apiKey, dek, mime, plain0, startCipherOff, totalCipher, mediaSource, signal) {
+  const sb = mediaSource.addSourceBuffer(mime)
+  const queue = []
+  let allFed = false
+
+  function drain() {
+    if (sb.updating) return
+    if (queue.length > 0) sb.appendBuffer(queue.shift())
+    else if (allFed && mediaSource.readyState === 'open') mediaSource.endOfStream()
   }
 
-  function appendToSb(buf) {
-    if (sourceBuffer.updating || queue.length > 0) queue.push(buf)
-    else sourceBuffer.appendBuffer(buf)
+  function append(buf) {
+    if (sb.updating || queue.length > 0) queue.push(buf)
+    else sb.appendBuffer(buf)
   }
 
-  function openSourceBuffer() {
-    if (!mime || sourceBuffer) return
-    sourceBuffer = mediaSource.addSourceBuffer(mime)
-    sourceBuffer.addEventListener('updateend', drainQueue)
-    for (const p of pending) appendToSb(p)
-    pending.length = 0
-  }
+  sb.addEventListener('updateend', drain)
+  sb.addEventListener('error', e => console.error('[heirlooms] SB error:', e))
 
-  const totalCipher = computeCiphertextSize(upload.fileSize)
-  let cipherOff = 0
-  let plainOff  = 0
+  append(plain0)  // ftyp + moov + start of mdat
 
-  while (cipherOff < totalCipher) {
+  let off = startCipherOff
+  while (off < totalCipher) {
     if (signal.aborted) return
-    const end = Math.min(cipherOff + CIPHER_CHUNK, totalCipher) - 1
+    const end = Math.min(off + CIPHER_CHUNK, totalCipher) - 1
     const r = await fetch(`${API_URL}/api/content/uploads/${upload.id}/file`, {
-      headers: { 'X-Api-Key': apiKey, 'Range': `bytes=${cipherOff}-${end}` },
+      headers: { 'X-Api-Key': apiKey, 'Range': `bytes=${off}-${end}` },
       signal,
     })
     if (!r.ok) throw new Error(`HTTP ${r.status}`)
-
-    const chunk = new Uint8Array(await r.arrayBuffer())
-    const nonce = chunk.slice(0, 12)
-    const plainBuf = await aesGcmDecryptWithAad(dek, nonce, nonce, chunk.slice(12))
-
-    // Feed a copy to mp4box for codec sniffing (only until onReady fires).
-    if (!mime) {
-      const mpBuf = plainBuf.slice(0)
-      mpBuf.fileStart = plainOff
-      mp4boxFile.appendBuffer(mpBuf)
-      // onReady may have fired synchronously above — open SB now if so.
-      openSourceBuffer()
-    }
-
-    if (sourceBuffer) appendToSb(plainBuf)
-    else pending.push(plainBuf)
-
-    cipherOff = end + 1
-    plainOff  += plainBuf.byteLength
+    const bytes = new Uint8Array(await r.arrayBuffer())
+    const plain = await aesGcmDecryptWithAad(dek, bytes.slice(0, 12), bytes.slice(0, 12), bytes.slice(12))
+    append(plain)
+    off = end + 1
   }
 
-  allChunksFed = true
+  allFed = true
+  drain()
+}
 
-  // For non-faststart MP4, moov arrives in the last chunk — open SB now.
-  if (!sourceBuffer) {
-    mp4boxFile.flush()
-    openSourceBuffer()
+// Downloads all chunks (chunk 0 already decrypted), combines, returns a blob URL.
+async function fullDownload(upload, apiKey, dek, plain0, startCipherOff, totalCipher) {
+  const parts = [plain0]
+  let totalBytes = plain0.byteLength
+  let off = startCipherOff
+
+  while (off < totalCipher) {
+    const end = Math.min(off + CIPHER_CHUNK, totalCipher) - 1
+    const r = await fetch(`${API_URL}/api/content/uploads/${upload.id}/file`, {
+      headers: { 'X-Api-Key': apiKey, 'Range': `bytes=${off}-${end}` },
+    })
+    if (!r.ok) throw new Error(`HTTP ${r.status}`)
+    const bytes = new Uint8Array(await r.arrayBuffer())
+    const plain = await aesGcmDecryptWithAad(dek, bytes.slice(0, 12), bytes.slice(0, 12), bytes.slice(12))
+    parts.push(plain)
+    totalBytes += plain.byteLength
+    off = end + 1
   }
 
-  if (!sourceBuffer) throw new Error('Could not determine video codec')
+  const combined = new Uint8Array(totalBytes)
+  let pos = 0
+  for (const p of parts) { combined.set(new Uint8Array(p), pos); pos += p.byteLength }
 
-  drainQueue()
+  return { type: 'blob', blobUrl: URL.createObjectURL(new Blob([combined], { type: upload.mimeType })) }
 }

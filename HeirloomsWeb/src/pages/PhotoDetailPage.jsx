@@ -423,17 +423,21 @@ export function PhotoDetailPage() {
       const LARGE = 10 * 1024 * 1024
 
       if (isEncrypted && isVideo && upload.fileSize > LARGE && typeof MediaSource !== 'undefined') {
-        // MSE streaming path: decrypt and buffer chunks progressively so playback
-        // starts before the full file is downloaded.
+        // Streaming path: faststart → MSE (progressive), non-faststart → full decrypt then blob.
         const masterKey = getMasterKey()
         const raw = upload.wrappedDek
         if (!raw) throw new Error('Missing wrappedDek')
         const wrappedDek = typeof raw === 'string' ? fromB64(raw) : raw
         const dek = await unwrapDekWithMasterKey(wrappedDek, masterKey)
-        const { msUrl, cleanup } = await openEncryptedVideoStream(upload, apiKey, dek)
-        streamCleanup = cleanup
-        objectUrl = msUrl
-        if (!cancelled) setBlobUrl(msUrl)
+        const result = await openEncryptedVideoStream(upload, apiKey, dek)
+        if (result.type === 'mse') {
+          streamCleanup = result.cleanup
+          objectUrl = result.msUrl
+          if (!cancelled) setBlobUrl(result.msUrl)
+        } else {
+          objectUrl = result.blobUrl
+          if (!cancelled) setBlobUrl(result.blobUrl)
+        }
       } else if (isEncrypted) {
         // Full-download path: small files or non-video encrypted content.
         const r = await fetch(`${API_URL}/api/content/uploads/${upload.id}/file`, {
