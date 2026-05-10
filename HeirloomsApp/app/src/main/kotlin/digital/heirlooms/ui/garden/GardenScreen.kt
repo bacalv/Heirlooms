@@ -670,50 +670,48 @@ private suspend fun copyContentUriToCache(context: android.content.Context, uri:
             else -> "tmp"
         }
         val dest = File(context.cacheDir, "plant-${UUID.randomUUID()}.$ext")
+        val diag = StringBuilder()
 
-        fun tryStream(src: Uri): Boolean {
-            return try {
-                context.contentResolver.openInputStream(src)?.use { it.copyTo(dest.outputStream()) }
-                    ?.let { true } ?: false
-            } catch (_: Exception) { false }
-        }
+        val hasPerm = if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2)
+            context.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        else true
+        diag.append("perm=$hasPerm ")
 
-        // Attempt 1: Documents UI URI (com.android.providers.media.documents) — convert to
-        // MediaStore URI then stream. Handles image:NNN, video:NNN, audio:NNN document IDs.
-        if (android.provider.DocumentsContract.isDocumentUri(context, uri)) {
+        val isDoc = try { android.provider.DocumentsContract.isDocumentUri(context, uri) } catch (e: Exception) { false }
+        diag.append("isDoc=$isDoc ")
+
+        if (isDoc) {
             try {
                 val docId = android.provider.DocumentsContract.getDocumentId(uri)
-                val (type, rowStr) = docId.split(":").let { it[0] to it.getOrElse(1) { "" } }
-                val rowId = rowStr.toLongOrNull()
-                if (rowId != null) {
-                    val mediaBase = when (type) {
-                        "image" -> android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-                        "video" -> android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-                        "audio" -> android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-                        else -> null
-                    }
-                    if (mediaBase != null) {
-                        val mediaUri = android.content.ContentUris.withAppendedId(mediaBase, rowId)
-                        if (tryStream(mediaUri)) return@withContext Pair(dest.absolutePath, "")
-                    }
+                diag.append("docId=$docId ")
+                val parts = docId.split(":")
+                val rowId = parts.getOrNull(1)?.toLongOrNull()
+                val mediaBase = when (parts.getOrNull(0)) {
+                    "image" -> android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                    "video" -> android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                    "audio" -> android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+                    else -> null
                 }
-            } catch (_: Exception) { }
+                if (rowId != null && mediaBase != null) {
+                    val mediaUri = android.content.ContentUris.withAppendedId(mediaBase, rowId)
+                    diag.append("msUri=$mediaUri ")
+                    try {
+                        val s = context.contentResolver.openInputStream(mediaUri)
+                        if (s != null) {
+                            s.use { it.copyTo(dest.outputStream()) }
+                            return@withContext Pair(dest.absolutePath, "")
+                        } else diag.append("ms=null ")
+                    } catch (e: Exception) { diag.append("ms=${e.javaClass.simpleName} ") }
+                }
+            } catch (e: Exception) { diag.append("docErr=${e.javaClass.simpleName} ") }
         }
 
-        // Attempt 2: stream directly from the URI.
-        if (tryStream(uri)) return@withContext Pair(dest.absolutePath, "")
-
-        // Attempt 3: resolve real path via MediaStore DATA column.
         try {
-            val realPath = context.contentResolver.query(
-                uri, arrayOf(android.provider.MediaStore.MediaColumns.DATA), null, null, null,
-            )?.use { if (it.moveToFirst()) it.getString(0) else null }
-            if (realPath != null) {
-                java.io.File(realPath).inputStream().use { it.copyTo(dest.outputStream()) }
-                return@withContext Pair(dest.absolutePath, "")
-            }
-        } catch (_: Exception) { }
+            val s = context.contentResolver.openInputStream(uri)
+            if (s != null) { s.use { it.copyTo(dest.outputStream()) }; return@withContext Pair(dest.absolutePath, "") }
+            else diag.append("direct=null ")
+        } catch (e: Exception) { diag.append("direct=${e.javaClass.simpleName} ") }
 
         dest.delete()
-        Pair(null, "Could not read file.")
+        Pair(null, diag.toString())
     }
