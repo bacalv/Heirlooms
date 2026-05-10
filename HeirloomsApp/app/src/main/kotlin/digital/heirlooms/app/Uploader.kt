@@ -47,7 +47,9 @@ class Uploader(
         const val DEFAULT_INITIAL_DELAY_MS = 1_000L
         private const val FALLBACK_MIME_TYPE = "application/octet-stream"
 
-        const val CHUNK_SIZE = 4 * 1024 * 1024
+        // Plaintext size chosen so ciphertext chunk (nonce+ct+tag = CHUNK_SIZE+28) is
+        // exactly 4 MiB = 16 × 256 KiB, satisfying GCS resumable upload alignment.
+        const val CHUNK_SIZE = 4 * 1024 * 1024 - 28
         const val LARGE_FILE_THRESHOLD = 10 * 1024 * 1024L
 
         fun isValidEndpoint(endpoint: String?): Boolean {
@@ -85,11 +87,12 @@ class Uploader(
             return digest.digest().joinToString("") { "%02x".format(it) }
         }
 
-        // Total GCS object size for a streaming-encrypted file:
-        // 4-byte header + per-chunk (12-byte nonce + plaintext + 16-byte tag)
+        // Total GCS object size: per-chunk (12-byte nonce + plaintext + 16-byte tag).
+        // No file header — the plaintext chunk size is chosen so each ciphertext chunk
+        // is exactly 4 MiB (GCS 256 KiB alignment). Format is detected at decrypt time.
         fun computeTotalCiphertextSize(fileSize: Long, chunkSize: Int): Long {
             val numChunks = (fileSize + chunkSize - 1) / chunkSize
-            return 4L + numChunks * 28L + fileSize
+            return numChunks * 28L + fileSize
         }
 
         // Deterministic 12-byte nonce: [4-byte uploadId prefix][8-byte big-endian chunkIndex]
@@ -478,13 +481,9 @@ class Uploader(
     }
 
     /**
-     * Encrypts [file] in [CHUNK_SIZE]-byte chunks and PUTs each to [resumableUri] via
-     * GCS resumable upload protocol (Content-Range headers). Returns null on success or
-     * a [UploadResult.Failure] on the first error.
-     *
-     * Chunk format on disk: [4-byte header][chunk_0: nonce+ct+tag][chunk_1: nonce+ct+tag]...
-     * The 4-byte header contains CHUNK_SIZE as a big-endian uint32 and doubles as a
-     * format discriminator for the decrypt path.
+     * Encrypts [file] in [CHUNK_SIZE]-byte plaintext chunks and PUTs each as
+     * [nonce(12)][ciphertext+tag(CHUNK_SIZE+16)] = exactly 4 MiB (GCS alignment satisfied).
+     * Returns null on success or a [UploadResult.Failure] on the first error.
      */
     private fun encryptAndUploadStreaming(
         file: File,
@@ -498,12 +497,6 @@ class Uploader(
             raw.copyOf(minOf(4, raw.size)).let { prefix ->
                 if (prefix.size < 4) prefix + ByteArray(4 - prefix.size) else prefix
             }
-        }
-
-        val header = ByteArray(4).also { h ->
-            val cs = CHUNK_SIZE
-            h[0] = (cs ushr 24).toByte(); h[1] = (cs ushr 16).toByte()
-            h[2] = (cs ushr 8).toByte();  h[3] = cs.toByte()
         }
 
         val plainBuffer = ByteArray(CHUNK_SIZE)
@@ -526,11 +519,7 @@ class Uploader(
                 val aad = buildChunkAad(uploadIdPrefix, chunkIndex)
                 val cipherChunk = VaultCrypto.aesGcmEncryptWithAad(contentDek, nonce, aad, plainBuffer, totalRead)
 
-                // Chunk 0 gets the 4-byte file header prepended; subsequent chunks get nonce+ct only.
-                val chunkParts: List<ByteArray> = if (chunkIndex == 0L)
-                    listOf(header, nonce, cipherChunk)
-                else
-                    listOf(nonce, cipherChunk)
+                val chunkParts: List<ByteArray> = listOf(nonce, cipherChunk)
 
                 val chunkSize = chunkParts.sumOf { it.size }.toLong()
                 val chunkStart = ciphertextOffset

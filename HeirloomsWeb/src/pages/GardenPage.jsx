@@ -638,12 +638,14 @@ async function generateThumbnail(file) {
   }
 }
 
-const CHUNK_SIZE = 4 * 1024 * 1024
+// Plaintext chunk size chosen so each ciphertext chunk (nonce+ct+tag = CHUNK_SIZE+28)
+// is exactly 4 MiB = 16 × 256 KiB, satisfying GCS resumable upload alignment.
+const CHUNK_SIZE = 4 * 1024 * 1024 - 28
 const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024
 
 function computeTotalCiphertextSize(fileSize, chunkSize) {
   const numChunks = Math.ceil(fileSize / chunkSize)
-  return 4 + numChunks * 28 + fileSize
+  return numChunks * 28 + fileSize
 }
 
 // Deterministic 12-byte nonce: [4-byte uploadId prefix][8-byte big-endian chunkIndex]
@@ -670,8 +672,6 @@ function concatArrays(...arrays) {
 
 async function encryptAndUploadStreamingContent(file, contentDek, storageKey, resumableUri, totalCiphertextBytes, onProgress) {
   const uploadIdPrefix = new TextEncoder().encode(storageKey).slice(0, 4)
-  const header = new Uint8Array(4)
-  new DataView(header.buffer).setUint32(0, CHUNK_SIZE, false)
 
   let ciphertextOffset = 0
   let chunkIndex = 0
@@ -685,9 +685,7 @@ async function encryptAndUploadStreamingContent(file, contentDek, storageKey, re
     const aad = buildChunkAad(uploadIdPrefix, chunkIndex)
     const cipherChunk = await aesGcmEncryptWithAad(contentDek, nonce, aad, plainChunk)
 
-    const chunkBytes = chunkIndex === 0
-      ? concatArrays(header, nonce, cipherChunk)
-      : concatArrays(nonce, cipherChunk)
+    const chunkBytes = concatArrays(nonce, cipherChunk)
 
     const chunkStart = ciphertextOffset
     const chunkEnd = ciphertextOffset + chunkBytes.length - 1
