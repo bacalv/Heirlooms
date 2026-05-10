@@ -58,6 +58,7 @@ export function LoginPage({ onLogin }) {
             {checking ? 'Checking…' : 'Sign in'}
           </button>
         </form>
+        <p className="text-[10px] text-text-muted/40 text-right mt-4">{__COMMIT__}</p>
       </div>
     </div>
   )
