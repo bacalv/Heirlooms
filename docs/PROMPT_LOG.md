@@ -6,6 +6,18 @@ important context or tradeoffs discovered along the way.
 
 ---
 
+## Session — 2026-05-10 — v0.34.0: Web encrypted video playback fix
+
+Implements Fix 1 from `docs/briefs/web_encrypted_video.md`. Web-only change.
+
+**Problem.** `PhotoDetailPage.jsx` always called `decryptSymmetric` for encrypted uploads. For files > 10 MB the server stores streaming-format ciphertext (`[nonce(12)][ct+tag]` 4 MiB chunks, produced by `encryptAndUploadStreamingContent`). `decryptSymmetric` calls `parseSymmetricEnvelope` which expects the first byte to be `0x01` (envelope version); the streaming format's first byte is the first byte of the nonce (an ASCII character from the upload ID prefix, never `0x01`). The parse threw, `blobUrl` was never set, and large encrypted videos showed as blank spinners.
+
+**Fix.** Added `decryptStreamingContent` to `vaultCrypto.js`. It walks the ciphertext in 4 MiB strides, reading `nonce(12)` then `ct+tag` for each chunk, and decrypts with `aesGcmDecryptWithAad` (nonce == AAD, matching the upload path). A local `aesGcmDecryptWithAad` helper was also added (the encrypt counterpart already existed). In `PhotoDetailPage.jsx`, the `decryptSymmetric` call in `loadContent` is now preceded by a format check: `encBytes[0] === 0x01` → envelope path (unchanged); otherwise → streaming path.
+
+**Test.** Added test 15 to `vaultCrypto.test.js`: constructs a single-chunk streaming blob manually (encrypt with `aesGcmEncryptWithAad`, prepend nonce), calls `decryptStreamingContent`, asserts plaintext round-trips. All 103 web tests pass.
+
+---
+
 ## Session — 2026-05-10 — v0.33.0: Streaming encryption for large files
 
 Implements the brief at `docs/briefs/streaming_encryption.md`. Three-platform change: server, Android, web.

@@ -7,7 +7,7 @@ import { WorkingDots } from '../brand/WorkingDots'
 import { AddToCapsuleModal } from '../components/AddToCapsuleModal'
 import { Toast } from '../components/Toast'
 import { getMasterKey } from '../crypto/vaultSession'
-import { unwrapDekWithMasterKey, decryptSymmetric, fromB64 } from '../crypto/vaultCrypto'
+import { unwrapDekWithMasterKey, decryptSymmetric, decryptStreamingContent, fromB64 } from '../crypto/vaultCrypto'
 
 function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`
@@ -430,7 +430,10 @@ export function PhotoDetailPage() {
         if (!raw) throw new Error('Missing wrappedDek')
         const wrappedDek = typeof raw === 'string' ? fromB64(raw) : raw
         const dek = await unwrapDekWithMasterKey(wrappedDek, masterKey)
-        const plainBytes = await decryptSymmetric(encBytes, dek)
+        // Envelope format starts with version byte 0x01; streaming chunk format starts with nonce bytes (never 0x01).
+        const plainBytes = encBytes[0] === 0x01
+          ? await decryptSymmetric(encBytes, dek)
+          : await decryptStreamingContent(encBytes, dek)
         const blob = new Blob([plainBytes], { type: upload.mimeType })
         objectUrl = URL.createObjectURL(blob)
         if (!cancelled) setBlobUrl(objectUrl)

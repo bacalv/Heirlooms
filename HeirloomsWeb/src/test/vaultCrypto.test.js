@@ -5,9 +5,9 @@ import { describe, it, expect } from 'vitest'
 function bytes(u) { return Array.from(u) }
 import {
   generateMasterKey, generateDek, generateNonce, generateSalt,
-  aesGcmEncrypt, aesGcmDecrypt,
+  aesGcmEncrypt, aesGcmDecrypt, aesGcmEncryptWithAad,
   buildSymmetricEnvelope, parseSymmetricEnvelope,
-  encryptSymmetric, decryptSymmetric,
+  encryptSymmetric, decryptSymmetric, decryptStreamingContent,
   wrapDekUnderMasterKey, unwrapDekWithMasterKey,
   hkdf,
   wrapMasterKeyWithPassphrase, unwrapMasterKeyWithPassphrase,
@@ -138,6 +138,21 @@ describe('vaultCrypto', () => {
     expect(bytes(parsed.ephemeralPubkeyBytes)).toEqual(bytes(ephemeral))
     expect(bytes(parsed.nonce)).toEqual(bytes(nonce))
     expect(bytes(parsed.ciphertextWithTag)).toEqual(bytes(ct))
+  })
+
+  it('15 — decryptStreamingContent round-trips a single-chunk streaming blob', async () => {
+    const dek = generateDek()
+    const plaintext = new TextEncoder().encode('streaming chunk test')
+    // Nonce first byte is 0x41 ('A') — valid upload-id prefix byte, never 0x01.
+    const nonce = new Uint8Array(12)
+    nonce[0] = 0x41
+    crypto.getRandomValues(nonce.subarray(1))
+    const ct = await aesGcmEncryptWithAad(dek, nonce, nonce, plaintext)
+    const streamingBlob = new Uint8Array(12 + ct.length)
+    streamingBlob.set(nonce, 0)
+    streamingBlob.set(ct, 12)
+    const recovered = await decryptStreamingContent(streamingBlob, dek)
+    expect(bytes(recovered)).toEqual(bytes(plaintext))
   })
 
   it('14 — wrapMasterKeyForDevice ECDH round-trip decrypts correctly', async () => {

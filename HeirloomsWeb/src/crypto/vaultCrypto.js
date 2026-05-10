@@ -46,6 +46,33 @@ export async function aesGcmDecrypt(key, nonce, ciphertextWithTag) {
   }
 }
 
+async function aesGcmDecryptWithAad(key, nonce, aad, ctWithTag) {
+  const ck = await crypto.subtle.importKey('raw', key, 'AES-GCM', false, ['decrypt'])
+  return crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonce, additionalData: aad }, ck, ctWithTag)
+}
+
+// Decrypt streaming-encrypted content (produced by Android's encryptAndUploadStreaming).
+// Format: sequence of [nonce(12)][ciphertext+tag] chunks, each exactly 4 MiB except the last.
+export async function decryptStreamingContent(encryptedBytes, dek) {
+  const CHUNK_SIZE = 4 * 1024 * 1024
+  const NONCE_SIZE = 12
+  const parts = []
+  let offset = 0
+  while (offset < encryptedBytes.length) {
+    const chunkEnd = Math.min(offset + CHUNK_SIZE, encryptedBytes.length)
+    const nonce = encryptedBytes.slice(offset, offset + NONCE_SIZE)
+    const ctWithTag = encryptedBytes.slice(offset + NONCE_SIZE, chunkEnd)
+    const plain = await aesGcmDecryptWithAad(dek, nonce, nonce, ctWithTag)
+    parts.push(plain)
+    offset = chunkEnd
+  }
+  const total = parts.reduce((n, p) => n + p.byteLength, 0)
+  const out = new Uint8Array(total)
+  let pos = 0
+  for (const p of parts) { out.set(new Uint8Array(p), pos); pos += p.byteLength }
+  return out
+}
+
 // Symmetric envelope:
 // [1] version=0x01  [1] alg_id_len  [N] alg_id  [12] nonce  [V] ciphertext+tag
 
