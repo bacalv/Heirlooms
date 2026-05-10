@@ -693,15 +693,37 @@ private suspend fun copyContentUriToCache(context: android.content.Context, uri:
                     else -> null
                 }
                 if (rowId != null && mediaBase != null) {
-                    val mediaUri = android.content.ContentUris.withAppendedId(mediaBase, rowId)
-                    diag.append("msUri=$mediaUri ")
+                    val extUri = android.content.ContentUris.withAppendedId(mediaBase, rowId)
+                    diag.append("ext=$extUri ")
                     try {
-                        val s = context.contentResolver.openInputStream(mediaUri)
-                        if (s != null) {
-                            s.use { it.copyTo(dest.outputStream()) }
-                            return@withContext Pair(dest.absolutePath, "")
-                        } else diag.append("ms=null ")
-                    } catch (e: Exception) { diag.append("ms=${e.javaClass.simpleName} ") }
+                        val s = context.contentResolver.openInputStream(extUri)
+                        if (s != null) { s.use { it.copyTo(dest.outputStream()) }; return@withContext Pair(dest.absolutePath, "") }
+                        else diag.append("ext=null ")
+                    } catch (e: Exception) { diag.append("ext=${e.javaClass.simpleName} ") }
+
+                    // Try internal MediaStore volume
+                    val internalBase = when (parts.getOrNull(0)) {
+                        "image" -> android.provider.MediaStore.Images.Media.INTERNAL_CONTENT_URI
+                        "video" -> android.provider.MediaStore.Video.Media.INTERNAL_CONTENT_URI
+                        "audio" -> android.provider.MediaStore.Audio.Media.INTERNAL_CONTENT_URI
+                        else -> null
+                    }
+                    if (internalBase != null) {
+                        val intUri = android.content.ContentUris.withAppendedId(internalBase, rowId)
+                        diag.append("int=$intUri ")
+                        try {
+                            val s = context.contentResolver.openInputStream(intUri)
+                            if (s != null) { s.use { it.copyTo(dest.outputStream()) }; return@withContext Pair(dest.absolutePath, "") }
+                            else diag.append("int=null ")
+                        } catch (e: Exception) { diag.append("int=${e.javaClass.simpleName} ") }
+                    }
+
+                    // Check if the row exists at all in external MediaStore
+                    val exists = context.contentResolver.query(mediaBase,
+                        arrayOf(android.provider.MediaStore.MediaColumns._ID),
+                        "${android.provider.MediaStore.MediaColumns._ID}=?", arrayOf("$rowId"), null
+                    )?.use { it.count > 0 } ?: false
+                    diag.append("rowExists=$exists ")
                 }
             } catch (e: Exception) { diag.append("docErr=${e.javaClass.simpleName} ") }
         }
