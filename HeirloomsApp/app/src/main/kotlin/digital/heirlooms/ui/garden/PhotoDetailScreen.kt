@@ -275,6 +275,8 @@ private fun MediaArea(
                     val factory = remember {
                         DecryptingDataSource.Factory(
                             OkHttpClient.Builder()
+                                .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                                .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
                                 .addInterceptor { chain ->
                                     chain.proceed(chain.request().newBuilder().header("X-Api-Key", api.apiKey).build())
                                 }
