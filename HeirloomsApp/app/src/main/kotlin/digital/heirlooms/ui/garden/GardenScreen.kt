@@ -671,47 +671,49 @@ private suspend fun copyContentUriToCache(context: android.content.Context, uri:
         }
         val dest = File(context.cacheDir, "plant-${UUID.randomUUID()}.$ext")
 
-        // Attempt 1: stream directly from the content resolver.
-        try {
-            val stream = context.contentResolver.openInputStream(uri)
-            if (stream != null) {
-                stream.use { it.copyTo(dest.outputStream()) }
-                return@withContext Pair(dest.absolutePath, "")
-            }
-        } catch (e: Exception) {
-            android.util.Log.w("Plant", "openInputStream failed: ${e.javaClass.simpleName}: ${e.message}")
+        fun tryStream(src: Uri): Boolean {
+            return try {
+                context.contentResolver.openInputStream(src)?.use { it.copyTo(dest.outputStream()) }
+                    ?.let { true } ?: false
+            } catch (_: Exception) { false }
         }
 
-        // Attempt 2: file descriptor.
-        try {
-            val pfd = context.contentResolver.openFileDescriptor(uri, "r")
-            if (pfd != null) {
-                pfd.use { java.io.FileInputStream(it.fileDescriptor).use { s -> s.copyTo(dest.outputStream()) } }
-                return@withContext Pair(dest.absolutePath, "")
-            }
-        } catch (e: Exception) {
-            android.util.Log.w("Plant", "openFileDescriptor failed: ${e.javaClass.simpleName}: ${e.message}")
+        // Attempt 1: Documents UI URI (com.android.providers.media.documents) — convert to
+        // MediaStore URI then stream. Handles image:NNN, video:NNN, audio:NNN document IDs.
+        if (android.provider.DocumentsContract.isDocumentUri(context, uri)) {
+            try {
+                val docId = android.provider.DocumentsContract.getDocumentId(uri)
+                val (type, rowStr) = docId.split(":").let { it[0] to it.getOrElse(1) { "" } }
+                val rowId = rowStr.toLongOrNull()
+                if (rowId != null) {
+                    val mediaBase = when (type) {
+                        "image" -> android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                        "video" -> android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                        "audio" -> android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+                        else -> null
+                    }
+                    if (mediaBase != null) {
+                        val mediaUri = android.content.ContentUris.withAppendedId(mediaBase, rowId)
+                        if (tryStream(mediaUri)) return@withContext Pair(dest.absolutePath, "")
+                    }
+                }
+            } catch (_: Exception) { }
         }
+
+        // Attempt 2: stream directly from the URI.
+        if (tryStream(uri)) return@withContext Pair(dest.absolutePath, "")
 
         // Attempt 3: resolve real path via MediaStore DATA column.
-        var lastError = "no path found"
         try {
             val realPath = context.contentResolver.query(
-                uri,
-                arrayOf(android.provider.MediaStore.MediaColumns.DATA),
-                null, null, null,
-            )?.use { cursor ->
-                if (cursor.moveToFirst()) cursor.getString(0) else null
-            }
+                uri, arrayOf(android.provider.MediaStore.MediaColumns.DATA), null, null, null,
+            )?.use { if (it.moveToFirst()) it.getString(0) else null }
             if (realPath != null) {
                 java.io.File(realPath).inputStream().use { it.copyTo(dest.outputStream()) }
                 return@withContext Pair(dest.absolutePath, "")
             }
-        } catch (e: Exception) {
-            lastError = "${e.javaClass.simpleName}: ${e.message}"
-            android.util.Log.w("Plant", "MediaStore DATA failed: $lastError")
-        }
+        } catch (_: Exception) { }
 
         dest.delete()
-        Pair(null, "URI=$uri err=$lastError")
+        Pair(null, "Could not read file.")
     }
