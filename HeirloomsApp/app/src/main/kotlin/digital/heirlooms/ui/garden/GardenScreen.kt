@@ -70,6 +70,8 @@ import digital.heirlooms.ui.theme.HeirloomsSerifItalic
 import digital.heirlooms.ui.theme.Parchment
 import digital.heirlooms.ui.theme.TextMuted
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.widget.Toast
@@ -118,19 +120,28 @@ fun GardenScreen(
     var pendingCaptureType by remember { mutableStateOf(PlantType.Photo) }
 
     val openFileLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null) {
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val uri: Uri = result.data?.data ?: return@rememberLauncherForActivityResult
             val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
             plantState = PlantState.Preview(uri, mime, isFile = true)
         }
     }
 
+    fun launchFilePicker() {
+        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            type = "*/*"
+            addCategory(Intent.CATEGORY_OPENABLE)
+            putExtra(Intent.EXTRA_LOCAL_ONLY, true)
+        }
+        openFileLauncher.launch(intent)
+    }
+
     val storagePermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { _ ->
-        // Launch picker regardless — permission may have been granted, denied, or already held.
-        openFileLauncher.launch("*/*")
+        launchFilePicker()
     }
 
     val takePictureLauncher = rememberLauncherForActivityResult(
@@ -278,11 +289,10 @@ fun GardenScreen(
                 onPhoto = { launchCamera(PlantType.Photo) },
                 onVideo = { launchCamera(PlantType.Video) },
                 onFile = {
-                    // On Android ≤12 (Fire OS) READ_EXTERNAL_STORAGE is required to open files.
                     if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2) {
                         storagePermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
                     } else {
-                        openFileLauncher.launch("*/*")
+                        launchFilePicker()
                     }
                 },
             )
