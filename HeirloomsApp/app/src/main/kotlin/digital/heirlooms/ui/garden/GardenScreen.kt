@@ -115,7 +115,7 @@ fun GardenScreen(
     var pendingCaptureType by remember { mutableStateOf(PlantType.Photo) }
 
     val openFileLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
+        ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
             val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
@@ -267,7 +267,7 @@ fun GardenScreen(
                 onDismiss = { showPlantSheet = false },
                 onPhoto = { launchCamera(PlantType.Photo) },
                 onVideo = { launchCamera(PlantType.Video) },
-                onFile = { openFileLauncher.launch(arrayOf("*/*")) },
+                onFile = { openFileLauncher.launch("*/*") },
             )
         }
 
