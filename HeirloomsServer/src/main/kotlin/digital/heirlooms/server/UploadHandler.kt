@@ -27,6 +27,7 @@ import org.http4k.core.Status.Companion.CONFLICT
 import org.http4k.core.Status.Companion.NOT_IMPLEMENTED
 import org.http4k.core.Status.Companion.NO_CONTENT
 import org.http4k.core.Status.Companion.OK
+import org.http4k.core.Status.Companion.PARTIAL_CONTENT
 import org.http4k.core.Status.Companion.UNPROCESSABLE_ENTITY
 import org.http4k.format.Jackson
 import org.http4k.format.Jackson.auto
@@ -506,16 +507,36 @@ private fun fileProxyContractRoute(storage: FileStore, database: Database): Cont
         summary = "Get file"
         description = "Streams the raw file bytes for the given upload ID with the correct Content-Type."
     } bindContract GET to { uploadId: UUID, _: String ->
-        { _: Request ->
+        { request: Request ->
             val record = database.getUploadById(uploadId)
             if (record == null) {
                 Response(NOT_FOUND)
             } else {
                 try {
                     val bytes = storage.get(StorageKey(record.storageKey))
-                    Response(OK)
-                        .header("Content-Type", record.mimeType)
-                        .body(ByteArrayInputStream(bytes), bytes.size.toLong())
+                    val total = bytes.size.toLong()
+                    val rangeHeader = request.header("Range")
+                    if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
+                        val parts = rangeHeader.removePrefix("bytes=").split("-")
+                        val start = parts.getOrNull(0)?.toLongOrNull() ?: 0L
+                        val end = parts.getOrNull(1)?.toLongOrNull()?.coerceAtMost(total - 1) ?: (total - 1)
+                        if (start > end || start >= total) {
+                            Response(org.http4k.core.Status(416, "Range Not Satisfiable"))
+                                .header("Content-Range", "bytes */$total")
+                        } else {
+                            val slice = bytes.copyOfRange(start.toInt(), (end + 1).toInt())
+                            Response(PARTIAL_CONTENT)
+                                .header("Content-Type", record.mimeType)
+                                .header("Content-Range", "bytes $start-$end/$total")
+                                .header("Accept-Ranges", "bytes")
+                                .body(ByteArrayInputStream(slice), slice.size.toLong())
+                        }
+                    } else {
+                        Response(OK)
+                            .header("Content-Type", record.mimeType)
+                            .header("Accept-Ranges", "bytes")
+                            .body(ByteArrayInputStream(bytes), total)
+                    }
                 } catch (e: Exception) {
                     Response(INTERNAL_SERVER_ERROR).body("Failed to fetch file: ${e.message}")
                 }

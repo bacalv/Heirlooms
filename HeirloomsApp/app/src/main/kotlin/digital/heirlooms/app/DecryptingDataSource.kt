@@ -19,7 +19,8 @@ import java.io.IOException
  *
  * Each ciphertext chunk is [nonce(12)][ciphertext+GCM-tag] = exactly 4 MiB.
  * The nonce doubles as the AAD (per buildChunkAad == buildChunkNonce).
- * Seeks are translated from plaintext coordinates to ciphertext byte ranges.
+ * Seeks are translated from plaintext coordinates to ciphertext byte ranges
+ * via HTTP Range requests (the /file endpoint returns 206 for range requests).
  */
 class DecryptingDataSource(
     private val okHttpClient: OkHttpClient,
@@ -37,6 +38,8 @@ class DecryptingDataSource(
     private var openedUri: Uri? = null
     private var plaintextChunk: ByteArray? = null
     private var chunkReadOffset = 0
+    // Cached total plaintext length derived from the first response's Content-Length.
+    private var cachedPlaintextLength = C.LENGTH_UNSET.toLong()
 
     override fun open(dataSpec: DataSpec): Long {
         close()
@@ -64,12 +67,30 @@ class DecryptingDataSource(
         }
         responseBody = response.body ?: throw IOException("Empty response body")
 
+        // Derive total plaintext length from ciphertext total size (available on first open
+        // from Content-Length, and on range responses from the Content-Range /total suffix).
+        if (cachedPlaintextLength == C.LENGTH_UNSET.toLong()) {
+            val ciphertextTotal: Long = when (response.code) {
+                206 -> response.header("Content-Range")
+                    ?.substringAfterLast('/')?.trim()?.toLongOrNull() ?: -1L
+                else -> response.body?.contentLength() ?: -1L
+            }
+            if (ciphertextTotal > 0) {
+                val numChunks = (ciphertextTotal + CIPHERTEXT_CHUNK - 1) / CIPHERTEXT_CHUNK
+                cachedPlaintextLength = ciphertextTotal - numChunks * (NONCE_SIZE + 16)
+            }
+        }
+
         if (offsetInChunk > 0) {
             plaintextChunk = decryptNextChunk() ?: throw IOException("EOF seeking into chunk at $plaintextPos")
             chunkReadOffset = offsetInChunk
         }
 
-        return C.LENGTH_UNSET.toLong()
+        return when {
+            dataSpec.length != C.LENGTH_UNSET.toLong() -> dataSpec.length
+            cachedPlaintextLength != C.LENGTH_UNSET.toLong() -> cachedPlaintextLength - plaintextPos
+            else -> C.LENGTH_UNSET.toLong()
+        }
     }
 
     private fun decryptNextChunk(): ByteArray? {
@@ -119,6 +140,7 @@ class DecryptingDataSource(
         responseBody = null
         plaintextChunk = null
         chunkReadOffset = 0
+        // cachedPlaintextLength is intentionally not reset — it persists across seeks.
     }
 
     override fun addTransferListener(transferListener: TransferListener) {}
