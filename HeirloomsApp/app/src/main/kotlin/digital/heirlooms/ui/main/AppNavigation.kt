@@ -77,6 +77,7 @@ internal object Routes {
     const val CAPSULE_CREATE = "capsule_create"
     const val PHOTO_PICKER = "photo_picker"
     const val SETTINGS = "settings"
+    const val DIAGNOSTICS = "diagnostics"
     const val UPLOAD_PROGRESS = "upload_progress/{sessionTag}"
     fun uploadProgress(sessionTag: String) = "upload_progress/$sessionTag"
 
@@ -169,6 +170,7 @@ fun MainNavigation(apiKey: String, onApiKeyReset: () -> Unit) {
                 onUploadsTap = {
                     activeSessionTag?.let { navController.navigate(Routes.uploadProgress(it)) }
                 },
+                onDiagnosticsTap = { navController.navigate(Routes.DIAGNOSTICS) },
             )
         }
 
@@ -198,6 +200,7 @@ fun MainNavigation(apiKey: String, onApiKeyReset: () -> Unit) {
             ) {
                 AppNavHost(
                     navController = navController,
+                    apiKey = apiKey,
                     onApiKeyReset = onApiKeyReset,
                 )
             }
@@ -238,7 +241,7 @@ private fun HeirloomsBottomNav(
 }
 
 @Composable
-private fun AppNavHost(navController: NavController, onApiKeyReset: () -> Unit) {
+private fun AppNavHost(navController: NavController, apiKey: String, onApiKeyReset: () -> Unit) {
     NavHost(
         navController = navController as androidx.navigation.NavHostController,
         startDestination = Routes.GARDEN,
@@ -322,6 +325,9 @@ private fun AppNavHost(navController: NavController, onApiKeyReset: () -> Unit) 
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(onApiKeyReset = onApiKeyReset)
+        }
+        composable(Routes.DIAGNOSTICS) {
+            DiagnosticsScreen(apiKey = apiKey, onBack = { navController.popBackStack() })
         }
         composable(
             route = Routes.UPLOAD_PROGRESS,

@@ -123,10 +123,41 @@ fun buildApp(
         routes += keysRoutes(database)
     }
 
+    val diagContract = contract {
+        renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
+        descriptionPath = "/openapi.json"
+        routes += listOf(
+            "/diagnostics/events" meta { summary = "Post a diagnostic event" } bindContract POST to { req ->
+                try {
+                    val node = com.fasterxml.jackson.databind.ObjectMapper().readTree(req.bodyString())
+                    database.insertDiagEvent(
+                        deviceLabel = node?.get("deviceLabel")?.asText() ?: "",
+                        tag         = node?.get("tag")?.asText()         ?: "unknown",
+                        message     = node?.get("message")?.asText()     ?: "",
+                        detail      = node?.get("detail")?.asText()      ?: "",
+                    )
+                    Response(CREATED)
+                } catch (e: Exception) {
+                    Response(INTERNAL_SERVER_ERROR).body(e.message ?: "error")
+                }
+            },
+            "/diagnostics/events" meta { summary = "List diagnostic events" } bindContract GET to { _ ->
+                try {
+                    val events = database.listDiagEvents()
+                    val json = com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(events)
+                    Response(OK).header("Content-Type", "application/json").body(json)
+                } catch (e: Exception) {
+                    Response(INTERNAL_SERVER_ERROR).body(e.message ?: "error")
+                }
+            },
+        )
+    }
+
     return routes(
         "/api/content" bind contentContract,
         "/api/keys" bind keysContract,
         "/api" bind capsuleContract,
+        "/api" bind diagContract,
         "/health" bind GET to { Response(OK).body("ok") },
         "/docs/api.json" bind GET to { mergedSpecWithApiKeyAuth(contentContract, capsuleContract, keysContract) },
         "/docs" bind GET to { Response(FOUND).header("Location", "/docs/index.html") },

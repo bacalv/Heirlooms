@@ -2,6 +2,35 @@
 
 ---
 
+## v0.32.0 — Diagnostics screen + Fire OS FreeTime detection (10 May 2026)
+
+Android-only. No server data-path changes; new `diagnostic_events` table and two
+API endpoints.
+
+- **Diagnostics screen** — accessible from the burger menu. Lists in-session error events
+  (most recent first). Tap any event to expand the full detail. "Report to server" button
+  sends the event to `POST /api/diagnostics/events`; shows `Sent ✓` or `Failed — tap to
+  retry` feedback. "Clear" button in the top bar wipes all events for the session.
+- **`DiagnosticsStore`** — in-process singleton (`mutableStateListOf`) holding up to 300
+  events. Logged from `copyContentUriToCache` on file-picker failures.
+- **`copyContentUriToCache` diagnostic logging** — on failure, appends a step-by-step trace
+  (URI, docId, mediaUri, DATA path, exception per attempt) to `DiagnosticsStore` instead of
+  returning an opaque error string.
+- **FreeTime secure-storage detection** — if the DATA column returns a path under
+  `/data/securedStorageLocation/` (Amazon's FreeTime / Kids+ encrypted store), the function
+  returns immediately with a friendly message: *"This file belongs to a different account on
+  this device and can't be accessed."* No diagnostic event is logged for this case (it is
+  expected, not a bug).
+- **`jsonEsc()` fix** — the JSON serialiser for `postDiagEvent` was not escaping `\n`, `\r`,
+  or `\t`, producing invalid JSON bodies and silently failing the POST. Fixed.
+- **Server: `diagnostic_events` table** — Flyway V17 migration. Columns: `id UUID`,
+  `created_at TIMESTAMP`, `device_label TEXT`, `tag TEXT`, `message TEXT`, `detail TEXT`.
+- **Server: diagnostics endpoints** — `POST /api/diagnostics/events` (insert event) and
+  `GET /api/diagnostics/events` (list last 200, newest first), both under `/api`.
+- versionCode 34. Installed on Amazon KFRAPWI (Fire HD 8, Fire OS) and Samsung Galaxy A02s.
+
+---
+
 ## v0.31.0 — Android: Garden Plant button (10 May 2026)
 
 First Android APK release since v0.28.1. Also picks up the E5 Android changes

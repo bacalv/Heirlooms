@@ -89,6 +89,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import digital.heirlooms.app.UploadWorker
+import digital.heirlooms.ui.main.DiagnosticsStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -314,14 +315,14 @@ fun GardenScreen(
                         val snapshot = ps
                         plantState = PlantState.Queuing
                         scope.launch(Dispatchers.IO) {
-                            val (filePath, copyError) = if (!snapshot.isFile && captureFile?.exists() == true) {
+                            val (filePath, errorMsg) = if (!snapshot.isFile && captureFile?.exists() == true) {
                                 Pair(captureFile!!.absolutePath, "")
                             } else {
                                 copyContentUriToCache(context, snapshot.uri, snapshot.mimeType)
                             }
                             if (filePath == null) {
                                 withContext(Dispatchers.Main) {
-                                    Toast.makeText(context, copyError, Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
                                 }
                             }
                             if (filePath != null) {
@@ -664,6 +665,7 @@ internal fun DidntTake(onRetry: () -> Unit) {
 
 private suspend fun copyContentUriToCache(context: android.content.Context, uri: Uri, mimeType: String): Pair<String?, String> =
     withContext(Dispatchers.IO) {
+        val diag = StringBuilder("uri=$uri mimeType=$mimeType\n")
         val ext = when {
             mimeType.startsWith("image/") -> "jpg"
             mimeType.startsWith("video/") -> "mp4"
@@ -675,19 +677,21 @@ private suspend fun copyContentUriToCache(context: android.content.Context, uri:
             java.io.File(path).takeIf { it.exists() && it.canRead() }
                 ?.inputStream()?.use { it.copyTo(dest.outputStream()) }
                 ?.let { true } ?: false
-        } catch (_: Exception) { false }
+        } catch (e: Exception) { diag.append("tryReadPath($path) threw ${e.javaClass.simpleName}: ${e.message}\n"); false }
 
         fun tryStream(src: Uri): Boolean = try {
             context.contentResolver.openInputStream(src)
                 ?.use { it.copyTo(dest.outputStream()) }
                 ?.let { true } ?: false
-        } catch (_: Exception) { false }
+        } catch (e: Exception) { diag.append("tryStream($src) threw ${e.javaClass.simpleName}: ${e.message}\n"); false }
 
         // Attempt 1: Documents UI URI — resolve MediaStore row, get DATA path, read directly.
         // openInputStream on MediaStore URIs is broken on Fire OS even when the row exists.
         if (android.provider.DocumentsContract.isDocumentUri(context, uri)) {
+            diag.append("isDocumentUri=true\n")
             try {
                 val docId = android.provider.DocumentsContract.getDocumentId(uri)
+                diag.append("docId=$docId\n")
                 val parts = docId.split(":")
                 val rowId = parts.getOrNull(1)?.toLongOrNull()
                 val mediaBase = when (parts.getOrNull(0)) {
@@ -698,17 +702,25 @@ private suspend fun copyContentUriToCache(context: android.content.Context, uri:
                 }
                 if (rowId != null && mediaBase != null) {
                     val mediaUri = android.content.ContentUris.withAppendedId(mediaBase, rowId)
-                    // Query the DATA column directly — bypasses the broken ContentProvider openFile().
+                    diag.append("mediaUri=$mediaUri\n")
                     val filePath = context.contentResolver.query(
                         mediaUri,
                         arrayOf(android.provider.MediaStore.MediaColumns.DATA),
                         null, null, null,
                     )?.use { if (it.moveToFirst()) it.getString(0) else null }
+                    diag.append("DATA path=$filePath\n")
+                    if (filePath != null && filePath.contains("securedStorageLocation", ignoreCase = true)) {
+                        dest.delete()
+                        return@withContext Pair(null, "This file belongs to a different account on this device and can't be accessed. Try taking a new photo directly in Heirlooms.")
+                    }
                     if (filePath != null && tryReadPath(filePath)) return@withContext Pair(dest.absolutePath, "")
-                    // Fallback: try openInputStream anyway (works on non-Fire Android).
                     if (tryStream(mediaUri)) return@withContext Pair(dest.absolutePath, "")
+                } else {
+                    diag.append("rowId=$rowId mediaBase=$mediaBase — skipping MediaStore path\n")
                 }
-            } catch (_: Exception) { }
+            } catch (e: Exception) {
+                diag.append("DocumentsContract block threw ${e.javaClass.simpleName}: ${e.message}\n")
+            }
         }
 
         // Attempt 2: direct stream from the original URI.
@@ -719,9 +731,17 @@ private suspend fun copyContentUriToCache(context: android.content.Context, uri:
             val filePath = context.contentResolver.query(
                 uri, arrayOf(android.provider.MediaStore.MediaColumns.DATA), null, null, null,
             )?.use { if (it.moveToFirst()) it.getString(0) else null }
+            diag.append("attempt3 DATA=$filePath\n")
             if (filePath != null && tryReadPath(filePath)) return@withContext Pair(dest.absolutePath, "")
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            diag.append("attempt3 threw ${e.javaClass.simpleName}: ${e.message}\n")
+        }
 
         dest.delete()
-        Pair(null, "Could not read file.")
+        DiagnosticsStore.log(
+            tag = "CopyUri",
+            message = "Could not read file from picker",
+            detail = diag.toString().trimEnd(),
+        )
+        Pair(null, "Couldn't read this file. See Diagnostics (burger menu) for details.")
     }

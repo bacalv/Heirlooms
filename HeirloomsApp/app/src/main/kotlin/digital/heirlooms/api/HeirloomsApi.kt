@@ -176,6 +176,13 @@ class HeirloomsApi(
     suspend fun cancelCapsule(id: String): CapsuleDetail =
         JSONObject(post("/api/capsules/$id/cancel")).toCapsuleDetail()
 
+    // ── Diagnostics ──────────────────────────────────────────────────────────
+
+    suspend fun postDiagEvent(deviceLabel: String, tag: String, message: String, detail: String) {
+        val body = """{"deviceLabel":${deviceLabel.jsonEsc()},"tag":${tag.jsonEsc()},"message":${message.jsonEsc()},"detail":${detail.jsonEsc()}}"""
+        post("/api/diagnostics/events", body)
+    }
+
     // ── Keys / device registration ───────────────────────────────────────────
 
     data class PassphraseBackup(
@@ -373,7 +380,7 @@ class HeirloomsApi(
     )
 
     private fun String.encodeParam() = java.net.URLEncoder.encode(this, "UTF-8")
-    private fun String.jsonEsc(): String = "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
+    private fun String.jsonEsc(): String = "\"${replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")}\""
 
     companion object {
         const val BASE_URL = "https://api.heirlooms.digital"

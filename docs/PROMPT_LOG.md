@@ -2985,3 +2985,56 @@ on rotation). Keeping it in the composable avoids adding VM complexity for a tra
 - `./gradlew :app:compileDebugKotlin` — BUILD SUCCESSFUL, zero warnings.
 - Installed on Samsung Galaxy A02s (SM-A025F, Android 12) via USB. Photo capture,
   preview, Plant, and Just Arrived appearance all confirmed working.
+
+---
+
+## Session — 10 May 2026 (Diagnostics screen + FreeTime detection — v0.32.0)
+
+### What was built
+
+A Diagnostics screen reachable from the burger menu that captures in-session error events,
+lets the user expand detail, and reports them to the server with one tap. Motivated by an
+ongoing Fire OS file-picker bug where files were silently unreadable.
+
+### Root cause identified via diagnostics
+
+First report from Amazon KFRAPWI revealed:
+
+```
+DATA path=/data/securedStorageLocation/com.android.camera2/FreeTime/Sadie/IMG_20260510_084641_3.heic
+tryStream(content://media/external/images/media/307) threw FileNotFoundException: Failed opening content provider
+```
+
+Files in Amazon FreeTime (Kids+) child profiles live under `/data/securedStorageLocation/`
+— Amazon's encrypted store, inaccessible to third-party apps via any mechanism. Detection
+added: if the DATA path contains `securedStorageLocation`, show a friendly message and skip
+diagnostic logging. Files from the main account work correctly (confirmed: camera-captured
+photo on the main profile uploaded successfully).
+
+### New files
+
+- `DiagnosticsStore.kt` — in-process `mutableStateListOf<DiagEvent>` singleton (max 300 events).
+- `DiagnosticsScreen.kt` — collapsible event rows; Report button cycles
+  `Idle → Sending → Sent ✓ / Failed — tap to retry`.
+- `V17__diagnostic_events.sql` — `diagnostic_events` table.
+
+### Modified files
+
+- `UploadHandler.kt` — `diagContract` with POST + GET routes bound to `/api`.
+- `Database.kt` — `insertDiagEvent()`, `listDiagEvents()`.
+- `HeirloomsApi.kt` — `postDiagEvent()`; `jsonEsc()` fixed to escape `\n`/`\r`/`\t`
+  (previously produced invalid JSON for multi-line detail, silently failing the POST).
+- `AppNavigation.kt` — `Routes.DIAGNOSTICS`, `apiKey` threaded into `AppNavHost`,
+  composable route, `onDiagnosticsTap` wired.
+- `BurgerPanel.kt` — `onDiagnosticsTap` parameter + Diagnostics row.
+- `GardenScreen.kt` — `copyContentUriToCache` logs to `DiagnosticsStore`; returns
+  `Pair<String?, String>` with friendly messages; FreeTime early-exit added.
+
+### Deployment
+
+Server `heirlooms-server-00036-9hw` (V17 migration). APK v0.32.0 installed on KFRAPWI.
+
+### Next
+
+Streaming encryption for large files (88 MB video). Brief at
+`docs/briefs/streaming_encryption.md`.
