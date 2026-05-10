@@ -66,7 +66,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import digital.heirlooms.app.DecryptingDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
@@ -111,6 +113,7 @@ fun PhotoDetailScreen(
     val isDirty by vm.isDirty.collectAsState()
     val decryptedBitmap by vm.decryptedBitmap.collectAsState()
     val decryptedVideoUri by vm.decryptedVideoUri.collectAsState()
+    val contentDek by vm.contentDek.collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -223,6 +226,7 @@ fun PhotoDetailScreen(
                         onCapsuleTap = onCapsuleTap,
                         decryptedBitmap = decryptedBitmap,
                         decryptedVideoUri = decryptedVideoUri,
+                        contentDek = contentDek,
                     )
                     else -> GardenFlavour(
                         upload = u,
@@ -238,6 +242,7 @@ fun PhotoDetailScreen(
                         onStartCapsule = { onStartCapsuleWithPhoto(uploadId) },
                         decryptedBitmap = decryptedBitmap,
                         decryptedVideoUri = decryptedVideoUri,
+                        contentDek = contentDek,
                         onCompost = {
                             scope.launch {
                                 try { api.compostUpload(uploadId); onBack() } catch (_: Exception) {}
@@ -257,13 +262,33 @@ private fun MediaArea(
     modifier: Modifier = Modifier,
     decryptedBitmap: ImageBitmap? = null,
     decryptedVideoUri: Uri? = null,
+    contentDek: ByteArray? = null,
 ) {
+    val api = LocalHeirloomsApi.current
     when {
         upload.isEncrypted && upload.isVideo -> {
-            if (decryptedVideoUri != null) {
-                VideoPlayer(videoUrl = decryptedVideoUri.toString(), modifier = modifier)
-            } else {
-                Box(modifier.aspectRatio(16f / 9f), contentAlignment = Alignment.Center) {
+            when {
+                upload.fileSize > 10L * 1024 * 1024 && contentDek != null -> {
+                    // Large encrypted video: decrypt on the fly chunk by chunk.
+                    // remember {} (no key) is safe here — this branch only enters composition
+                    // once contentDek is non-null, and contentDek doesn't change after that.
+                    val factory = remember {
+                        DecryptingDataSource.Factory(
+                            OkHttpClient.Builder()
+                                .addInterceptor { chain ->
+                                    chain.proceed(chain.request().newBuilder().header("X-Api-Key", api.apiKey).build())
+                                }
+                                .build(),
+                            contentDek,
+                            api.apiKey,
+                        )
+                    }
+                    VideoPlayer(videoUrl = api.fileUrl(upload.id), modifier = modifier, dataSourceFactory = factory)
+                }
+                upload.fileSize <= 10L * 1024 * 1024 && decryptedVideoUri != null -> {
+                    VideoPlayer(videoUrl = decryptedVideoUri.toString(), modifier = modifier)
+                }
+                else -> Box(modifier.aspectRatio(16f / 9f), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Forest)
                 }
             }
@@ -283,14 +308,11 @@ private fun MediaArea(
             }
         }
         upload.isVideo -> {
-            VideoPlayer(
-                videoUrl = LocalHeirloomsApi.current.fileUrl(upload.id),
-                modifier = modifier,
-            )
+            VideoPlayer(videoUrl = api.fileUrl(upload.id), modifier = modifier)
         }
         else -> {
             HeirloomsImage(
-                url = LocalHeirloomsApi.current.fileUrl(upload.id),
+                url = api.fileUrl(upload.id),
                 contentDescription = null,
                 modifier = modifier,
                 contentScale = ContentScale.FillWidth,
@@ -301,11 +323,15 @@ private fun MediaArea(
 }
 
 @Composable
-private fun VideoPlayer(videoUrl: String, modifier: Modifier = Modifier) {
+private fun VideoPlayer(
+    videoUrl: String,
+    modifier: Modifier = Modifier,
+    dataSourceFactory: DataSource.Factory? = null,
+) {
     val context = LocalContext.current
     val apiKey = LocalHeirloomsApi.current.apiKey
     val player = remember {
-        val dataSourceFactory = OkHttpDataSource.Factory(
+        val factory = dataSourceFactory ?: OkHttpDataSource.Factory(
             OkHttpClient.Builder()
                 .addInterceptor { chain ->
                     chain.proceed(chain.request().newBuilder().header("X-Api-Key", apiKey).build())
@@ -313,7 +339,7 @@ private fun VideoPlayer(videoUrl: String, modifier: Modifier = Modifier) {
                 .build()
         )
         ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(factory))
             .build()
             .also { player ->
                 player.setMediaItem(MediaItem.fromUri(Uri.parse(videoUrl)))
@@ -348,6 +374,7 @@ internal fun GardenFlavour(
     onCompost: () -> Unit,
     decryptedBitmap: ImageBitmap? = null,
     decryptedVideoUri: Uri? = null,
+    contentDek: ByteArray? = null,
 ) {
     var showAddToCapsule by remember { mutableStateOf(false) }
     var showCompostConfirm by remember { mutableStateOf(false) }
@@ -363,6 +390,7 @@ internal fun GardenFlavour(
             MediaArea(
                 upload = upload, rotation = rotation, modifier = Modifier.fillMaxWidth(),
                 decryptedBitmap = decryptedBitmap, decryptedVideoUri = decryptedVideoUri,
+                contentDek = contentDek,
             )
             if (!upload.isVideo) {
                 IconButton(
@@ -483,6 +511,7 @@ internal fun ExploreFlavour(
     onCapsuleTap: (String) -> Unit,
     decryptedBitmap: ImageBitmap? = null,
     decryptedVideoUri: Uri? = null,
+    contentDek: ByteArray? = null,
 ) {
     Column(
         Modifier
@@ -494,6 +523,7 @@ internal fun ExploreFlavour(
             MediaArea(
                 upload = upload, rotation = rotation, modifier = Modifier.fillMaxWidth(),
                 decryptedBitmap = decryptedBitmap, decryptedVideoUri = decryptedVideoUri,
+                contentDek = contentDek,
             )
             if (!upload.isVideo) {
                 IconButton(

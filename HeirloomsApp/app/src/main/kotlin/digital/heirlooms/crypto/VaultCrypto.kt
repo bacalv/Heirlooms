@@ -56,6 +56,31 @@ object VaultCrypto {
         return cipher.doFinal(ciphertextWithTag)
     }
 
+    // AES-256-GCM decrypt with AAD. Mirrors aesGcmEncryptWithAad.
+    fun aesGcmDecryptWithAad(key: ByteArray, nonce: ByteArray, aad: ByteArray, ciphertextWithTag: ByteArray): ByteArray {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(AUTH_TAG_BITS, nonce))
+        cipher.updateAAD(aad)
+        return cipher.doFinal(ciphertextWithTag)
+    }
+
+    // Decrypt streaming-encrypted content produced by encryptAndUploadStreaming.
+    // Format: sequence of [nonce(12)][ciphertext+tag] chunks, each exactly 4 MiB except
+    // the last. The AAD for each chunk equals its nonce (same bytes, per buildChunkAad).
+    fun decryptStreamingContent(encryptedBytes: ByteArray, dek: ByteArray): ByteArray {
+        val chunkSize = 4 * 1024 * 1024  // CIPHERTEXT_CHUNK_SIZE = 4 MiB
+        val output = java.io.ByteArrayOutputStream()
+        var offset = 0
+        while (offset < encryptedBytes.size) {
+            val chunkEnd = minOf(offset + chunkSize, encryptedBytes.size)
+            val nonce = encryptedBytes.copyOfRange(offset, offset + NONCE_SIZE)
+            val ctWithTag = encryptedBytes.copyOfRange(offset + NONCE_SIZE, chunkEnd)
+            output.write(aesGcmDecryptWithAad(dek, nonce, nonce, ctWithTag))
+            offset = chunkEnd
+        }
+        return output.toByteArray()
+    }
+
     // Build symmetric envelope: [version][alg_id_len][alg_id][nonce][ciphertext || auth_tag]
     fun buildSymmetricEnvelope(algorithmId: String, nonce: ByteArray, ciphertextWithTag: ByteArray): ByteArray {
         val algBytes = algorithmId.toByteArray(Charsets.UTF_8)

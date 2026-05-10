@@ -44,6 +44,11 @@ class PhotoDetailViewModel(
     private val _decryptedVideoUri = MutableStateFlow<Uri?>(null)
     val decryptedVideoUri: StateFlow<Uri?> = _decryptedVideoUri.asStateFlow()
 
+    // Unwrapped DEK for large encrypted videos — used by DecryptingDataSource instead of
+    // downloading the full file.
+    private val _contentDek = MutableStateFlow<ByteArray?>(null)
+    val contentDek: StateFlow<ByteArray?> = _contentDek.asStateFlow()
+
     // All tags in the user's library — for TagInputField suggestions.
     private val _availableTags = MutableStateFlow<List<String>>(emptyList())
     val availableTags: StateFlow<List<String>> = _availableTags.asStateFlow()
@@ -68,6 +73,7 @@ class PhotoDetailViewModel(
             _stagedRotation.value = null
             _decryptedBitmap.value = null
             _decryptedVideoUri.value = null
+            _contentDek.value = null
             try {
                 val upload = api.getUpload(uploadId)
                 val refs = api.getCapsulesForUpload(uploadId)
@@ -90,8 +96,22 @@ class PhotoDetailViewModel(
                 val wrappedDek = upload.wrappedDek ?: return@runCatching
                 val mk = VaultSession.masterKey
                 val dek = VaultCrypto.unwrapDekWithMasterKey(wrappedDek, mk)
+
+                if (upload.isVideo && upload.fileSize > LARGE_VIDEO_THRESHOLD) {
+                    // Large video: expose the DEK so DecryptingDataSource can decrypt while
+                    // streaming. No full download needed.
+                    _contentDek.value = dek
+                    return@runCatching
+                }
+
                 val encryptedBytes = api.fetchBytes(api.fileUrl(upload.id))
-                val decryptedBytes = VaultCrypto.decryptSymmetric(encryptedBytes, dek)
+                // Envelope format starts with version byte 0x01; streaming chunk format starts
+                // with a nonce whose first byte comes from the printable storageKey string.
+                val decryptedBytes = if (encryptedBytes.isNotEmpty() && (encryptedBytes[0].toInt() and 0xFF) == 1) {
+                    VaultCrypto.decryptSymmetric(encryptedBytes, dek)
+                } else {
+                    VaultCrypto.decryptStreamingContent(encryptedBytes, dek)
+                }
 
                 if (upload.isVideo) {
                     val ext = when {
@@ -109,6 +129,10 @@ class PhotoDetailViewModel(
                 }
             }
         }
+    }
+
+    private companion object {
+        const val LARGE_VIDEO_THRESHOLD = 10L * 1024 * 1024
     }
 
     fun trackView(api: HeirloomsApi, uploadId: String) {
