@@ -33,7 +33,7 @@ export async function openEncryptedVideoStream(upload, apiKey, dek) {
 }
 
 async function runStream(upload, apiKey, dek, mediaSource, signal) {
-  const { default: MP4Box } = await import('mp4box')
+  const MP4Box = await import('mp4box')
   const mp4boxFile = MP4Box.createFile()
 
   const sourceBuffers = {}  // trackId → SourceBuffer
