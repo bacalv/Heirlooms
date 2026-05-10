@@ -489,6 +489,7 @@ HeirloomsWeb:
 cd ~/IdeaProjects/Heirlooms/HeirloomsWeb
 docker build --platform linux/amd64 \
 --build-arg VITE_API_URL=https://api.heirlooms.digital \
+--build-arg VITE_COMMIT=$(git rev-parse --short HEAD) \
 -t europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-web:latest .
 docker push europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-web:latest
 gcloud run deploy heirlooms-web \
