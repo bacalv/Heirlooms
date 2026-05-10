@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
@@ -154,7 +155,7 @@ private fun FilePreview(uri: Uri) {
                 ?: "File"
         }
     }
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)) {
         Icon(
             Icons.AutoMirrored.Filled.InsertDriveFile,
             contentDescription = null,
@@ -163,5 +164,7 @@ private fun FilePreview(uri: Uri) {
         )
         Spacer(Modifier.height(12.dp))
         Text(displayName, color = Forest)
+        Spacer(Modifier.height(8.dp))
+        Text(uri.toString(), color = Forest.copy(alpha = 0.5f), fontSize = 10.sp)
     }
 }
