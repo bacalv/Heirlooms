@@ -69,7 +69,10 @@ import digital.heirlooms.ui.theme.Forest15
 import digital.heirlooms.ui.theme.HeirloomsSerifItalic
 import digital.heirlooms.ui.theme.Parchment
 import digital.heirlooms.ui.theme.TextMuted
+import android.Manifest
 import android.net.Uri
+import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -121,6 +124,13 @@ fun GardenScreen(
             val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
             plantState = PlantState.Preview(uri, mime, isFile = true)
         }
+    }
+
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        // Launch picker regardless — permission may have been granted, denied, or already held.
+        openFileLauncher.launch("*/*")
     }
 
     val takePictureLauncher = rememberLauncherForActivityResult(
@@ -267,7 +277,14 @@ fun GardenScreen(
                 onDismiss = { showPlantSheet = false },
                 onPhoto = { launchCamera(PlantType.Photo) },
                 onVideo = { launchCamera(PlantType.Video) },
-                onFile = { openFileLauncher.launch("*/*") },
+                onFile = {
+                    // On Android ≤12 (Fire OS) READ_EXTERNAL_STORAGE is required to open files.
+                    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2) {
+                        storagePermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                    } else {
+                        openFileLauncher.launch("*/*")
+                    }
+                },
             )
         }
 
@@ -291,6 +308,11 @@ fun GardenScreen(
                                 captureFile!!.absolutePath
                             } else {
                                 copyContentUriToCache(context, snapshot.uri, snapshot.mimeType)
+                            }
+                            if (filePath == null) {
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(context, "Couldn't read file. Try again.", Toast.LENGTH_LONG).show()
+                                }
                             }
                             if (filePath != null) {
                                 val fileName = filePath.substringAfterLast("/")
