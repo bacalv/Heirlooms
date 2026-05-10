@@ -670,20 +670,24 @@ private suspend fun copyContentUriToCache(context: android.content.Context, uri:
             else -> "tmp"
         }
         val dest = File(context.cacheDir, "plant-${UUID.randomUUID()}.$ext")
-        val diag = StringBuilder()
 
-        val hasPerm = if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2)
-            context.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        else true
-        diag.append("perm=$hasPerm ")
+        fun tryReadPath(path: String): Boolean = try {
+            java.io.File(path).takeIf { it.exists() && it.canRead() }
+                ?.inputStream()?.use { it.copyTo(dest.outputStream()) }
+                ?.let { true } ?: false
+        } catch (_: Exception) { false }
 
-        val isDoc = try { android.provider.DocumentsContract.isDocumentUri(context, uri) } catch (e: Exception) { false }
-        diag.append("isDoc=$isDoc ")
+        fun tryStream(src: Uri): Boolean = try {
+            context.contentResolver.openInputStream(src)
+                ?.use { it.copyTo(dest.outputStream()) }
+                ?.let { true } ?: false
+        } catch (_: Exception) { false }
 
-        if (isDoc) {
+        // Attempt 1: Documents UI URI — resolve MediaStore row, get DATA path, read directly.
+        // openInputStream on MediaStore URIs is broken on Fire OS even when the row exists.
+        if (android.provider.DocumentsContract.isDocumentUri(context, uri)) {
             try {
                 val docId = android.provider.DocumentsContract.getDocumentId(uri)
-                diag.append("docId=$docId ")
                 val parts = docId.split(":")
                 val rowId = parts.getOrNull(1)?.toLongOrNull()
                 val mediaBase = when (parts.getOrNull(0)) {
@@ -693,47 +697,31 @@ private suspend fun copyContentUriToCache(context: android.content.Context, uri:
                     else -> null
                 }
                 if (rowId != null && mediaBase != null) {
-                    val extUri = android.content.ContentUris.withAppendedId(mediaBase, rowId)
-                    diag.append("ext=$extUri ")
-                    try {
-                        val s = context.contentResolver.openInputStream(extUri)
-                        if (s != null) { s.use { it.copyTo(dest.outputStream()) }; return@withContext Pair(dest.absolutePath, "") }
-                        else diag.append("ext=null ")
-                    } catch (e: Exception) { diag.append("ext=${e.javaClass.simpleName} ") }
-
-                    // Try internal MediaStore volume
-                    val internalBase = when (parts.getOrNull(0)) {
-                        "image" -> android.provider.MediaStore.Images.Media.INTERNAL_CONTENT_URI
-                        "video" -> android.provider.MediaStore.Video.Media.INTERNAL_CONTENT_URI
-                        "audio" -> android.provider.MediaStore.Audio.Media.INTERNAL_CONTENT_URI
-                        else -> null
-                    }
-                    if (internalBase != null) {
-                        val intUri = android.content.ContentUris.withAppendedId(internalBase, rowId)
-                        diag.append("int=$intUri ")
-                        try {
-                            val s = context.contentResolver.openInputStream(intUri)
-                            if (s != null) { s.use { it.copyTo(dest.outputStream()) }; return@withContext Pair(dest.absolutePath, "") }
-                            else diag.append("int=null ")
-                        } catch (e: Exception) { diag.append("int=${e.javaClass.simpleName} ") }
-                    }
-
-                    // Check if the row exists at all in external MediaStore
-                    val exists = context.contentResolver.query(mediaBase,
-                        arrayOf(android.provider.MediaStore.MediaColumns._ID),
-                        "${android.provider.MediaStore.MediaColumns._ID}=?", arrayOf("$rowId"), null
-                    )?.use { it.count > 0 } ?: false
-                    diag.append("rowExists=$exists ")
+                    val mediaUri = android.content.ContentUris.withAppendedId(mediaBase, rowId)
+                    // Query the DATA column directly — bypasses the broken ContentProvider openFile().
+                    val filePath = context.contentResolver.query(
+                        mediaUri,
+                        arrayOf(android.provider.MediaStore.MediaColumns.DATA),
+                        null, null, null,
+                    )?.use { if (it.moveToFirst()) it.getString(0) else null }
+                    if (filePath != null && tryReadPath(filePath)) return@withContext Pair(dest.absolutePath, "")
+                    // Fallback: try openInputStream anyway (works on non-Fire Android).
+                    if (tryStream(mediaUri)) return@withContext Pair(dest.absolutePath, "")
                 }
-            } catch (e: Exception) { diag.append("docErr=${e.javaClass.simpleName} ") }
+            } catch (_: Exception) { }
         }
 
+        // Attempt 2: direct stream from the original URI.
+        if (tryStream(uri)) return@withContext Pair(dest.absolutePath, "")
+
+        // Attempt 3: DATA column on the original URI.
         try {
-            val s = context.contentResolver.openInputStream(uri)
-            if (s != null) { s.use { it.copyTo(dest.outputStream()) }; return@withContext Pair(dest.absolutePath, "") }
-            else diag.append("direct=null ")
-        } catch (e: Exception) { diag.append("direct=${e.javaClass.simpleName} ") }
+            val filePath = context.contentResolver.query(
+                uri, arrayOf(android.provider.MediaStore.MediaColumns.DATA), null, null, null,
+            )?.use { if (it.moveToFirst()) it.getString(0) else null }
+            if (filePath != null && tryReadPath(filePath)) return@withContext Pair(dest.absolutePath, "")
+        } catch (_: Exception) { }
 
         dest.delete()
-        Pair(null, diag.toString())
+        Pair(null, "Could not read file.")
     }
