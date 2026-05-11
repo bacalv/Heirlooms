@@ -99,14 +99,14 @@ fun ShareSheet(
                         FriendPickerRow(friend) {
                             sharing = true
                             scope.launch {
-                                val result = shareWithFriend(api, upload, friend)
+                                val error = shareWithFriend(api, upload, friend)
                                 withContext(Dispatchers.Main) {
                                     sharing = false
-                                    if (result) {
+                                    if (error == null) {
                                         Toast.makeText(context, "Shared with ${friend.displayName}", Toast.LENGTH_SHORT).show()
                                         onDismiss()
                                     } else {
-                                        Toast.makeText(context, "Couldn't share. Try again.", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }
@@ -140,13 +140,13 @@ private suspend fun shareWithFriend(
     api: HeirloomsApi,
     upload: Upload,
     friend: HeirloomsApi.Friend,
-): Boolean = withContext(Dispatchers.IO) {
+): String? = withContext(Dispatchers.IO) {
     try {
-        val wrappedDek = upload.wrappedDek ?: return@withContext false
+        val wrappedDek = upload.wrappedDek ?: return@withContext "Couldn't share. Try again."
         val masterKey = VaultSession.masterKey
         val dek = VaultCrypto.unwrapDekWithMasterKey(wrappedDek, masterKey)
 
-        val friendPubkey = api.getFriendSharingPubkey(friend.userId) ?: return@withContext false
+        val friendPubkey = api.getFriendSharingPubkey(friend.userId) ?: return@withContext "Couldn't share. Try again."
 
         val reWrappedDek = VaultCrypto.wrapMasterKeyForRecipient(dek, friendPubkey)
         val reWrappedDekB64 = Base64.encodeToString(reWrappedDek, Base64.NO_WRAP)
@@ -163,8 +163,9 @@ private suspend fun shareWithFriend(
             wrappedDekB64 = reWrappedDekB64,
             wrappedThumbnailDekB64 = reWrappedThumbDekB64,
         )
-        true
-    } catch (_: Exception) {
-        false
+        null
+    } catch (e: Exception) {
+        if (e.message?.contains("409") == true) "${friend.displayName} already has this item."
+        else "Couldn't share. Try again."
     }
 }

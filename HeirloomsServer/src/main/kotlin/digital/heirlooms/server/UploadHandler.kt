@@ -557,6 +557,8 @@ private fun handleShareUpload(uploadId: UUID, request: Request, database: Databa
             ?: return Response(BAD_REQUEST).body("Invalid toUserId")
         if (!database.areFriends(requesterId, toUserId))
             return Response(FORBIDDEN).body("Not friends")
+        if (database.userAlreadyHasStorageKey(toUserId, record.storageKey))
+            return Response(CONFLICT).body("Recipient already has this item")
         val dec = Base64.getDecoder()
         val wrappedDek = runCatching { dec.decode(wrappedDekB64) }.getOrNull()
             ?: return Response(BAD_REQUEST).body("wrappedDek is not valid Base64")

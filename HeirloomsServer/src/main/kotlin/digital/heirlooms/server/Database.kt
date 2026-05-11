@@ -462,6 +462,19 @@ class Database(private val dataSource: DataSource) {
 
     // Returns true if any active (non-composted) upload for any user references the same storage_key.
     // Used by compost cleanup to skip GCS deletion when a shared copy is still alive.
+    fun userAlreadyHasStorageKey(userId: UUID, storageKey: String): Boolean {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                "SELECT EXISTS(SELECT 1 FROM uploads WHERE user_id = ? AND storage_key = ? AND composted_at IS NULL)"
+            ).use { stmt ->
+                stmt.setObject(1, userId)
+                stmt.setString(2, storageKey)
+                val rs = stmt.executeQuery()
+                return rs.next() && rs.getBoolean(1)
+            }
+        }
+    }
+
     fun hasLiveSharedReference(storageKey: String, excludeUploadId: UUID): Boolean {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
