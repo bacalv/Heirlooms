@@ -47,10 +47,10 @@ class Uploader(
         const val DEFAULT_INITIAL_DELAY_MS = 1_000L
         private const val FALLBACK_MIME_TYPE = "application/octet-stream"
 
-        // Plaintext size chosen so ciphertext chunk (nonce+ct+tag = CHUNK_SIZE+28) is
-        // exactly 4 MiB = 16 × 256 KiB, satisfying GCS resumable upload alignment.
-        const val CHUNK_SIZE = 4 * 1024 * 1024 - 28
-        const val CIPHERTEXT_CHUNK_SIZE = CHUNK_SIZE + 28  // = 4194304, exactly 4 MiB
+        // Plaintext chunk size: 1 MiB cipher chunks (1 MiB - 28 bytes overhead).
+        // Ciphertext chunk = 1 MiB = 4 × 256 KiB, satisfying GCS resumable upload alignment.
+        const val CHUNK_SIZE = 1 * 1024 * 1024 - 28
+        const val CIPHERTEXT_CHUNK_SIZE = CHUNK_SIZE + 28  // = 1048576, exactly 1 MiB
         const val LARGE_FILE_THRESHOLD = 10 * 1024 * 1024L
 
         fun isValidEndpoint(endpoint: String?): Boolean {
@@ -381,6 +381,8 @@ class Uploader(
 
         val contentDek = VaultCrypto.generateDek()
         val thumbnailDek = VaultCrypto.generateDek()
+        val isLargeVideo = file.length() > LARGE_FILE_THRESHOLD && mimeType.startsWith("video/")
+        val previewDurationSeconds = if (isLargeVideo) fetchPreviewDurationSeconds(base, apiKey) else 0
 
         // Step 1: initiate (get signed URLs and storage keys before reading file)
         val initiateResponse = try {
@@ -406,6 +408,25 @@ class Uploader(
             ?: return UploadResult.Failure("Missing thumbnailStorageKey in initiate response")
         val thumbUploadUrl = parseJsonStringField(initiateResponse, "thumbnailUploadUrl")
             ?: return UploadResult.Failure("Missing thumbnailUploadUrl in initiate response")
+
+        // Step 1b: initiate a second GCS slot for the preview clip (large videos only)
+        var previewStorageKey: String? = null
+        var previewUploadUrl: String? = null
+        if (isLargeVideo) {
+            try {
+                val previewInitResponse = httpClient.newCall(
+                    Request.Builder()
+                        .url("$base/api/content/uploads/initiate")
+                        .post("""{"mimeType":"video/mp4","storage_class":"encrypted"}""".toRequestBody("application/json".toMediaType()))
+                        .apply { if (!apiKey.isNullOrBlank()) header("X-Api-Key", apiKey) }
+                        .build()
+                ).execute().use { response ->
+                    if (response.isSuccessful) response.body?.string() else null
+                }
+                previewStorageKey = previewInitResponse?.let { parseJsonStringField(it, "storageKey") }
+                previewUploadUrl = previewInitResponse?.let { parseJsonStringField(it, "uploadUrl") }
+            } catch (_: Exception) { /* preview is optional — continue without it */ }
+        }
 
         // Step 2: encrypt + upload content
         val encryptedContentSize: Long
@@ -506,14 +527,44 @@ class Uploader(
             return UploadResult.Failure("Thumbnail PUT error: ${e.message}")
         }
 
-        // Step 5: confirm
+        // Step 5: generate + upload preview clip (large videos only, best-effort)
+        var wrappedPreviewDekB64: String? = null
+        var confirmedPreviewStorageKey: String? = null
+        if (isLargeVideo && previewStorageKey != null && previewUploadUrl != null) {
+            try {
+                val previewDek = VaultCrypto.generateDek()
+                val previewBytes = generatePreviewClip(file, previewDurationSeconds)
+                if (previewBytes != null) {
+                    val previewNonce = VaultCrypto.generateNonce()
+                    val previewCt = VaultCrypto.aesGcmEncrypt(previewDek, previewNonce, previewBytes)
+                    val previewEnvelope = VaultCrypto.buildSymmetricEnvelope(VaultCrypto.ALG_AES256GCM_V1, previewNonce, previewCt)
+                    httpClient.newCall(
+                        Request.Builder().url(previewUploadUrl)
+                            .put(previewEnvelope.toRequestBody("application/octet-stream".toMediaType()))
+                            .build()
+                    ).execute().use { response ->
+                        if (response.isSuccessful) {
+                            val wrappedPreviewDek = VaultCrypto.wrapDekUnderMasterKey(previewDek, masterKey)
+                            wrappedPreviewDekB64 = Base64.encodeToString(wrappedPreviewDek, Base64.NO_WRAP)
+                            confirmedPreviewStorageKey = previewStorageKey
+                        }
+                    }
+                }
+            } catch (_: Exception) { /* preview is optional */ }
+        }
+
+        // Step 6: confirm
         onConfirming?.invoke()
         val wrappedContentDek = VaultCrypto.wrapDekUnderMasterKey(contentDek, masterKey)
         val wrappedThumbnailDek = VaultCrypto.wrapDekUnderMasterKey(thumbnailDek, masterKey)
         val wrappedDekB64 = Base64.encodeToString(wrappedContentDek, Base64.NO_WRAP)
         val wrappedThumbDekB64 = Base64.encodeToString(wrappedThumbnailDek, Base64.NO_WRAP)
         val tagsJson = if (tags.isEmpty()) "" else ""","tags":[${tags.joinToString(",") { "\"$it\"" }}]"""
-        val confirmBody = """{"storageKey":"$contentStorageKey","mimeType":"$mimeType","fileSize":$encryptedContentSize,"storage_class":"encrypted","envelopeVersion":1,"wrappedDek":"$wrappedDekB64","dekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}","thumbnailStorageKey":"$thumbStorageKey","wrappedThumbnailDek":"$wrappedThumbDekB64","thumbnailDekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}"$tagsJson}"""
+        val previewJson = if (confirmedPreviewStorageKey != null && wrappedPreviewDekB64 != null)
+            ""","previewStorageKey":"$confirmedPreviewStorageKey","wrappedPreviewDek":"$wrappedPreviewDekB64","previewDekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}""""
+        else ""
+        val chunkSizeJson = if (file.length() > LARGE_FILE_THRESHOLD) ""","plainChunkSize":$CHUNK_SIZE""" else ""
+        val confirmBody = """{"storageKey":"$contentStorageKey","mimeType":"$mimeType","fileSize":$encryptedContentSize,"storage_class":"encrypted","envelopeVersion":1,"wrappedDek":"$wrappedDekB64","dekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}","thumbnailStorageKey":"$thumbStorageKey","wrappedThumbnailDek":"$wrappedThumbDekB64","thumbnailDekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}"$tagsJson$previewJson$chunkSizeJson}"""
 
         return try {
             httpClient.newCall(
@@ -798,6 +849,69 @@ class Uploader(
     private fun makeFallbackThumbnail(): ByteArray {
         val bmp = Bitmap.createBitmap(1, 1, Bitmap.Config.RGB_565)
         return ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.JPEG, 80, it) }.toByteArray()
+    }
+
+    // Fetch previewDurationSeconds from server settings; returns default 15 on any error.
+    private fun fetchPreviewDurationSeconds(base: String, apiKey: String?): Int {
+        return try {
+            val request = Request.Builder()
+                .url("$base/api/settings")
+                .apply { if (!apiKey.isNullOrBlank()) header("X-Api-Key", apiKey) }
+                .build()
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return 15
+                val body = response.body?.string() ?: return 15
+                Regex(""""previewDurationSeconds"\s*:\s*(\d+)""").find(body)
+                    ?.groupValues?.get(1)?.toIntOrNull() ?: 15
+            }
+        } catch (_: Exception) { 15 }
+    }
+
+    // Trim the first [durationSeconds] seconds of [file] into a new MP4 using MediaExtractor +
+    // MediaMuxer. Returns null if the video is shorter than the threshold or on any error.
+    private fun generatePreviewClip(file: File, durationSeconds: Int): ByteArray? {
+        val durationUs = durationSeconds * 1_000_000L
+        val outputFile = File.createTempFile("heirloom_preview_", ".mp4")
+        return try {
+            val extractor = android.media.MediaExtractor()
+            extractor.setDataSource(file.absolutePath)
+
+            val muxer = android.media.MediaMuxer(
+                outputFile.absolutePath,
+                android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4,
+            )
+            val trackMap = mutableMapOf<Int, Int>()
+            for (i in 0 until extractor.trackCount) {
+                val format = extractor.getTrackFormat(i)
+                val mime = format.getString(android.media.MediaFormat.KEY_MIME) ?: continue
+                if (mime.startsWith("video/") || mime.startsWith("audio/")) {
+                    extractor.selectTrack(i)
+                    trackMap[i] = muxer.addTrack(format)
+                }
+            }
+
+            muxer.start()
+            val buffer = java.nio.ByteBuffer.allocate(2 * 1024 * 1024)
+            val info = android.media.MediaCodec.BufferInfo()
+            while (true) {
+                val trackIndex = extractor.sampleTrackIndex
+                if (trackIndex < 0 || extractor.sampleTime > durationUs) break
+                val muxerTrack = trackMap[trackIndex]
+                if (muxerTrack == null) { extractor.advance(); continue }
+                info.offset = 0
+                info.size = extractor.readSampleData(buffer, 0)
+                if (info.size < 0) break
+                info.presentationTimeUs = extractor.sampleTime
+                info.flags = if ((extractor.sampleFlags and android.media.MediaExtractor.SAMPLE_FLAG_SYNC) != 0)
+                    android.media.MediaCodec.BUFFER_FLAG_KEY_FRAME else 0
+                muxer.writeSampleData(muxerTrack, buffer, info)
+                extractor.advance()
+            }
+            muxer.stop()
+            muxer.release()
+            extractor.release()
+            outputFile.readBytes()
+        } catch (_: Exception) { null } finally { outputFile.delete() }
     }
 }
 

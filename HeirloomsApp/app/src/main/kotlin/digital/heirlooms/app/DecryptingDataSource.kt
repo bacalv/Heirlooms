@@ -26,13 +26,12 @@ class DecryptingDataSource(
     private val okHttpClient: OkHttpClient,
     private val dek: ByteArray,
     private val apiKey: String?,
+    ciphertextChunkSize: Int = 4 * 1024 * 1024,
 ) : DataSource {
 
-    private companion object {
-        const val CIPHERTEXT_CHUNK = 4 * 1024 * 1024       // 4 MiB
-        const val NONCE_SIZE = 12
-        const val PLAINTEXT_CHUNK = CIPHERTEXT_CHUNK - NONCE_SIZE - 16  // = Uploader.CHUNK_SIZE
-    }
+    private val CIPHERTEXT_CHUNK = ciphertextChunkSize
+    private val NONCE_SIZE = 12
+    private val PLAINTEXT_CHUNK = CIPHERTEXT_CHUNK - NONCE_SIZE - 16
 
     private var responseBody: ResponseBody? = null
     private var openedUri: Uri? = null
@@ -149,7 +148,8 @@ class DecryptingDataSource(
         private val okHttpClient: OkHttpClient,
         private val dek: ByteArray,
         private val apiKey: String?,
+        private val ciphertextChunkSize: Int = 4 * 1024 * 1024,
     ) : DataSource.Factory {
-        override fun createDataSource() = DecryptingDataSource(okHttpClient, dek, apiKey)
+        override fun createDataSource() = DecryptingDataSource(okHttpClient, dek, apiKey, ciphertextChunkSize)
     }
 }

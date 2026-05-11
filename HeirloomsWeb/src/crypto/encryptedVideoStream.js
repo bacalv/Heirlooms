@@ -1,11 +1,11 @@
 import { API_URL } from '../api'
 import { aesGcmDecryptWithAad } from './vaultCrypto'
 
-const CIPHER_CHUNK = 4 * 1024 * 1024
-const PLAIN_CHUNK  = CIPHER_CHUNK - 28
+const DEFAULT_PLAIN_CHUNK = 4 * 1024 * 1024 - 28
+const PREFETCH = 4  // number of cipher chunks to fetch in parallel
 
-export function computeCiphertextSize(plaintextSize) {
-  const n = Math.ceil(plaintextSize / PLAIN_CHUNK)
+export function computeCiphertextSize(plaintextSize, plainChunkSize = DEFAULT_PLAIN_CHUNK) {
+  const n = Math.ceil(plaintextSize / plainChunkSize)
   return n * 28 + plaintextSize
 }
 
@@ -17,17 +17,14 @@ export function computeCiphertextSize(plaintextSize) {
 // mp4box onReady fires synchronously during appendBuffer if the moov is in
 // chunk 0.  If it fires → faststart → raw-byte MSE streaming (works because
 // the SourceBuffer receives ftyp+moov+mdat in order).  If not → non-faststart
-// → download all chunks, decrypt, return a blob URL (same latency as Fix 1,
-// guaranteed correct).
-//
-// We deliberately avoid mp4box's segmentation API (setSegmentOptions / start /
-// onSegment) because initializeSegmentation() calls resetTables() which
-// deletes trak.samples, leaving start() with no samples to emit.
+// → download all chunks, decrypt, return a blob URL.
 export async function openEncryptedVideoStream(upload, apiKey, dek) {
   if (typeof MediaSource === 'undefined') throw new Error('MSE not supported')
 
-  const totalCipher = computeCiphertextSize(upload.fileSize)
-  const chunk0End = Math.min(CIPHER_CHUNK, totalCipher) - 1
+  const plainChunkSize = upload.plainChunkSize ?? DEFAULT_PLAIN_CHUNK
+  const cipherChunkSize = plainChunkSize + 28
+  const totalCipher = computeCiphertextSize(upload.fileSize, plainChunkSize)
+  const chunk0End = Math.min(cipherChunkSize, totalCipher) - 1
 
   // --- Chunk 0: decrypt + probe ---
   const r0 = await fetch(`${API_URL}/api/content/uploads/${upload.id}/file`, {
@@ -51,34 +48,30 @@ export async function openEncryptedVideoStream(upload, apiKey, dek) {
     mime = MediaSource.isTypeSupported(withAudio) ? withAudio
          : MediaSource.isTypeSupported(videoOnly) ? videoOnly
          : null
-    console.log('[heirlooms] chunk-0 probe — codec:', vt.codec, at?.codec ?? '(no audio)', '→', mime)
   }
-  const probe = plain0.slice(0)   // copy so plain0 stays intact
+  const probe = plain0.slice(0)
   probe.fileStart = 0
   sniffer.appendBuffer(probe)
 
   if (!mime) {
-    // Non-faststart (moov not in chunk 0): full download then blob URL.
     console.log('[heirlooms] non-faststart → full download')
-    return fullDownload(upload, apiKey, dek, plain0, chunk0End + 1, totalCipher)
+    return fullDownload(upload, apiKey, dek, plain0, chunk0End + 1, totalCipher, plainChunkSize)
   }
 
-  // Faststart: stream raw decrypted bytes into a SourceBuffer.
   console.log('[heirlooms] faststart → MSE streaming with', mime)
   const abort = new AbortController()
   const mediaSource = new MediaSource()
   const msUrl = URL.createObjectURL(mediaSource)
 
   mediaSource.addEventListener('sourceopen', () => {
-    streamFaststart(upload, apiKey, dek, mime, plain0, chunk0End + 1, totalCipher, mediaSource, abort.signal)
+    streamFaststart(upload, apiKey, dek, mime, plain0, chunk0End + 1, totalCipher, cipherChunkSize, mediaSource, abort.signal)
       .catch(() => { if (mediaSource.readyState === 'open') mediaSource.endOfStream('network') })
   }, { once: true })
 
   return { type: 'mse', msUrl, cleanup() { abort.abort(); URL.revokeObjectURL(msUrl) } }
 }
 
-// Appends chunk 0 (already decrypted) then continues fetching from startCipherOff.
-async function streamFaststart(upload, apiKey, dek, mime, plain0, startCipherOff, totalCipher, mediaSource, signal) {
+async function streamFaststart(upload, apiKey, dek, mime, plain0, startCipherOff, totalCipher, cipherChunkSize, mediaSource, signal) {
   const sb = mediaSource.addSourceBuffer(mime)
   const queue = []
   let allFed = false
@@ -97,49 +90,103 @@ async function streamFaststart(upload, apiKey, dek, mime, plain0, startCipherOff
   sb.addEventListener('updateend', drain)
   sb.addEventListener('error', e => console.error('[heirlooms] SB error:', e))
 
-  append(plain0)  // ftyp + moov + start of mdat
+  append(plain0)
 
-  let off = startCipherOff
-  while (off < totalCipher) {
-    if (signal.aborted) return
-    const end = Math.min(off + CIPHER_CHUNK, totalCipher) - 1
+  // Build list of remaining chunk ranges
+  const chunks = []
+  let o = startCipherOff
+  while (o < totalCipher) {
+    const end = Math.min(o + cipherChunkSize, totalCipher) - 1
+    chunks.push({ off: o, end })
+    o = end + 1
+  }
+
+  // Fetch chunk bytes and decrypt — returns Uint8Array
+  async function fetchChunk({ off, end }) {
     const r = await fetch(`${API_URL}/api/content/uploads/${upload.id}/file`, {
       headers: { 'X-Api-Key': apiKey, 'Range': `bytes=${off}-${end}` },
       signal,
     })
     if (!r.ok) throw new Error(`HTTP ${r.status}`)
     const bytes = new Uint8Array(await r.arrayBuffer())
-    const plain = await aesGcmDecryptWithAad(dek, bytes.slice(0, 12), bytes.slice(0, 12), bytes.slice(12))
+    return aesGcmDecryptWithAad(dek, bytes.slice(0, 12), bytes.slice(0, 12), bytes.slice(12))
+  }
+
+  // Parallel sliding-window: keep PREFETCH fetches in flight, append in order
+  let fetchIdx = 0
+  let appendIdx = 0
+  const inFlight = new Map()
+
+  function seedFetches() {
+    while (fetchIdx < chunks.length && inFlight.size < PREFETCH) {
+      inFlight.set(fetchIdx, fetchChunk(chunks[fetchIdx]))
+      fetchIdx++
+    }
+  }
+
+  seedFetches()
+
+  while (appendIdx < chunks.length) {
+    if (signal.aborted) return
+    const plain = await inFlight.get(appendIdx)
+    inFlight.delete(appendIdx)
+    appendIdx++
     append(plain)
-    off = end + 1
+    seedFetches()
   }
 
   allFed = true
   drain()
 }
 
-// Downloads all chunks (chunk 0 already decrypted), combines, returns a blob URL.
-async function fullDownload(upload, apiKey, dek, plain0, startCipherOff, totalCipher) {
+async function fullDownload(upload, apiKey, dek, plain0, startCipherOff, totalCipher, plainChunkSize) {
+  const cipherChunkSize = plainChunkSize + 28
   const parts = [plain0]
   let totalBytes = plain0.byteLength
   let off = startCipherOff
 
+  // Parallel sliding-window for the full download too
+  const chunks = []
   while (off < totalCipher) {
-    const end = Math.min(off + CIPHER_CHUNK, totalCipher) - 1
+    const end = Math.min(off + cipherChunkSize, totalCipher) - 1
+    chunks.push({ off, end })
+    off = end + 1
+  }
+
+  async function fetchChunk({ off: o, end }) {
     const r = await fetch(`${API_URL}/api/content/uploads/${upload.id}/file`, {
-      headers: { 'X-Api-Key': apiKey, 'Range': `bytes=${off}-${end}` },
+      headers: { 'X-Api-Key': apiKey, 'Range': `bytes=${o}-${end}` },
     })
     if (!r.ok) throw new Error(`HTTP ${r.status}`)
     const bytes = new Uint8Array(await r.arrayBuffer())
-    const plain = await aesGcmDecryptWithAad(dek, bytes.slice(0, 12), bytes.slice(0, 12), bytes.slice(12))
+    return aesGcmDecryptWithAad(dek, bytes.slice(0, 12), bytes.slice(0, 12), bytes.slice(12))
+  }
+
+  let fetchIdx = 0
+  let appendIdx = 0
+  const inFlight = new Map()
+
+  function seedFetches() {
+    while (fetchIdx < chunks.length && inFlight.size < PREFETCH) {
+      inFlight.set(fetchIdx, fetchChunk(chunks[fetchIdx]))
+      fetchIdx++
+    }
+  }
+
+  seedFetches()
+
+  while (appendIdx < chunks.length) {
+    const plain = await inFlight.get(appendIdx)
+    inFlight.delete(appendIdx)
+    appendIdx++
     parts.push(plain)
     totalBytes += plain.byteLength
-    off = end + 1
+    seedFetches()
   }
 
   const combined = new Uint8Array(totalBytes)
   let pos = 0
   for (const p of parts) { combined.set(new Uint8Array(p), pos); pos += p.byteLength }
 
-  return { type: 'blob', blobUrl: URL.createObjectURL(new Blob([combined], { type: upload.mimeType })) }
+  return { type: 'blob', blobUrl: URL.createObjectURL(new Blob([combined], { type: 'video/mp4' })) }
 }

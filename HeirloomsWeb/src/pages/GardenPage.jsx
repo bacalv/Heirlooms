@@ -20,7 +20,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useAuth } from '../AuthContext'
-import { API_URL, apiFetch, initiateEncryptedUpload, initiateResumableUpload, putBlob, putBlobWithProgress, confirmEncryptedUpload } from '../api'
+import { API_URL, apiFetch, initiateEncryptedUpload, initiateResumableUpload, putBlob, putBlobWithProgress, confirmEncryptedUpload, fetchSettings } from '../api'
 import { WorkingDots } from '../brand/WorkingDots'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { getMasterKey } from '../crypto/vaultSession'
@@ -638,13 +638,45 @@ async function generateThumbnail(file) {
   }
 }
 
-// Plaintext chunk size chosen so each ciphertext chunk (nonce+ct+tag = CHUNK_SIZE+28)
-// is exactly 4 MiB = 16 × 256 KiB, satisfying GCS resumable upload alignment.
-const CHUNK_SIZE = 4 * 1024 * 1024 - 28
+// Plaintext chunk size: 1 MiB cipher chunks (1 MiB - 28 bytes overhead).
+// Value stored per-upload so the reader always knows what size was used.
+const PLAIN_CHUNK_SIZE = 1 * 1024 * 1024 - 28
 const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024
 
-function computeTotalCiphertextSize(fileSize, chunkSize) {
-  const numChunks = Math.ceil(fileSize / chunkSize)
+let ffmpegInstance = null
+async function getFFmpeg() {
+  if (ffmpegInstance) return ffmpegInstance
+  const { FFmpeg } = await import('@ffmpeg/ffmpeg')
+  const { toBlobURL } = await import('@ffmpeg/util')
+  const ff = new FFmpeg()
+  await ff.load({
+    coreURL: await toBlobURL('/ffmpeg-core.js', 'text/javascript'),
+    wasmURL: await toBlobURL('/ffmpeg-core.wasm', 'application/wasm'),
+  })
+  ffmpegInstance = ff
+  return ff
+}
+
+async function generatePreviewClip(file, durationSeconds) {
+  const { fetchFile } = await import('@ffmpeg/util')
+  const ff = await getFFmpeg()
+  await ff.writeFile('input', await fetchFile(file))
+  await ff.exec([
+    '-i', 'input',
+    '-t', String(durationSeconds),
+    '-c:v', 'copy',
+    '-c:a', 'copy',
+    '-movflags', '+faststart',
+    '-y', 'preview.mp4',
+  ])
+  const data = await ff.readFile('preview.mp4')
+  await ff.deleteFile('input')
+  await ff.deleteFile('preview.mp4')
+  return data instanceof Uint8Array ? data : new Uint8Array(data)
+}
+
+function computeTotalCiphertextSize(fileSize, plainChunkSize) {
+  const numChunks = Math.ceil(fileSize / plainChunkSize)
   return numChunks * 28 + fileSize
 }
 
@@ -670,7 +702,7 @@ function concatArrays(...arrays) {
   return out
 }
 
-async function encryptAndUploadStreamingContent(file, contentDek, storageKey, resumableUri, totalCiphertextBytes, onProgress) {
+async function encryptAndUploadStreamingContent(file, contentDek, storageKey, resumableUri, totalCiphertextBytes, plainChunkSize, onProgress) {
   const uploadIdPrefix = new TextEncoder().encode(storageKey).slice(0, 4)
 
   let ciphertextOffset = 0
@@ -678,7 +710,7 @@ async function encryptAndUploadStreamingContent(file, contentDek, storageKey, re
   let fileOffset = 0
 
   while (fileOffset < file.size) {
-    const slice = file.slice(fileOffset, fileOffset + CHUNK_SIZE)
+    const slice = file.slice(fileOffset, fileOffset + plainChunkSize)
     const plainChunk = new Uint8Array(await slice.arrayBuffer())
 
     const nonce = buildChunkNonce(uploadIdPrefix, chunkIndex)
@@ -739,24 +771,37 @@ async function buildEncryptedMetadata(file) {
 }
 
 async function encryptAndUpload(file, apiKey, onStatus) {
+  const settings = await fetchSettings(apiKey)
+  const previewDurationSeconds = settings.previewDurationSeconds ?? 15
+  const isLarge = file.size > LARGE_FILE_THRESHOLD
+  const isVideo = file.type.startsWith('video/')
+
   const contentDek = generateDek()
   const thumbDek = generateDek()
   const masterKey = getMasterKey()
 
-  // Step 1: initiate before reading file bytes
-  onStatus('Uploading…')
+  // Step 1: initiate content + thumbnail upload slots
+  onStatus('Preparing…')
   const { storageKey, uploadUrl, thumbnailStorageKey, thumbnailUploadUrl } =
     await initiateEncryptedUpload(apiKey, file.type)
 
-  // Step 2: encrypt + upload content (streaming for large files, in-memory for small)
+  // Step 2: initiate preview upload slot (large videos only)
+  let previewInit = null
+  if (isVideo && isLarge) {
+    previewInit = await initiateEncryptedUpload(apiKey, 'video/mp4')
+  }
+
+  // Step 3: encrypt + upload content (streaming for large files, envelope for small)
   let contentFileSize
-  if (file.size > LARGE_FILE_THRESHOLD) {
-    const totalCiphertextBytes = computeTotalCiphertextSize(file.size, CHUNK_SIZE)
+  let usedChunkSize = null
+  if (isLarge) {
+    const totalCiphertextBytes = computeTotalCiphertextSize(file.size, PLAIN_CHUNK_SIZE)
     const { resumableUri } = await initiateResumableUpload(apiKey, storageKey, totalCiphertextBytes, 'application/octet-stream')
-    await encryptAndUploadStreamingContent(file, contentDek, storageKey, resumableUri, totalCiphertextBytes, (consumed) => {
+    await encryptAndUploadStreamingContent(file, contentDek, storageKey, resumableUri, totalCiphertextBytes, PLAIN_CHUNK_SIZE, (consumed) => {
       onStatus(`Uploading (${Math.round(consumed / file.size * 100)}%)…`)
     })
     contentFileSize = file.size
+    usedChunkSize = PLAIN_CHUNK_SIZE
   } else {
     onStatus('Encrypting…')
     const fileBytes = new Uint8Array(await file.arrayBuffer())
@@ -768,17 +813,34 @@ async function encryptAndUpload(file, apiKey, onStatus) {
     })
   }
 
-  // Step 3: thumbnail (always small, always in-memory)
+  // Step 4: thumbnail (always small, always envelope)
   const thumbBytes = await generateThumbnail(file)
   const thumbEnvelope = await encryptSymmetric(ALG_AES256GCM_V1, thumbDek, thumbBytes)
   await putBlob(thumbnailUploadUrl, thumbEnvelope)
 
-  // Step 4: encrypted metadata
+  // Step 5: preview clip (large videos only — uses ffmpeg.wasm to trim first N seconds)
+  let previewStorageKey = null
+  let wrappedPreviewDek = null
+  if (previewInit && isVideo && isLarge) {
+    try {
+      onStatus('Generating preview…')
+      const previewDek = generateDek()
+      const previewBytes = await generatePreviewClip(file, previewDurationSeconds)
+      const previewEnvelope = await encryptSymmetric(ALG_AES256GCM_V1, previewDek, previewBytes)
+      await putBlob(previewInit.uploadUrl, previewEnvelope)
+      previewStorageKey = previewInit.storageKey
+      wrappedPreviewDek = await wrapDekUnderMasterKey(previewDek, masterKey)
+    } catch (e) {
+      console.warn('[heirlooms] preview clip generation failed, skipping:', e)
+    }
+  }
+
+  // Step 6: encrypted metadata
   const metaJson = await buildEncryptedMetadata(file)
   const metaBytes = new TextEncoder().encode(metaJson)
   const metaEnvelope = await encryptSymmetric(ALG_AES256GCM_V1, contentDek, metaBytes)
 
-  // Step 5: wrap DEKs and confirm
+  // Step 7: wrap DEKs and confirm
   const wrappedDek = await wrapDekUnderMasterKey(contentDek, masterKey)
   const wrappedThumbDek = await wrapDekUnderMasterKey(thumbDek, masterKey)
   const takenAt = new Date(file.lastModified).toISOString()
@@ -794,6 +856,10 @@ async function encryptAndUpload(file, apiKey, onStatus) {
     thumbnailDekFormat: ALG_MASTER_AES256GCM_V1,
     encryptedMetadataB64: toB64(metaEnvelope),
     encryptedMetadataFormat: ALG_AES256GCM_V1,
+    previewStorageKey,
+    wrappedPreviewDekB64: wrappedPreviewDek ? toB64(wrappedPreviewDek) : null,
+    previewDekFormat: wrappedPreviewDek ? ALG_MASTER_AES256GCM_V1 : null,
+    plainChunkSize: usedChunkSize,
     takenAt,
     tags: [],
   })

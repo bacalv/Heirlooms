@@ -513,8 +513,8 @@ class UploaderTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun `CIPHERTEXT_CHUNK_SIZE equals 4 MiB`() {
-        assertEquals(4 * 1024 * 1024, Uploader.CIPHERTEXT_CHUNK_SIZE)
+    fun `CIPHERTEXT_CHUNK_SIZE equals 1 MiB`() {
+        assertEquals(1 * 1024 * 1024, Uploader.CIPHERTEXT_CHUNK_SIZE)
     }
 
     @Test

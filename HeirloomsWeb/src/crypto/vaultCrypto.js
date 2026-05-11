@@ -51,10 +51,11 @@ export async function aesGcmDecryptWithAad(key, nonce, aad, ctWithTag) {
   return crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonce, additionalData: aad }, ck, ctWithTag)
 }
 
-// Decrypt streaming-encrypted content (produced by Android's encryptAndUploadStreaming).
-// Format: sequence of [nonce(12)][ciphertext+tag] chunks, each exactly 4 MiB except the last.
-export async function decryptStreamingContent(encryptedBytes, dek) {
-  const CHUNK_SIZE = 4 * 1024 * 1024
+// Decrypt streaming-encrypted content.
+// Format: sequence of [nonce(12)][ciphertext+tag] cipher chunks, each plainChunkSize+28 bytes except the last.
+// plainChunkSize defaults to the original 4 MiB - 28 format for backward compatibility.
+export async function decryptStreamingContent(encryptedBytes, dek, plainChunkSize = 4 * 1024 * 1024 - 28) {
+  const CHUNK_SIZE = plainChunkSize + 28
   const NONCE_SIZE = 12
   const parts = []
   let offset = 0

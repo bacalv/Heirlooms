@@ -153,7 +153,7 @@ function KebabMenu({ onAddToCapsule, onCompost, compostDisabled }) {
 
 function GardenFlavour({ upload, blobUrl, capsules, isComposted, composting, compostError,
   restoring, restoreError, compostDisabled, onCompost, onRestore, onOpenAddModal,
-  onRotate, onUpdateTags }) {
+  onRotate, onUpdateTags, onDownload, downloading }) {
 
   const isImage = upload.mimeType?.startsWith('image/')
   const isVideo = upload.mimeType?.startsWith('video/')
@@ -173,8 +173,13 @@ function GardenFlavour({ upload, blobUrl, capsules, isComposted, composting, com
         </div>
       )}
       {blobUrl && isVideo && (
-        <div className="rounded-card overflow-hidden border border-forest-08 bg-black">
-          <video src={blobUrl} controls className="max-w-full max-h-[500px] w-full" />
+        <div className="space-y-2">
+          <div className="rounded-card overflow-hidden border border-forest-08 bg-black">
+            <video src={blobUrl} controls className="max-w-full max-h-[500px] w-full" />
+          </div>
+          {upload.previewStorageKey && (
+            <p className="text-xs text-text-muted">Showing {upload.storageClass === 'encrypted' ? 'preview clip' : 'video'}. <button onClick={onDownload} disabled={downloading} className="underline hover:text-forest disabled:opacity-50">{downloading ? 'Downloading…' : 'Download full file'}</button></p>
+          )}
         </div>
       )}
 
@@ -182,6 +187,14 @@ function GardenFlavour({ upload, blobUrl, capsules, isComposted, composting, com
         <div className="flex items-start justify-between gap-2">
           <h1 className="text-lg font-medium text-forest">{upload.storageKey}</h1>
           <div className="flex items-center gap-1 flex-shrink-0">
+            {isVideo && onDownload && !upload.previewStorageKey && (
+              <button onClick={onDownload} disabled={downloading} title="Download"
+                className="p-1 text-text-muted hover:text-forest transition-colors rounded disabled:opacity-50">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+              </button>
+            )}
             {isImage && onRotate && (
               <button onClick={onRotate} title="Rotate 90°"
                 className="p-1 text-text-muted hover:text-forest transition-colors rounded">
@@ -277,7 +290,7 @@ function GardenFlavour({ upload, blobUrl, capsules, isComposted, composting, com
 // ---- Explore flavour — content-forward layout ------------------------------
 
 function ExploreFlavour({ upload, blobUrl, capsules, isComposted, composting, compostError,
-  restoring, restoreError, compostDisabled, onCompost, onRestore, onOpenAddModal }) {
+  restoring, restoreError, compostDisabled, onCompost, onRestore, onOpenAddModal, onDownload, downloading }) {
 
   const isImage = upload.mimeType?.startsWith('image/')
   const isVideo = upload.mimeType?.startsWith('video/')
@@ -297,8 +310,13 @@ function ExploreFlavour({ upload, blobUrl, capsules, isComposted, composting, co
         </div>
       )}
       {blobUrl && isVideo && (
-        <div className="rounded-card overflow-hidden border border-forest-08 bg-black">
-          <video src={blobUrl} controls className="max-w-full max-h-[600px] w-full" />
+        <div className="space-y-2">
+          <div className="rounded-card overflow-hidden border border-forest-08 bg-black">
+            <video src={blobUrl} controls className="max-w-full max-h-[600px] w-full" />
+          </div>
+          {upload.previewStorageKey && (
+            <p className="text-xs text-text-muted">Showing preview clip. <button onClick={onDownload} disabled={downloading} className="underline hover:text-forest disabled:opacity-50">{downloading ? 'Downloading…' : 'Download full file'}</button></p>
+          )}
         </div>
       )}
 
@@ -388,6 +406,49 @@ export function PhotoDetailPage() {
   const [compostError, setCompostError] = useState(null)
   const [restoring, setRestoring] = useState(false)
   const [restoreError, setRestoreError] = useState(null)
+  const [downloading, setDownloading] = useState(false)
+
+  async function handleDownload() {
+    if (!upload || downloading) return
+    setDownloading(true)
+    try {
+      const isEncrypted = upload.storageClass === 'encrypted'
+      let plainBytes
+      if (isEncrypted) {
+        const masterKey = getMasterKey()
+        const raw = upload.wrappedDek
+        if (!raw) throw new Error('Missing wrappedDek')
+        const wrappedDek = typeof raw === 'string' ? fromB64(raw) : raw
+        const dek = await unwrapDekWithMasterKey(wrappedDek, masterKey)
+        const r = await fetch(`${API_URL}/api/content/uploads/${upload.id}/file`, {
+          headers: { 'X-Api-Key': apiKey },
+        })
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        const encBytes = new Uint8Array(await r.arrayBuffer())
+        plainBytes = encBytes[0] === 0x01
+          ? await decryptSymmetric(encBytes, dek)
+          : await decryptStreamingContent(encBytes, dek, upload.plainChunkSize ?? undefined)
+      } else {
+        const r = await fetch(`${API_URL}/api/content/uploads/${upload.id}/file`, {
+          headers: { 'X-Api-Key': apiKey },
+        })
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        plainBytes = new Uint8Array(await r.arrayBuffer())
+      }
+      const ext = upload.mimeType?.split('/')[1]?.split(';')[0] ?? 'bin'
+      const blob = new Blob([plainBytes], { type: upload.mimeType })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `heirloom.${ext}`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error('Download failed', e)
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   useEffect(() => {
     document.title = upload ? `${upload.storageKey} · Heirlooms` : 'Photo · Heirlooms'
@@ -422,8 +483,24 @@ export function PhotoDetailPage() {
       const isEncrypted = upload.storageClass === 'encrypted'
       const LARGE = 10 * 1024 * 1024
 
-      if (isEncrypted && isVideo && upload.fileSize > LARGE && typeof MediaSource !== 'undefined') {
-        // Streaming path: faststart → MSE (progressive), non-faststart → full decrypt then blob.
+      if (isEncrypted && isVideo && upload.previewStorageKey) {
+        // Preview clip path: decrypt the short preview clip (envelope format) and play it.
+        const masterKey = getMasterKey()
+        const rawPreview = upload.wrappedPreviewDek
+        if (!rawPreview) throw new Error('Missing wrappedPreviewDek')
+        const wrappedPreviewDek = typeof rawPreview === 'string' ? fromB64(rawPreview) : rawPreview
+        const previewDek = await unwrapDekWithMasterKey(wrappedPreviewDek, masterKey)
+        const r = await fetch(`${API_URL}/api/content/uploads/${upload.id}/preview`, {
+          headers: { 'X-Api-Key': apiKey },
+        })
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        const encBytes = new Uint8Array(await r.arrayBuffer())
+        const plainBytes = await decryptSymmetric(encBytes, previewDek)
+        const blob = new Blob([plainBytes], { type: 'video/mp4' })
+        objectUrl = URL.createObjectURL(blob)
+        if (!cancelled) setBlobUrl(objectUrl)
+      } else if (isEncrypted && isVideo && upload.fileSize > LARGE && typeof MediaSource !== 'undefined') {
+        // Legacy large video (no preview clip): MSE streaming path.
         const masterKey = getMasterKey()
         const raw = upload.wrappedDek
         if (!raw) throw new Error('Missing wrappedDek')
@@ -453,7 +530,7 @@ export function PhotoDetailPage() {
         // Envelope format starts with version byte 0x01; streaming chunk format starts with nonce bytes (never 0x01).
         const plainBytes = encBytes[0] === 0x01
           ? await decryptSymmetric(encBytes, dek)
-          : await decryptStreamingContent(encBytes, dek)
+          : await decryptStreamingContent(encBytes, dek, upload.plainChunkSize ?? undefined)
         const blob = new Blob([plainBytes], { type: upload.mimeType })
         objectUrl = URL.createObjectURL(blob)
         if (!cancelled) setBlobUrl(objectUrl)
@@ -596,6 +673,7 @@ export function PhotoDetailPage() {
     onOpenAddModal: () => setShowAddModal(true),
     onRotate: handleRotate,
     onUpdateTags: handleUpdateTags,
+    onDownload: handleDownload, downloading,
   }
 
   return (

@@ -1,5 +1,14 @@
 export const API_URL = import.meta.env.VITE_API_URL ?? ''
 
+let cachedSettings = null
+export async function fetchSettings(apiKey) {
+  if (cachedSettings) return cachedSettings
+  const r = await apiFetch('/api/settings', apiKey)
+  if (!r.ok) return { previewDurationSeconds: 15 }
+  cachedSettings = await r.json()
+  return cachedSettings
+}
+
 export async function apiFetch(path, apiKey, options = {}) {
   const headers = { 'X-Api-Key': apiKey }
   if (options.body) headers['Content-Type'] = 'application/json'
@@ -84,6 +93,8 @@ export async function confirmEncryptedUpload(apiKey, {
   envelopeVersion, wrappedDekB64, dekFormat,
   thumbnailStorageKey, wrappedThumbnailDekB64, thumbnailDekFormat,
   encryptedMetadataB64, encryptedMetadataFormat,
+  previewStorageKey, wrappedPreviewDekB64, previewDekFormat,
+  plainChunkSize,
   takenAt, tags,
 }) {
   const r = await apiFetch('/api/content/uploads/confirm', apiKey, {
@@ -93,11 +104,12 @@ export async function confirmEncryptedUpload(apiKey, {
       envelopeVersion, wrappedDek: wrappedDekB64, dekFormat,
       thumbnailStorageKey, wrappedThumbnailDek: wrappedThumbnailDekB64, thumbnailDekFormat,
       encryptedMetadata: encryptedMetadataB64, encryptedMetadataFormat,
+      previewStorageKey, wrappedPreviewDek: wrappedPreviewDekB64, previewDekFormat,
+      plainChunkSize,
       takenAt, tags,
     }),
   })
   if (!r.ok) throw new Error(`HTTP ${r.status}`)
-  return r.json()
 }
 
 // Fetch arbitrary URL with auth header and return raw bytes.

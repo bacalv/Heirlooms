@@ -54,7 +54,7 @@ fun main() {
     cleanupService.startPeriodicCleanup()
     println("PendingBlobsCleanupService started")
 
-    val app = buildApp(storage, database)
+    val app = buildApp(storage, database, previewDurationSeconds = config.previewDurationSeconds)
     val server = corsFilter().then(
         if (config.apiKey.isNotEmpty()) {
             apiKeyFilter(config.apiKey).then(app)

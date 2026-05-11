@@ -21,6 +21,10 @@ data class Upload(
     val dekFormat: String? = null,
     val wrappedThumbnailDek: ByteArray? = null,
     val thumbnailDekFormat: String? = null,
+    val previewStorageKey: String? = null,
+    val wrappedPreviewDek: ByteArray? = null,
+    val previewDekFormat: String? = null,
+    val plainChunkSize: Int? = null,
 ) {
     val isVideo: Boolean get() = mimeType.startsWith("video/")
     val isEncrypted: Boolean get() = storageClass == "encrypted"
@@ -73,6 +77,10 @@ data class CapsuleRef(
     val state: String,
     val unlockAt: String,
     val recipients: List<String>,
+)
+
+data class AppSettings(
+    val previewDurationSeconds: Int = 15,
 )
 
 sealed class LoadState<out T> {

@@ -84,6 +84,7 @@ fun buildApp(
     database: Database,
     thumbnailGenerator: (ByteArray, String) -> ByteArray? = ::generateThumbnail,
     metadataExtractor: (ByteArray, String) -> MediaMetadata = MetadataExtractor()::extract,
+    previewDurationSeconds: Int = 15,
 ): HttpHandler {
     val directUpload = storage as? DirectUploadSupport
 
@@ -103,6 +104,7 @@ fun buildApp(
             migrateUploadContractRoute(storage, database),
             fileProxyContractRoute(storage, database),
             thumbProxyContractRoute(storage, database),
+            previewProxyContractRoute(storage, database),
             readUrlContractRoute(directUpload, database),
             rotationContractRoute(database),
             tagsContractRoute(database),
@@ -161,6 +163,7 @@ fun buildApp(
         "/api" bind capsuleContract,
         "/api" bind diagContract,
         "/health" bind GET to { Response(OK).body("ok") },
+        "/api/settings" bind GET to { Response(OK).header("Content-Type", "application/json").body("""{"previewDurationSeconds":$previewDurationSeconds}""") },
         "/docs/api.json" bind GET to { mergedSpecWithApiKeyAuth(contentContract, capsuleContract, keysContract) },
         "/docs" bind GET to { Response(FOUND).header("Location", "/docs/index.html") },
         "/docs/swagger-initializer.js" bind GET to {
@@ -581,6 +584,30 @@ private fun thumbProxyContractRoute(storage: FileStore, database: Database): Con
     }
 }
 
+private fun previewProxyContractRoute(storage: FileStore, database: Database): ContractRoute {
+    val id = Path.uuid().of("id")
+    return "/uploads" / id / "preview" meta {
+        summary = "Get encrypted preview clip"
+        description = "Returns the encrypted preview clip for the given upload ID if one exists, otherwise 404."
+    } bindContract GET to { uploadId: UUID, _: String ->
+        { _: Request ->
+            val record = database.getUploadById(uploadId)
+            when {
+                record == null -> Response(NOT_FOUND)
+                record.previewStorageKey == null -> Response(NOT_FOUND)
+                else -> try {
+                    val bytes = storage.get(StorageKey(record.previewStorageKey))
+                    Response(OK)
+                        .header("Content-Type", "application/octet-stream")
+                        .body(ByteArrayInputStream(bytes), bytes.size.toLong())
+                } catch (e: Exception) {
+                    Response(INTERNAL_SERVER_ERROR).body("Failed to fetch preview: ${e.message}")
+                }
+            }
+        }
+    }
+}
+
 private fun readUrlContractRoute(directUpload: DirectUploadSupport?, database: Database): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id / "url" meta {
@@ -895,6 +922,10 @@ private fun confirmEncryptedUpload(
     val thumbStorageKey = node?.get("thumbnailStorageKey")?.asText()?.takeIf { it.isNotBlank() }
     val wrappedThumbDekB64 = node?.get("wrappedThumbnailDek")?.asText()?.takeIf { it.isNotBlank() }
     val thumbDekFormat = node?.get("thumbnailDekFormat")?.asText()?.takeIf { it.isNotBlank() }
+    val previewStorageKey = node?.get("previewStorageKey")?.asText()?.takeIf { it.isNotBlank() }
+    val wrappedPreviewDekB64 = node?.get("wrappedPreviewDek")?.asText()?.takeIf { it.isNotBlank() }
+    val previewDekFormat = node?.get("previewDekFormat")?.asText()?.takeIf { it.isNotBlank() }
+    val plainChunkSize = node?.get("plainChunkSize")?.asInt()?.takeIf { it > 0 }
     val takenAt = node?.get("takenAt")?.asText()?.takeIf { it.isNotBlank() }
         ?.let { runCatching { Instant.parse(it) }.getOrNull() }
 
@@ -911,6 +942,10 @@ private fun confirmEncryptedUpload(
         runCatching { dec.decode(it) }.getOrNull()
             ?: return Response(BAD_REQUEST).body("wrappedThumbnailDek is not valid Base64")
     }
+    val wrappedPreviewDek = wrappedPreviewDekB64?.let {
+        runCatching { dec.decode(it) }.getOrNull()
+            ?: return Response(BAD_REQUEST).body("wrappedPreviewDek is not valid Base64")
+    }
 
     runCatching { EnvelopeFormat.validateSymmetric(wrappedDek, dekFormat) }.onFailure { e ->
         return Response(BAD_REQUEST).body("wrappedDek envelope invalid: ${e.message}")
@@ -923,6 +958,11 @@ private fun confirmEncryptedUpload(
     if (wrappedThumbDek != null && thumbDekFormat != null) {
         runCatching { EnvelopeFormat.validateSymmetric(wrappedThumbDek, thumbDekFormat) }.onFailure { e ->
             return Response(BAD_REQUEST).body("wrappedThumbnailDek envelope invalid: ${e.message}")
+        }
+    }
+    if (wrappedPreviewDek != null && previewDekFormat != null) {
+        runCatching { EnvelopeFormat.validateSymmetric(wrappedPreviewDek, previewDekFormat) }.onFailure { e ->
+            return Response(BAD_REQUEST).body("wrappedPreviewDek envelope invalid: ${e.message}")
         }
     }
 
@@ -944,11 +984,16 @@ private fun confirmEncryptedUpload(
             thumbnailStorageKey = thumbStorageKey,
             wrappedThumbnailDek = wrappedThumbDek,
             thumbnailDekFormat = thumbDekFormat,
+            previewStorageKey = previewStorageKey,
+            wrappedPreviewDek = wrappedPreviewDek,
+            previewDekFormat = previewDekFormat,
+            plainChunkSize = plainChunkSize,
         )
     )
     if (tags.isNotEmpty()) database.updateTags(id, tags)
     runCatching { database.deletePendingBlob(storageKey) }
     if (thumbStorageKey != null) runCatching { database.deletePendingBlob(thumbStorageKey) }
+    if (previewStorageKey != null) runCatching { database.deletePendingBlob(previewStorageKey) }
     return Response(CREATED)
 }
 

@@ -178,6 +178,15 @@ class HeirloomsApi(
 
     // ── Diagnostics ──────────────────────────────────────────────────────────
 
+    suspend fun getSettings(): AppSettings = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject(get("/api/settings"))
+            AppSettings(previewDurationSeconds = json.optInt("previewDurationSeconds", 15))
+        } catch (_: Exception) {
+            AppSettings()
+        }
+    }
+
     suspend fun postDiagEvent(deviceLabel: String, tag: String, message: String, detail: String) {
         val body = """{"deviceLabel":${deviceLabel.jsonEsc()},"tag":${tag.jsonEsc()},"message":${message.jsonEsc()},"detail":${detail.jsonEsc()}}"""
         post("/api/diagnostics/events", body)
@@ -270,12 +279,22 @@ class HeirloomsApi(
         thumbnailDekFormat: String,
         takenAt: String?,
         tags: List<String>,
+        previewStorageKey: String? = null,
+        wrappedPreviewDekB64: String? = null,
+        previewDekFormat: String? = null,
+        plainChunkSize: Int? = null,
     ): Upload {
         val tagsJson = "[${tags.joinToString(",") { "\"${it.replace("\"", "\\\"")}\"" }}]"
         val takenAtJson = if (takenAt != null) ""","takenAt":"$takenAt"""" else ""
-        val body = """{"storageKey":"$storageKey","mimeType":"$mimeType","fileSize":$fileSize,"storage_class":"encrypted","envelopeVersion":$envelopeVersion,"wrappedDek":"$wrappedDekB64","dekFormat":"$dekFormat","thumbnailStorageKey":"$thumbnailStorageKey","wrappedThumbnailDek":"$wrappedThumbnailDekB64","thumbnailDekFormat":"$thumbnailDekFormat","tags":$tagsJson$takenAtJson}"""
+        val previewJson = if (previewStorageKey != null && wrappedPreviewDekB64 != null && previewDekFormat != null)
+            ""","previewStorageKey":"$previewStorageKey","wrappedPreviewDek":"$wrappedPreviewDekB64","previewDekFormat":"$previewDekFormat""""
+        else ""
+        val chunkSizeJson = if (plainChunkSize != null) ""","plainChunkSize":$plainChunkSize""" else ""
+        val body = """{"storageKey":"$storageKey","mimeType":"$mimeType","fileSize":$fileSize,"storage_class":"encrypted","envelopeVersion":$envelopeVersion,"wrappedDek":"$wrappedDekB64","dekFormat":"$dekFormat","thumbnailStorageKey":"$thumbnailStorageKey","wrappedThumbnailDek":"$wrappedThumbnailDekB64","thumbnailDekFormat":"$thumbnailDekFormat","tags":$tagsJson$takenAtJson$previewJson$chunkSizeJson}"""
         return JSONObject(post("/api/content/uploads/confirm", body)).toUpload()
     }
+
+    fun previewUrl(uploadId: String) = "$baseUrl/api/content/uploads/$uploadId/preview"
 
     // ── Raw byte fetch (for decrypting encrypted content) ────────────────────
 
@@ -324,6 +343,11 @@ class HeirloomsApi(
         wrappedThumbnailDek = optString("wrappedThumbnailDek").takeIf { it.isNotEmpty() && it != "null" }
             ?.let { Base64.decode(it, Base64.DEFAULT) },
         thumbnailDekFormat = optString("thumbnailDekFormat").takeIf { it.isNotEmpty() && it != "null" },
+        previewStorageKey = optString("previewStorageKey").takeIf { it.isNotEmpty() && it != "null" },
+        wrappedPreviewDek = optString("wrappedPreviewDek").takeIf { it.isNotEmpty() && it != "null" }
+            ?.let { Base64.decode(it, Base64.DEFAULT) },
+        previewDekFormat = optString("previewDekFormat").takeIf { it.isNotEmpty() && it != "null" },
+        plainChunkSize = if (has("plainChunkSize") && !isNull("plainChunkSize")) getInt("plainChunkSize") else null,
     )
 
     private fun JSONArray.toPlotList(): List<Plot> =

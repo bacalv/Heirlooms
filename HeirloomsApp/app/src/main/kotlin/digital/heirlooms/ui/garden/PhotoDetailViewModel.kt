@@ -93,13 +93,26 @@ class PhotoDetailViewModel(
     private fun loadEncryptedContent(api: HeirloomsApi, upload: Upload, context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
-                val wrappedDek = upload.wrappedDek ?: return@runCatching
                 val mk = VaultSession.masterKey
+
+                if (upload.isVideo && upload.previewStorageKey != null) {
+                    // Has a preview clip — decrypt it and play that instead of the full file.
+                    val wrappedPreviewDek = upload.wrappedPreviewDek ?: return@runCatching
+                    val previewDek = VaultCrypto.unwrapDekWithMasterKey(wrappedPreviewDek, mk)
+                    val encryptedBytes = api.fetchBytes(api.previewUrl(upload.id))
+                    val decryptedBytes = VaultCrypto.decryptSymmetric(encryptedBytes, previewDek)
+                    val tempDir = File(context.cacheDir, "vault_temp").also { it.mkdirs() }
+                    val tempFile = File(tempDir, "${upload.id}_preview.mp4")
+                    tempFile.writeBytes(decryptedBytes)
+                    _decryptedVideoUri.value = Uri.fromFile(tempFile)
+                    return@runCatching
+                }
+
+                val wrappedDek = upload.wrappedDek ?: return@runCatching
                 val dek = VaultCrypto.unwrapDekWithMasterKey(wrappedDek, mk)
 
                 if (upload.isVideo && upload.fileSize > LARGE_VIDEO_THRESHOLD) {
-                    // Large video: expose the DEK so DecryptingDataSource can decrypt while
-                    // streaming. No full download needed.
+                    // Large legacy video (no preview clip): stream-decrypt via DecryptingDataSource.
                     _contentDek.value = dek
                     return@runCatching
                 }
@@ -110,7 +123,7 @@ class PhotoDetailViewModel(
                 val decryptedBytes = if (encryptedBytes.isNotEmpty() && (encryptedBytes[0].toInt() and 0xFF) == 1) {
                     VaultCrypto.decryptSymmetric(encryptedBytes, dek)
                 } else {
-                    VaultCrypto.decryptStreamingContent(encryptedBytes, dek)
+                    VaultCrypto.decryptStreamingContent(encryptedBytes, dek, upload.plainChunkSize ?: (4 * 1024 * 1024 - 28))
                 }
 
                 if (upload.isVideo) {
@@ -127,6 +140,28 @@ class PhotoDetailViewModel(
                     val bmp = BitmapFactory.decodeByteArray(decryptedBytes, 0, decryptedBytes.size)
                     _decryptedBitmap.value = bmp?.asImageBitmap()
                 }
+            }
+        }
+    }
+
+    fun downloadFullFile(api: HeirloomsApi, upload: Upload, context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val mk = VaultSession.masterKey
+                val wrappedDek = upload.wrappedDek ?: return@runCatching
+                val dek = VaultCrypto.unwrapDekWithMasterKey(wrappedDek, mk)
+                val encryptedBytes = api.fetchBytes(api.fileUrl(upload.id))
+                val plainBytes = if (encryptedBytes.isNotEmpty() && (encryptedBytes[0].toInt() and 0xFF) == 1) {
+                    VaultCrypto.decryptSymmetric(encryptedBytes, dek)
+                } else {
+                    VaultCrypto.decryptStreamingContent(encryptedBytes, dek, upload.plainChunkSize ?: (4 * 1024 * 1024 - 28))
+                }
+                val ext = upload.mimeType.substringAfterLast('/').substringBefore(';').ifEmpty { "bin" }
+                val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                downloadsDir.mkdirs()
+                val outFile = File(downloadsDir, "heirloom_${upload.id.take(8)}.$ext")
+                outFile.writeBytes(plainBytes)
+                android.media.MediaScannerConnection.scanFile(context, arrayOf(outFile.absolutePath), null, null)
             }
         }
     }

@@ -19,6 +19,7 @@ data class AppConfig(
     val dbUser: String,
     val dbPassword: String,
     val apiKey: String,
+    val previewDurationSeconds: Int = 15,
 ) {
     companion object {
 
@@ -62,7 +63,8 @@ data class AppConfig(
                 dbUrl              = env("DB_URL")               ?: "",
                 dbUser             = env("DB_USER")              ?: "",
                 dbPassword         = env("DB_PASSWORD")          ?: "",
-                apiKey             = env("API_KEY")              ?: "",
+                apiKey                 = env("API_KEY")                       ?: "",
+                previewDurationSeconds = env("PREVIEW_DURATION_SECONDS")?.toIntOrNull() ?: 15,
             )
         }
 
@@ -90,7 +92,8 @@ data class AppConfig(
                 dbUrl              = prop("db.url")                   ?: "",
                 dbUser             = prop("db.user")                  ?: "",
                 dbPassword         = prop("db.password")              ?: "",
-                apiKey             = prop("api.key")                  ?: "",
+                apiKey                 = prop("api.key")                            ?: "",
+                previewDurationSeconds = prop("preview.duration.seconds")?.toIntOrNull() ?: 15,
             )
         }
     }

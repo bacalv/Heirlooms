@@ -65,10 +65,10 @@ object VaultCrypto {
     }
 
     // Decrypt streaming-encrypted content produced by encryptAndUploadStreaming.
-    // Format: sequence of [nonce(12)][ciphertext+tag] chunks, each exactly 4 MiB except
-    // the last. The AAD for each chunk equals its nonce (same bytes, per buildChunkAad).
-    fun decryptStreamingContent(encryptedBytes: ByteArray, dek: ByteArray): ByteArray {
-        val chunkSize = 4 * 1024 * 1024  // CIPHERTEXT_CHUNK_SIZE = 4 MiB
+    // Format: sequence of [nonce(12)][ciphertext+tag] cipher chunks per plainChunkSize.
+    // Defaults to the original 4 MiB cipher chunk size for backward compatibility.
+    fun decryptStreamingContent(encryptedBytes: ByteArray, dek: ByteArray, plainChunkSize: Int = 4 * 1024 * 1024 - 28): ByteArray {
+        val chunkSize = plainChunkSize + 28
         val output = java.io.ByteArrayOutputStream()
         var offset = 0
         while (offset < encryptedBytes.size) {

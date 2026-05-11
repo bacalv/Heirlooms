@@ -157,6 +157,15 @@ fun PhotoDetailScreen(
                             Icon(Icons.Filled.MoreVert, contentDescription = null, tint = Forest)
                         }
                         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            if (upload != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Download") },
+                                    onClick = {
+                                        showMenu = false
+                                        vm.downloadFullFile(api, upload, context)
+                                    },
+                                )
+                            }
                             if (upload != null && upload.compostedAt == null) {
                                 val effectiveTags = stagedTags ?: upload.tags
                                 val hasTagsOrCapsules = effectiveTags.isNotEmpty() ||
@@ -272,6 +281,7 @@ private fun MediaArea(
                     // Large encrypted video: decrypt on the fly chunk by chunk.
                     // remember {} (no key) is safe here — this branch only enters composition
                     // once contentDek is non-null, and contentDek doesn't change after that.
+                    val cipherChunkSize = (upload.plainChunkSize ?: (4 * 1024 * 1024 - 28)) + 28
                     val factory = remember {
                         DecryptingDataSource.Factory(
                             OkHttpClient.Builder()
@@ -283,11 +293,12 @@ private fun MediaArea(
                                 .build(),
                             contentDek,
                             api.apiKey,
+                            cipherChunkSize,
                         )
                     }
                     VideoPlayer(videoUrl = api.fileUrl(upload.id), modifier = modifier, dataSourceFactory = factory)
                 }
-                upload.fileSize <= 10L * 1024 * 1024 && decryptedVideoUri != null -> {
+                decryptedVideoUri != null -> {
                     VideoPlayer(videoUrl = decryptedVideoUri.toString(), modifier = modifier)
                 }
                 else -> Box(modifier.aspectRatio(16f / 9f), contentAlignment = Alignment.Center) {
