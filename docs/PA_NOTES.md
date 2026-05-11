@@ -25,6 +25,7 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
 - Current version: v0.37.0 (11 May 2026) — Duration-based playback threshold, preview label + end overlay.
+- Next milestone: M8 — Multi-user access. Briefs written 11 May 2026 (M8_E1–E4_brief.md).
   v0.36.0 = Preview clips, 1 MiB chunks, parallel prefetch, download button (server + web + Android).
   v0.35.0 = Web encrypted video playback + MSE streaming (web only).
   v0.34.0 = Web: streaming-format decrypt fix for large encrypted videos.
@@ -143,6 +144,65 @@ re-run; the script is idempotent so successfully imported rows are skipped on re
 1. Restart HeirloomsServer.
 2. Verify the Garden loads and item counts match expectations.
 3. Re-apply any tags, rotation adjustments, or capsule memberships manually if needed.
+
+---
+
+## M8 Multi-user — key design decisions
+
+**Auth mechanism:** Merged credential — the vault passphrase is the single auth
+credential. `Argon2id(passphrase, auth_salt, m=65536, t=3, p=1, outputLen=64)`
+produces 64 bytes: `auth_key = [0..31]` (sent to server), `master_key_seed = [32..63]`
+(vault key derivation, never leaves client). Server stores `SHA256(auth_key)` as the
+verifier. Never the passphrase or auth_key itself.
+
+**Registration:** Invite-only. Any authenticated user can generate an invite token
+(48-hour expiry, multiple pending invites allowed). Unified token: redeemable on
+Android (first-run QR scan or deep link) or web (`/join?token=xxx`). Fire-and-forget
+— no invite management UI.
+
+**Session tokens:** Per-user, 256-bit random, stored as SHA256 hash server-side.
+Expiry: 90 days from `last_used_at`, refreshed on every request. Header: `X-Api-Key`
+(same header name as the old shared key). Explicit logout deletes the session row.
+
+**Web device pairing (Android-initiated):**
+1. Android generates a 6–8 digit numeric code (`POST /api/auth/pairing/initiate`).
+2. User types code on web → web calls `POST /api/auth/pairing/qr` → receives `session_id`.
+3. Web generates P-256 ephemeral keypair, encodes `{session_id, pubkey}` as QR.
+4. Android scans QR → wraps master key to web's pubkey →
+   `POST /api/auth/pairing/complete`.
+5. Web polls `GET /api/auth/pairing/status` (1-second interval) until `state: complete`.
+6. Web receives session token + wrapped master key → vault unlocked, no passphrase entry.
+
+**Web-only users:** Supported. Invite redemption via `/join?token=xxx` in browser.
+Onboarding entirely in browser (WebCrypto keypair, Argon2id derivation). Subsequent
+logins: `POST /api/auth/challenge` (by username) → fetch auth_salt → Argon2id →
+login → re-derive master key. Username is a unique identifier; required for
+web-only login on a fresh browser.
+
+**Bret migration:** V21 inserts Bret's user row with `auth_verifier = NULL`.
+First M8 Android launch detects `api_key` present but no `session_token` → shows
+"Set up your new passphrase" screen → calls `POST /api/auth/setup-existing` (gated
+by device_id matching a wrapped_keys row). One-time path; 409 if verifier already set.
+
+**Data isolation:** Every user has a completely separate garden, plots, capsules,
+wrapped keys. No cross-user data visible anywhere. Cross-user resource accesses
+return 404 (not 403 — privacy-preserving). Two-user isolation test suite across
+every endpoint is M8's non-negotiable correctness property.
+
+**System plot creation:** `POST /api/auth/register` creates the `__just_arrived__`
+system plot for each new user in the same transaction.
+
+**Next migrations after V19:** V20 (`users`, `user_sessions`, `invites`),
+V21 (backfill + FK tightening; adds `user_id` to `uploads`, `capsules`; tightens
+`plots.owner_user_id`, `wrapped_keys.user_id`; fixes `recovery_passphrase` PK;
+adds `user_id` + `web_session_id` to `pending_device_links`).
+
+**Server push deferred:** Long-polling for QR pairing status (1-second client poll,
+server returns immediately). SSE/WebSocket deferred to a future milestone when
+notification streams justify the infrastructure.
+
+**Android capsule creation (M5 Inc 3) ships in M8 E4:** Capsule create screen,
+updated capsule detail (seal, cancel, add photo, edit message).
 
 ---
 
