@@ -1,6 +1,7 @@
 package digital.heirlooms.ui.main
 
 import android.util.Base64
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +16,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -30,6 +32,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import digital.heirlooms.app.PairingQrParser
 import digital.heirlooms.crypto.VaultCrypto
 import digital.heirlooms.crypto.VaultSession
@@ -43,10 +47,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/**
- * Completes the web pairing handshake. The user pastes the JSON payload from
- * the browser's QR code (future: automatically scanned by camera).
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PairingScreen(onBack: () -> Unit, onPaired: () -> Unit) {
@@ -57,6 +57,41 @@ fun PairingScreen(onBack: () -> Unit, onPaired: () -> Unit) {
     var working by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var success by remember { mutableStateOf(false) }
+
+    fun submit(json: String) {
+        scope.launch {
+            working = true
+            error = null
+            try {
+                val parsed = when (val r = PairingQrParser.parse(json.trim())) {
+                    is PairingQrParser.ParseResult.Error -> {
+                        error = r.message
+                        return@launch
+                    }
+                    is PairingQrParser.ParseResult.Success -> r.payload
+                }
+                val masterKey = VaultSession.masterKey
+                val recipientSpki = withContext(Dispatchers.IO) {
+                    VaultCrypto.fromBase64Url(parsed.pubkey)
+                }
+                val wrapped = withContext(Dispatchers.IO) {
+                    VaultCrypto.wrapMasterKeyForRecipient(masterKey, recipientSpki)
+                }
+                val wrappedB64 = Base64.encodeToString(wrapped, Base64.NO_WRAP)
+                api.pairingComplete(parsed.sessionId, wrappedB64, parsed.pubkey)
+                success = true
+                onPaired()
+            } catch (e: Exception) {
+                error = e.message ?: "Pairing failed."
+            } finally {
+                working = false
+            }
+        }
+    }
+
+    val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        result.contents?.let { json -> submit(json) }
+    }
 
     Scaffold(
         containerColor = Parchment,
@@ -84,9 +119,27 @@ fun PairingScreen(onBack: () -> Unit, onPaired: () -> Unit) {
                 return@Column
             }
 
-            Text("Scan the QR code shown by your browser, or paste its JSON content below.",
+            Text("Point your camera at the QR code shown by your browser.",
                 style = MaterialTheme.typography.bodyMedium, color = Forest)
             Spacer(Modifier.height(16.dp))
+            Button(
+                onClick = {
+                    scanLauncher.launch(ScanOptions().apply {
+                        setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                        setPrompt("Scan the browser pairing QR code")
+                        setBeepEnabled(false)
+                        setOrientationLocked(false)
+                    })
+                },
+                enabled = !working,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Forest, contentColor = Parchment),
+            ) { Text("Scan QR code") }
+
+            Spacer(Modifier.height(24.dp))
+            Text("Or paste the QR code's JSON content:",
+                style = MaterialTheme.typography.bodyMedium, color = Forest)
+            Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 value = qrJson, onValueChange = { qrJson = it },
                 label = { Text("QR code JSON") },
@@ -99,41 +152,11 @@ fun PairingScreen(onBack: () -> Unit, onPaired: () -> Unit) {
                 Text(error ?: "", style = HeirloomsSerifItalic.copy(fontSize = 14.sp, color = Earth))
             }
             Spacer(Modifier.height(16.dp))
-            Button(
-                onClick = {
-                    scope.launch {
-                        working = true
-                        error = null
-                        try {
-                            val parsed = when (val r = PairingQrParser.parse(qrJson.trim())) {
-                                is PairingQrParser.ParseResult.Error -> {
-                                    error = r.message
-                                    return@launch
-                                }
-                                is PairingQrParser.ParseResult.Success -> r.payload
-                            }
-
-                            val masterKey = VaultSession.masterKey
-                            val recipientSpki = withContext(Dispatchers.IO) {
-                                VaultCrypto.fromBase64Url(parsed.pubkey)
-                            }
-                            val wrapped = withContext(Dispatchers.IO) {
-                                VaultCrypto.wrapMasterKeyForRecipient(masterKey, recipientSpki)
-                            }
-                            val wrappedB64 = Base64.encodeToString(wrapped, Base64.NO_WRAP)
-                            api.pairingComplete(parsed.sessionId, wrappedB64, parsed.pubkey)
-                            success = true
-                            onPaired()
-                        } catch (e: Exception) {
-                            error = e.message ?: "Pairing failed."
-                        } finally {
-                            working = false
-                        }
-                    }
-                },
+            OutlinedButton(
+                onClick = { submit(qrJson) },
                 enabled = !working && qrJson.isNotBlank(),
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Forest, contentColor = Parchment),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Forest),
             ) { Text(if (working) "Linking…" else "Link browser") }
         }
     }

@@ -2,6 +2,16 @@
 
 ---
 
+## Session — 11 May 2026 — v0.43.0: Android bugfixes (QR scan + upload OOM)
+
+Two bugs found during post-M8 testing with second user (sadaar).
+
+**PairingScreen QR scan (bug: missing camera option).** `PairingScreen` showed "Scan the QR code" in its instructions but offered only a paste-JSON text field — the camera path was deferred with a TODO comment. Added `com.journeyapps:zxing-android-embedded:4.3.0` (no Google Play Services dependency, safe for Fire OS). `CAMERA` permission added to `AndroidManifest.xml`. `PairingScreen` now leads with a "Scan QR code" button using `rememberLauncherForActivityResult(ScanContract())`; a successful scan auto-submits via a shared `submit(json)` function. Paste-JSON field demoted to secondary (outlined button).
+
+**Upload OOM — confirm never fires (bug: `Exception` catch misses `OutOfMemoryError`).** Investigation via GCS + Cloud Run logs: content (49 MB) and thumbnail landed in GCS at 11:51:03, but `POST /api/content/uploads/confirm` never appeared in server logs. Root cause: preview clip generation in `uploadEncryptedViaSigned` catches `Exception`; `OutOfMemoryError` is a `Throwable`/`Error` subclass and escaped, crashing the WorkManager CoroutineWorker (uncaught Throwable = permanent failure, not retry). Fix: both the outer block and `generatePreviewClip`'s inner catch changed to `catch (_: Throwable)`. `UploadWorker.doWork()` now wraps the uploader call in `try/catch (t: Throwable)` as a safety net so future unexpected errors go through the normal retry/failure path. Sadaar's lost upload (GCS objects will be cleaned up within 24h by pending_blobs job) requires a re-upload.
+
+---
+
 ## Session — 11 May 2026 — v0.42.1: M8 deploy + first invite test
 
 **Deploy.** M8 shipped to production in the following order: (1) Android APK installed on founding user's device via ADB. (2) Server deployed (`heirlooms-server-00041-rm4`) — Flyway applied V20→V22 cleanly. (3) Founding user completed `setup-existing` via `MigrationScreen` immediately after server came live — session token issued, api_key cleared, Garden confirmed loading. (4) Web deployed (`heirlooms-web-00054-tnj`).

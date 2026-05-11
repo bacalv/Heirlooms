@@ -2,6 +2,15 @@
 
 ---
 
+## v0.43.0 — Android bugfix: QR scan + upload OOM (11 May 2026)
+
+Android only.
+
+- **PairingScreen QR scan** — Added camera scan button using `zxing-android-embedded`. "Scan QR code" is now the primary action; scanning auto-submits without a second button press. Paste-JSON field retained as fallback. `CAMERA` permission added to manifest.
+- **Upload OOM fix** — Preview clip generation (`generatePreviewClip`) and its enclosing block in `uploadEncryptedViaSigned` changed from `catch (_: Exception)` to `catch (_: Throwable)`. On memory-constrained devices (e.g. Fire OS tablet), `outputFile.readBytes()` after a large video upload could throw `OutOfMemoryError` (a `Throwable`, not an `Exception`), which escaped all catch guards, crashed the WorkManager worker, and caused confirm to never fire — leaving the upload invisible in the garden despite both GCS objects landing successfully. `UploadWorker.doWork()` also now wraps the entire uploader call in `try/catch (t: Throwable)` so any future unexpected error routes through the existing retry/failure path instead of silently failing.
+
+---
+
 ## v0.42.1 — InviteRedemptionScreen UX fix (11 May 2026)
 
 Android only. Post-deploy fix found during first live invite test on Fire OS.

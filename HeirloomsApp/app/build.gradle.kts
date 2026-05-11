@@ -85,8 +85,9 @@ dependencies {
     // BouncyCastle — Argon2id for passphrase key derivation.
     implementation("org.bouncycastle:bcprov-jdk18on:1.79")
 
-    // QR code generation for invite and pairing screens
+    // QR code generation (DevicesAccessScreen) + camera scanning (PairingScreen)
     implementation("com.google.zxing:core:3.5.3")
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.bouncycastle:bcprov-jdk18on:1.79")

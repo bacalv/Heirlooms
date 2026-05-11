@@ -46,35 +46,39 @@ class UploadWorker(
             VaultSession.unlock(mk)
         }
 
-        val result = if (VaultSession.isUnlocked) {
-            uploader.uploadEncryptedViaSigned(
-                baseUrl = BASE_URL,
-                file = file,
-                mimeType = mimeType,
-                masterKey = VaultSession.masterKey,
-                apiKey = apiKey,
-                tags = tags,
-                onProgress = { bytesWritten, fileTotal ->
-                    setProgressAsync(workDataOf(
-                        KEY_BYTES_WRITTEN to bytesWritten,
-                        KEY_TOTAL_BYTES to fileTotal,
-                    ))
-                },
-            )
-        } else {
-            uploader.uploadViaSigned(
-                baseUrl = BASE_URL,
-                file = file,
-                mimeType = mimeType,
-                apiKey = apiKey,
-                tags = tags,
-                onProgress = { bytesWritten, fileTotal ->
-                    setProgressAsync(workDataOf(
-                        KEY_BYTES_WRITTEN to bytesWritten,
-                        KEY_TOTAL_BYTES to fileTotal,
-                    ))
-                },
-            )
+        val result = try {
+            if (VaultSession.isUnlocked) {
+                uploader.uploadEncryptedViaSigned(
+                    baseUrl = BASE_URL,
+                    file = file,
+                    mimeType = mimeType,
+                    masterKey = VaultSession.masterKey,
+                    apiKey = apiKey,
+                    tags = tags,
+                    onProgress = { bytesWritten, fileTotal ->
+                        setProgressAsync(workDataOf(
+                            KEY_BYTES_WRITTEN to bytesWritten,
+                            KEY_TOTAL_BYTES to fileTotal,
+                        ))
+                    },
+                )
+            } else {
+                uploader.uploadViaSigned(
+                    baseUrl = BASE_URL,
+                    file = file,
+                    mimeType = mimeType,
+                    apiKey = apiKey,
+                    tags = tags,
+                    onProgress = { bytesWritten, fileTotal ->
+                        setProgressAsync(workDataOf(
+                            KEY_BYTES_WRITTEN to bytesWritten,
+                            KEY_TOTAL_BYTES to fileTotal,
+                        ))
+                    },
+                )
+            }
+        } catch (t: Throwable) {
+            Uploader.UploadResult.Failure("Unexpected error: ${t.message}")
         }
 
         return when {

@@ -551,7 +551,7 @@ class Uploader(
                         }
                     }
                 }
-            } catch (_: Exception) { /* preview is optional */ }
+            } catch (_: Throwable) { /* preview is optional — catch Throwable so OOM doesn't abort confirm */ }
         }
 
         // Step 6: confirm
@@ -933,7 +933,7 @@ class Uploader(
             muxer.release()
             extractor.release()
             outputFile.readBytes()
-        } catch (_: Exception) { null } finally { outputFile.delete() }
+        } catch (_: Throwable) { null } finally { outputFile.delete() }
     }
 }
 
