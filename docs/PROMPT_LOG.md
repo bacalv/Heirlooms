@@ -2,6 +2,16 @@
 
 ---
 
+## Session — 11 May 2026 — v0.42.1: M8 deploy + first invite test
+
+**Deploy.** M8 shipped to production in the following order: (1) Android APK installed on founding user's device via ADB. (2) Server deployed (`heirlooms-server-00041-rm4`) — Flyway applied V20→V22 cleanly. (3) Founding user completed `setup-existing` via `MigrationScreen` immediately after server came live — session token issued, api_key cleared, Garden confirmed loading. (4) Web deployed (`heirlooms-web-00054-tnj`).
+
+**First invite test.** Invite generated on founding user's Android device (Devices & Access). Redeemed on a Fire OS tablet via `InviteRedemptionScreen`. Registration succeeded — new user landed on the Garden ("A garden begins with a single seed"). Multi-user confirmed working end-to-end.
+
+**`InviteRedemptionScreen` UX fix (v0.42.1).** During testing, the registration form's submit button was hidden behind the keyboard in landscape mode on the Fire tablet. Fix: `verticalScroll` + `imePadding` on the Column so the button is always reachable; `ImeAction.Next` chains field focus in order; `ImeAction.Done` on the confirm field submits. Submit logic extracted to a local `submit()` function shared by button and keyboard action. Portrait mode was sufficient to complete the test so the fix ships as a follow-up patch.
+
+---
+
 ## Session — 11 May 2026 — v0.42.0: M8 E5 — Fixup pass before deploy
 
 Implements `docs/briefs/M8_E5_brief.md`. Server + Web + Android. M8 ready to deploy.

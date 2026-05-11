@@ -2,6 +2,16 @@
 
 ---
 
+## v0.42.1 — InviteRedemptionScreen UX fix (11 May 2026)
+
+Android only. Post-deploy fix found during first live invite test on Fire OS.
+
+- **Scrollable form** — `verticalScroll` + `imePadding` added to the Column so the "Create account" button is always reachable regardless of screen size or keyboard state.
+- **Keyboard navigation** — `ImeAction.Next` on each field advances focus in order (Invite code → Username → Display name → Passphrase → Confirm); `ImeAction.Done` on the last field submits the form directly.
+- **Submit extracted** — form submission logic moved to a local `submit()` function shared by the button `onClick` and the `onDone` keyboard action.
+
+---
+
 ## v0.42.0 — M8 E5: Fixup pass before deploy (11 May 2026)
 
 Server + Web + Android. Milestone 8 ready to deploy.
