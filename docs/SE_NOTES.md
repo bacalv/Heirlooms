@@ -77,6 +77,9 @@ Three Gradle subprojects under `/Users/bac/IdeaProjects/Heirlooms/`:
   signature: GCS objects present but no `/confirm` call in server logs. Also wrap the top-level
   uploader call in `UploadWorker.doWork()` in `try/catch (t: Throwable)` as a safety net.
 
+- **`ActivityResultContracts.CaptureVideo()` crashes on Fire OS — use plain `ACTION_VIDEO_CAPTURE` intent (v0.44.0):**
+  `CaptureVideo()` passes the output URI via `MediaStore.EXTRA_OUTPUT`. Fire OS camera apps don't honour this extra and crash immediately. Fix: use `StartActivityForResult` with `Intent(MediaStore.ACTION_VIDEO_CAPTURE)` (no output URI). The camera writes to its own media store and returns the content URI in `result.data?.data`. Retrieve it there and route through `copyContentUriToCache`. This bug was masked in earlier builds by the permission crash fixed in v0.43.1 — once the permission was granted the video path was exposed. Pattern: never assume `CaptureVideo()` works on Fire OS; always use the plain intent.
+
 - **`zxing-android-embedded` adds `CAMERA` to merged manifest — must request at runtime (v0.43.1):**
   Adding `com.journeyapps:zxing-android-embedded` merges `CAMERA` into the app's manifest. On Fire OS
   (and Android 6+), once `CAMERA` is in the manifest the system enforces a runtime grant before any

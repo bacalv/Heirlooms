@@ -14,6 +14,8 @@ Post-M8 testing with sadaar (second user on Fire OS tablet) surfaced four Androi
 
 **Bug 5 — Spinner instead of plant icon during thumbnail load (`HeirloomsImage.kt`).** `EncryptedThumbnail` loading branch replaced `CircularProgressIndicator` with `OliveBranchIcon` (24 dp, matching the failed state). Removed unused `CircularProgressIndicator` import.
 
+**Bug 6 — + Video crashes on Fire OS (`GardenScreen.kt`).** `ActivityResultContracts.CaptureVideo()` passes `EXTRA_OUTPUT` (a pre-created FileProvider URI) to `ACTION_VIDEO_CAPTURE`. Fire OS camera apps don't honour this extra and crash. This was masked before v0.43.1 by the camera permission crash. Fix: replaced `CaptureVideo()` with `StartActivityForResult` + plain `ACTION_VIDEO_CAPTURE` (no output URI); URI retrieved from `result.data?.data` and passed through the existing `copyContentUriToCache` path with `isFile = true`.
+
 versionCode 47→48, versionName 0.43.1→0.44.0.
 
 ---

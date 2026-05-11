@@ -10,6 +10,7 @@ Android only.
 - **Bug 2 — New Just Arrived item at position −1** — `LaunchedEffect` in `PlotRowSection` is now keyed on `newlyArrivedIds` (a `Set`) rather than `shouldScrollToStart` (a `Boolean`). When a second item arrives while the set is already non-empty, the boolean didn't change so the scroll never re-fired; keying on the set ensures it always re-fires.
 - **Bug 3 — Garden tab doesn't dismiss BurgerPanel** — `onTabSelected` in `MainNavigation` now calls `burgerSheetState.hide()` and sets `showBurger = false` before `navigateToTab()`, so the sheet plays its dismiss animation cleanly when the user taps any tab.
 - **Bug 5 — Loading spinner instead of plant icon for thumbnails** — `EncryptedThumbnail` loading state now shows `OliveBranchIcon` (matching the failed state) instead of `CircularProgressIndicator`. Both "not yet available" states look the same.
+- **Bug 6 — + Video crashes on Fire OS** — Fire OS camera apps don't support `EXTRA_OUTPUT` for `ACTION_VIDEO_CAPTURE` (the URI pre-creation that `ActivityResultContracts.CaptureVideo()` uses). Switched to `StartActivityForResult` with a plain `ACTION_VIDEO_CAPTURE` intent; URI is retrieved from `result.data?.data` and routed through the existing `copyContentUriToCache` path. This was masked in earlier versions by the camera permission crash fixed in v0.43.1.
 
 ---
 

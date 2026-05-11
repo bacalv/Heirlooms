@@ -155,25 +155,34 @@ fun GardenScreen(
         else PlantState.Idle
     }
 
+    // Fire OS camera apps don't support EXTRA_OUTPUT for video — they save to their own
+    // media store and return the URI in result.data?.data. Use StartActivityForResult
+    // with a plain ACTION_VIDEO_CAPTURE intent (no output URI) and retrieve it from the result.
     val captureVideoLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CaptureVideo()
-    ) { success ->
-        plantState = if (success && captureUri != null)
-            PlantState.Preview(captureUri!!, "video/mp4")
-        else PlantState.Idle
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uri = result.data?.data
+        if (result.resultCode == Activity.RESULT_OK && uri != null) {
+            val mime = context.contentResolver.getType(uri) ?: "video/mp4"
+            plantState = PlantState.Preview(uri, mime, isFile = true)
+        } else {
+            plantState = PlantState.Idle
+        }
     }
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (!granted) return@rememberLauncherForActivityResult
-        val ext = if (pendingCaptureType == PlantType.Photo) "jpg" else "mp4"
-        val file = File(context.cacheDir, "capture-${UUID.randomUUID()}.$ext")
+        if (pendingCaptureType == PlantType.Video) {
+            captureVideoLauncher.launch(Intent(android.provider.MediaStore.ACTION_VIDEO_CAPTURE))
+            return@rememberLauncherForActivityResult
+        }
+        val file = File(context.cacheDir, "capture-${UUID.randomUUID()}.jpg")
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         captureFile = file
         captureUri = uri
-        if (pendingCaptureType == PlantType.Photo) takePictureLauncher.launch(uri)
-        else captureVideoLauncher.launch(uri)
+        takePictureLauncher.launch(uri)
     }
 
     fun launchCamera(type: PlantType) {
@@ -183,13 +192,15 @@ fun GardenScreen(
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
             return
         }
-        val ext = if (type == PlantType.Photo) "jpg" else "mp4"
-        val file = File(context.cacheDir, "capture-${UUID.randomUUID()}.$ext")
+        if (type == PlantType.Video) {
+            captureVideoLauncher.launch(Intent(android.provider.MediaStore.ACTION_VIDEO_CAPTURE))
+            return
+        }
+        val file = File(context.cacheDir, "capture-${UUID.randomUUID()}.jpg")
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         captureFile = file
         captureUri = uri
-        if (type == PlantType.Photo) takePictureLauncher.launch(uri)
-        else captureVideoLauncher.launch(uri)
+        takePictureLauncher.launch(uri)
     }
     // -----------------------------------------------------------------------
 
