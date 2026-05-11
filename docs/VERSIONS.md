@@ -2,6 +2,24 @@
 
 ---
 
+## v0.42.0 — M8 E5: Fixup pass before deploy (11 May 2026)
+
+Server + Web + Android. Milestone 8 ready to deploy.
+
+- **`GET /api/auth/me`** — Lightweight session-validation endpoint. Returns `{user_id, username, display_name}` for the authenticated caller. Used by both clients on mount to confirm a cached session token is still valid before performing any other request. Returns 401 via `SessionAuthFilter` if token is missing, expired, or invalid.
+- **Web: IDB pairing persistence** — New `webPairingStore.js` module persists the pairing keypair and wrapped master key in IndexedDB (one record keyed `'current'`). On app mount, the boot handler calls `GET /api/auth/me`; on 200, loads IDB material and auto-unlocks the vault without re-entering a passphrase. On 401, clears IDB and session. `PairPage` saves material after successful pairing. `handleSignOut` clears IDB on logout.
+- **`authMe` in `api.js`** — Thin wrapper for `GET /api/auth/me`.
+- **V22 migration** — Adds `user_id UUID NULL REFERENCES users(id) ON DELETE SET NULL` to `diagnostic_events`. Pre-M8 rows stay `NULL`; new rows are scoped to the authenticated user. `GET /api/diag` filters by caller's `user_id`; `POST /api/diag` sets `user_id`.
+- **Isolation test suite** — Added 8 tests covering: `GET /auth/me` isolation, `wrapped_keys` cross-user access (4 tests), `recovery_passphrase` cross-user isolation (1 test), `diagnostic_events` scoping (2 tests).
+- **Recovery protocol fix** — `POST /api/auth/register` and `POST /api/auth/setup-existing` now accept optional `wrapped_master_key_recovery` + `wrap_format_recovery` fields and store them in `recovery_passphrase` (format `master-aes256gcm-v1`). Fresh-browser login can derive `master_key_seed` from passphrase and decrypt the recovery blob to recover the master key.
+- **`AuthHandlerTest`** — Added tests for `GET /me` (authenticated, unauthenticated, expired session), and cross-platform recovery verification.
+- **Android `MigrationScreen`** — Username field is now read-only when the stored username is already known (locked to the account's existing username). Muted border indicates non-editable state.
+- **Deploy hygiene** — Removed dead `API_KEY` secret binding from Cloud Run deploy command (E2 removed `ApiKeyFilter`; secret stays in Secret Manager). Deploy window documented.
+- **3 IDB persistence vitest tests** — pairing saves to IDB, mount recovers from IDB, 401 clears IDB.
+- All 116 web tests pass. All 251+ server tests pass.
+
+---
+
 ## v0.41.0 — M8 E4: Android auth migration, Devices & Access, capsule ViewModel (11 May 2026)
 
 Android only. Milestone 8 complete.

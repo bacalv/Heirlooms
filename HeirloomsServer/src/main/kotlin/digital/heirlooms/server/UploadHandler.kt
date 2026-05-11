@@ -146,15 +146,16 @@ fun buildApp(
                         tag         = node?.get("tag")?.asText()         ?: "unknown",
                         message     = node?.get("message")?.asText()     ?: "",
                         detail      = node?.get("detail")?.asText()      ?: "",
+                        userId      = req.authUserId(),
                     )
                     Response(CREATED)
                 } catch (e: Exception) {
                     Response(INTERNAL_SERVER_ERROR).body(e.message ?: "error")
                 }
             },
-            "/diagnostics/events" meta { summary = "List diagnostic events" } bindContract GET to { _ ->
+            "/diagnostics/events" meta { summary = "List diagnostic events" } bindContract GET to { req ->
                 try {
-                    val events = database.listDiagEvents()
+                    val events = database.listDiagEvents(userId = req.authUserId())
                     val json = com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(events)
                     Response(OK).header("Content-Type", "application/json").body(json)
                 } catch (e: Exception) {

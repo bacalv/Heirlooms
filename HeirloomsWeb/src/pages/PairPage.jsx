@@ -3,8 +3,9 @@ import QRCode from 'qrcode'
 import { useNavigate } from 'react-router-dom'
 import { WorkingDots } from '../brand/WorkingDots'
 import { pairingQr, pairingStatus } from '../api'
-import { unwrapMasterKeyForDevice, toB64url } from '../crypto/vaultCrypto'
+import { unwrapMasterKeyForDevice, toB64url, ALG_P256_ECDH_HKDF_V1 } from '../crypto/vaultCrypto'
 import { unlock } from '../crypto/vaultSession'
+import { savePairingMaterial } from '../crypto/webPairingStore'
 
 export function PairPage({ onPaired }) {
   const [code, setCode] = useState('')
@@ -56,6 +57,12 @@ export function PairPage({ onPaired }) {
             clearInterval(pollRef.current)
             const wrappedBytes = Uint8Array.from(atob(data.wrapped_master_key.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0))
             const masterKey = await unwrapMasterKeyForDevice(wrappedBytes, privateKeyRef.current)
+            await savePairingMaterial({
+              privateKey: privateKeyRef.current,
+              publicKeyRaw: spkiBytes,
+              wrappedMasterKey: wrappedBytes,
+              wrapFormat: ALG_P256_ECDH_HKDF_V1,
+            })
             unlock(masterKey)
             onPaired(data.session_token, masterKey)
             navigate('/', { replace: true })

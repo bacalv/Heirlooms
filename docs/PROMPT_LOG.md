@@ -2,6 +2,26 @@
 
 ---
 
+## Session — 11 May 2026 — v0.42.0: M8 E5 — Fixup pass before deploy
+
+Implements `docs/briefs/M8_E5_brief.md`. Server + Web + Android. M8 ready to deploy.
+
+**Section 1 — `GET /api/auth/me` (server).** New contract route in `AuthHandler`. Reads `userId` from request context (set by `SessionAuthFilter`), fetches the user row, returns `{user_id, username, display_name}`. Added to `authRoutes()`. Tests: authenticated returns calling user's row; unauthenticated returns 401 (via filter); expired session returns 401. Also tested in `IsolationTest` to confirm Alice and Bob each see their own row.
+
+**Section 2 — Web IDB pairing persistence.** New `webPairingStore.js` module: `savePairingMaterial`, `loadPairingMaterial`, `clearPairingMaterial` backed by IndexedDB (one-record store `pairing`, key `'current'`). WebCrypto keys survive `structuredClone` into IDB without becoming extractable. `App.jsx` gains a mount `useEffect` that validates the cached session token via `GET /api/auth/me`; on 401 clears IDB and session; on 200 calls `loadPairingMaterial()` and auto-unlocks the vault if material is present. `PairPage.jsx` calls `savePairingMaterial` after a successful pairing. `handleSignOut` calls `clearPairingMaterial` before clearing the session. `api.js` gains `authMe`. 3 vitest tests: pairing saves to IDB, mount recovers from IDB (vault unlocks, garden page renders), 401 clears IDB.
+
+**Section 3 — Android MigrationScreen username lock.** Username initialised from `store.getUsername()` and shown read-only when the value is known (muted Forest15 border). First-run migration (username not yet in store) stays editable. No personal names hardcoded in source.
+
+**Section 4 — Diagnostic events user scoping.** V22 migration adds `user_id UUID NULL REFERENCES users(id) ON DELETE SET NULL` to `diagnostic_events`. `Database.insertDiagEvent` and `listDiagEvents` accept `userId` param. `UploadHandler` passes `request.authUserId()` for both diag POST and GET. Isolation tests: Bob's `GET /api/diag` returns only Bob's events; Bob's `POST /api/diag` writes row with Bob's `user_id`.
+
+**Section 5 — Recovery protocol fix.** Root cause: `master_key_seed` (32-byte symmetric) cannot unwrap a P-256 ECDH asymmetric envelope. Fix: `registerRoute` and `setupExistingRoute` accept optional `wrapped_master_key_recovery` + `wrap_format_recovery`; server stores them in `recovery_passphrase` (`master-aes256gcm-v1` format). Fresh-browser login: derive `master_key_seed` → `GET /api/keys/recovery` → decrypt blob → master key. Cross-platform recovery test added to `AuthHandlerTest`. `IsolationTest` gets 3 wrapped_keys tests + 1 recovery passphrase test.
+
+**Section 6 — Deploy hygiene.** Removed `--set-secrets API_KEY=heirlooms-api-key:latest` from PA_NOTES Cloud Run deploy command (dead binding; `ApiKeyFilter` removed in E2). Updated PA_NOTES current version to v0.42.0. Documented founding user deploy window, QR library decision (ZXing — no Play Services dependency), and M8 recovery flow.
+
+**Tests.** All 116 web tests pass. All server tests pass (integration suite covers isolation, auth, and diag event scoping).
+
+---
+
 ## Session — 11 May 2026 — v0.41.0: M8 E4 — Android auth + Devices & Access
 
 Implements `docs/briefs/M8_E4_brief.md`. Android-only. Milestone 8 complete.

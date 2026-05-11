@@ -24,7 +24,7 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.41.0 (11 May 2026) — M8 E4: Android auth migration, Devices & Access, capsule ViewModel. M8 complete.
+- Current version: v0.42.0 (11 May 2026) — M8 E5: fixup pass (IDB pairing persistence, GET /auth/me, diagnostic event scoping, recovery blob, deploy hygiene). M8 ready to deploy.
 - Next milestone: M9 — to be defined.
   v0.36.0 = Preview clips, 1 MiB chunks, parallel prefetch, download button (server + web + Android).
   v0.35.0 = Web encrypted video playback + MSE streaming (web only).
@@ -38,6 +38,23 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
   v0.26.0 = M7 E1: schema + envelope format. v0.25.x = M6 D4 Android + post-ship fixes.
 - One-time machine setup required: ~/.testcontainers.properties with
   docker.raw.sock path — see PROMPT_LOG.md for details
+- **QR library decision (Android):** `com.google.zxing:core:3.5.3` (pure Java).
+  Do NOT switch to ML Kit Barcode Scanning — ML Kit requires Google Play Services
+  which is absent on Fire OS/Kindle Fire. ZXing has no Google dependency and works
+  on all target devices. Added in v0.41.0 / M8 E4.
+- **Founding user deploy window:** between the M8 server deploy going live and the
+  founding user completing the `setup-existing` migration on their Android device,
+  the old API key no longer authenticates anything. Run the migration flow within
+  minutes of deploy. Do NOT reinstall the Android app before `setup-existing`
+  completes — a fresh device_id won't match any wrapped_keys row. If something goes
+  wrong, redeploy the prior server revision; nothing on the device is broken.
+- **M8 recovery flow (master-aes256gcm-v1):** Fresh-browser login path: `POST
+  /api/auth/login` → `GET /api/keys/recovery` → decrypt blob with `master_key_seed`
+  (symmetric AES-GCM, `master-aes256gcm-v1` envelope format). The `register` and
+  `setup-existing` endpoints accept `wrapped_master_key_recovery` + `wrap_format_recovery`
+  which the server stores in `recovery_passphrase`. On refresh with IDB pairing material,
+  the mount effect reads the keypair + wrapped blob from IndexedDB and auto-unlocks
+  without re-entering passphrase.
 
 ---
 
@@ -546,7 +563,6 @@ gcloud run deploy heirlooms-server \
 --set-env-vars "DB_URL=jdbc:postgresql:///heirlooms?cloudSqlInstance=heirlooms-495416:europe-west2:heirlooms-db&socketFactory=com.google.cloud.sql.postgres.SocketFactory" \
 --set-secrets "DB_PASSWORD=heirlooms-db-password:latest" \
 --set-secrets "GCS_CREDENTIALS_JSON=heirlooms-gcs-credentials:latest" \
---set-secrets "API_KEY=heirlooms-api-key:latest" \
 --service-account heirlooms-server@heirlooms-495416.iam.gserviceaccount.com \
 --add-cloudsql-instances heirlooms-495416:europe-west2:heirlooms-db
 

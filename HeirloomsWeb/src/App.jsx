@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthContext, useAuth } from './AuthContext'
 import { AuthLayout } from './AuthLayout'
@@ -14,8 +14,10 @@ import { CapsuleDetailPage } from './pages/capsules/CapsuleDetailPage'
 import { CapsuleCreatePage } from './pages/capsules/CapsuleCreatePage'
 import { CompostHeapPage } from './pages/CompostHeapPage'
 import { ExplorePage } from './pages/ExplorePage'
-import { lock } from './crypto/vaultSession'
-import { authLogout } from './api'
+import { lock, unlock } from './crypto/vaultSession'
+import { authLogout, authMe } from './api'
+import { unwrapMasterKeyForDevice } from './crypto/vaultCrypto'
+import { loadPairingMaterial, clearPairingMaterial } from './crypto/webPairingStore'
 
 const LS_TOKEN        = 'heirlooms_session_token'
 const LS_USERNAME     = 'heirlooms_username'
@@ -39,6 +41,31 @@ export default function App() {
   const [username, setUsernameState] = useState(() => localStorage.getItem(LS_USERNAME) ?? null)
   const [displayName, setDisplayNameState] = useState(() => localStorage.getItem(LS_DISPLAY_NAME) ?? null)
   const [vaultUnlocked, setVaultUnlocked] = useState(false)
+
+  // On mount: validate cached session token and auto-unlock vault from IDB pairing
+  // material if available (survives page refresh without re-entering passphrase).
+  useEffect(() => {
+    const token = localStorage.getItem(LS_TOKEN)
+    if (!token) return
+    ;(async () => {
+      try {
+        const r = await authMe(token)
+        if (r.status === 401) {
+          try { await clearPairingMaterial() } catch { /* best effort */ }
+          setSessionTokenState(null)
+          localStorage.removeItem(LS_TOKEN)
+          return
+        }
+        const material = await loadPairingMaterial()
+        if (!material) return
+        const masterKey = await unwrapMasterKeyForDevice(material.wrappedMasterKey, material.privateKey)
+        unlock(masterKey)
+        setVaultUnlocked(true)
+      } catch {
+        // Network error — don't force logout; let the user interact normally
+      }
+    })()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function setSession(token, uname, dname) {
     if (token) {
@@ -68,6 +95,7 @@ export default function App() {
 
   async function handleSignOut() {
     lock()
+    try { await clearPairingMaterial() } catch { /* best effort */ }
     if (sessionToken) {
       try { await authLogout(sessionToken) } catch { /* best effort */ }
     }

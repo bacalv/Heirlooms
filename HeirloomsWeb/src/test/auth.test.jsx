@@ -6,6 +6,8 @@ import { LoginPage } from '../pages/LoginPage'
 import { JoinPage } from '../pages/JoinPage'
 import { AccessPage } from '../pages/AccessPage'
 import { PairPage } from '../pages/PairPage'
+import App from '../App'
+import { savePairingMaterial, loadPairingMaterial, clearPairingMaterial } from '../crypto/webPairingStore'
 
 // ---- Module mocks (hoisted to top by vitest) --------------------------------
 
@@ -48,6 +50,25 @@ vi.mock('qrcode', () => ({
   default: { toDataURL: vi.fn(async () => 'data:image/png;base64,stub') },
 }))
 
+vi.mock('../crypto/webPairingStore', () => ({
+  savePairingMaterial: vi.fn(async () => {}),
+  loadPairingMaterial: vi.fn(async () => null),
+  clearPairingMaterial: vi.fn(async () => {}),
+}))
+
+// Page-component mocks — prevent complex data-fetching side effects when
+// rendering <App /> in the IDB persistence tests below.
+vi.mock('../pages/GardenPage', () => ({ GardenPage: () => <div data-testid="garden-page" /> }))
+vi.mock('../pages/PhotoDetailPage', () => ({ PhotoDetailPage: () => null }))
+vi.mock('../pages/capsules/CapsulesListPage', () => ({ CapsulesListPage: () => null }))
+vi.mock('../pages/capsules/CapsuleDetailPage', () => ({ CapsuleDetailPage: () => null }))
+vi.mock('../pages/capsules/CapsuleCreatePage', () => ({ CapsuleCreatePage: () => null }))
+vi.mock('../pages/CompostHeapPage', () => ({ CompostHeapPage: () => null }))
+vi.mock('../pages/ExplorePage', () => ({ ExplorePage: () => null }))
+vi.mock('../pages/VaultUnlockPage', () => ({
+  VaultUnlockPage: () => <div data-testid="vault-unlock" />,
+}))
+
 // ---- localStorage stub -------------------------------------------------------
 
 let _ls = {}
@@ -65,6 +86,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   _ls = {}
   global.fetch = vi.fn()
+  loadPairingMaterial.mockResolvedValue(null)
+  clearPairingMaterial.mockResolvedValue()
+  savePairingMaterial.mockResolvedValue()
 })
 
 // ---- helpers ----------------------------------------------------------------
@@ -343,5 +367,71 @@ describe('RequireAuth', () => {
 
     expect(screen.getByTestId('login-page')).toBeInTheDocument()
     expect(screen.getByText(/redirected from: \/garden/)).toBeInTheDocument()
+  })
+})
+
+// ---- Tests 11–13: IDB pairing persistence (E5 Section 2) -------------------
+
+describe('IDB pairing persistence', () => {
+  // Test 11: PairPage saves material to IDB after a successful pairing
+  it('after pairing completes, savePairingMaterial is called with keypair and wrapped key', async () => {
+    global.fetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ session_id: 'sess-1' }) })
+      .mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          state: 'complete',
+          session_token: 'pair-tok',
+          wrapped_master_key: btoa(String.fromCharCode(...new Uint8Array(100).fill(8))),
+        }),
+      })
+
+    pairWrapper(vi.fn())
+
+    fireEvent.change(screen.getByPlaceholderText('Pairing code'), { target: { value: '12345678' } })
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+
+    await waitFor(
+      () => expect(savePairingMaterial).toHaveBeenCalledWith(
+        expect.objectContaining({ wrappedMasterKey: expect.any(Uint8Array), wrapFormat: expect.any(String) }),
+      ),
+      { timeout: 4000 },
+    )
+  }, 10000)
+
+  // Test 12: App mount recovers master key from IDB (reload simulation)
+  it('mount handler reads IDB pairing material and unlocks vault after reload', async () => {
+    _ls['heirlooms_session_token'] = 'valid-tok'
+    loadPairingMaterial.mockResolvedValueOnce({
+      privateKey: 'fake-priv-key',
+      publicKeyRaw: new Uint8Array(65),
+      wrappedMasterKey: new Uint8Array(100).fill(8),
+      wrapFormat: 'p256-ecdh-hkdf-aes256gcm-v1',
+    })
+    global.fetch.mockResolvedValue({
+      ok: true, status: 200, json: async () => ({ user_id: 'u1', username: 'alice' }),
+    })
+
+    const { unmount } = render(<App />)
+
+    // Vault unlocks → garden page renders, proving the IDB recovery worked
+    await waitFor(() => screen.getByTestId('garden-page'), { timeout: 3000 })
+    expect(loadPairingMaterial).toHaveBeenCalled()
+
+    unmount()
+  })
+
+  // Test 13: App mount clears IDB and session when /auth/me returns 401
+  it('401 from /auth/me clears pairing material and session token', async () => {
+    _ls['heirlooms_session_token'] = 'expired-tok'
+    global.fetch.mockResolvedValue({ ok: false, status: 401, json: async () => ({}) })
+
+    const { unmount } = render(<App />)
+
+    await waitFor(() => expect(clearPairingMaterial).toHaveBeenCalled(), { timeout: 3000 })
+    expect(_ls['heirlooms_session_token']).toBeUndefined()
+
+    unmount()
   })
 })

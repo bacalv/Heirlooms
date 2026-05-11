@@ -37,6 +37,12 @@ export async function authLogin(username, authKeyB64url) {
   return r // caller checks status
 }
 
+export async function authMe(sessionToken) {
+  return fetch(`${API_URL}/api/auth/me`, {
+    headers: { 'X-Api-Key': sessionToken },
+  })
+}
+
 export async function authLogout(sessionToken) {
   await fetch(`${API_URL}/api/auth/logout`, {
     method: 'POST',

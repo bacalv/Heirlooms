@@ -8,6 +8,7 @@ import org.flywaydb.core.Flyway
 import org.http4k.core.Method.GET
 import org.http4k.core.Method.POST
 import org.http4k.core.Request
+import org.http4k.core.then
 import org.http4k.core.Status.Companion.BAD_REQUEST
 import org.http4k.core.Status.Companion.CONFLICT
 import org.http4k.core.Status.Companion.CREATED
@@ -75,7 +76,8 @@ class AuthHandlerTest {
 
             database = Database(dataSource)
             val serverSecret = ByteArray(32) { it.toByte() }
-            app = buildApp(mockk(relaxed = true), database, authSecret = serverSecret)
+            val rawApp = buildApp(mockk(relaxed = true), database, authSecret = serverSecret)
+            app = sessionAuthFilter(database).then(rawApp)
         }
 
         private fun post(path: String, body: String, token: String? = null): org.http4k.core.Response {
@@ -500,7 +502,156 @@ class AuthHandlerTest {
         assertEquals(NOT_FOUND, resp.status)
     }
 
-    // ---- 28. Two users same username via register returns 409 --------------
+    // ---- 28. GET /me returns calling user's profile -------------------------
+
+    @Test
+    fun `GET me returns authenticated user's username`() {
+        val inviterToken = setupInviterSession("inviter-me-${UUID.randomUUID()}")
+        val invite = generateInvite(inviterToken)
+        val sessionToken = registerUser("user_me_${UUID.randomUUID().toString().take(6)}", invite)
+
+        val resp = get("/api/auth/me", sessionToken)
+        assertEquals(OK, resp.status)
+        val node = mapper.readTree(resp.bodyString())
+        assertNotNull(node.get("user_id"))
+        assertNotNull(node.get("username"))
+    }
+
+    @Test
+    fun `GET me without token returns 401`() {
+        val resp = get("/api/auth/me")
+        assertEquals(UNAUTHORIZED, resp.status)
+    }
+
+    @Test
+    fun `GET me with expired session returns 401`() {
+        val inviterToken = setupInviterSession("inviter-mexp-${UUID.randomUUID()}")
+        val invite = generateInvite(inviterToken)
+        val sessionToken = registerUser("user_mexp_${UUID.randomUUID().toString().take(6)}", invite)
+
+        val tokenBytes = runCatching { Base64.getUrlDecoder().decode(sessionToken) }
+            .getOrElse { Base64.getDecoder().decode(sessionToken) }
+        val hash = sha256(tokenBytes)
+        val session = database.findSessionByTokenHash(hash)
+        if (session != null) {
+            dataSource.connection.use { conn ->
+                conn.prepareStatement(
+                    "UPDATE user_sessions SET expires_at = NOW() - INTERVAL '1 day' WHERE id = ?"
+                ).use { stmt -> stmt.setObject(1, session.id); stmt.executeUpdate() }
+            }
+        }
+        val resp = get("/api/auth/me", sessionToken)
+        assertEquals(UNAUTHORIZED, resp.status)
+    }
+
+    // ---- 29. Cross-platform recovery verification ---------------------------
+    //
+    // Proves the end-to-end auth/vault recovery model:
+    //   1. Register with a wrapped_master_key_recovery (master_key_seed-wrapped).
+    //   2. Logout.
+    //   3. Fresh login → derive master_key_seed from same passphrase+auth_salt.
+    //   4. GET /api/keys/passphrase → recovery blob.
+    //   5. Decrypt recovery blob with master_key_seed → recover original master_key.
+
+    private fun masterAesGcmWrap(kek: ByteArray, plaintext: ByteArray): ByteArray {
+        val alg = "master-aes256gcm-v1".toByteArray(Charsets.UTF_8)
+        val nonce = ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }
+        val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(javax.crypto.Cipher.ENCRYPT_MODE,
+            javax.crypto.spec.SecretKeySpec(kek, "AES"),
+            javax.crypto.spec.GCMParameterSpec(128, nonce))
+        val ct = cipher.doFinal(plaintext)
+        // envelope: [0x01][algLen][alg][nonce][ct+tag]
+        return byteArrayOf(0x01, alg.size.toByte()) + alg + nonce + ct
+    }
+
+    private fun masterAesGcmUnwrap(kek: ByteArray, envelope: ByteArray): ByteArray {
+        var off = 0
+        val version = envelope[off++]
+        require(version == 0x01.toByte())
+        val algLen = envelope[off++].toInt() and 0xFF
+        off += algLen
+        val nonce = envelope.copyOfRange(off, off + 12); off += 12
+        val ctWithTag = envelope.copyOfRange(off, envelope.size)
+        val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(javax.crypto.Cipher.DECRYPT_MODE,
+            javax.crypto.spec.SecretKeySpec(kek, "AES"),
+            javax.crypto.spec.GCMParameterSpec(128, nonce))
+        return cipher.doFinal(ctWithTag)
+    }
+
+    @Test
+    fun `cross-platform recovery — fresh login after logout recovers master key from passphrase blob`() {
+        val inviterToken = setupInviterSession("inviter-rec-${UUID.randomUUID()}")
+        val invite = generateInvite(inviterToken)
+
+        // Known master key and key-encryption key (simulate what the client would derive)
+        val masterKey = ByteArray(32) { (it + 1).toByte() }
+        val masterKeySeed = ByteArray(32) { (it + 100).toByte() }
+
+        // Wrap master key under master_key_seed
+        val recoveryBlob = masterAesGcmWrap(masterKeySeed, masterKey)
+        val recoveryB64url = urlEnc.encodeToString(recoveryBlob)
+
+        val authSalt = ByteArray(16) { 7 }
+        val authVerifier = ByteArray(32) { 8 }
+        val username = "recovery_user_${UUID.randomUUID().toString().take(6)}"
+        val deviceId = UUID.randomUUID().toString()
+        val body = """{
+            "invite_token": "$invite",
+            "username": "$username",
+            "display_name": "Recovery User",
+            "auth_salt": "${urlEnc.encodeToString(authSalt)}",
+            "auth_verifier": "${urlEnc.encodeToString(authVerifier)}",
+            "wrapped_master_key": "${stdEnc.encodeToString(ByteArray(100))}",
+            "wrap_format": "p256-ecdh-hkdf-aes256gcm-v1",
+            "pubkey_format": "p256-spki",
+            "pubkey": "${stdEnc.encodeToString(ByteArray(65))}",
+            "device_id": "$deviceId",
+            "device_label": "Test Device",
+            "device_kind": "android",
+            "wrapped_master_key_recovery": "$recoveryB64url",
+            "wrap_format_recovery": "master-aes256gcm-v1"
+        }"""
+        val regResp = post("/api/auth/register", body)
+        assertEquals(CREATED, regResp.status)
+        val sessionToken = mapper.readTree(regResp.bodyString()).get("session_token").asText()
+
+        // Logout
+        val logoutResp = app(Request(POST, "/api/auth/logout")
+            .header("X-Api-Key", sessionToken))
+        assertEquals(NO_CONTENT, logoutResp.status)
+
+        // Fresh login: simulate client re-deriving auth_key and requesting a new session.
+        // For the test we skip Argon2id and directly use the same authVerifier/authSalt bytes.
+        val loginBody = """{"username":"$username","auth_key":"${urlEnc.encodeToString(authVerifier)}"}"""
+        // Override auth_verifier in DB to accept our test auth_key directly
+        dataSource.connection.use { conn ->
+            conn.prepareStatement("UPDATE users SET auth_verifier = ? WHERE username = ?").use { stmt ->
+                stmt.setBytes(1, sha256(authVerifier))
+                stmt.setString(2, username)
+                stmt.executeUpdate()
+            }
+        }
+        val loginResp = post("/api/auth/login", loginBody)
+        assertEquals(OK, loginResp.status)
+        val newToken = mapper.readTree(loginResp.bodyString()).get("session_token").asText()
+
+        // GET /api/keys/passphrase — should return recovery blob
+        val recoveryResp = get("/api/keys/passphrase", newToken)
+        assertEquals(OK, recoveryResp.status)
+        val recoveryNode = mapper.readTree(recoveryResp.bodyString())
+        assertEquals("master-aes256gcm-v1", recoveryNode.get("wrapFormat").asText())
+
+        // Decrypt recovery blob with master_key_seed → should recover original master_key
+        val recoveredBlobBytes = Base64.getDecoder()
+            .decode(recoveryNode.get("wrappedMasterKey").asText())
+        val recoveredMasterKey = masterAesGcmUnwrap(masterKeySeed, recoveredBlobBytes)
+        assertTrue(masterKey.contentEquals(recoveredMasterKey),
+            "Decrypted master key should match the original after fresh login")
+    }
+
+    // ---- 30. Two users same username via register returns 409 --------------
 
     @Test
     fun `two users same username via register returns 409`() {

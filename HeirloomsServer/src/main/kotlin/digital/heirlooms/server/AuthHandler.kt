@@ -82,6 +82,7 @@ fun authRoutes(database: Database, serverSecret: ByteArray): List<ContractRoute>
     loginRoute(database),
     setupExistingRoute(database),
     logoutRoute(database),
+    meRoute(database),
     getInviteRoute(database),
     registerRoute(database),
     pairingInitiateRoute(database),
@@ -172,6 +173,11 @@ private fun setupExistingRoute(database: Database): ContractRoute =
             val authVerifier = decodeBase64Url(authVerifierB64)
                 ?: return@to Response(BAD_REQUEST).body("auth_verifier is not valid Base64")
 
+            val wrappedMasterKeyRecoveryB64 = node?.get("wrapped_master_key_recovery")?.asText()
+            val wrapFormatRecovery = node?.get("wrap_format_recovery")?.asText()
+            val wrappedMasterKeyRecovery = if (!wrappedMasterKeyRecoveryB64.isNullOrBlank())
+                decodeBase64Url(wrappedMasterKeyRecoveryB64) else null
+
             val user = database.findUserByUsername(username)
                 ?: return@to Response(UNAUTHORIZED)
                     .header("Content-Type", "application/json")
@@ -191,6 +197,20 @@ private fun setupExistingRoute(database: Database): ContractRoute =
             }
 
             database.setUserAuth(user.id, authVerifier, authSalt)
+
+            if (wrappedMasterKeyRecovery != null && !wrapFormatRecovery.isNullOrBlank()) {
+                database.upsertRecoveryPassphrase(
+                    RecoveryPassphraseRecord(
+                        wrappedMasterKey = wrappedMasterKeyRecovery,
+                        wrapFormat = wrapFormatRecovery,
+                        argon2Params = "{}",
+                        salt = ByteArray(0),
+                        createdAt = Instant.now(),
+                        updatedAt = Instant.now(),
+                    ),
+                    user.id,
+                )
+            }
 
             val (token, _, hash) = issueToken()
             val session = database.createSession(user.id, hash, keyRecord.deviceKind)
@@ -214,6 +234,23 @@ private fun logoutRoute(database: Database): ContractRoute =
             Response(NO_CONTENT)
         } catch (e: Exception) {
             Response(INTERNAL_SERVER_ERROR).body("logout failed: ${e.message}")
+        }
+    }
+
+// ---- GET /me ---------------------------------------------------------------
+
+private fun meRoute(database: Database): ContractRoute =
+    "/me" meta {
+        summary = "Return the authenticated user's profile"
+    } bindContract GET to { request: Request ->
+        try {
+            val userId = request.authUserId()
+            val user = database.findUserById(userId)
+                ?: return@to Response(UNAUTHORIZED)
+            Response(OK).header("Content-Type", "application/json")
+                .body("""{"user_id":"${user.id}","username":"${user.username}","display_name":"${user.displayName}"}""")
+        } catch (e: Exception) {
+            Response(INTERNAL_SERVER_ERROR).body("me failed: ${e.message}")
         }
     }
 
@@ -276,6 +313,13 @@ private fun registerRoute(database: Database): ContractRoute =
             val pubkey = decodeBase64Url(pubkeyB64)
                 ?: return@to Response(BAD_REQUEST).body("pubkey is not valid Base64")
 
+            // Optional: client-supplied recovery blob (master_key_seed-wrapped master key).
+            // Allows vault recovery after a fresh-browser login without re-pairing.
+            val wrappedMasterKeyRecoveryB64 = node?.get("wrapped_master_key_recovery")?.asText()
+            val wrapFormatRecovery = node?.get("wrap_format_recovery")?.asText()
+            val wrappedMasterKeyRecovery = if (!wrappedMasterKeyRecoveryB64.isNullOrBlank())
+                decodeBase64Url(wrappedMasterKeyRecoveryB64) else null
+
             val invite = database.findInviteByToken(inviteToken)
             if (invite == null || invite.usedAt != null || invite.expiresAt.isBefore(Instant.now())) {
                 return@to Response(GONE)
@@ -296,6 +340,20 @@ private fun registerRoute(database: Database): ContractRoute =
                 authSalt = authSalt,
             )
             database.createSystemPlot(newUser.id)
+
+            if (wrappedMasterKeyRecovery != null && !wrapFormatRecovery.isNullOrBlank()) {
+                database.upsertRecoveryPassphrase(
+                    RecoveryPassphraseRecord(
+                        wrappedMasterKey = wrappedMasterKeyRecovery,
+                        wrapFormat = wrapFormatRecovery,
+                        argon2Params = "{}",
+                        salt = ByteArray(0),
+                        createdAt = Instant.now(),
+                        updatedAt = Instant.now(),
+                    ),
+                    newUser.id,
+                )
+            }
 
             val now = Instant.now()
             database.insertWrappedKey(

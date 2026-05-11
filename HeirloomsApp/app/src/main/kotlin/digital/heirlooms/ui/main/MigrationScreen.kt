@@ -41,7 +41,12 @@ fun MigrationScreen(onMigrated: (sessionToken: String) -> Unit) {
     val deviceKeyManager = remember { DeviceKeyManager(context) }
     val scope = rememberCoroutineScope()
 
-    var username by remember { mutableStateOf("") }
+    // Username is read from the store if already known. Shown as read-only so the
+    // founding user can't accidentally change it — the account username is fixed in
+    // the database and setup-existing will reject a mismatch.
+    val storedUsername = remember { store.getUsername() }
+    var username by remember { mutableStateOf(storedUsername) }
+    val usernameIsLocked = storedUsername.isNotEmpty()
     var passphrase by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
@@ -63,10 +68,14 @@ fun MigrationScreen(onMigrated: (sessionToken: String) -> Unit) {
 
         OutlinedTextField(
             value = username,
-            onValueChange = { username = it },
+            onValueChange = { if (!usernameIsLocked) username = it },
             label = { Text("Username") },
+            readOnly = usernameIsLocked,
             modifier = Modifier.fillMaxWidth(),
-            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Forest, unfocusedBorderColor = Forest15),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = if (usernameIsLocked) Forest15 else Forest,
+                unfocusedBorderColor = Forest15,
+            ),
         )
         Spacer(Modifier.height(12.dp))
         OutlinedTextField(

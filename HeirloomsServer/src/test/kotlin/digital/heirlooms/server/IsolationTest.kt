@@ -6,11 +6,13 @@ import com.zaxxer.hikari.HikariDataSource
 import io.mockk.every
 import io.mockk.mockk
 import org.flywaydb.core.Flyway
+import org.http4k.core.Method.DELETE
 import org.http4k.core.Method.GET
 import org.http4k.core.then
 import org.http4k.core.Method.PATCH
 import org.http4k.core.Method.POST
 import org.http4k.core.Request
+import org.http4k.core.Status.Companion.CREATED
 import org.http4k.core.Status.Companion.NOT_FOUND
 import org.http4k.core.Status.Companion.OK
 import org.http4k.core.Status.Companion.UNAUTHORIZED
@@ -367,5 +369,118 @@ class IsolationTest {
         if (before != null && after != null) {
             assertTrue(!after.isBefore(before), "last_used_at should be refreshed after authenticated request")
         }
+    }
+
+    @Test
+    fun `GET auth me returns calling user's row`() {
+        val aliceResp = get("/api/auth/me", aliceToken)
+        assertEquals(OK, aliceResp.status)
+        val node = isoMapper.readTree(aliceResp.bodyString())
+        assertEquals("alice_iso", node.get("username").asText())
+
+        val bobResp = get("/api/auth/me", bobToken)
+        assertEquals(OK, bobResp.status)
+        assertEquals("bob_iso", isoMapper.readTree(bobResp.bodyString()).get("username").asText())
+    }
+
+    @Test
+    fun `GET auth me unauthenticated returns 401`() {
+        val resp = get("/api/auth/me")
+        assertEquals(UNAUTHORIZED, resp.status)
+    }
+
+    @Test
+    fun `Two-user isolation — GET auth me returns own row not other user`() {
+        val aliceNode = isoMapper.readTree(get("/api/auth/me", aliceToken).bodyString())
+        val bobNode = isoMapper.readTree(get("/api/auth/me", bobToken).bodyString())
+        assertFalse(aliceNode.get("user_id").asText() == bobNode.get("user_id").asText())
+        assertEquals("alice_iso", aliceNode.get("username").asText())
+        assertEquals("bob_iso", bobNode.get("username").asText())
+    }
+
+    // ======== Wrapped keys isolation ==========================================
+
+    @Test
+    fun `Bob GET Alice device by ID returns 404`() {
+        val aliceUser = database.findUserByUsername("alice_iso")!!
+        val aliceDevice = database.listWrappedKeys(aliceUser.id).firstOrNull() ?: return
+        val resp = get("/api/keys/devices/${aliceDevice.deviceId}", bobToken)
+        assertEquals(NOT_FOUND, resp.status)
+    }
+
+    @Test
+    fun `Bob GET devices list does not include Alice device`() {
+        val aliceUser = database.findUserByUsername("alice_iso")!!
+        val aliceDevice = database.listWrappedKeys(aliceUser.id).firstOrNull() ?: return
+        val resp = get("/api/keys/devices", bobToken)
+        assertEquals(OK, resp.status)
+        assertFalse(resp.bodyString().contains(aliceDevice.deviceId), "Bob should not see Alice's device")
+    }
+
+    @Test
+    fun `Bob DELETE Alice device returns 404`() {
+        val aliceUser = database.findUserByUsername("alice_iso")!!
+        val aliceDevice = database.listWrappedKeys(aliceUser.id).firstOrNull() ?: return
+        val resp = app(
+            Request(DELETE, "/api/keys/devices/${aliceDevice.deviceId}")
+                .header("X-Api-Key", bobToken)
+        )
+        assertEquals(NOT_FOUND, resp.status)
+    }
+
+    // ======== Recovery passphrase isolation ===================================
+
+    @Test
+    fun `Bob GET recovery passphrase returns Bob data not Alice data`() {
+        val aliceUser = database.findUserByUsername("alice_iso")!!
+        val bobUser = database.findUserByUsername("bob_iso")!!
+        // Set up distinct passphrase records for Alice and Bob
+        database.upsertRecoveryPassphrase(
+            digital.heirlooms.server.RecoveryPassphraseRecord(
+                wrappedMasterKey = ByteArray(64) { 11 },
+                wrapFormat = "master-aes256gcm-v1",
+                argon2Params = "{}",
+                salt = ByteArray(0),
+                createdAt = java.time.Instant.now(),
+                updatedAt = java.time.Instant.now(),
+            ),
+            aliceUser.id,
+        )
+        database.upsertRecoveryPassphrase(
+            digital.heirlooms.server.RecoveryPassphraseRecord(
+                wrappedMasterKey = ByteArray(64) { 22 },
+                wrapFormat = "master-aes256gcm-v1",
+                argon2Params = "{}",
+                salt = ByteArray(0),
+                createdAt = java.time.Instant.now(),
+                updatedAt = java.time.Instant.now(),
+            ),
+            bobUser.id,
+        )
+        val bobResp = get("/api/keys/passphrase", bobToken)
+        assertEquals(OK, bobResp.status)
+        val bobKey = java.util.Base64.getDecoder().decode(
+            isoMapper.readTree(bobResp.bodyString()).get("wrappedMasterKey").asText()
+        )
+        assertTrue(bobKey.all { it == 22.toByte() }, "Bob should see his own key, not Alice's")
+    }
+
+    // ======== Diagnostic events isolation =====================================
+
+    @Test
+    fun `Bob POST diag event is scoped to Bob`() {
+        val resp = post(
+            "/api/diagnostics/events",
+            """{"deviceLabel":"Bob phone","tag":"test","message":"Bob event","detail":""}""",
+            bobToken,
+        )
+        assertEquals(CREATED, resp.status)
+
+        val bobEvents = get("/api/diagnostics/events", bobToken)
+        assertEquals(OK, bobEvents.status)
+        assertTrue(bobEvents.bodyString().contains("Bob event"), "Bob should see his own event")
+
+        val aliceEvents = get("/api/diagnostics/events", aliceToken)
+        assertFalse(aliceEvents.bodyString().contains("Bob event"), "Alice should not see Bob's event")
     }
 }

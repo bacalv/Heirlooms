@@ -2084,26 +2084,34 @@ class Database(private val dataSource: DataSource) {
 
     // ── Diagnostics ──────────────────────────────────────────────────────────
 
-    fun insertDiagEvent(deviceLabel: String, tag: String, message: String, detail: String) {
+    fun insertDiagEvent(
+        deviceLabel: String,
+        tag: String,
+        message: String,
+        detail: String,
+        userId: UUID = FOUNDING_USER_ID,
+    ) {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
-                "INSERT INTO diagnostic_events (device_label, tag, message, detail) VALUES (?, ?, ?, ?)"
+                "INSERT INTO diagnostic_events (device_label, tag, message, detail, user_id) VALUES (?, ?, ?, ?, ?)"
             ).use { stmt ->
                 stmt.setString(1, deviceLabel)
                 stmt.setString(2, tag)
                 stmt.setString(3, message)
                 stmt.setString(4, detail)
+                stmt.setObject(5, userId)
                 stmt.executeUpdate()
             }
         }
     }
 
-    fun listDiagEvents(limit: Int = 200): List<Map<String, String>> {
+    fun listDiagEvents(userId: UUID = FOUNDING_USER_ID, limit: Int = 200): List<Map<String, String>> {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
-                "SELECT id, created_at, device_label, tag, message, detail FROM diagnostic_events ORDER BY created_at DESC LIMIT ?"
+                "SELECT id, created_at, device_label, tag, message, detail FROM diagnostic_events WHERE user_id = ? ORDER BY created_at DESC LIMIT ?"
             ).use { stmt ->
-                stmt.setInt(1, limit)
+                stmt.setObject(1, userId)
+                stmt.setInt(2, limit)
                 val rs = stmt.executeQuery()
                 val results = mutableListOf<Map<String, String>>()
                 while (rs.next()) results.add(mapOf(
