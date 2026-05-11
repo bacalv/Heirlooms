@@ -101,7 +101,49 @@ the pre-launch period.
 - Swagger UI confirmed at https://api.heirlooms.digital/docs/index.html
 - heirlooms.com: Currently parked on venture.com. Worth monitoring
 - License: Deliberately deferred
+- **Android plot management (create / rename / delete) not yet implemented.** The API
+  supports it (server has plot CRUD endpoints) but the Android app only calls `listPlots`.
+  There is no UI to create or edit plots on Android. Included in M9 scope.
 
+---
+
+## Milestone roadmap (updated 11 May 2026)
+
+Original M9 (strong sealing + social recovery) has been renumbered to M11 to make
+room for two new milestones:
+
+| Milestone | Theme |
+|---|---|
+| M9 (new) | Friends, individual item sharing, Android plot management |
+| M10 (new) | Shared plots (collaborative galleries, own plot key per shared plot) |
+| M11 (was M9) | Strong sealing + social recovery |
+
+Brief for M9 at `docs/briefs/M9_brief.md`.
+
+---
+
+## CQRS / event sourcing — architectural direction (parked)
+
+Bret has experience with event-sourced systems (append-only event store, CQRS
+projections, server push via event bus + WebSocket). The pattern fits well with
+shared plots needing real-time updates, and the existing `uploads`/`plots` tables
+are natural projections.
+
+**Parked for a future milestone (M12+).** Reasons for deferral:
+- E2EE limits the value: event payloads are opaque metadata (keys, hashes, user IDs);
+  the server cannot read content, so rich cross-cutting semantic projections aren't
+  possible from the event store.
+- Migration cost is high: bolting event sourcing onto an existing schema requires
+  upcasting strategy and projection rebuilds — better greenfielded.
+- Server push for shared plots (the most immediate need) can be satisfied more cheaply
+  with Postgres `LISTEN/NOTIFY` feeding a WebSocket relay.
+
+**Near-term mitigation:** keep an append-only `change_log` table as a lightweight
+side-write alongside mutations. Gives audit trail and a prototype push feed without
+committing to a full event store.
+
+**When to revisit:** when shared plots go live and simultaneous active users make
+real-time updates a real user need, re-evaluate whether the full pattern is warranted.
 
 ---
 
