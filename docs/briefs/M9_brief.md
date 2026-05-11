@@ -23,7 +23,6 @@ now M11). It adds the social layer needed before shared plots (M10) and real sea
 - Web sharing (Android-only for this milestone)
 - Shared plots (M10)
 - Automation rules (future)
-- Re-sharing (to be decided; not implemented in M9)
 
 ---
 
@@ -34,10 +33,13 @@ now M11). It adds the social layer needed before shared plots (M10) and real sea
 | Sharing keypair | Account-level P-256 keypair per user; private key wrapped to master key and stored server-side; public key on user record |
 | Compost independence | Recipient composting their shared copy has no effect on owner's copy (and vice versa) |
 | Revocation | None — once shared, it's shared |
+| Re-sharing | Allowed — anyone with access can share onward; chain tracked via `shared_from_upload_id` |
 | Tags on shared items | Per-user (recipient tags independently; owner doesn't see them) |
 | Rotation on shared items | Per-user (already true since each user has their own upload record) |
-| Friends list placement | Burger → Friends (new dedicated screen) |
+| Friends list placement | Burger → Friends (new dedicated screen); each entry shows display name + username beneath |
 | Detail view attribution | Photo detail shows "Shared by [display name]" |
+| Share icon on thumbnail | Bottom-right corner overlay (mirrors tag icon at bottom-left) |
+| Add plot trigger | Inline "+ Add plot" tappable row after the last plot section in the garden scroll |
 
 ---
 
@@ -154,13 +156,14 @@ CREATE TABLE friendships (
 );
 
 -- Backfill friendships from redeemed invites
+-- (invites table uses created_by / used_by / used_at)
 INSERT INTO friendships (user_id_1, user_id_2, created_at)
 SELECT
-    LEAST(invited_by_user_id, redeemed_by_user_id),
-    GREATEST(invited_by_user_id, redeemed_by_user_id),
-    redeemed_at
+    LEAST(created_by, used_by),
+    GREATEST(created_by, used_by),
+    used_at
 FROM invites
-WHERE redeemed_by_user_id IS NOT NULL
+WHERE used_by IS NOT NULL
 ON CONFLICT DO NOTHING;
 
 -- Shared upload provenance columns
@@ -194,7 +197,7 @@ ALTER TABLE uploads
   `wrapDekForSharingPubkey(dek, pubkeyBytes)`.
 - `EncryptedThumbnail` / full-size decrypt: check `wrap_format`; route to sharing key
   unwrap path when `p256-ecdh-hkdf-aes256gcm-v1`.
-- Garden thumbnail: add share icon overlay (alongside existing tag icon at bottom-left).
+- Garden thumbnail: add share icon overlay at **bottom-right** (tag icon stays bottom-left).
   Tapping opens `ShareSheet` (friend picker).
 - `ShareSheet`: coroutine fetches friend's pubkey, re-wraps DEKs, calls `shareUpload`,
   shows toast on success.
@@ -212,8 +215,9 @@ Server endpoints already exist (create, update, delete, batch reorder).
   tagCriteria)`, `deletePlot(id)`.
 - `GardenViewModel`: add `createPlot`, `renamePlot`, `deletePlot` methods with
   optimistic updates.
-- Garden UI: "Add plot" button at bottom of the plot list (or inline after last row).
-  Each plot row header gains an edit icon (pencil) that opens a `PlotEditSheet`
+- Garden UI: tappable **"+ Add plot"** row rendered after the last plot section in
+  the vertical scroll. Tapping opens a `PlotCreateSheet` (name field + tag criteria).
+  Each existing plot row header gains a pencil/edit icon that opens a `PlotEditSheet`
   (rename field + delete button with confirmation).
 
 ---
@@ -232,4 +236,4 @@ Server endpoints already exist (create, update, delete, batch reorder).
 - Modified: `GardenScreen.kt`, `GardenViewModel.kt`
 - Modified: `HeirloomsImage.kt` (sharing key decrypt path)
 - Modified: `PhotoDetailScreen.kt` (attribution)
-- New: `FriendsScreen.kt`, `ShareSheet.kt`, `PlotEditSheet.kt`
+- New: `FriendsScreen.kt`, `ShareSheet.kt`, `PlotEditSheet.kt`, `PlotCreateSheet.kt`
