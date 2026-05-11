@@ -314,6 +314,51 @@ object VaultCrypto {
         return buildAsymmetricEnvelope(ALG_P256_ECDH_HKDF_V1, ephPubSec1, nonce, ct)
     }
 
+    // ---- Sharing keypair helpers -------------------------------------------
+
+    /** Generate a P-256 keypair for account-level sharing. Returns (PKCS8 privkey DER, SPKI pubkey DER). */
+    fun generateSharingKeypair(): Pair<ByteArray, ByteArray> {
+        val kg = java.security.KeyPairGenerator.getInstance("EC")
+        kg.initialize(java.security.spec.ECGenParameterSpec("secp256r1"))
+        val kp = kg.generateKeyPair()
+        return Pair(kp.private.encoded, kp.public.encoded)
+    }
+
+    // SEC1 uncompressed P-256 (65 bytes: 0x04 || x || y) → X.509 SPKI DER (91 bytes).
+    // The 26-byte prefix encodes the OID for P-256.
+    private val P256_SPKI_PREFIX = byteArrayOf(
+        0x30, 0x59.toByte(), 0x30, 0x13, 0x06, 0x07,
+        0x2a, 0x86.toByte(), 0x48, 0xce.toByte(), 0x3d, 0x02, 0x01,
+        0x06, 0x08, 0x2a, 0x86.toByte(), 0x48, 0xce.toByte(), 0x3d, 0x03, 0x01, 0x07,
+        0x03, 0x42, 0x00
+    )
+
+    private fun sec1ToSpki(sec1: ByteArray): ByteArray {
+        require(sec1.size == 65 && sec1[0] == 0x04.toByte()) { "Expected 65-byte uncompressed P-256 point" }
+        return P256_SPKI_PREFIX + sec1
+    }
+
+    /**
+     * Unwrap bytes that were wrapped by wrapMasterKeyForRecipient (or wrapForSharingRecipient),
+     * using the recipient's PKCS8-DER private key bytes.
+     * Used to decrypt a received shared DEK.
+     */
+    fun unwrapWithSharingKey(envelope: ByteArray, sharingPrivkeyPkcs8: ByteArray): ByteArray {
+        val parsed = parseAsymmetricEnvelope(envelope)
+        require(parsed.algorithmId == ALG_P256_ECDH_HKDF_V1) { "Unexpected algorithm: ${parsed.algorithmId}" }
+        val privKey = java.security.KeyFactory.getInstance("EC")
+            .generatePrivate(java.security.spec.PKCS8EncodedKeySpec(sharingPrivkeyPkcs8))
+        val ephPubSpki = sec1ToSpki(parsed.ephemeralPubkeyBytes)
+        val ephPub = java.security.KeyFactory.getInstance("EC")
+            .generatePublic(java.security.spec.X509EncodedKeySpec(ephPubSpki))
+        val ka = javax.crypto.KeyAgreement.getInstance("ECDH")
+        ka.init(privKey)
+        ka.doPhase(ephPub, true)
+        val sharedSecret = ka.generateSecret()
+        val kek = hkdf(sharedSecret, info = "heirlooms-v1".toByteArray(Charsets.UTF_8))
+        return aesGcmDecrypt(kek, parsed.nonce, parsed.ciphertextWithTag)
+    }
+
     /** Base64url-encode bytes (no padding). */
     fun toBase64Url(bytes: ByteArray): String =
         java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)

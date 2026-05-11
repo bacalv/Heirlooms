@@ -374,6 +374,7 @@ private fun registerRoute(database: Database): ContractRoute =
             )
 
             database.markInviteUsed(invite.id, newUser.id)
+            database.createFriendship(invite.createdBy, newUser.id)
 
             val (token, _, hash) = issueToken()
             val session = database.createSession(newUser.id, hash, deviceKind)

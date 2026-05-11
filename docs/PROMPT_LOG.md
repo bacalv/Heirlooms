@@ -2,6 +2,31 @@
 
 ---
 
+## Session — 11 May 2026 — v0.45.0: M9 friends, item sharing, Android plot management
+
+Full M9 implementation. Server + Android only.
+
+**Server changes:**
+- V23 migration: `account_sharing_keys`, `friendships` tables; `shared_from_upload_id` / `shared_from_user_id` on `uploads`; friendship backfill from redeemed invites.
+- `SharingKeyHandler.kt`: `PUT /api/keys/sharing`, `GET /api/keys/sharing/me`, `GET /api/keys/sharing/{userId}` (friends only).
+- `FriendsHandler.kt`: `GET /api/friends`.
+- `UploadHandler.kt`: `POST /api/content/uploads/{id}/share` creates recipient upload record with re-wrapped DEKs. Compost cleanup guards GCS deletion against live shared references.
+- `AuthHandler.kt`: `createFriendship` called in register after invite is marked used. UUID ordering bug fixed (Kotlin `UUID <` uses signed-long order, PostgreSQL uses string lexicographic — fixed to use `toString()` comparison).
+
+**Android changes:**
+- `VaultCrypto`: `generateSharingKeypair()`, `unwrapWithSharingKey()`, `sec1ToSpki()` helper.
+- `VaultSession`: `sharingPrivkey` field + `setSharingPrivkey()`.
+- `HeirloomsApi`: plot CRUD (`createPlot`, `updatePlot`, `deletePlot`), sharing key endpoints, friends list, `shareUpload`. `Upload` model gets `sharedFromUserId` / `sharedFromDisplayName` / `isShared`.
+- `FriendsScreen.kt` (new): Burger → Friends list with display name + username.
+- `ShareSheet.kt` (new): friend picker, DEK re-wrap, share API call.
+- `PlotSheets.kt` (new): `PlotCreateSheet` and `PlotEditSheet` with name field, tag criteria, delete confirmation.
+- `GardenViewModel`: `ensureSharingKey()` (lazy sharing keypair init on vault unlock), `loadFriends()`, `createPlot()`, `renamePlot()`, `deletePlot()`, `enrichWithFriendNames()`.
+- `GardenScreen`: share icon (bottom-right, encrypted+owned items), friend indicator (top-right, received items), edit pencil on plot headers, "+ Add plot" row, `PlotCreateSheet` wired.
+- `HeirloomsImage`: shared-item thumbnail path unwraps DEK via `unwrapWithSharingKey` when `thumbnailDekFormat == p256-ecdh-hkdf-aes256gcm-v1`.
+- `PhotoDetailScreen`: "Shared by [name]" attribution line in `GardenFlavour`.
+
+---
+
 ## Session — 11 May 2026 — web: pairing code entry unreachable from login page
 
 `PairPage` (the code-entry screen for Android-initiated pairing) was behind `RequireAuth` at `/access/pair`. A new browser session with no token could never reach it — and the login page had no link to it. Fix: added `/pair` as a public route in `App.jsx` (alongside `/login` and `/join`), and added a "Have a pairing code from the app? Pair with phone" link at the bottom of `LoginPage`. The existing `/access/pair` route stays for users who are already logged in and want to link a new browser.

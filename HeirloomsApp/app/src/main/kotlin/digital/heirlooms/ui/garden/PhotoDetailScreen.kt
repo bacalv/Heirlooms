@@ -554,6 +554,11 @@ internal fun GardenFlavour(
             }
             Text("Uploaded ${formatInstantDate(upload.uploadedAt)}", style = MaterialTheme.typography.bodySmall, color = TextMuted)
 
+            upload.sharedFromDisplayName?.let { name ->
+                Spacer(Modifier.height(4.dp))
+                Text("Shared by $name", style = MaterialTheme.typography.bodySmall, color = Forest.copy(alpha = 0.7f))
+            }
+
             val activeCapsules = capsuleRefs.filter { it.state == "open" || it.state == "sealed" }
             if (activeCapsules.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))

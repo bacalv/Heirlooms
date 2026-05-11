@@ -104,8 +104,13 @@ private fun EncryptedThumbnail(
             try {
                 val wrappedDek = upload.wrappedThumbnailDek
                 if (wrappedDek == null) { failed = true; return@withContext }
-                val mk = VaultSession.masterKey
-                val dek = VaultCrypto.unwrapDekWithMasterKey(wrappedDek, mk)
+                val dek = if (upload.thumbnailDekFormat == VaultCrypto.ALG_P256_ECDH_HKDF_V1) {
+                    val privkey = VaultSession.sharingPrivkey
+                    if (privkey == null) { failed = true; return@withContext }
+                    VaultCrypto.unwrapWithSharingKey(wrappedDek, privkey)
+                } else {
+                    VaultCrypto.unwrapDekWithMasterKey(wrappedDek, VaultSession.masterKey)
+                }
                 val encryptedBytes = api.fetchBytes(api.thumbUrl(upload.id))
                 val decryptedBytes = VaultCrypto.decryptSymmetric(encryptedBytes, dek)
                 val bmp = BitmapFactory.decodeByteArray(decryptedBytes, 0, decryptedBytes.size)

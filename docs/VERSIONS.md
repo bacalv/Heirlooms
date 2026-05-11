@@ -2,6 +2,20 @@
 
 ---
 
+## v0.45.0 — M9: Friends, item sharing, Android plot management (11 May 2026)
+
+Server + Android. No web changes.
+
+- **Account-level sharing keypair** — Each user has a P-256 keypair generated on first vault unlock after upgrade. Private key wrapped to master key and stored server-side (`account_sharing_keys` table). Public key available to friends. Used to re-wrap DEKs when sharing items.
+- **Friendships** — Automatic on invite redemption. Bidirectional. Backfilled from existing redeemed invites. New `friendships` table.
+- **Item sharing (Android)** — Share icon (bottom-right) on encrypted garden thumbnails. Tapping opens a friend picker sheet. The sender unwraps the item DEK and thumbnail DEK, re-wraps both to the recipient's sharing pubkey, and calls `POST /api/content/uploads/{id}/share`. Server creates a recipient upload record pointing to the same GCS blob.
+- **Received shared items** — Land in Just Arrived with a person icon indicator. "Shared by [name]" attribution in photo detail view. Per-user rotation and tags (independent of the original owner's).
+- **Friends screen** — Burger → Friends. Shows display name + username for each friend.
+- **Android plot management** — Create (inline "+ Add plot" row at bottom of garden scroll), rename, and delete plots. Each plot row header has a pencil edit icon.
+- **Compost GCS guard** — Compost cleanup now skips GCS blob deletion if any active (non-composted) shared copy references the same storage key.
+
+---
+
 ## v0.44.0 — Android bugfix iteration 1 (11 May 2026)
 
 Android only.

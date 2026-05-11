@@ -3,9 +3,12 @@ package digital.heirlooms.ui.garden
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.util.Base64
 import digital.heirlooms.api.HeirloomsApi
 import digital.heirlooms.api.Plot
 import digital.heirlooms.api.Upload
+import digital.heirlooms.crypto.VaultCrypto
+import digital.heirlooms.crypto.VaultSession
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -111,7 +114,10 @@ class GardenViewModel(
                 }
                 knownJustArrivedIds = justArrived.uploads.map { it.id }.toSet()
                 scrollPositions["__just_arrived__"] = 0
-                _state.value = GardenLoadState.Ready(rows)
+                val enriched = rows.map { row ->
+                    row.copy(uploads = enrichWithFriendNames(row.uploads, _friends.value))
+                }
+                _state.value = GardenLoadState.Ready(enriched)
             } catch (e: Exception) {
                 _state.value = GardenLoadState.Error(e.message ?: "Couldn't load")
             }
@@ -211,6 +217,100 @@ class GardenViewModel(
                     _state.value = GardenLoadState.Ready(rows)
                 }
             } catch (_: Exception) { }
+        }
+    }
+
+    // ---- Sharing key lazy init ---------------------------------------------
+
+    // Called once after vault unlock. Checks for a sharing key on the server;
+    // generates and uploads one if missing, then stores it in VaultSession.
+    fun ensureSharingKey(api: HeirloomsApi) {
+        if (VaultSession.sharingPrivkey != null) return
+        viewModelScope.launch {
+            try {
+                val existing = api.getSharingKeyMe()
+                if (existing != null) {
+                    val masterKey = VaultSession.masterKey
+                    val privkeyBytes = VaultCrypto.unwrapDekWithMasterKey(existing.wrappedPrivkey, masterKey)
+                    VaultSession.setSharingPrivkey(privkeyBytes)
+                } else {
+                    val masterKey = VaultSession.masterKey
+                    val (privkeyPkcs8, pubkeySpki) = VaultCrypto.generateSharingKeypair()
+                    val wrappedPrivkey = VaultCrypto.wrapDekUnderMasterKey(privkeyPkcs8, masterKey)
+                    val pubkeyB64 = Base64.encodeToString(pubkeySpki, Base64.NO_WRAP)
+                    val wrappedPrivkeyB64 = Base64.encodeToString(wrappedPrivkey, Base64.NO_WRAP)
+                    api.putSharingKey(pubkeyB64, wrappedPrivkeyB64, VaultCrypto.ALG_MASTER_AES256GCM_V1)
+                    VaultSession.setSharingPrivkey(privkeyPkcs8)
+                }
+            } catch (_: Exception) { /* best-effort; retry on next load */ }
+        }
+    }
+
+    // ---- Plot management ---------------------------------------------------
+
+    fun createPlot(api: HeirloomsApi, name: String, tagCriteria: List<String>) {
+        viewModelScope.launch {
+            try {
+                api.createPlot(name, tagCriteria)
+                load(api)
+            } catch (_: Exception) { }
+        }
+    }
+
+    fun renamePlot(api: HeirloomsApi, plot: Plot, newName: String, newTagCriteria: List<String>) {
+        val current = _state.value as? GardenLoadState.Ready ?: return
+        _state.value = GardenLoadState.Ready(current.rows.map { row ->
+            if (row.plot?.id == plot.id) row.copy(plot = plot.copy(name = newName, tagCriteria = newTagCriteria)) else row
+        })
+        viewModelScope.launch {
+            try {
+                api.updatePlot(plot.id, newName, newTagCriteria)
+                load(api)
+            } catch (_: Exception) {
+                _state.value = GardenLoadState.Ready(current.rows)
+            }
+        }
+    }
+
+    fun deletePlot(api: HeirloomsApi, plotId: String) {
+        val current = _state.value as? GardenLoadState.Ready ?: return
+        _state.value = GardenLoadState.Ready(current.rows.filter { it.plot?.id != plotId })
+        viewModelScope.launch {
+            try {
+                api.deletePlot(plotId)
+            } catch (_: Exception) {
+                _state.value = GardenLoadState.Ready(current.rows)
+            }
+        }
+    }
+
+    // ---- Cached friends list (loaded lazily for display name resolution) ---
+
+    private val _friends = MutableStateFlow<List<HeirloomsApi.Friend>>(emptyList())
+    val friends: StateFlow<List<HeirloomsApi.Friend>> = _friends.asStateFlow()
+
+    fun loadFriends(api: HeirloomsApi) {
+        if (_friends.value.isNotEmpty()) return
+        viewModelScope.launch {
+            try {
+                _friends.value = api.getFriends()
+                // Re-enrich any already-loaded shared uploads with display names.
+                val current = _state.value as? GardenLoadState.Ready ?: return@launch
+                _state.value = GardenLoadState.Ready(current.rows.map { row ->
+                    row.copy(uploads = enrichWithFriendNames(row.uploads, _friends.value))
+                })
+            } catch (_: Exception) { }
+        }
+    }
+
+    private fun enrichWithFriendNames(uploads: List<Upload>, friendList: List<HeirloomsApi.Friend>): List<Upload> {
+        if (friendList.isEmpty()) return uploads
+        val byId = friendList.associateBy { it.userId }
+        return uploads.map { u ->
+            if (u.sharedFromUserId != null && u.sharedFromDisplayName == null) {
+                val name = byId[u.sharedFromUserId]?.displayName ?: byId[u.sharedFromUserId]?.username
+                if (name != null) u.copy(sharedFromDisplayName = name) else u
+            } else u
         }
     }
 

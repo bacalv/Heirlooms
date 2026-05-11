@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import digital.heirlooms.api.HeirloomsApi
 import digital.heirlooms.api.Upload
 import digital.heirlooms.ui.brand.OliveBranchArrival
 import digital.heirlooms.ui.common.HeirloomsImage
@@ -92,6 +93,10 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import digital.heirlooms.app.UploadWorker
 import digital.heirlooms.ui.main.DiagnosticsStore
+import digital.heirlooms.ui.social.ShareSheet
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Share
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -208,6 +213,8 @@ fun GardenScreen(
 
     LaunchedEffect(Unit) {
         if (state is GardenLoadState.Loading) vm.load(api) else vm.refresh(api)
+        vm.ensureSharingKey(api)
+        vm.loadFriends(api)
     }
 
     LaunchedEffect(Unit) {
@@ -218,6 +225,19 @@ fun GardenScreen(
     }
 
     val newlyArrivedIds by vm.newlyArrivedIds.collectAsStateWithLifecycle()
+    val friends by vm.friends.collectAsStateWithLifecycle()
+    var showCreatePlot by remember { mutableStateOf(false) }
+
+    if (showCreatePlot) {
+        PlotCreateSheet(
+            availableTags = availableTags,
+            onDismiss = { showCreatePlot = false },
+            onCreate = { name, tags ->
+                showCreatePlot = false
+                vm.createPlot(api, name, tags)
+            },
+        )
+    }
 
     fun refresh() {
         refreshing = true
@@ -260,6 +280,7 @@ fun GardenScreen(
 
                                 PlotRowSection(
                                     label = rowLabel,
+                                    plot = row.plot,
                                     uploads = row.uploads,
                                     nextCursor = row.nextCursor,
                                     loadingMore = row.loadingMore,
@@ -270,10 +291,10 @@ fun GardenScreen(
                                     onLoadMore = { vm.loadMoreForRow(api, index) },
                                     onExploreAll = { onNavigateToExplore(tags, isJustArrived) },
                                     isJustArrived = isJustArrived,
-                                    shouldScrollToStart = isJustArrived && newlyArrivedIds.isNotEmpty(),
                                     newlyArrivedIds = if (isJustArrived) newlyArrivedIds else emptySet(),
                                     onClearNewlyArrived = { vm.clearNewlyArrived() },
                                     availableTags = availableTags,
+                                    friends = friends,
                                     onQuickRotate = { uploadId, currentRotation ->
                                         val newRotation = (currentRotation + 90) % 360
                                         vm.optimisticRotate(uploadId, newRotation)
@@ -291,9 +312,17 @@ fun GardenScreen(
                                             catch (_: Exception) { vm.optimisticTag(uploadId, oldTags) }
                                         }
                                     },
+                                    onRenamePlot = { newName, newTags ->
+                                        row.plot?.let { vm.renamePlot(api, it, newName, newTags) }
+                                    },
+                                    onDeletePlot = {
+                                        row.plot?.let { vm.deletePlot(api, it.id) }
+                                    },
                                     emptyLabel = if (isJustArrived) "Nothing waiting." else "No items match this plot's tags.",
                                 )
                             }
+                            // "+ Add plot" row at the bottom of the garden scroll
+                            AddPlotRow(onClick = { showCreatePlot = true })
                         }
                     }
                 }
@@ -396,6 +425,7 @@ fun GardenScreen(
 @Composable
 private fun PlotRowSection(
     label: String,
+    plot: digital.heirlooms.api.Plot?,
     uploads: List<Upload>,
     nextCursor: String?,
     loadingMore: Boolean,
@@ -406,15 +436,28 @@ private fun PlotRowSection(
     onLoadMore: () -> Unit,
     onExploreAll: () -> Unit,
     isJustArrived: Boolean,
-    shouldScrollToStart: Boolean = false,
     newlyArrivedIds: Set<String> = emptySet(),
     onClearNewlyArrived: () -> Unit = {},
     availableTags: List<String> = emptyList(),
+    friends: List<HeirloomsApi.Friend> = emptyList(),
     onQuickRotate: (uploadId: String, currentRotation: Int) -> Unit,
     onTagsUpdated: (uploadId: String, oldTags: List<String>, newTags: List<String>) -> Unit,
+    onRenamePlot: (name: String, tagCriteria: List<String>) -> Unit = { _, _ -> },
+    onDeletePlot: () -> Unit = {},
     emptyLabel: String,
 ) {
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = savedScrollIndex)
+    var showEditPlot by remember { mutableStateOf(false) }
+
+    if (showEditPlot && plot != null) {
+        PlotEditSheet(
+            plot = plot,
+            availableTags = availableTags,
+            onDismiss = { showEditPlot = false },
+            onSave = { name, tags -> showEditPlot = false; onRenamePlot(name, tags) },
+            onDelete = { showEditPlot = false; onDeletePlot() },
+        )
+    }
 
     LaunchedEffect(listState.firstVisibleItemIndex) {
         onScrollIndex(listState.firstVisibleItemIndex)
@@ -426,22 +469,25 @@ private fun PlotRowSection(
 
     Column(Modifier.padding(top = 16.dp)) {
         Row(
-            modifier = Modifier
-                .clickable(onClick = onTitleTap)
-                .padding(horizontal = 16.dp, vertical = 4.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.titleSmall.copy(color = Forest),
-            )
-            Spacer(Modifier.width(4.dp))
-            Icon(
-                Icons.Filled.ChevronRight,
-                contentDescription = null,
-                tint = Forest.copy(alpha = 0.5f),
-                modifier = Modifier.size(16.dp),
-            )
+            Row(
+                modifier = Modifier.weight(1f).clickable(onClick = onTitleTap),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(label, style = MaterialTheme.typography.titleSmall.copy(color = Forest))
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Forest.copy(alpha = 0.5f), modifier = Modifier.size(16.dp))
+            }
+            if (plot != null && !plot.isSystemDefined) {
+                Icon(
+                    Icons.Filled.Edit,
+                    contentDescription = "Edit plot",
+                    tint = Forest.copy(alpha = 0.4f),
+                    modifier = Modifier.size(16.dp).clickable { showEditPlot = true },
+                )
+            }
         }
         Spacer(Modifier.height(6.dp))
 
@@ -460,6 +506,11 @@ private fun PlotRowSection(
                 itemsIndexed(uploads, key = { _, u -> u.id }) { _, upload ->
                     var showMenu by remember { mutableStateOf(false) }
                     var showTagSheet by remember { mutableStateOf(false) }
+                    var showShareSheet by remember { mutableStateOf(false) }
+
+                    if (showShareSheet) {
+                        ShareSheet(upload = upload, onDismiss = { showShareSheet = false })
+                    }
 
                     Box {
                         Box(
@@ -492,7 +543,7 @@ private fun PlotRowSection(
                                 )
                             }
                         }
-                        // Visible tag button — higher Z order so taps don't reach inner Box.
+                        // Tag button — bottom-left
                         Box(
                             Modifier
                                 .align(Alignment.BottomStart)
@@ -506,6 +557,39 @@ private fun PlotRowSection(
                                 tint = Parchment,
                                 modifier = Modifier.size(14.dp),
                             )
+                        }
+                        // Share button — bottom-right (only for encrypted/owned items)
+                        if (upload.isEncrypted && !upload.isShared) {
+                            Box(
+                                Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .clickable { showShareSheet = true }
+                                    .background(Forest.copy(alpha = 0.65f), RoundedCornerShape(topStart = 4.dp))
+                                    .padding(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Share,
+                                    contentDescription = "Share",
+                                    tint = Parchment,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
+                        }
+                        // Friend indicator — top-right corner for received shared items
+                        if (upload.isShared) {
+                            Box(
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .background(Forest.copy(alpha = 0.75f), RoundedCornerShape(bottomStart = 4.dp))
+                                    .padding(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.PersonAdd,
+                                    contentDescription = "Shared from a friend",
+                                    tint = Parchment,
+                                    modifier = Modifier.size(12.dp),
+                                )
+                            }
                         }
                         // Per-tile arrival animation for newly landed items.
                         if (upload.id in newlyArrivedIds) {
@@ -673,6 +757,21 @@ private fun GardenEmptyState() {
             color = TextMuted,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
+    }
+}
+
+@Composable
+private fun AddPlotRow(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.Add, contentDescription = null, tint = Forest.copy(alpha = 0.5f), modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Add plot", style = MaterialTheme.typography.bodyMedium.copy(color = Forest.copy(alpha = 0.6f)))
     }
 }
 

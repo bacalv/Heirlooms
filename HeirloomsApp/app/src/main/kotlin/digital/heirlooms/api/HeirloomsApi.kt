@@ -143,6 +143,107 @@ class HeirloomsApi(
     suspend fun listPlots(): List<Plot> =
         JSONArray(get("/api/plots")).toPlotList()
 
+    suspend fun createPlot(name: String, tagCriteria: List<String>): Plot {
+        val tagsJson = "[${tagCriteria.joinToString(",") { "\"${it.replace("\"", "\\\"")}\"" }}]"
+        return JSONObject(post("/api/plots", """{"name":${name.jsonEsc()},"tag_criteria":$tagsJson}""")).toPlot()
+    }
+
+    suspend fun updatePlot(id: String, name: String, tagCriteria: List<String>): Plot {
+        val tagsJson = "[${tagCriteria.joinToString(",") { "\"${it.replace("\"", "\\\"")}\"" }}]"
+        return JSONObject(put("/api/plots/$id", """{"name":${name.jsonEsc()},"tag_criteria":$tagsJson}""")).toPlot()
+    }
+
+    suspend fun deletePlot(id: String) {
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url("$baseUrl/api/plots/$id")
+                .withAuth()
+                .delete()
+                .build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+            }
+        }
+    }
+
+    // ── Friends & sharing ────────────────────────────────────────────────────
+
+    data class Friend(val userId: String, val username: String, val displayName: String)
+    data class SharingKeyMe(val pubkey: ByteArray, val wrappedPrivkey: ByteArray, val wrapFormat: String)
+
+    // Returns null if the user has no sharing key yet (404 → triggers lazy generation).
+    suspend fun getSharingKeyMe(): SharingKeyMe? = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$baseUrl/api/keys/sharing/me")
+            .withAuth()
+            .build()
+        client.newCall(request).execute().use { response ->
+            when (response.code) {
+                404 -> null
+                in 200..299 -> {
+                    val json = JSONObject(response.body?.string() ?: throw IOException("Empty"))
+                    SharingKeyMe(
+                        pubkey = Base64.decode(json.getString("pubkey"), Base64.DEFAULT),
+                        wrappedPrivkey = Base64.decode(json.getString("wrappedPrivkey"), Base64.DEFAULT),
+                        wrapFormat = json.getString("wrapFormat"),
+                    )
+                }
+                else -> throw IOException("HTTP ${response.code}")
+            }
+        }
+    }
+
+    suspend fun putSharingKey(pubkeyB64: String, wrappedPrivkeyB64: String, wrapFormat: String) {
+        val body = """{"pubkey":"$pubkeyB64","wrappedPrivkey":"$wrappedPrivkeyB64","wrapFormat":"$wrapFormat"}"""
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url("$baseUrl/api/keys/sharing")
+                .withAuth()
+                .put(body.toRequestBody("application/json".toMediaType()))
+                .build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+            }
+        }
+    }
+
+    // Returns null if the friend has no sharing key yet.
+    suspend fun getFriendSharingPubkey(userId: String): ByteArray? = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$baseUrl/api/keys/sharing/$userId")
+            .withAuth()
+            .build()
+        client.newCall(request).execute().use { response ->
+            when (response.code) {
+                404 -> null
+                in 200..299 -> {
+                    val json = JSONObject(response.body?.string() ?: throw IOException("Empty"))
+                    Base64.decode(json.getString("pubkey"), Base64.DEFAULT)
+                }
+                else -> throw IOException("HTTP ${response.code}")
+            }
+        }
+    }
+
+    suspend fun getFriends(): List<Friend> =
+        JSONArray(get("/api/friends")).let { arr ->
+            (0 until arr.length()).map {
+                val o = arr.getJSONObject(it)
+                Friend(o.getString("userId"), o.getString("username"), o.getString("displayName"))
+            }
+        }
+
+    suspend fun shareUpload(
+        uploadId: String,
+        toUserId: String,
+        wrappedDekB64: String,
+        wrappedThumbnailDekB64: String?,
+    ) {
+        val thumbJson = if (wrappedThumbnailDekB64 != null) ""","wrappedThumbnailDek":"$wrappedThumbnailDekB64"""" else ""
+        val body = """{"toUserId":"$toUserId","wrappedDek":"$wrappedDekB64","dekFormat":"${VaultCrypto.ALG_P256_ECDH_HKDF_V1}"$thumbJson}"""
+        post("/api/content/uploads/$uploadId/share", body)
+    }
+
     // ── Capsules ─────────────────────────────────────────────────────────────
 
     suspend fun listCapsules(states: String = "open,sealed"): List<CapsuleSummary> =
@@ -460,6 +561,7 @@ class HeirloomsApi(
         previewDekFormat = optString("previewDekFormat").takeIf { it.isNotEmpty() && it != "null" },
         plainChunkSize = if (has("plainChunkSize") && !isNull("plainChunkSize")) getInt("plainChunkSize") else null,
         durationSeconds = if (has("durationSeconds") && !isNull("durationSeconds")) getInt("durationSeconds") else null,
+        sharedFromUserId = optString("sharedFromUserId").takeIf { it.isNotEmpty() && it != "null" },
     )
 
     private fun JSONArray.toPlotList(): List<Plot> =

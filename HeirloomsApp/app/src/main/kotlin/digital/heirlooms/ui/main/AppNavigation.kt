@@ -60,6 +60,7 @@ import digital.heirlooms.ui.share.UploadProgressScreen
 import digital.heirlooms.ui.garden.GardenScreen
 import digital.heirlooms.ui.garden.PhotoDetailScreen
 import digital.heirlooms.ui.settings.SettingsScreen
+import digital.heirlooms.ui.social.FriendsScreen
 import digital.heirlooms.ui.theme.Forest
 import digital.heirlooms.ui.theme.Forest15
 import digital.heirlooms.ui.theme.Parchment
@@ -79,6 +80,7 @@ internal object Routes {
     const val SETTINGS = "settings"
     const val DIAGNOSTICS = "diagnostics"
     const val DEVICES_ACCESS = "devices_access"
+    const val FRIENDS = "friends"
     const val PAIRING = "pairing"
     const val UPLOAD_PROGRESS = "upload_progress/{sessionTag}"
     fun uploadProgress(sessionTag: String) = "upload_progress/$sessionTag"
@@ -174,6 +176,7 @@ fun MainNavigation(apiKey: String, onApiKeyReset: () -> Unit, store: digital.hei
                 },
                 onDiagnosticsTap = { navController.navigate(Routes.DIAGNOSTICS) },
                 onDevicesAccessTap = { navController.navigate(Routes.DEVICES_ACCESS) },
+                onFriendsTap = { navController.navigate(Routes.FRIENDS) },
             )
         }
 
@@ -328,6 +331,9 @@ private fun AppNavHost(navController: NavController, apiKey: String, onApiKeyRes
                 navController = navController as androidx.navigation.NavHostController,
                 onDismiss = { navController.popBackStack() },
             )
+        }
+        composable(Routes.FRIENDS) {
+            FriendsScreen(onBack = { navController.popBackStack() })
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(onApiKeyReset = onApiKeyReset, store = store)

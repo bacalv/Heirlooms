@@ -112,6 +112,8 @@ data class UploadRecord(
     val previewDekFormat: String? = null,
     val plainChunkSize: Int? = null,
     val durationSeconds: Int? = null,
+    val sharedFromUploadId: UUID? = null,
+    val sharedFromUserId: UUID? = null,
 )
 
 data class UploadPage(val items: List<UploadRecord>, val nextCursor: String?)
@@ -162,6 +164,21 @@ data class PendingDeviceLinkRecord(
 enum class UploadSort { UPLOAD_NEWEST, UPLOAD_OLDEST, TAKEN_NEWEST, TAKEN_OLDEST }
 
 private data class DecodedCursor(val sort: UploadSort, val sortKeyMs: Long?, val id: UUID)
+
+// ---- Sharing / social domain model --------------------------------------
+
+data class AccountSharingKeyRecord(
+    val userId: UUID,
+    val pubkey: ByteArray,
+    val wrappedPrivkey: ByteArray,
+    val wrapFormat: String,
+)
+
+data class FriendRecord(
+    val userId: UUID,
+    val username: String,
+    val displayName: String,
+)
 
 // ---- Plot domain model -----------------------------------------------
 
@@ -441,6 +458,172 @@ class Database(private val dataSource: DataSource) {
                 stmt.executeUpdate()
             }
         }
+    }
+
+    // Returns true if any active (non-composted) upload for any user references the same storage_key.
+    // Used by compost cleanup to skip GCS deletion when a shared copy is still alive.
+    fun hasLiveSharedReference(storageKey: String, excludeUploadId: UUID): Boolean {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                "SELECT EXISTS(SELECT 1 FROM uploads WHERE storage_key = ? AND id != ? AND composted_at IS NULL)"
+            ).use { stmt ->
+                stmt.setString(1, storageKey)
+                stmt.setObject(2, excludeUploadId)
+                val rs = stmt.executeQuery()
+                return rs.next() && rs.getBoolean(1)
+            }
+        }
+    }
+
+    // ---- Sharing / social operations ---------------------------------------
+
+    fun upsertSharingKey(userId: UUID, pubkey: ByteArray, wrappedPrivkey: ByteArray, wrapFormat: String) {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                """INSERT INTO account_sharing_keys (user_id, pubkey, wrapped_privkey, wrap_format)
+                   VALUES (?, ?, ?, ?)
+                   ON CONFLICT (user_id) DO UPDATE
+                   SET pubkey = EXCLUDED.pubkey, wrapped_privkey = EXCLUDED.wrapped_privkey,
+                       wrap_format = EXCLUDED.wrap_format"""
+            ).use { stmt ->
+                stmt.setObject(1, userId)
+                stmt.setString(2, java.util.Base64.getEncoder().encodeToString(pubkey))
+                stmt.setString(3, java.util.Base64.getEncoder().encodeToString(wrappedPrivkey))
+                stmt.setString(4, wrapFormat)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    fun getSharingKey(userId: UUID): AccountSharingKeyRecord? {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                "SELECT user_id, pubkey, wrapped_privkey, wrap_format FROM account_sharing_keys WHERE user_id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, userId)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return null
+                val dec = java.util.Base64.getDecoder()
+                return AccountSharingKeyRecord(
+                    userId = rs.getObject("user_id", UUID::class.java),
+                    pubkey = dec.decode(rs.getString("pubkey")),
+                    wrappedPrivkey = dec.decode(rs.getString("wrapped_privkey")),
+                    wrapFormat = rs.getString("wrap_format"),
+                )
+            }
+        }
+    }
+
+    fun listFriends(userId: UUID): List<FriendRecord> {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                """SELECT u.id, u.username, u.display_name
+                   FROM friendships f
+                   JOIN users u ON u.id = CASE WHEN f.user_id_1 = ? THEN f.user_id_2 ELSE f.user_id_1 END
+                   WHERE f.user_id_1 = ? OR f.user_id_2 = ?
+                   ORDER BY u.display_name"""
+            ).use { stmt ->
+                stmt.setObject(1, userId)
+                stmt.setObject(2, userId)
+                stmt.setObject(3, userId)
+                val rs = stmt.executeQuery()
+                val results = mutableListOf<FriendRecord>()
+                while (rs.next()) results.add(
+                    FriendRecord(
+                        userId = rs.getObject("id", UUID::class.java),
+                        username = rs.getString("username"),
+                        displayName = rs.getString("display_name"),
+                    )
+                )
+                return results
+            }
+        }
+    }
+
+    fun createFriendship(a: UUID, b: UUID) {
+        val u1 = if (a.toString() < b.toString()) a else b
+        val u2 = if (a.toString() < b.toString()) b else a
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                "INSERT INTO friendships (user_id_1, user_id_2) VALUES (?, ?) ON CONFLICT DO NOTHING"
+            ).use { stmt ->
+                stmt.setObject(1, u1)
+                stmt.setObject(2, u2)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    fun areFriends(a: UUID, b: UUID): Boolean {
+        val u1 = if (a.toString() < b.toString()) a else b
+        val u2 = if (a.toString() < b.toString()) b else a
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                "SELECT EXISTS(SELECT 1 FROM friendships WHERE user_id_1 = ? AND user_id_2 = ?)"
+            ).use { stmt ->
+                stmt.setObject(1, u1)
+                stmt.setObject(2, u2)
+                val rs = stmt.executeQuery()
+                return rs.next() && rs.getBoolean(1)
+            }
+        }
+    }
+
+    fun createSharedUpload(
+        fromRecord: UploadRecord,
+        fromUserId: UUID,
+        toUserId: UUID,
+        wrappedDek: ByteArray,
+        wrappedThumbnailDek: ByteArray?,
+        dekFormat: String,
+    ): UploadRecord {
+        val newId = UUID.randomUUID()
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                """INSERT INTO uploads
+                   (id, storage_key, mime_type, file_size, content_hash, thumbnail_key,
+                    storage_class, envelope_version, wrapped_dek, dek_format,
+                    thumbnail_storage_key, wrapped_thumbnail_dek, thumbnail_dek_format,
+                    preview_storage_key, wrapped_preview_dek, preview_dek_format,
+                    plain_chunk_size, duration_seconds, exif_processed_at,
+                    shared_from_upload_id, shared_from_user_id, user_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?)"""
+            ).use { stmt ->
+                stmt.setObject(1, newId)
+                stmt.setString(2, fromRecord.storageKey)
+                stmt.setString(3, fromRecord.mimeType)
+                stmt.setLong(4, fromRecord.fileSize)
+                stmt.setString(5, fromRecord.contentHash)
+                stmt.setString(6, fromRecord.thumbnailKey)
+                stmt.setString(7, "encrypted")
+                stmt.setObject(8, fromRecord.envelopeVersion)
+                stmt.setBytes(9, wrappedDek)
+                stmt.setString(10, dekFormat)
+                stmt.setString(11, fromRecord.thumbnailStorageKey)
+                stmt.setBytes(12, wrappedThumbnailDek)
+                stmt.setString(13, if (wrappedThumbnailDek != null) dekFormat else null)
+                stmt.setString(14, fromRecord.previewStorageKey)
+                stmt.setBytes(15, fromRecord.wrappedPreviewDek)
+                stmt.setString(16, fromRecord.previewDekFormat)
+                stmt.setObject(17, fromRecord.plainChunkSize)
+                stmt.setObject(18, fromRecord.durationSeconds)
+                stmt.setObject(19, fromRecord.id)
+                stmt.setObject(20, fromUserId)
+                stmt.setObject(21, toUserId)
+                stmt.executeUpdate()
+            }
+        }
+        return fromRecord.copy(
+            id = newId,
+            wrappedDek = wrappedDek,
+            wrappedThumbnailDek = wrappedThumbnailDek,
+            dekFormat = dekFormat,
+            thumbnailDekFormat = if (wrappedThumbnailDek != null) dekFormat else null,
+            rotation = 0,
+            tags = emptyList(),
+            sharedFromUploadId = fromRecord.id,
+            sharedFromUserId = fromUserId,
+        )
     }
 
     internal fun canCompost(uploadId: UUID, conn: Connection): Boolean {
@@ -2163,6 +2346,7 @@ internal fun UploadRecord.toJson(): String {
         if (plainChunkSize != null) node.put("plainChunkSize", plainChunkSize)
     }
     if (durationSeconds != null) node.put("durationSeconds", durationSeconds)
+    if (sharedFromUserId != null) node.put("sharedFromUserId", sharedFromUserId.toString())
     return node.toString()
 }
 
@@ -2211,6 +2395,8 @@ private fun java.sql.ResultSet.toUploadRecord() = UploadRecord(
     previewDekFormat = try { getString("preview_dek_format") } catch (_: Exception) { null },
     plainChunkSize = try { getObject("plain_chunk_size") as? Int } catch (_: Exception) { null },
     durationSeconds = try { getObject("duration_seconds") as? Int } catch (_: Exception) { null },
+    sharedFromUploadId = try { getObject("shared_from_upload_id", UUID::class.java) } catch (_: Exception) { null },
+    sharedFromUserId = try { getObject("shared_from_user_id", UUID::class.java) } catch (_: Exception) { null },
 )
 
 private fun java.sql.ResultSet.toWrappedKeyRecord() = WrappedKeyRecord(

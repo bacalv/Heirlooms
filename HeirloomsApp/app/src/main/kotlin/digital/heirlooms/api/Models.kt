@@ -26,9 +26,14 @@ data class Upload(
     val previewDekFormat: String? = null,
     val plainChunkSize: Int? = null,
     val durationSeconds: Int? = null,
+    // Sharing provenance — non-null when this upload was shared from another user
+    val sharedFromUserId: String? = null,
+    // Display name resolved client-side from the friends list
+    val sharedFromDisplayName: String? = null,
 ) {
     val isVideo: Boolean get() = mimeType.startsWith("video/")
     val isEncrypted: Boolean get() = storageClass == "encrypted"
+    val isShared: Boolean get() = sharedFromUserId != null
 }
 
 data class UploadPage(

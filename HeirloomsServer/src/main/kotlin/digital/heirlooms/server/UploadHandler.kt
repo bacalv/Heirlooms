@@ -20,6 +20,7 @@ import org.http4k.core.Request
 import org.http4k.core.Response
 import org.http4k.core.Status.Companion.BAD_REQUEST
 import org.http4k.core.Status.Companion.CREATED
+import org.http4k.core.Status.Companion.FORBIDDEN
 import org.http4k.core.Status.Companion.FOUND
 import org.http4k.core.Status.Companion.INTERNAL_SERVER_ERROR
 import org.http4k.core.Status.Companion.NOT_FOUND
@@ -113,6 +114,7 @@ fun buildApp(
             capsuleReverseLookupRoute(database),
             compostUploadContractRoute(database),
             restoreUploadContractRoute(database),
+            shareUploadContractRoute(database),
         )
     }
 
@@ -125,7 +127,13 @@ fun buildApp(
     val keysContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
         descriptionPath = "/openapi.json"
-        routes += keysRoutes(database)
+        routes += keysRoutes(database) + sharingKeyRoutes(database)
+    }
+
+    val socialContract = contract {
+        renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
+        descriptionPath = "/openapi.json"
+        routes += friendsRoutes(database)
     }
 
     val authContract = contract {
@@ -170,6 +178,7 @@ fun buildApp(
         "/api/keys" bind keysContract,
         "/api/auth" bind authContract,
         "/api" bind capsuleContract,
+        "/api" bind socialContract,
         "/api" bind diagContract,
         "/health" bind GET to { Response(OK).body("ok") },
         "/api/settings" bind GET to { Response(OK).header("Content-Type", "application/json").body("""{"previewDurationSeconds":$previewDurationSeconds}""") },
@@ -442,16 +451,21 @@ private fun launchCompostCleanup(storage: FileStore, database: Database) {
             val expired = database.fetchExpiredCompostedUploads()
             for (record in expired) {
                 try {
-                    storage.delete(StorageKey(record.storageKey))
-                    if (record.thumbnailKey != null) {
-                        try { storage.delete(StorageKey(record.thumbnailKey)) } catch (e: Exception) {
-                            println("[compost-cleanup] WARNING: failed to delete thumbnail ${record.thumbnailKey}: ${e.message}")
+                    val hasLiveRef = database.hasLiveSharedReference(record.storageKey, record.id)
+                    if (!hasLiveRef) {
+                        storage.delete(StorageKey(record.storageKey))
+                        if (record.thumbnailKey != null) {
+                            try { storage.delete(StorageKey(record.thumbnailKey)) } catch (e: Exception) {
+                                println("[compost-cleanup] WARNING: failed to delete thumbnail ${record.thumbnailKey}: ${e.message}")
+                            }
                         }
-                    }
-                    if (record.thumbnailStorageKey != null) {
-                        try { storage.delete(StorageKey(record.thumbnailStorageKey)) } catch (e: Exception) {
-                            println("[compost-cleanup] WARNING: failed to delete encrypted thumbnail ${record.thumbnailStorageKey}: ${e.message}")
+                        if (record.thumbnailStorageKey != null) {
+                            try { storage.delete(StorageKey(record.thumbnailStorageKey)) } catch (e: Exception) {
+                                println("[compost-cleanup] WARNING: failed to delete encrypted thumbnail ${record.thumbnailStorageKey}: ${e.message}")
+                            }
                         }
+                    } else {
+                        println("[compost-cleanup] INFO: skipping GCS delete for upload ${record.id} — live shared reference exists")
                     }
                     database.hardDeleteUpload(record.id)
                     println("[compost-cleanup] INFO: hard-deleted upload ${record.id} (composted ${record.compostedAt})")
@@ -513,6 +527,45 @@ private fun restoreUploadContractRoute(database: Database): ContractRoute {
                 Response(INTERNAL_SERVER_ERROR).body("Failed to restore upload: ${e.message}")
             }
         }
+    }
+}
+
+private fun shareUploadContractRoute(database: Database): ContractRoute {
+    val id = Path.uuid().of("id")
+    return "/uploads" / id / "share" meta {
+        summary = "Share an upload with a friend"
+        description = "Creates a recipient upload record with a re-wrapped DEK. Requester must own the upload and be friends with the recipient."
+    } bindContract POST to { uploadId: UUID, _: String ->
+        { request: Request -> handleShareUpload(uploadId, request, database) }
+    }
+}
+
+private fun handleShareUpload(uploadId: UUID, request: Request, database: Database): Response {
+    return try {
+        val requesterId = request.authUserId()
+            ?: return Response(FORBIDDEN)
+        val record = database.findUploadByIdForUser(uploadId, requesterId)
+            ?: return Response(NOT_FOUND)
+        val node = ObjectMapper().readTree(request.bodyString())
+        val toUserIdStr = node?.get("toUserId")?.asText()
+        val wrappedDekB64 = node?.get("wrappedDek")?.asText()
+        val wrappedThumbnailDekB64 = node?.get("wrappedThumbnailDek")?.asText()
+        val dekFormat = node?.get("dekFormat")?.asText()
+        if (toUserIdStr.isNullOrBlank() || wrappedDekB64.isNullOrBlank() || dekFormat.isNullOrBlank())
+            return Response(BAD_REQUEST).body("Missing required fields")
+        val toUserId = runCatching { UUID.fromString(toUserIdStr) }.getOrNull()
+            ?: return Response(BAD_REQUEST).body("Invalid toUserId")
+        if (!database.areFriends(requesterId, toUserId))
+            return Response(FORBIDDEN).body("Not friends")
+        val dec = Base64.getDecoder()
+        val wrappedDek = runCatching { dec.decode(wrappedDekB64) }.getOrNull()
+            ?: return Response(BAD_REQUEST).body("wrappedDek is not valid Base64")
+        val wrappedThumbnailDek = if (!wrappedThumbnailDekB64.isNullOrBlank())
+            runCatching { dec.decode(wrappedThumbnailDekB64) }.getOrNull() else null
+        val shared = database.createSharedUpload(record, requesterId, toUserId, wrappedDek, wrappedThumbnailDek, dekFormat)
+        Response(CREATED).header("Content-Type", "application/json").body(shared.toJson())
+    } catch (e: Exception) {
+        Response(INTERNAL_SERVER_ERROR).body("shareUpload failed: ${e.message}")
     }
 }
 
