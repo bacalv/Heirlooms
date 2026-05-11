@@ -85,6 +85,7 @@ fun buildApp(
     thumbnailGenerator: (ByteArray, String) -> ByteArray? = ::generateThumbnail,
     metadataExtractor: (ByteArray, String) -> MediaMetadata = MetadataExtractor()::extract,
     previewDurationSeconds: Int = 15,
+    authSecret: ByteArray = ByteArray(32),
 ): HttpHandler {
     val directUpload = storage as? DirectUploadSupport
 
@@ -127,6 +128,12 @@ fun buildApp(
         routes += keysRoutes(database)
     }
 
+    val authContract = contract {
+        renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
+        descriptionPath = "/openapi.json"
+        routes += authRoutes(database, authSecret)
+    }
+
     val diagContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
         descriptionPath = "/openapi.json"
@@ -160,6 +167,7 @@ fun buildApp(
     return routes(
         "/api/content" bind contentContract,
         "/api/keys" bind keysContract,
+        "/api/auth" bind authContract,
         "/api" bind capsuleContract,
         "/api" bind diagContract,
         "/health" bind GET to { Response(OK).body("ok") },

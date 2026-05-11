@@ -7,6 +7,7 @@ import kotlinx.coroutines.cancel
 import org.http4k.core.then
 import org.http4k.server.Netty
 import org.http4k.server.asServer
+import java.util.Base64
 
 fun main() {
     // Prefer environment variables (used in Docker) over application.properties
@@ -54,7 +55,11 @@ fun main() {
     cleanupService.startPeriodicCleanup()
     println("PendingBlobsCleanupService started")
 
-    val app = buildApp(storage, database, previewDurationSeconds = config.previewDurationSeconds)
+    val authSecret = if (config.authSecret.isNotEmpty())
+        runCatching { Base64.getUrlDecoder().decode(config.authSecret) }.getOrElse { ByteArray(32) }
+    else
+        ByteArray(32)
+    val app = buildApp(storage, database, previewDurationSeconds = config.previewDurationSeconds, authSecret = authSecret)
     val server = corsFilter().then(
         if (config.apiKey.isNotEmpty()) {
             apiKeyFilter(config.apiKey).then(app)

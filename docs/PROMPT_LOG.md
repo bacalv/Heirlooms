@@ -1,5 +1,21 @@
 # Heirlooms — Prompt Log
 
+---
+
+## Session — 11 May 2026 — v0.38.0: M8 E1 — Schema + Auth API
+
+Implements `docs/briefs/M8_E1_brief.md`. Server-only. No client changes.
+
+**Migrations.** V20 creates `users`, `user_sessions`, and `invites` tables. Session tokens are 32 raw bytes (base64url); only `SHA256(token)` is persisted. Sessions expire 90 days from `last_used_at`. V21 seeds the founding user (`id = 00000000-0000-0000-0000-000000000001`), backfills `user_id` onto `uploads`, `capsules`, `plots`, `wrapped_keys`, and `recovery_passphrase`, then tightens all those columns to `NOT NULL` with FK constraints. `recovery_passphrase` drops its `id` sentinel column and makes `user_id` the primary key. `pending_device_links` gains `user_id`, `web_session_id`, `raw_session_token`, and `session_expires_at` for the M8 QR pairing flow.
+
+**Auth endpoints** (`/api/auth/*`). `POST /challenge` returns the stored `auth_salt` for known usernames; returns a deterministic fake salt (HMAC-SHA256 of server secret + username, truncated to 16 bytes) for unknown ones — no enumeration. `POST /login` verifies `SHA256(auth_key)` against `users.auth_verifier`. `POST /setup-existing` is a one-time path for the founding user to set their passphrase after the M8 deploy — gated on `auth_verifier IS NULL` and a matching `device_id` in `wrapped_keys`. `GET /invites` generates a 48-hour invite token. `POST /register` redeems an invite, creates a user + `wrapped_keys` row, issues a session. `POST /logout` deletes the calling session. Pairing flow: `POST /pairing/initiate` (authenticated Android, generates 8-digit numeric code) → `POST /pairing/qr` (web enters code, gets `session_id`) → `POST /pairing/complete` (Android wraps master key, creates web session) → `GET /pairing/status` (web polls, receives session token + wrapped key when ready).
+
+**Bridge pattern.** All existing DB INSERT methods gain an optional `userId: UUID = FOUNDING_USER_ID` parameter so they continue to work after V21's NOT NULL constraints land. E2 replaces the default with the authenticated user's ID. `recovery_passphrase` queries updated to use `user_id` PK (old `id = 1` sentinel removed). `listPlots()` updated from `owner_user_id IS NULL` to `owner_user_id = FOUNDING_USER_ID`.
+
+**Tests.** 8 schema canary tests (Testcontainers) verify V20/V21 shape and constraints. 20 auth endpoint integration tests cover the full auth lifecycle including the complete pairing flow. All 246 server tests pass.
+
+---
+
 A record of the key decisions and prompts from the founding development session
 (April 2026). Each entry captures the original intent, what was built, and any
 important context or tradeoffs discovered along the way.

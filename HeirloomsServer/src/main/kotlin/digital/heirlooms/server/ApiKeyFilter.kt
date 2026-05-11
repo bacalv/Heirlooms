@@ -10,6 +10,7 @@ fun apiKeyFilter(apiKey: String): Filter = Filter { next ->
         when {
             path == "/health" -> next(request)
             path.startsWith("/docs") -> next(request)
+            path.startsWith("/api/auth/") -> next(request)
             request.header("X-Api-Key") == apiKey -> next(request)
             else -> Response(UNAUTHORIZED).body("Unauthorized")
         }

@@ -13,6 +13,39 @@ import java.util.Base64
 import java.util.UUID
 import javax.sql.DataSource
 
+// ---- Auth domain model --------------------------------------------------
+
+val FOUNDING_USER_ID: UUID = UUID.fromString("00000000-0000-0000-0000-000000000001")
+
+data class UserRecord(
+    val id: UUID,
+    val username: String,
+    val displayName: String,
+    val authVerifier: ByteArray?,
+    val authSalt: ByteArray?,
+    val createdAt: java.time.Instant,
+)
+
+data class UserSessionRecord(
+    val id: UUID,
+    val userId: UUID,
+    val tokenHash: ByteArray,
+    val deviceKind: String,
+    val createdAt: java.time.Instant,
+    val lastUsedAt: java.time.Instant,
+    val expiresAt: java.time.Instant,
+)
+
+data class InviteRecord(
+    val id: UUID,
+    val token: String,
+    val createdBy: UUID,
+    val createdAt: java.time.Instant,
+    val expiresAt: java.time.Instant,
+    val usedAt: java.time.Instant?,
+    val usedBy: UUID?,
+)
+
 // ---- Capsule domain model -----------------------------------------------
 
 enum class CapsuleShape { OPEN, SEALED }
@@ -118,6 +151,10 @@ data class PendingDeviceLinkRecord(
     val newPubkey: ByteArray?,
     val wrappedMasterKey: ByteArray?,
     val wrapFormat: String?,
+    val userId: UUID? = null,
+    val webSessionId: String? = null,
+    val rawSessionToken: String? = null,
+    val sessionExpiresAt: Instant? = null,
 )
 
 // ---- Sort options for uploads -------------------------------------------
@@ -149,7 +186,7 @@ class Database(private val dataSource: DataSource) {
             .migrate()
     }
 
-    fun recordUpload(record: UploadRecord) {
+    fun recordUpload(record: UploadRecord, userId: UUID = FOUNDING_USER_ID) {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
                 """INSERT INTO uploads
@@ -158,8 +195,9 @@ class Database(private val dataSource: DataSource) {
                     exif_processed_at, storage_class, envelope_version, wrapped_dek, dek_format,
                     encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
                     wrapped_thumbnail_dek, thumbnail_dek_format, preview_storage_key,
-                    wrapped_preview_dek, preview_dek_format, plain_chunk_size, duration_seconds)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+                    wrapped_preview_dek, preview_dek_format, plain_chunk_size, duration_seconds,
+                    user_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
             ).use { stmt ->
                 stmt.setObject(1, record.id)
                 stmt.setString(2, record.storageKey)
@@ -188,6 +226,7 @@ class Database(private val dataSource: DataSource) {
                 stmt.setString(25, record.previewDekFormat)
                 stmt.setObject(26, record.plainChunkSize)
                 stmt.setObject(27, record.durationSeconds)
+                stmt.setObject(28, userId)
                 stmt.executeUpdate()
             }
         }
@@ -440,12 +479,13 @@ class Database(private val dataSource: DataSource) {
         recipients: List<String>,
         uploadIds: List<UUID>,
         message: String,
+        userId: UUID = FOUNDING_USER_ID,
     ): CapsuleDetail {
         val now = Instant.now()
         withTransaction { conn ->
             conn.prepareStatement(
-                """INSERT INTO capsules (id, created_at, updated_at, created_by_user, shape, state, unlock_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)"""
+                """INSERT INTO capsules (id, created_at, updated_at, created_by_user, shape, state, unlock_at, user_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
             ).use { stmt ->
                 stmt.setObject(1, id)
                 stmt.setTimestamp(2, Timestamp.from(now))
@@ -454,6 +494,7 @@ class Database(private val dataSource: DataSource) {
                 stmt.setString(5, shape.name.lowercase())
                 stmt.setString(6, state.name.lowercase())
                 stmt.setObject(7, unlockAt)
+                stmt.setObject(8, userId)
                 stmt.executeUpdate()
             }
             insertRecipients(conn, id, recipients)
@@ -1074,15 +1115,16 @@ class Database(private val dataSource: DataSource) {
 
     // ---- Plot operations --------------------------------------------------
 
-    fun listPlots(): List<PlotRecord> {
+    fun listPlots(userId: UUID = FOUNDING_USER_ID): List<PlotRecord> {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
                 """SELECT p.id, p.owner_user_id, p.name, p.sort_order, p.is_system_defined,
                           p.created_at, p.updated_at
                    FROM plots p
-                   WHERE p.owner_user_id IS NULL
+                   WHERE p.owner_user_id = ?
                    ORDER BY p.sort_order ASC, p.created_at ASC"""
             ).use { stmt ->
+                stmt.setObject(1, userId)
                 val rs = stmt.executeQuery()
                 val results = mutableListOf<PlotRecord>()
                 while (rs.next()) {
@@ -1126,17 +1168,18 @@ class Database(private val dataSource: DataSource) {
         }
     }
 
-    fun createPlot(name: String, tagCriteria: List<String>): PlotRecord {
+    fun createPlot(name: String, tagCriteria: List<String>, userId: UUID = FOUNDING_USER_ID): PlotRecord {
         val id = UUID.randomUUID()
         val now = Instant.now()
         withTransaction { conn ->
             conn.prepareStatement(
-                "INSERT INTO plots (id, owner_user_id, name, created_at, updated_at) VALUES (?, NULL, ?, ?, ?)"
+                "INSERT INTO plots (id, owner_user_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
             ).use { stmt ->
                 stmt.setObject(1, id)
-                stmt.setString(2, name.trim())
-                stmt.setTimestamp(3, Timestamp.from(now))
+                stmt.setObject(2, userId)
+                stmt.setString(3, name.trim())
                 stmt.setTimestamp(4, Timestamp.from(now))
+                stmt.setTimestamp(5, Timestamp.from(now))
                 stmt.executeUpdate()
             }
             replacePlotTagCriteria(conn, id, tagCriteria)
@@ -1341,12 +1384,12 @@ class Database(private val dataSource: DataSource) {
 
     // ---- Wrapped keys --------------------------------------------------------
 
-    fun insertWrappedKey(record: WrappedKeyRecord) {
+    fun insertWrappedKey(record: WrappedKeyRecord, userId: UUID = FOUNDING_USER_ID) {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """INSERT INTO wrapped_keys (id, device_id, device_label, device_kind, pubkey_format,
-                       pubkey, wrapped_master_key, wrap_format, created_at, last_used_at, retired_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+                       pubkey, wrapped_master_key, wrap_format, created_at, last_used_at, retired_at, user_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
             ).use { stmt ->
                 stmt.setObject(1, record.id)
                 stmt.setString(2, record.deviceId)
@@ -1359,6 +1402,7 @@ class Database(private val dataSource: DataSource) {
                 stmt.setTimestamp(9, Timestamp.from(record.createdAt))
                 stmt.setTimestamp(10, Timestamp.from(record.lastUsedAt))
                 stmt.setTimestamp(11, record.retiredAt?.let { Timestamp.from(it) })
+                stmt.setObject(12, userId)
                 stmt.executeUpdate()
             }
         }
@@ -1424,11 +1468,12 @@ class Database(private val dataSource: DataSource) {
 
     // ---- Recovery passphrase -------------------------------------------------
 
-    fun getRecoveryPassphrase(): RecoveryPassphraseRecord? {
+    fun getRecoveryPassphrase(userId: UUID = FOUNDING_USER_ID): RecoveryPassphraseRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
-                "SELECT wrapped_master_key, wrap_format, argon2_params, salt, created_at, updated_at FROM recovery_passphrase WHERE id = 1"
+                "SELECT wrapped_master_key, wrap_format, argon2_params, salt, created_at, updated_at FROM recovery_passphrase WHERE user_id = ?"
             ).use { stmt ->
+                stmt.setObject(1, userId)
                 val rs = stmt.executeQuery()
                 if (!rs.next()) return null
                 return rs.toRecoveryPassphraseRecord()
@@ -1436,30 +1481,32 @@ class Database(private val dataSource: DataSource) {
         }
     }
 
-    fun upsertRecoveryPassphrase(record: RecoveryPassphraseRecord) {
+    fun upsertRecoveryPassphrase(record: RecoveryPassphraseRecord, userId: UUID = FOUNDING_USER_ID) {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
-                """INSERT INTO recovery_passphrase (id, wrapped_master_key, wrap_format, argon2_params, salt, created_at, updated_at)
-                   VALUES (1, ?, ?, ?::jsonb, ?, NOW(), NOW())
-                   ON CONFLICT (id) DO UPDATE SET
+                """INSERT INTO recovery_passphrase (user_id, wrapped_master_key, wrap_format, argon2_params, salt, created_at, updated_at)
+                   VALUES (?, ?, ?, ?::jsonb, ?, NOW(), NOW())
+                   ON CONFLICT (user_id) DO UPDATE SET
                        wrapped_master_key = EXCLUDED.wrapped_master_key,
                        wrap_format = EXCLUDED.wrap_format,
                        argon2_params = EXCLUDED.argon2_params,
                        salt = EXCLUDED.salt,
                        updated_at = NOW()"""
             ).use { stmt ->
-                stmt.setBytes(1, record.wrappedMasterKey)
-                stmt.setString(2, record.wrapFormat)
-                stmt.setString(3, record.argon2Params)
-                stmt.setBytes(4, record.salt)
+                stmt.setObject(1, userId)
+                stmt.setBytes(2, record.wrappedMasterKey)
+                stmt.setString(3, record.wrapFormat)
+                stmt.setString(4, record.argon2Params)
+                stmt.setBytes(5, record.salt)
                 stmt.executeUpdate()
             }
         }
     }
 
-    fun deleteRecoveryPassphrase(): Boolean {
+    fun deleteRecoveryPassphrase(userId: UUID = FOUNDING_USER_ID): Boolean {
         dataSource.connection.use { conn ->
-            conn.prepareStatement("DELETE FROM recovery_passphrase WHERE id = 1").use { stmt ->
+            conn.prepareStatement("DELETE FROM recovery_passphrase WHERE user_id = ?").use { stmt ->
+                stmt.setObject(1, userId)
                 return stmt.executeUpdate() > 0
             }
         }
@@ -1481,12 +1528,16 @@ class Database(private val dataSource: DataSource) {
         }
     }
 
+    private val pendingLinkColumns = """
+        id, one_time_code, expires_at, state, new_device_id, new_device_label,
+        new_device_kind, new_pubkey_format, new_pubkey, wrapped_master_key, wrap_format,
+        user_id, web_session_id, raw_session_token, session_expires_at
+    """.trimIndent()
+
     fun getPendingDeviceLink(id: UUID): PendingDeviceLinkRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
-                """SELECT id, one_time_code, expires_at, state, new_device_id, new_device_label,
-                          new_device_kind, new_pubkey_format, new_pubkey, wrapped_master_key, wrap_format
-                   FROM pending_device_links WHERE id = ?"""
+                "SELECT $pendingLinkColumns FROM pending_device_links WHERE id = ?"
             ).use { stmt ->
                 stmt.setObject(1, id)
                 val rs = stmt.executeQuery()
@@ -1499,11 +1550,22 @@ class Database(private val dataSource: DataSource) {
     fun getPendingDeviceLinkByCode(code: String): PendingDeviceLinkRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
-                """SELECT id, one_time_code, expires_at, state, new_device_id, new_device_label,
-                          new_device_kind, new_pubkey_format, new_pubkey, wrapped_master_key, wrap_format
-                   FROM pending_device_links WHERE one_time_code = ?"""
+                "SELECT $pendingLinkColumns FROM pending_device_links WHERE one_time_code = ?"
             ).use { stmt ->
                 stmt.setString(1, code)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return null
+                return rs.toPendingDeviceLinkRecord()
+            }
+        }
+    }
+
+    fun getPendingDeviceLinkByWebSessionId(webSessionId: String): PendingDeviceLinkRecord? {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "SELECT $pendingLinkColumns FROM pending_device_links WHERE web_session_id = ?"
+            ).use { stmt ->
+                stmt.setString(1, webSessionId)
                 val rs = stmt.executeQuery()
                 if (!rs.next()) return null
                 return rs.toPendingDeviceLinkRecord()
@@ -1538,6 +1600,7 @@ class Database(private val dataSource: DataSource) {
         id: UUID, wrappedMasterKey: ByteArray, wrapFormat: String,
         deviceId: String, deviceLabel: String, deviceKind: String,
         pubkeyFormat: String, pubkey: ByteArray,
+        userId: UUID = FOUNDING_USER_ID,
     ) {
         withTransaction { conn ->
             conn.prepareStatement(
@@ -1551,8 +1614,8 @@ class Database(private val dataSource: DataSource) {
             val now = Instant.now()
             conn.prepareStatement(
                 """INSERT INTO wrapped_keys (id, device_id, device_label, device_kind, pubkey_format,
-                       pubkey, wrapped_master_key, wrap_format, created_at, last_used_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+                       pubkey, wrapped_master_key, wrap_format, created_at, last_used_at, user_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
             ).use { stmt ->
                 stmt.setObject(1, UUID.randomUUID())
                 stmt.setString(2, deviceId)
@@ -1564,6 +1627,7 @@ class Database(private val dataSource: DataSource) {
                 stmt.setString(8, wrapFormat)
                 stmt.setTimestamp(9, Timestamp.from(now))
                 stmt.setTimestamp(10, Timestamp.from(now))
+                stmt.setObject(11, userId)
                 stmt.executeUpdate()
             }
         }
@@ -1664,6 +1728,287 @@ class Database(private val dataSource: DataSource) {
                 idleTimeout = 600_000
             }
             return Database(HikariDataSource(hikari))
+        }
+    }
+
+    // ── Users ─────────────────────────────────────────────────────────────────
+
+    fun createUser(
+        id: UUID = UUID.randomUUID(),
+        username: String,
+        displayName: String,
+        authVerifier: ByteArray? = null,
+        authSalt: ByteArray? = null,
+    ): UserRecord {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """INSERT INTO users (id, username, display_name, auth_verifier, auth_salt)
+                   VALUES (?, ?, ?, ?, ?)"""
+            ).use { stmt ->
+                stmt.setObject(1, id)
+                stmt.setString(2, username)
+                stmt.setString(3, displayName)
+                stmt.setBytes(4, authVerifier)
+                stmt.setBytes(5, authSalt)
+                stmt.executeUpdate()
+            }
+        }
+        return findUserById(id)!!
+    }
+
+    fun findUserByUsername(username: String): UserRecord? {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "SELECT id, username, display_name, auth_verifier, auth_salt, created_at FROM users WHERE username = ?"
+            ).use { stmt ->
+                stmt.setString(1, username)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return null
+                return rs.toUserRecord()
+            }
+        }
+    }
+
+    fun findUserById(id: UUID): UserRecord? {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "SELECT id, username, display_name, auth_verifier, auth_salt, created_at FROM users WHERE id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, id)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return null
+                return rs.toUserRecord()
+            }
+        }
+    }
+
+    fun setUserAuth(userId: UUID, authVerifier: ByteArray, authSalt: ByteArray) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "UPDATE users SET auth_verifier = ?, auth_salt = ? WHERE id = ?"
+            ).use { stmt ->
+                stmt.setBytes(1, authVerifier)
+                stmt.setBytes(2, authSalt)
+                stmt.setObject(3, userId)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    fun resetUserAuth(userId: UUID) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "UPDATE users SET auth_verifier = NULL, auth_salt = NULL WHERE id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, userId)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    // ── Sessions ──────────────────────────────────────────────────────────────
+
+    fun createSession(userId: UUID, tokenHash: ByteArray, deviceKind: String): UserSessionRecord {
+        val id = UUID.randomUUID()
+        val now = Instant.now()
+        val expiresAt = now.plus(90, ChronoUnit.DAYS)
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """INSERT INTO user_sessions (id, user_id, token_hash, device_kind, created_at, last_used_at, expires_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)"""
+            ).use { stmt ->
+                stmt.setObject(1, id)
+                stmt.setObject(2, userId)
+                stmt.setBytes(3, tokenHash)
+                stmt.setString(4, deviceKind)
+                stmt.setTimestamp(5, Timestamp.from(now))
+                stmt.setTimestamp(6, Timestamp.from(now))
+                stmt.setTimestamp(7, Timestamp.from(expiresAt))
+                stmt.executeUpdate()
+            }
+        }
+        return UserSessionRecord(id, userId, tokenHash, deviceKind, now, now, expiresAt)
+    }
+
+    fun findSessionByTokenHash(tokenHash: ByteArray): UserSessionRecord? {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """SELECT id, user_id, token_hash, device_kind, created_at, last_used_at, expires_at
+                   FROM user_sessions WHERE token_hash = ?"""
+            ).use { stmt ->
+                stmt.setBytes(1, tokenHash)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return null
+                return rs.toUserSessionRecord()
+            }
+        }
+    }
+
+    fun deleteSession(id: UUID) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement("DELETE FROM user_sessions WHERE id = ?").use { stmt ->
+                stmt.setObject(1, id)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    fun refreshSession(id: UUID) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "UPDATE user_sessions SET last_used_at = NOW(), expires_at = NOW() + INTERVAL '90 days' WHERE id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, id)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    fun deleteExpiredSessions() {
+        dataSource.connection.use { conn ->
+            conn.createStatement().use { stmt ->
+                stmt.execute("DELETE FROM user_sessions WHERE expires_at < NOW()")
+                stmt.execute("DELETE FROM pending_device_links WHERE expires_at < NOW() AND state != 'wrap_complete'")
+                stmt.execute("DELETE FROM invites WHERE expires_at < NOW() AND used_at IS NULL")
+            }
+        }
+    }
+
+    // ── Invites ───────────────────────────────────────────────────────────────
+
+    fun createInvite(createdBy: UUID, rawToken: String): InviteRecord {
+        val id = UUID.randomUUID()
+        val now = Instant.now()
+        val expiresAt = now.plus(48, ChronoUnit.HOURS)
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "INSERT INTO invites (id, token, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?)"
+            ).use { stmt ->
+                stmt.setObject(1, id)
+                stmt.setString(2, rawToken)
+                stmt.setObject(3, createdBy)
+                stmt.setTimestamp(4, Timestamp.from(now))
+                stmt.setTimestamp(5, Timestamp.from(expiresAt))
+                stmt.executeUpdate()
+            }
+        }
+        return InviteRecord(id, rawToken, createdBy, now, expiresAt, null, null)
+    }
+
+    fun findInviteByToken(token: String): InviteRecord? {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "SELECT id, token, created_by, created_at, expires_at, used_at, used_by FROM invites WHERE token = ?"
+            ).use { stmt ->
+                stmt.setString(1, token)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return null
+                return rs.toInviteRecord()
+            }
+        }
+    }
+
+    fun markInviteUsed(id: UUID, usedBy: UUID) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "UPDATE invites SET used_at = NOW(), used_by = ? WHERE id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, usedBy)
+                stmt.setObject(2, id)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    // ── M8 Pairing ────────────────────────────────────────────────────────────
+
+    fun createPairingLink(userId: UUID, code: String): PendingDeviceLinkRecord {
+        val id = UUID.randomUUID()
+        val expiresAt = Instant.now().plus(5, ChronoUnit.MINUTES)
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """INSERT INTO pending_device_links (id, one_time_code, expires_at, state, user_id)
+                   VALUES (?, ?, ?, 'initiated', ?)"""
+            ).use { stmt ->
+                stmt.setObject(1, id)
+                stmt.setString(2, code)
+                stmt.setTimestamp(3, Timestamp.from(expiresAt))
+                stmt.setObject(4, userId)
+                stmt.executeUpdate()
+            }
+        }
+        return PendingDeviceLinkRecord(
+            id = id, oneTimeCode = code, expiresAt = expiresAt, state = "initiated",
+            newDeviceId = null, newDeviceLabel = null, newDeviceKind = null,
+            newPubkeyFormat = null, newPubkey = null, wrappedMasterKey = null, wrapFormat = null,
+            userId = userId,
+        )
+    }
+
+    fun setPairingWebSession(id: UUID, webSessionId: String) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "UPDATE pending_device_links SET state = 'device_registered', web_session_id = ? WHERE id = ?"
+            ).use { stmt ->
+                stmt.setString(1, webSessionId)
+                stmt.setObject(2, id)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    fun completePairingLink(
+        id: UUID,
+        wrappedMasterKey: ByteArray,
+        wrapFormat: String,
+        rawSessionToken: String,
+        sessionRecord: UserSessionRecord,
+    ) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """UPDATE pending_device_links SET
+                       state = 'wrap_complete',
+                       wrapped_master_key = ?,
+                       wrap_format = ?,
+                       raw_session_token = ?,
+                       session_expires_at = ?
+                   WHERE id = ?"""
+            ).use { stmt ->
+                stmt.setBytes(1, wrappedMasterKey)
+                stmt.setString(2, wrapFormat)
+                stmt.setString(3, rawSessionToken)
+                stmt.setTimestamp(4, Timestamp.from(sessionRecord.expiresAt))
+                stmt.setObject(5, id)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    fun getWrappedKeyByDeviceIdAndUser(deviceId: String, userId: UUID): WrappedKeyRecord? {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """SELECT id, device_id, device_label, device_kind, pubkey_format, pubkey,
+                          wrapped_master_key, wrap_format, created_at, last_used_at, retired_at
+                   FROM wrapped_keys WHERE device_id = ? AND user_id = ?"""
+            ).use { stmt ->
+                stmt.setString(1, deviceId)
+                stmt.setObject(2, userId)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return null
+                return rs.toWrappedKeyRecord()
+            }
+        }
+    }
+
+    fun createSystemPlot(userId: UUID) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """INSERT INTO plots (id, owner_user_id, name, sort_order, is_system_defined)
+                   VALUES (gen_random_uuid(), ?, '__just_arrived__', -1000, TRUE)"""
+            ).use { stmt ->
+                stmt.setObject(1, userId)
+                stmt.executeUpdate()
+            }
         }
     }
 
@@ -1804,6 +2149,35 @@ private fun java.sql.ResultSet.toWrappedKeyRecord() = WrappedKeyRecord(
     retiredAt = getTimestamp("retired_at")?.toInstant(),
 )
 
+private fun java.sql.ResultSet.toUserRecord() = UserRecord(
+    id = getObject("id", UUID::class.java),
+    username = getString("username"),
+    displayName = getString("display_name"),
+    authVerifier = getBytes("auth_verifier"),
+    authSalt = getBytes("auth_salt"),
+    createdAt = getTimestamp("created_at").toInstant(),
+)
+
+private fun java.sql.ResultSet.toUserSessionRecord() = UserSessionRecord(
+    id = getObject("id", UUID::class.java),
+    userId = getObject("user_id", UUID::class.java),
+    tokenHash = getBytes("token_hash"),
+    deviceKind = getString("device_kind"),
+    createdAt = getTimestamp("created_at").toInstant(),
+    lastUsedAt = getTimestamp("last_used_at").toInstant(),
+    expiresAt = getTimestamp("expires_at").toInstant(),
+)
+
+private fun java.sql.ResultSet.toInviteRecord() = InviteRecord(
+    id = getObject("id", UUID::class.java),
+    token = getString("token"),
+    createdBy = getObject("created_by", UUID::class.java),
+    createdAt = getTimestamp("created_at").toInstant(),
+    expiresAt = getTimestamp("expires_at").toInstant(),
+    usedAt = getTimestamp("used_at")?.toInstant(),
+    usedBy = getObject("used_by", UUID::class.java),
+)
+
 private fun java.sql.ResultSet.toRecoveryPassphraseRecord() = RecoveryPassphraseRecord(
     wrappedMasterKey = getBytes("wrapped_master_key"),
     wrapFormat = getString("wrap_format"),
@@ -1825,4 +2199,8 @@ private fun java.sql.ResultSet.toPendingDeviceLinkRecord() = PendingDeviceLinkRe
     newPubkey = getBytes("new_pubkey"),
     wrappedMasterKey = getBytes("wrapped_master_key"),
     wrapFormat = getString("wrap_format"),
+    userId = try { getObject("user_id", UUID::class.java) } catch (_: Exception) { null },
+    webSessionId = try { getString("web_session_id") } catch (_: Exception) { null },
+    rawSessionToken = try { getString("raw_session_token") } catch (_: Exception) { null },
+    sessionExpiresAt = try { getTimestamp("session_expires_at")?.toInstant() } catch (_: Exception) { null },
 )

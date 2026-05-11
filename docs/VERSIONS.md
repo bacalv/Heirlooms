@@ -2,6 +2,19 @@
 
 ---
 
+## v0.38.0 — M8 E1: Schema + Auth API (11 May 2026)
+
+Server only.
+
+- **V20 migration** — `users`, `user_sessions`, `invites` tables. Session tokens are 256-bit random values; only `SHA256(token)` is stored. Sessions expire after 90 days of inactivity.
+- **V21 migration** — Seeds the founding user row; backfills `user_id` onto all existing `uploads`, `capsules`, `plots`, `wrapped_keys`, and `recovery_passphrase` rows. Tightens NULL sentinels to proper FK constraints. Adds `user_id`, `web_session_id`, `raw_session_token`, and `session_expires_at` to `pending_device_links`.
+- **Auth endpoints** (`/api/auth/*`) — `POST /challenge`, `POST /login`, `POST /setup-existing` (one-time founding user migration path), `POST /logout`, `GET /invites`, `POST /register`, `POST /pairing/initiate`, `POST /pairing/qr`, `POST /pairing/complete`, `GET /pairing/status`.
+- Existing handlers are **unchanged** — all continue to work without authentication in E1. Enforcement is E2.
+- `FOUNDING_USER_ID` constant in `Database.kt` used as the default `user_id` for all existing INSERT paths until E2 wires up per-user context.
+- 8 schema canary tests + 20 auth endpoint integration tests (Testcontainers). All 246 server tests pass.
+
+---
+
 ## v0.37.0 — Duration-based playback threshold, preview label + end overlay (11 May 2026)
 
 Server + Web + Android.
