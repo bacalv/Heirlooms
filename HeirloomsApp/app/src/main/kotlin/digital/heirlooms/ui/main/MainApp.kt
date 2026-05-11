@@ -52,6 +52,7 @@ fun MainApp() {
                     apiKey = ""
                     // Welcome flag intentionally NOT reset — welcome shows once per install.
                 },
+                store = store,
             )
         }
     }

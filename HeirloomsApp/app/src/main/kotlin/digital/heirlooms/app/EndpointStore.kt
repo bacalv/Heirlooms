@@ -50,10 +50,20 @@ class EndpointStore(private val store: PreferenceStore) {
     fun getWelcomed(): Boolean = store.getString(KEY_WELCOMED, "false") == "true"
     fun setWelcomed(value: Boolean) = store.putString(KEY_WELCOMED, if (value) "true" else "false")
 
+    // Maximum video duration (seconds) to play in full; longer videos use the preview clip.
+    // Int.MAX_VALUE = "No limit" — always play the full video.
+    fun getVideoPlaybackThreshold(): Int =
+        store.getString(KEY_VIDEO_THRESHOLD, DEFAULT_VIDEO_THRESHOLD.toString()).toIntOrNull()
+            ?: DEFAULT_VIDEO_THRESHOLD
+    fun setVideoPlaybackThreshold(seconds: Int) =
+        store.putString(KEY_VIDEO_THRESHOLD, seconds.toString())
+
     companion object {
         private const val KEY_API_KEY = "api_key"
         private const val KEY_WIFI_ONLY = "wifi_only"
         private const val KEY_WELCOMED = "welcomed"
+        private const val KEY_VIDEO_THRESHOLD = "video_playback_threshold"
+        const val DEFAULT_VIDEO_THRESHOLD = 300  // 5 minutes
 
         /** Convenience factory for use in Activities and Services. */
         fun create(context: Context): EndpointStore =

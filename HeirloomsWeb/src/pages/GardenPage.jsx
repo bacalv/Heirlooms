@@ -571,6 +571,20 @@ function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMo
 
 // ---- Main GardenPage -------------------------------------------------------
 
+async function getVideoDurationSeconds(file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file)
+    const video = document.createElement('video')
+    video.preload = 'metadata'
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(url)
+      resolve(isFinite(video.duration) ? Math.round(video.duration) : null)
+    }
+    video.onerror = () => { URL.revokeObjectURL(url); resolve(null) }
+    video.src = url
+  })
+}
+
 async function generateThumbnail(file) {
   const MAX_DIM = 400
   const canvas = document.createElement('canvas')
@@ -775,6 +789,7 @@ async function encryptAndUpload(file, apiKey, onStatus) {
   const previewDurationSeconds = settings.previewDurationSeconds ?? 15
   const isLarge = file.size > LARGE_FILE_THRESHOLD
   const isVideo = file.type.startsWith('video/')
+  const durationSeconds = isVideo ? await getVideoDurationSeconds(file) : null
 
   const contentDek = generateDek()
   const thumbDek = generateDek()
@@ -860,6 +875,7 @@ async function encryptAndUpload(file, apiKey, onStatus) {
     wrappedPreviewDekB64: wrappedPreviewDek ? toB64(wrappedPreviewDek) : null,
     previewDekFormat: wrappedPreviewDek ? ALG_MASTER_AES256GCM_V1 : null,
     plainChunkSize: usedChunkSize,
+    durationSeconds,
     takenAt,
     tags: [],
   })

@@ -1,4 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+
+// Videos shorter than this play in full. Longer videos use the preview clip (if available)
+// or fall back to the thumbnail. Revisit when a web settings page exists.
+const FULL_PLAYBACK_THRESHOLD_SECONDS = 120
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
 import { apiFetch, daysUntilPurge, formatCompactDate, formatUploadDate, capsuleTitle, API_URL } from '../api'
@@ -9,6 +13,12 @@ import { Toast } from '../components/Toast'
 import { getMasterKey } from '../crypto/vaultSession'
 import { unwrapDekWithMasterKey, decryptSymmetric, decryptStreamingContent, fromB64 } from '../crypto/vaultCrypto'
 import { openEncryptedVideoStream } from '../crypto/encryptedVideoStream'
+
+function formatDuration(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60)
+  const s = Math.floor(totalSeconds % 60)
+  return `${m}:${String(s).padStart(2, '0')}`
+}
 
 function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`
@@ -149,11 +159,78 @@ function KebabMenu({ onAddToCapsule, onCompost, compostDisabled }) {
   )
 }
 
+// ---- Shared video player with preview label + end overlay ------------------
+
+function PreviewVideoPlayer({ upload, blobUrl, onDownload, downloading, maxHeight = 500,
+  previewEnded, setPreviewEnded, previewPosition, setPreviewPosition, previewVideoRef }) {
+
+  const isPreview = !!(upload.previewStorageKey &&
+    upload.durationSeconds != null &&
+    upload.durationSeconds > FULL_PLAYBACK_THRESHOLD_SECONDS)
+
+  const fullDuration = upload.durationSeconds ?? 0
+
+  function handleTimeUpdate(e) {
+    setPreviewPosition(Math.floor(e.target.currentTime))
+  }
+
+  function handleEnded() {
+    setPreviewEnded(true)
+  }
+
+  return (
+    <div className="space-y-1">
+      <div className="rounded-card overflow-hidden border border-forest-08 bg-black relative">
+        <video
+          ref={previewVideoRef}
+          src={blobUrl}
+          controls
+          className={`max-w-full w-full`}
+          style={{ maxHeight }}
+          onTimeUpdate={isPreview ? handleTimeUpdate : undefined}
+          onEnded={isPreview ? handleEnded : undefined}
+        />
+        {isPreview && previewEnded && (
+          <div
+            className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-3 p-6"
+            onClick={(e) => { if (e.target === e.currentTarget) setPreviewEnded(false) }}
+          >
+            <p className="text-white font-medium text-lg">Preview ended</p>
+            <p className="text-white/80 text-sm text-center">
+              This is a short preview. The full video is {formatDuration(fullDuration)} long.
+            </p>
+            <button
+              onClick={onDownload}
+              disabled={downloading}
+              className="mt-1 px-4 py-2 bg-forest text-parchment rounded text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              {downloading ? 'Downloading…' : 'Download full video'}
+            </button>
+          </div>
+        )}
+      </div>
+      {isPreview && !previewEnded && (
+        <p className="text-xs text-text-muted">
+          Preview · {formatDuration(previewPosition)} of {formatDuration(fullDuration)}
+        </p>
+      )}
+      {isPreview && previewEnded && (
+        <p className="text-xs text-text-muted">
+          Preview · {formatDuration(fullDuration)} full video
+          {' · '}
+          <button onClick={() => setPreviewEnded(false)} className="underline hover:text-forest">dismiss</button>
+        </p>
+      )}
+    </div>
+  )
+}
+
 // ---- Garden flavour (default) — action-forward layout ----------------------
 
 function GardenFlavour({ upload, blobUrl, capsules, isComposted, composting, compostError,
   restoring, restoreError, compostDisabled, onCompost, onRestore, onOpenAddModal,
-  onRotate, onUpdateTags, onDownload, downloading }) {
+  onRotate, onUpdateTags, onDownload, downloading,
+  previewEnded, setPreviewEnded, previewPosition, setPreviewPosition, previewVideoRef }) {
 
   const isImage = upload.mimeType?.startsWith('image/')
   const isVideo = upload.mimeType?.startsWith('video/')
@@ -173,21 +250,19 @@ function GardenFlavour({ upload, blobUrl, capsules, isComposted, composting, com
         </div>
       )}
       {blobUrl && isVideo && (
-        <div className="space-y-2">
-          <div className="rounded-card overflow-hidden border border-forest-08 bg-black">
-            <video src={blobUrl} controls className="max-w-full max-h-[500px] w-full" />
-          </div>
-          {upload.previewStorageKey && (
-            <p className="text-xs text-text-muted">Showing {upload.storageClass === 'encrypted' ? 'preview clip' : 'video'}. <button onClick={onDownload} disabled={downloading} className="underline hover:text-forest disabled:opacity-50">{downloading ? 'Downloading…' : 'Download full file'}</button></p>
-          )}
-        </div>
+        <PreviewVideoPlayer
+          upload={upload} blobUrl={blobUrl} onDownload={onDownload} downloading={downloading}
+          maxHeight={500} previewEnded={previewEnded} setPreviewEnded={setPreviewEnded}
+          previewPosition={previewPosition} setPreviewPosition={setPreviewPosition}
+          previewVideoRef={previewVideoRef}
+        />
       )}
 
       <div className="space-y-2">
         <div className="flex items-start justify-between gap-2">
           <h1 className="text-lg font-medium text-forest">{upload.storageKey}</h1>
           <div className="flex items-center gap-1 flex-shrink-0">
-            {isVideo && onDownload && !upload.previewStorageKey && (
+            {isVideo && onDownload && (
               <button onClick={onDownload} disabled={downloading} title="Download"
                 className="p-1 text-text-muted hover:text-forest transition-colors rounded disabled:opacity-50">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -290,7 +365,8 @@ function GardenFlavour({ upload, blobUrl, capsules, isComposted, composting, com
 // ---- Explore flavour — content-forward layout ------------------------------
 
 function ExploreFlavour({ upload, blobUrl, capsules, isComposted, composting, compostError,
-  restoring, restoreError, compostDisabled, onCompost, onRestore, onOpenAddModal, onDownload, downloading }) {
+  restoring, restoreError, compostDisabled, onCompost, onRestore, onOpenAddModal, onDownload, downloading,
+  previewEnded, setPreviewEnded, previewPosition, setPreviewPosition, previewVideoRef }) {
 
   const isImage = upload.mimeType?.startsWith('image/')
   const isVideo = upload.mimeType?.startsWith('video/')
@@ -310,14 +386,12 @@ function ExploreFlavour({ upload, blobUrl, capsules, isComposted, composting, co
         </div>
       )}
       {blobUrl && isVideo && (
-        <div className="space-y-2">
-          <div className="rounded-card overflow-hidden border border-forest-08 bg-black">
-            <video src={blobUrl} controls className="max-w-full max-h-[600px] w-full" />
-          </div>
-          {upload.previewStorageKey && (
-            <p className="text-xs text-text-muted">Showing preview clip. <button onClick={onDownload} disabled={downloading} className="underline hover:text-forest disabled:opacity-50">{downloading ? 'Downloading…' : 'Download full file'}</button></p>
-          )}
-        </div>
+        <PreviewVideoPlayer
+          upload={upload} blobUrl={blobUrl} onDownload={onDownload} downloading={downloading}
+          maxHeight={600} previewEnded={previewEnded} setPreviewEnded={setPreviewEnded}
+          previewPosition={previewPosition} setPreviewPosition={setPreviewPosition}
+          previewVideoRef={previewVideoRef}
+        />
       )}
 
       {/* Metadata prominent */}
@@ -407,6 +481,9 @@ export function PhotoDetailPage() {
   const [restoring, setRestoring] = useState(false)
   const [restoreError, setRestoreError] = useState(null)
   const [downloading, setDownloading] = useState(false)
+  const [previewEnded, setPreviewEnded] = useState(false)
+  const [previewPosition, setPreviewPosition] = useState(0)
+  const previewVideoRef = useRef(null)
 
   async function handleDownload() {
     if (!upload || downloading) return
@@ -483,7 +560,13 @@ export function PhotoDetailPage() {
       const isEncrypted = upload.storageClass === 'encrypted'
       const LARGE = 10 * 1024 * 1024
 
-      if (isEncrypted && isVideo && upload.previewStorageKey) {
+      // Decide whether to use the preview clip or play the full video.
+      const knowsDuration = upload.durationSeconds != null
+      const exceedsThreshold = knowsDuration
+        ? upload.durationSeconds > FULL_PLAYBACK_THRESHOLD_SECONDS
+        : upload.fileSize > LARGE  // fallback for old uploads without duration
+
+      if (isEncrypted && isVideo && exceedsThreshold && upload.previewStorageKey) {
         // Preview clip path: decrypt the short preview clip (envelope format) and play it.
         const masterKey = getMasterKey()
         const rawPreview = upload.wrappedPreviewDek
@@ -499,8 +582,11 @@ export function PhotoDetailPage() {
         const blob = new Blob([plainBytes], { type: 'video/mp4' })
         objectUrl = URL.createObjectURL(blob)
         if (!cancelled) setBlobUrl(objectUrl)
+      } else if (isEncrypted && isVideo && exceedsThreshold && !upload.previewStorageKey) {
+        // Exceeds threshold but no preview — show nothing (thumbnail will display instead).
+        if (!cancelled) setBlobUrl(null)
       } else if (isEncrypted && isVideo && upload.fileSize > LARGE && typeof MediaSource !== 'undefined') {
-        // Legacy large video (no preview clip): MSE streaming path.
+        // Full video path (under threshold, or old upload): MSE streaming for large files.
         const masterKey = getMasterKey()
         const raw = upload.wrappedDek
         if (!raw) throw new Error('Missing wrappedDek')
@@ -562,6 +648,8 @@ export function PhotoDetailPage() {
       }
     }
 
+    setPreviewEnded(false)
+    setPreviewPosition(0)
     loadContent().catch(() => {})
     return () => {
       cancelled = true
@@ -674,6 +762,7 @@ export function PhotoDetailPage() {
     onRotate: handleRotate,
     onUpdateTags: handleUpdateTags,
     onDownload: handleDownload, downloading,
+    previewEnded, setPreviewEnded, previewPosition, setPreviewPosition, previewVideoRef,
   }
 
   return (

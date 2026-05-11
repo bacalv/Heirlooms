@@ -78,6 +78,7 @@ data class UploadRecord(
     val wrappedPreviewDek: ByteArray? = null,
     val previewDekFormat: String? = null,
     val plainChunkSize: Int? = null,
+    val durationSeconds: Int? = null,
 )
 
 data class UploadPage(val items: List<UploadRecord>, val nextCursor: String?)
@@ -157,8 +158,8 @@ class Database(private val dataSource: DataSource) {
                     exif_processed_at, storage_class, envelope_version, wrapped_dek, dek_format,
                     encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
                     wrapped_thumbnail_dek, thumbnail_dek_format, preview_storage_key,
-                    wrapped_preview_dek, preview_dek_format, plain_chunk_size)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+                    wrapped_preview_dek, preview_dek_format, plain_chunk_size, duration_seconds)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
             ).use { stmt ->
                 stmt.setObject(1, record.id)
                 stmt.setString(2, record.storageKey)
@@ -186,6 +187,7 @@ class Database(private val dataSource: DataSource) {
                 stmt.setBytes(24, record.wrappedPreviewDek)
                 stmt.setString(25, record.previewDekFormat)
                 stmt.setObject(26, record.plainChunkSize)
+                stmt.setObject(27, record.durationSeconds)
                 stmt.executeUpdate()
             }
         }
@@ -200,7 +202,7 @@ class Database(private val dataSource: DataSource) {
                           storage_class, envelope_version, wrapped_dek, dek_format,
                           encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
                           wrapped_thumbnail_dek, thumbnail_dek_format, preview_storage_key,
-                          wrapped_preview_dek, preview_dek_format, plain_chunk_size
+                          wrapped_preview_dek, preview_dek_format, plain_chunk_size, duration_seconds
                    FROM uploads WHERE content_hash = ? LIMIT 1"""
             ).use { stmt ->
                 stmt.setString(1, hash)
@@ -220,7 +222,7 @@ class Database(private val dataSource: DataSource) {
                           storage_class, envelope_version, wrapped_dek, dek_format,
                           encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
                           wrapped_thumbnail_dek, thumbnail_dek_format, preview_storage_key,
-                          wrapped_preview_dek, preview_dek_format, plain_chunk_size
+                          wrapped_preview_dek, preview_dek_format, plain_chunk_size, duration_seconds
                    FROM uploads WHERE id = ?"""
             ).use { stmt ->
                 stmt.setObject(1, id)
@@ -255,7 +257,7 @@ class Database(private val dataSource: DataSource) {
                           storage_class, envelope_version, wrapped_dek, dek_format,
                           encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
                           wrapped_thumbnail_dek, thumbnail_dek_format, preview_storage_key,
-                          wrapped_preview_dek, preview_dek_format, plain_chunk_size
+                          wrapped_preview_dek, preview_dek_format, plain_chunk_size, duration_seconds
                    FROM uploads $where ORDER BY uploaded_at DESC"""
             ).use { stmt ->
                 var idx = 1
@@ -278,7 +280,7 @@ class Database(private val dataSource: DataSource) {
                           storage_class, envelope_version, wrapped_dek, dek_format,
                           encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
                           wrapped_thumbnail_dek, thumbnail_dek_format, preview_storage_key,
-                          wrapped_preview_dek, preview_dek_format, plain_chunk_size
+                          wrapped_preview_dek, preview_dek_format, plain_chunk_size, duration_seconds
                    FROM uploads WHERE composted_at IS NOT NULL ORDER BY composted_at DESC"""
             ).use { stmt ->
                 val rs = stmt.executeQuery()
@@ -353,7 +355,7 @@ class Database(private val dataSource: DataSource) {
                           storage_class, envelope_version, wrapped_dek, dek_format,
                           encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
                           wrapped_thumbnail_dek, thumbnail_dek_format, preview_storage_key,
-                          wrapped_preview_dek, preview_dek_format, plain_chunk_size
+                          wrapped_preview_dek, preview_dek_format, plain_chunk_size, duration_seconds
                    FROM uploads WHERE composted_at < NOW() - INTERVAL '90 days'"""
             ).use { stmt ->
                 val rs = stmt.executeQuery()
@@ -775,7 +777,7 @@ class Database(private val dataSource: DataSource) {
                       u.storage_class, u.envelope_version, u.wrapped_dek, u.dek_format,
                       u.encrypted_metadata, u.encrypted_metadata_format, u.thumbnail_storage_key,
                       u.wrapped_thumbnail_dek, u.thumbnail_dek_format, u.preview_storage_key,
-                      u.wrapped_preview_dek, u.preview_dek_format, u.plain_chunk_size
+                      u.wrapped_preview_dek, u.preview_dek_format, u.plain_chunk_size, u.duration_seconds
                FROM uploads u
                JOIN capsule_contents cc ON u.id = cc.upload_id
                WHERE cc.capsule_id = ?
@@ -912,7 +914,7 @@ class Database(private val dataSource: DataSource) {
                           storage_class, envelope_version, wrapped_dek, dek_format,
                           encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
                           wrapped_thumbnail_dek, thumbnail_dek_format, preview_storage_key,
-                          wrapped_preview_dek, preview_dek_format, plain_chunk_size
+                          wrapped_preview_dek, preview_dek_format, plain_chunk_size, duration_seconds
                    FROM uploads $where $orderBy LIMIT ?"""
             ).use { stmt ->
                 var idx = 1
@@ -991,7 +993,7 @@ class Database(private val dataSource: DataSource) {
                           storage_class, envelope_version, wrapped_dek, dek_format,
                           encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
                           wrapped_thumbnail_dek, thumbnail_dek_format, preview_storage_key,
-                          wrapped_preview_dek, preview_dek_format, plain_chunk_size
+                          wrapped_preview_dek, preview_dek_format, plain_chunk_size, duration_seconds
                    FROM uploads $where
                    ORDER BY composted_at DESC, id DESC
                    LIMIT ?"""
@@ -1737,6 +1739,7 @@ internal fun UploadRecord.toJson(): String {
         if (previewDekFormat != null) node.put("previewDekFormat", previewDekFormat)
         if (plainChunkSize != null) node.put("plainChunkSize", plainChunkSize)
     }
+    if (durationSeconds != null) node.put("durationSeconds", durationSeconds)
     return node.toString()
 }
 
@@ -1784,6 +1787,7 @@ private fun java.sql.ResultSet.toUploadRecord() = UploadRecord(
     wrappedPreviewDek = try { getBytes("wrapped_preview_dek") } catch (_: Exception) { null },
     previewDekFormat = try { getString("preview_dek_format") } catch (_: Exception) { null },
     plainChunkSize = try { getObject("plain_chunk_size") as? Int } catch (_: Exception) { null },
+    durationSeconds = try { getObject("duration_seconds") as? Int } catch (_: Exception) { null },
 )
 
 private fun java.sql.ResultSet.toWrappedKeyRecord() = WrappedKeyRecord(

@@ -4,6 +4,7 @@ package digital.heirlooms.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +16,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,16 +35,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import digital.heirlooms.app.BuildConfig
+import digital.heirlooms.app.EndpointStore
 import digital.heirlooms.ui.theme.Earth
 import digital.heirlooms.ui.theme.Forest
+import digital.heirlooms.ui.theme.Forest08
 import digital.heirlooms.ui.theme.Forest15
 import digital.heirlooms.ui.theme.HeirloomsSerifItalic
 import digital.heirlooms.ui.theme.Parchment
 import digital.heirlooms.ui.theme.TextMuted
 
+private val VIDEO_THRESHOLD_OPTIONS = listOf(
+    60 to "1 min",
+    300 to "5 min",
+    900 to "15 min",
+    Int.MAX_VALUE to "No limit",
+)
+
 @Composable
-fun SettingsScreen(onApiKeyReset: () -> Unit) {
+fun SettingsScreen(onApiKeyReset: () -> Unit, store: EndpointStore) {
     var showResetConfirm by remember { mutableStateOf(false) }
+    var videoThreshold by remember { mutableStateOf(store.getVideoPlaybackThreshold()) }
 
     Scaffold(
         containerColor = Parchment,
@@ -65,6 +78,41 @@ fun SettingsScreen(onApiKeyReset: () -> Unit) {
                 onClick = { showResetConfirm = true },
                 showArrow = true,
             )
+            HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Forest15)
+
+            // Video playback threshold
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                Text(
+                    "Play full video up to",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Forest,
+                )
+                Text(
+                    "Longer videos show a short preview clip instead.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                    modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    VIDEO_THRESHOLD_OPTIONS.forEach { (seconds, label) ->
+                        val selected = videoThreshold == seconds
+                        FilterChip(
+                            selected = selected,
+                            onClick = {
+                                videoThreshold = seconds
+                                store.setVideoPlaybackThreshold(seconds)
+                            },
+                            label = { Text(label, style = MaterialTheme.typography.bodySmall) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Forest,
+                                selectedLabelColor = Parchment,
+                                containerColor = Forest08,
+                                labelColor = Forest,
+                            ),
+                        )
+                    }
+                }
+            }
             HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Forest15)
 
             SettingsRow(

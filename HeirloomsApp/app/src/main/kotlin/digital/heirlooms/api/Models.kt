@@ -25,6 +25,7 @@ data class Upload(
     val wrappedPreviewDek: ByteArray? = null,
     val previewDekFormat: String? = null,
     val plainChunkSize: Int? = null,
+    val durationSeconds: Int? = null,
 ) {
     val isVideo: Boolean get() = mimeType.startsWith("video/")
     val isEncrypted: Boolean get() = storageClass == "encrypted"

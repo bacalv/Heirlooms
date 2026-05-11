@@ -283,6 +283,7 @@ class HeirloomsApi(
         wrappedPreviewDekB64: String? = null,
         previewDekFormat: String? = null,
         plainChunkSize: Int? = null,
+        durationSeconds: Int? = null,
     ): Upload {
         val tagsJson = "[${tags.joinToString(",") { "\"${it.replace("\"", "\\\"")}\"" }}]"
         val takenAtJson = if (takenAt != null) ""","takenAt":"$takenAt"""" else ""
@@ -290,7 +291,8 @@ class HeirloomsApi(
             ""","previewStorageKey":"$previewStorageKey","wrappedPreviewDek":"$wrappedPreviewDekB64","previewDekFormat":"$previewDekFormat""""
         else ""
         val chunkSizeJson = if (plainChunkSize != null) ""","plainChunkSize":$plainChunkSize""" else ""
-        val body = """{"storageKey":"$storageKey","mimeType":"$mimeType","fileSize":$fileSize,"storage_class":"encrypted","envelopeVersion":$envelopeVersion,"wrappedDek":"$wrappedDekB64","dekFormat":"$dekFormat","thumbnailStorageKey":"$thumbnailStorageKey","wrappedThumbnailDek":"$wrappedThumbnailDekB64","thumbnailDekFormat":"$thumbnailDekFormat","tags":$tagsJson$takenAtJson$previewJson$chunkSizeJson}"""
+        val durationJson = if (durationSeconds != null) ""","durationSeconds":$durationSeconds""" else ""
+        val body = """{"storageKey":"$storageKey","mimeType":"$mimeType","fileSize":$fileSize,"storage_class":"encrypted","envelopeVersion":$envelopeVersion,"wrappedDek":"$wrappedDekB64","dekFormat":"$dekFormat","thumbnailStorageKey":"$thumbnailStorageKey","wrappedThumbnailDek":"$wrappedThumbnailDekB64","thumbnailDekFormat":"$thumbnailDekFormat","tags":$tagsJson$takenAtJson$previewJson$chunkSizeJson$durationJson}"""
         return JSONObject(post("/api/content/uploads/confirm", body)).toUpload()
     }
 
@@ -348,6 +350,7 @@ class HeirloomsApi(
             ?.let { Base64.decode(it, Base64.DEFAULT) },
         previewDekFormat = optString("previewDekFormat").takeIf { it.isNotEmpty() && it != "null" },
         plainChunkSize = if (has("plainChunkSize") && !isNull("plainChunkSize")) getInt("plainChunkSize") else null,
+        durationSeconds = if (has("durationSeconds") && !isNull("durationSeconds")) getInt("durationSeconds") else null,
     )
 
     private fun JSONArray.toPlotList(): List<Plot> =

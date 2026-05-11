@@ -926,6 +926,7 @@ private fun confirmEncryptedUpload(
     val wrappedPreviewDekB64 = node?.get("wrappedPreviewDek")?.asText()?.takeIf { it.isNotBlank() }
     val previewDekFormat = node?.get("previewDekFormat")?.asText()?.takeIf { it.isNotBlank() }
     val plainChunkSize = node?.get("plainChunkSize")?.asInt()?.takeIf { it > 0 }
+    val durationSeconds = node?.get("durationSeconds")?.asInt()?.takeIf { it > 0 }
     val takenAt = node?.get("takenAt")?.asText()?.takeIf { it.isNotBlank() }
         ?.let { runCatching { Instant.parse(it) }.getOrNull() }
 
@@ -988,6 +989,7 @@ private fun confirmEncryptedUpload(
             wrappedPreviewDek = wrappedPreviewDek,
             previewDekFormat = previewDekFormat,
             plainChunkSize = plainChunkSize,
+            durationSeconds = durationSeconds,
         )
     )
     if (tags.isNotEmpty()) database.updateTags(id, tags)
@@ -1019,6 +1021,10 @@ private fun confirmLegacyUpload(
     val metadata = if (metaBytes != null) {
         runCatching { metadataExtractor(metaBytes, mimeType) }.getOrDefault(MediaMetadata())
     } else MediaMetadata()
+    val normalizedMime = mimeType.substringBefore(";").trim().lowercase()
+    val durationSeconds = if (bytes != null && normalizedMime.startsWith("video/"))
+        runCatching { extractVideoDuration(bytes, mimeType) }.getOrNull()
+    else null
     val id = UUID.randomUUID()
     database.recordUpload(
         UploadRecord(
@@ -1034,6 +1040,7 @@ private fun confirmLegacyUpload(
             altitude = metadata.altitude,
             deviceMake = metadata.deviceMake,
             deviceModel = metadata.deviceModel,
+            durationSeconds = durationSeconds,
         )
     )
     if (tags.isNotEmpty()) database.updateTags(id, tags)

@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import digital.heirlooms.api.CapsuleRef
 import digital.heirlooms.api.HeirloomsApi
 import digital.heirlooms.api.Upload
+import digital.heirlooms.app.EndpointStore
 import digital.heirlooms.crypto.VaultCrypto
 import digital.heirlooms.crypto.VaultSession
 import kotlinx.coroutines.Dispatchers
@@ -66,7 +67,7 @@ class PhotoDetailViewModel(
 
     private var viewTracked = false
 
-    fun load(api: HeirloomsApi, uploadId: String, context: Context? = null) {
+    fun load(api: HeirloomsApi, uploadId: String, context: Context? = null, thresholdSeconds: Int = EndpointStore.DEFAULT_VIDEO_THRESHOLD) {
         viewModelScope.launch {
             _state.value = PhotoDetailState.Loading
             _stagedTags.value = null
@@ -79,7 +80,7 @@ class PhotoDetailViewModel(
                 val refs = api.getCapsulesForUpload(uploadId)
                 _state.value = PhotoDetailState.Ready(upload, refs)
                 if (upload.isEncrypted && context != null) {
-                    loadEncryptedContent(api, upload, context)
+                    loadEncryptedContent(api, upload, context, thresholdSeconds)
                 }
             } catch (e: Exception) {
                 _state.value = PhotoDetailState.Error(e.message ?: "Couldn't load")
@@ -90,13 +91,20 @@ class PhotoDetailViewModel(
         }
     }
 
-    private fun loadEncryptedContent(api: HeirloomsApi, upload: Upload, context: Context) {
+    private fun loadEncryptedContent(api: HeirloomsApi, upload: Upload, context: Context, thresholdSeconds: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 val mk = VaultSession.masterKey
 
-                if (upload.isVideo && upload.previewStorageKey != null) {
-                    // Has a preview clip — decrypt it and play that instead of the full file.
+                // Decide whether to use the preview clip.
+                val knowsDuration = upload.durationSeconds != null
+                val exceedsThreshold = if (knowsDuration)
+                    upload.durationSeconds!! > thresholdSeconds
+                else
+                    upload.fileSize > LARGE_VIDEO_THRESHOLD
+
+                if (upload.isVideo && exceedsThreshold && upload.previewStorageKey != null) {
+                    // Has a preview clip and video exceeds threshold — play the preview.
                     val wrappedPreviewDek = upload.wrappedPreviewDek ?: return@runCatching
                     val previewDek = VaultCrypto.unwrapDekWithMasterKey(wrappedPreviewDek, mk)
                     val encryptedBytes = api.fetchBytes(api.previewUrl(upload.id))
@@ -111,8 +119,19 @@ class PhotoDetailViewModel(
                 val wrappedDek = upload.wrappedDek ?: return@runCatching
                 val dek = VaultCrypto.unwrapDekWithMasterKey(wrappedDek, mk)
 
+                if (upload.isVideo && exceedsThreshold && upload.previewStorageKey == null) {
+                    // Exceeds threshold but no preview clip — show nothing (thumbnail displays).
+                    return@runCatching
+                }
+
+                if (upload.isVideo && upload.fileSize > LARGE_VIDEO_THRESHOLD && !exceedsThreshold) {
+                    // Under threshold but large file: stream-decrypt via DecryptingDataSource.
+                    _contentDek.value = dek
+                    return@runCatching
+                }
+
                 if (upload.isVideo && upload.fileSize > LARGE_VIDEO_THRESHOLD) {
-                    // Large legacy video (no preview clip): stream-decrypt via DecryptingDataSource.
+                    // Legacy large video (no duration stored): stream-decrypt via DecryptingDataSource.
                     _contentDek.value = dek
                     return@runCatching
                 }

@@ -101,7 +101,7 @@ private enum class Tab(val route: String, val label: String) {
 }
 
 @Composable
-fun MainNavigation(apiKey: String, onApiKeyReset: () -> Unit) {
+fun MainNavigation(apiKey: String, onApiKeyReset: () -> Unit, store: digital.heirlooms.app.EndpointStore) {
     val context = LocalContext.current
     val api = remember(apiKey) { HeirloomsApi(apiKey = apiKey) }
     val imageLoader = remember(apiKey) {
@@ -202,6 +202,7 @@ fun MainNavigation(apiKey: String, onApiKeyReset: () -> Unit) {
                     navController = navController,
                     apiKey = apiKey,
                     onApiKeyReset = onApiKeyReset,
+                    store = store,
                 )
             }
         }
@@ -241,7 +242,7 @@ private fun HeirloomsBottomNav(
 }
 
 @Composable
-private fun AppNavHost(navController: NavController, apiKey: String, onApiKeyReset: () -> Unit) {
+private fun AppNavHost(navController: NavController, apiKey: String, onApiKeyReset: () -> Unit, store: digital.heirlooms.app.EndpointStore) {
     NavHost(
         navController = navController as androidx.navigation.NavHostController,
         startDestination = Routes.GARDEN,
@@ -324,7 +325,7 @@ private fun AppNavHost(navController: NavController, apiKey: String, onApiKeyRes
             )
         }
         composable(Routes.SETTINGS) {
-            SettingsScreen(onApiKeyReset = onApiKeyReset)
+            SettingsScreen(onApiKeyReset = onApiKeyReset, store = store)
         }
         composable(Routes.DIAGNOSTICS) {
             DiagnosticsScreen(apiKey = apiKey, onBack = { navController.popBackStack() })

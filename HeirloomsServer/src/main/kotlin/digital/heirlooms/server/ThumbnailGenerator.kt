@@ -59,6 +59,35 @@ private fun extractVideoThumbnail(bytes: ByteArray, mimeType: String): ByteArray
     }
 }
 
+// Extracts video duration in whole seconds using ffprobe. Returns null on any error.
+fun extractVideoDuration(bytes: ByteArray, mimeType: String): Int? {
+    val ext = when (mimeType.substringBefore(";").trim().lowercase()) {
+        "video/quicktime" -> ".mov"
+        "video/x-msvideo" -> ".avi"
+        "video/webm"      -> ".webm"
+        else              -> ".mp4"
+    }
+    var inputFile: File? = null
+    try {
+        inputFile = File.createTempFile("heirloom-dur-", ext)
+        inputFile.writeBytes(bytes)
+        val process = ProcessBuilder(
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            inputFile.absolutePath,
+        ).start()
+        val output = process.inputStream.bufferedReader().readText().trim()
+        val exited = process.waitFor(30, TimeUnit.SECONDS)
+        if (!exited || process.exitValue() != 0) return null
+        return output.toDoubleOrNull()?.let { Math.round(it).toInt() }
+    } catch (_: Exception) {
+        return null
+    } finally {
+        inputFile?.delete()
+    }
+}
+
 private fun scaleAndEncode(original: BufferedImage): ByteArray? = try {
     val w = original.width
     val h = original.height

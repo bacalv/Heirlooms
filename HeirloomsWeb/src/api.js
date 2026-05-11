@@ -94,7 +94,7 @@ export async function confirmEncryptedUpload(apiKey, {
   thumbnailStorageKey, wrappedThumbnailDekB64, thumbnailDekFormat,
   encryptedMetadataB64, encryptedMetadataFormat,
   previewStorageKey, wrappedPreviewDekB64, previewDekFormat,
-  plainChunkSize,
+  plainChunkSize, durationSeconds,
   takenAt, tags,
 }) {
   const r = await apiFetch('/api/content/uploads/confirm', apiKey, {
@@ -105,7 +105,7 @@ export async function confirmEncryptedUpload(apiKey, {
       thumbnailStorageKey, wrappedThumbnailDek: wrappedThumbnailDekB64, thumbnailDekFormat,
       encryptedMetadata: encryptedMetadataB64, encryptedMetadataFormat,
       previewStorageKey, wrappedPreviewDek: wrappedPreviewDekB64, previewDekFormat,
-      plainChunkSize,
+      plainChunkSize, durationSeconds,
       takenAt, tags,
     }),
   })

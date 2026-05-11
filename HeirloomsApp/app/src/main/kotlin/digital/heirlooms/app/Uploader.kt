@@ -383,6 +383,7 @@ class Uploader(
         val thumbnailDek = VaultCrypto.generateDek()
         val isLargeVideo = file.length() > LARGE_FILE_THRESHOLD && mimeType.startsWith("video/")
         val previewDurationSeconds = if (isLargeVideo) fetchPreviewDurationSeconds(base, apiKey) else 0
+        val fileDurationSeconds = if (mimeType.startsWith("video/")) extractFileDurationSeconds(file) else null
 
         // Step 1: initiate (get signed URLs and storage keys before reading file)
         val initiateResponse = try {
@@ -564,7 +565,8 @@ class Uploader(
             ""","previewStorageKey":"$confirmedPreviewStorageKey","wrappedPreviewDek":"$wrappedPreviewDekB64","previewDekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}""""
         else ""
         val chunkSizeJson = if (file.length() > LARGE_FILE_THRESHOLD) ""","plainChunkSize":$CHUNK_SIZE""" else ""
-        val confirmBody = """{"storageKey":"$contentStorageKey","mimeType":"$mimeType","fileSize":$encryptedContentSize,"storage_class":"encrypted","envelopeVersion":1,"wrappedDek":"$wrappedDekB64","dekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}","thumbnailStorageKey":"$thumbStorageKey","wrappedThumbnailDek":"$wrappedThumbDekB64","thumbnailDekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}"$tagsJson$previewJson$chunkSizeJson}"""
+        val durationJson = if (fileDurationSeconds != null) ""","durationSeconds":$fileDurationSeconds""" else ""
+        val confirmBody = """{"storageKey":"$contentStorageKey","mimeType":"$mimeType","fileSize":$encryptedContentSize,"storage_class":"encrypted","envelopeVersion":1,"wrappedDek":"$wrappedDekB64","dekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}","thumbnailStorageKey":"$thumbStorageKey","wrappedThumbnailDek":"$wrappedThumbDekB64","thumbnailDekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}"$tagsJson$previewJson$chunkSizeJson$durationJson}"""
 
         return try {
             httpClient.newCall(
@@ -849,6 +851,26 @@ class Uploader(
     private fun makeFallbackThumbnail(): ByteArray {
         val bmp = Bitmap.createBitmap(1, 1, Bitmap.Config.RGB_565)
         return ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.JPEG, 80, it) }.toByteArray()
+    }
+
+    // Extracts video duration in seconds from a file using MediaExtractor.
+    private fun extractFileDurationSeconds(file: File): Int? {
+        return try {
+            val extractor = android.media.MediaExtractor()
+            extractor.setDataSource(file.absolutePath)
+            var durationUs = -1L
+            for (i in 0 until extractor.trackCount) {
+                val format = extractor.getTrackFormat(i)
+                if (format.getString(android.media.MediaFormat.KEY_MIME)?.startsWith("video/") == true) {
+                    if (format.containsKey(android.media.MediaFormat.KEY_DURATION)) {
+                        durationUs = format.getLong(android.media.MediaFormat.KEY_DURATION)
+                    }
+                    break
+                }
+            }
+            extractor.release()
+            if (durationUs > 0) (durationUs / 1_000_000L).toInt() else null
+        } catch (_: Exception) { null }
     }
 
     // Fetch previewDurationSeconds from server settings; returns default 15 on any error.

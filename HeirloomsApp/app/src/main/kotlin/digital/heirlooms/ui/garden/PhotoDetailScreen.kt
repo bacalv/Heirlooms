@@ -65,9 +65,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.graphics.Color
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import kotlinx.coroutines.delay
 import digital.heirlooms.app.DecryptingDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -117,8 +120,10 @@ fun PhotoDetailScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
+    val videoThreshold = remember { digital.heirlooms.app.EndpointStore.create(context).getVideoPlaybackThreshold() }
+
     LaunchedEffect(uploadId) {
-        vm.load(api, uploadId, context)
+        vm.load(api, uploadId, context, videoThreshold)
         vm.trackView(api, uploadId)
     }
 
@@ -236,6 +241,7 @@ fun PhotoDetailScreen(
                         decryptedBitmap = decryptedBitmap,
                         decryptedVideoUri = decryptedVideoUri,
                         contentDek = contentDek,
+                        onDownload = { vm.downloadFullFile(api, u, context) },
                     )
                     else -> GardenFlavour(
                         upload = u,
@@ -252,6 +258,7 @@ fun PhotoDetailScreen(
                         decryptedBitmap = decryptedBitmap,
                         decryptedVideoUri = decryptedVideoUri,
                         contentDek = contentDek,
+                        onDownload = { vm.downloadFullFile(api, u, context) },
                         onCompost = {
                             scope.launch {
                                 try { api.compostUpload(uploadId); onBack() } catch (_: Exception) {}
@@ -264,6 +271,106 @@ fun PhotoDetailScreen(
     }
 }
 
+private fun formatDuration(totalSeconds: Int): String {
+    val m = totalSeconds / 60
+    val s = totalSeconds % 60
+    return "$m:${s.toString().padStart(2, '0')}"
+}
+
+@Composable
+private fun PreviewVideoPlayer(
+    videoUri: Uri,
+    upload: Upload,
+    onDownload: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val apiKey = LocalHeirloomsApi.current.apiKey
+    var previewEnded by remember { mutableStateOf(false) }
+    var positionSeconds by remember { mutableStateOf(0) }
+    val fullDuration = upload.durationSeconds ?: 0
+
+    val player = remember {
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(
+                OkHttpDataSource.Factory(OkHttpClient.Builder()
+                    .addInterceptor { chain ->
+                        chain.proceed(chain.request().newBuilder().header("X-Api-Key", apiKey).build())
+                    }.build())
+            ))
+            .build()
+            .also { p ->
+                p.setMediaItem(MediaItem.fromUri(videoUri))
+                p.prepare()
+                p.playWhenReady = true
+            }
+    }
+
+    DisposableEffect(Unit) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_ENDED) previewEnded = true
+            }
+        }
+        player.addListener(listener)
+        onDispose {
+            player.removeListener(listener)
+            player.release()
+        }
+    }
+
+    // Poll position every 500ms while playing
+    LaunchedEffect(player) {
+        while (true) {
+            positionSeconds = (player.currentPosition / 1000).toInt()
+            delay(500)
+        }
+    }
+
+    Column(modifier) {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+            AndroidView(
+                factory = { ctx -> PlayerView(ctx).apply { this.player = player } },
+                modifier = Modifier.fillMaxSize(),
+            )
+            if (previewEnded) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.70f))
+                        .clickable { previewEnded = false },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Preview ended", color = Color.White,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(bottom = 6.dp))
+                        Text(
+                            "This is a short preview. The full video is ${formatDuration(fullDuration)} long.",
+                            color = Color.White.copy(alpha = 0.80f),
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+                        )
+                        Button(
+                            onClick = onDownload,
+                            colors = ButtonDefaults.buttonColors(containerColor = Forest, contentColor = Parchment),
+                            modifier = Modifier.padding(top = 8.dp),
+                        ) { Text("Download full video") }
+                    }
+                }
+            }
+        }
+        if (!previewEnded) {
+            Text(
+                text = "Preview · ${formatDuration(positionSeconds)} of ${formatDuration(fullDuration)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextMuted,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        }
+    }
+}
+
 @Composable
 private fun MediaArea(
     upload: Upload,
@@ -272,6 +379,7 @@ private fun MediaArea(
     decryptedBitmap: ImageBitmap? = null,
     decryptedVideoUri: Uri? = null,
     contentDek: ByteArray? = null,
+    onDownload: (() -> Unit)? = null,
 ) {
     val api = LocalHeirloomsApi.current
     when {
@@ -297,6 +405,14 @@ private fun MediaArea(
                         )
                     }
                     VideoPlayer(videoUrl = api.fileUrl(upload.id), modifier = modifier, dataSourceFactory = factory)
+                }
+                decryptedVideoUri != null && upload.previewStorageKey != null && onDownload != null -> {
+                    PreviewVideoPlayer(
+                        videoUri = decryptedVideoUri,
+                        upload = upload,
+                        onDownload = onDownload,
+                        modifier = modifier,
+                    )
                 }
                 decryptedVideoUri != null -> {
                     VideoPlayer(videoUrl = decryptedVideoUri.toString(), modifier = modifier)
@@ -388,6 +504,7 @@ internal fun GardenFlavour(
     decryptedBitmap: ImageBitmap? = null,
     decryptedVideoUri: Uri? = null,
     contentDek: ByteArray? = null,
+    onDownload: (() -> Unit)? = null,
 ) {
     var showAddToCapsule by remember { mutableStateOf(false) }
     var showCompostConfirm by remember { mutableStateOf(false) }
@@ -403,7 +520,7 @@ internal fun GardenFlavour(
             MediaArea(
                 upload = upload, rotation = rotation, modifier = Modifier.fillMaxWidth(),
                 decryptedBitmap = decryptedBitmap, decryptedVideoUri = decryptedVideoUri,
-                contentDek = contentDek,
+                contentDek = contentDek, onDownload = onDownload,
             )
             if (!upload.isVideo) {
                 IconButton(
@@ -525,6 +642,7 @@ internal fun ExploreFlavour(
     decryptedBitmap: ImageBitmap? = null,
     decryptedVideoUri: Uri? = null,
     contentDek: ByteArray? = null,
+    onDownload: (() -> Unit)? = null,
 ) {
     Column(
         Modifier
@@ -536,7 +654,7 @@ internal fun ExploreFlavour(
             MediaArea(
                 upload = upload, rotation = rotation, modifier = Modifier.fillMaxWidth(),
                 decryptedBitmap = decryptedBitmap, decryptedVideoUri = decryptedVideoUri,
-                contentDek = contentDek,
+                contentDek = contentDek, onDownload = onDownload,
             )
             if (!upload.isVideo) {
                 IconButton(
