@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import QRCode from 'qrcode'
-import { useNavigate } from 'react-router-dom'
 import { WorkingDots } from '../brand/WorkingDots'
 import { pairingQr, pairingStatus } from '../api'
 import { unwrapMasterKeyForDevice, toB64url, ALG_P256_ECDH_HKDF_V1 } from '../crypto/vaultCrypto'
@@ -12,7 +11,6 @@ export function PairPage({ onPaired }) {
   const [phase, setPhase] = useState('enter') // enter | qr | done | error
   const [errorMsg, setErrorMsg] = useState('')
   const [qrDataUrl, setQrDataUrl] = useState(null)
-  const navigate = useNavigate()
   const privateKeyRef = useRef(null)
   const pollRef = useRef(null)
 
@@ -65,7 +63,7 @@ export function PairPage({ onPaired }) {
             })
             unlock(masterKey)
             onPaired(data.session_token, masterKey)
-            navigate('/', { replace: true })
+            window.location.replace('/')
           }
         } catch {
           /* keep polling */
