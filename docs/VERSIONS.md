@@ -2,6 +2,14 @@
 
 ---
 
+## v0.43.1 — Android bugfix: camera permission on Fire OS (11 May 2026)
+
+Android only.
+
+- **Camera permission request** — Adding `zxing-android-embedded` in v0.43.0 put `CAMERA` into the merged manifest. Fire OS enforces it strictly at runtime — `TakePicture`/`CaptureVideo` crashes without a prior grant. `GardenScreen.launchCamera()` now checks `ContextCompat.checkSelfPermission` and requests the permission via `cameraPermissionLauncher` if not already granted before launching the camera intent.
+
+---
+
 ## v0.43.0 — Android bugfix: QR scan + upload OOM (11 May 2026)
 
 Android only.

@@ -2,6 +2,14 @@
 
 ---
 
+## Session — 11 May 2026 — v0.43.1: Camera permission on Fire OS
+
+**Camera permission crash on Fire OS (bug).** Adding `zxing-android-embedded` in v0.43.0 merged the `CAMERA` permission into the app manifest. Fire OS enforces declared permissions strictly — `TakePicture`/`CaptureVideo` in `GardenScreen.launchCamera()` crashed without a runtime grant. Photo worked fine on Bret's Android phone (confirmed), crash was Fire OS specific. Fix: added `cameraPermissionLauncher` (RequestPermission) in `GardenScreen`; `launchCamera()` checks `ContextCompat.checkSelfPermission` first and requests the permission if missing, otherwise launches the camera intent directly. Note: `PackageManager.PERMISSION_GRANTED` import added.
+
+Also bumped versionCode 46→47, versionName 0.43.0→0.43.1.
+
+---
+
 ## Session — 11 May 2026 — v0.43.0: Android bugfixes (QR scan + upload OOM)
 
 Two bugs found during post-M8 testing with second user (sadaar).

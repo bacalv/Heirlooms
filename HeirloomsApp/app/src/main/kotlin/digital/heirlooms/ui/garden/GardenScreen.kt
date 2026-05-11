@@ -83,7 +83,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.FloatingActionButton
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import android.content.pm.PackageManager
 import androidx.work.BackoffPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -161,8 +163,26 @@ fun GardenScreen(
         else PlantState.Idle
     }
 
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) return@rememberLauncherForActivityResult
+        val ext = if (pendingCaptureType == PlantType.Photo) "jpg" else "mp4"
+        val file = File(context.cacheDir, "capture-${UUID.randomUUID()}.$ext")
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        captureFile = file
+        captureUri = uri
+        if (pendingCaptureType == PlantType.Photo) takePictureLauncher.launch(uri)
+        else captureVideoLauncher.launch(uri)
+    }
+
     fun launchCamera(type: PlantType) {
         pendingCaptureType = type
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+            return
+        }
         val ext = if (type == PlantType.Photo) "jpg" else "mp4"
         val file = File(context.cacheDir, "capture-${UUID.randomUUID()}.$ext")
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
