@@ -101,9 +101,8 @@ the pre-launch period.
 - Swagger UI confirmed at https://api.heirlooms.digital/docs/index.html
 - heirlooms.com: Currently parked on venture.com. Worth monitoring
 - License: Deliberately deferred
-- **Android plot management (create / rename / delete) not yet implemented.** The API
-  supports it (server has plot CRUD endpoints) but the Android app only calls `listPlots`.
-  There is no UI to create or edit plots on Android. Included in M9 scope.
+- **First human tester onboarding pending.** Tester has an older Android phone. Onboarding
+  and full M9 feature testing planned for the next session.
 
 ---
 
@@ -558,8 +557,8 @@ with manual env vars achieves the same result.
 | Artifact Registry | heirlooms (europe-west2) |
 | HeirloomsServer image | europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server |
 | HeirloomsWeb image | europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-web |
-| HeirloomsServer Cloud Run URL | https://heirlooms-server-340655233963.us-central1.run.app (revision heirlooms-server-00041-rm4, 2Gi) |
-| HeirloomsWeb Cloud Run URL | https://heirlooms-web-340655233963.us-central1.run.app (revision heirlooms-web-00054-tnj) |
+| HeirloomsServer Cloud Run URL | https://heirlooms-server-340655233963.us-central1.run.app (revision heirlooms-server-00042-qmx, 2Gi) |
+| HeirloomsWeb Cloud Run URL | https://heirlooms-web-340655233963.us-central1.run.app (revision heirlooms-web-00056-zln) |
 | Target domain (web) | https://heirlooms.digital (live) |
 | Target domain (server) | https://api.heirlooms.digital (live) |
 

@@ -77,6 +77,25 @@ Three Gradle subprojects under `/Users/bac/IdeaProjects/Heirlooms/`:
   signature: GCS objects present but no `/confirm` call in server logs. Also wrap the top-level
   uploader call in `UploadWorker.doWork()` in `try/catch (t: Throwable)` as a safety net.
 
+- **Kotlin `UUID` comparison (`<`, `>`) uses signed-long order, not PostgreSQL's lexicographic order (v0.45.0):**
+  PostgreSQL `CHECK (user_id_1 < user_id_2)` uses string lexicographic ordering on the canonical UUID
+  representation. Kotlin's `UUID.compareTo()` compares the most-significant bits as a signed `Long`,
+  which gives different ordering for UUIDs whose MSB has bit 63 set (e.g. `e0...` < `00...` in Java
+  but `e0...` > `00...` in Postgres). Any Kotlin code that enforces a canonical pair ordering to match
+  a Postgres CHECK constraint must use `a.toString() < b.toString()`, not `a < b`.
+
+- **Cloud SQL Proxy path on this machine (one-time setup note):**
+  `cloud-sql-proxy` is at `/opt/homebrew/share/google-cloud-sdk/bin/cloud-sql-proxy`.
+  `psql` is at `/opt/homebrew/Cellar/libpq/18.3/bin/psql`.
+  Neither is in the default PATH — prepend both when scripting DB access.
+  ADC must be current (`gcloud auth application-default login`) before the proxy will start.
+
+- **Deleting a user from the live DB — FK dependency order (v0.45.0):**
+  The `invites.used_by` FK is the non-obvious blocker. Before deleting a user, NULL out any
+  `invites.used_by` references first (`UPDATE invites SET used_by = NULL WHERE used_by = ?`),
+  then proceed in this order: `user_sessions` → `wrapped_keys` → `account_sharing_keys` →
+  `friendships` → `pending_device_links` → `plots` → `uploads` → `invites` (created_by) → `users`.
+
 - **`ActivityResultContracts.CaptureVideo()` crashes on Fire OS — use plain `ACTION_VIDEO_CAPTURE` intent (v0.44.0):**
   `CaptureVideo()` passes the output URI via `MediaStore.EXTRA_OUTPUT`. Fire OS camera apps don't honour this extra and crash immediately. Fix: use `StartActivityForResult` with `Intent(MediaStore.ACTION_VIDEO_CAPTURE)` (no output URI). The camera writes to its own media store and returns the content URI in `result.data?.data`. Retrieve it there and route through `copyContentUriToCache`. This bug was masked in earlier builds by the permission crash fixed in v0.43.1 — once the permission was granted the video path was exposed. Pattern: never assume `CaptureVideo()` works on Fire OS; always use the plain intent.
 

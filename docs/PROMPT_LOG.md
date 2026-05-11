@@ -2,6 +2,30 @@
 
 ---
 
+## Session — 11 May 2026 — M9 deploy, test user cleanup, partial test plan
+
+**M9 deployed to production.** Server revision `heirlooms-server-00042-qmx`. V23 migration ran cleanly:
+`account_sharing_keys` and `friendships` tables created, friendship backfill from redeemed invites
+ran correctly (Bret ↔ Sadaar friendship created). Two nullable columns added to `uploads`.
+
+**Test user "Sadaar's Safari Browser" deleted.** A third user account had been accidentally created
+during M8 web pairing testing. Deleted via Cloud SQL Proxy + psql using ADC credentials. The
+`invites.used_by` FK required NULLing before the user row could be deleted (see SE_NOTES for the
+full deletion order). Two users remain: Bret (founding user) and Sadaar (daughter's account).
+
+**M9 partial test results:**
+- ✅ Server health and V23 migration confirmed
+- ✅ Friendship backfill: Bret sees Sadaar in Friends list and vice versa
+- ✅ Item sharing end-to-end: Sadaar shared a photo from the Fire tablet to Bret's account
+- ✅ Shared item appeared in Bret's Just Arrived with arrival animation
+- ⏳ Friend indicator (person icon on thumbnail), "Shared by" attribution — not yet confirmed
+- ⏳ Per-user rotation/tag independence — not yet confirmed
+- ⏳ Plot management UI — not yet confirmed
+
+**First human tester** (third-party, older Android phone) onboarding deferred to next session.
+
+---
+
 ## Session — 11 May 2026 — v0.45.0: M9 friends, item sharing, Android plot management
 
 Full M9 implementation. Server + Android only.
