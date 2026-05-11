@@ -118,6 +118,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
           <Route path="/join" element={<JoinPage onJoined={handleLogin} />} />
+          <Route path="/pair" element={<PairPage onPaired={handleLogin} />} />
           <Route path="/" element={<RequireAuth />}>
             <Route index element={<GardenPage />} />
             <Route path="explore" element={<ExplorePage />} />

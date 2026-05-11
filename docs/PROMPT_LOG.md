@@ -2,6 +2,12 @@
 
 ---
 
+## Session — 11 May 2026 — web: pairing code entry unreachable from login page
+
+`PairPage` (the code-entry screen for Android-initiated pairing) was behind `RequireAuth` at `/access/pair`. A new browser session with no token could never reach it — and the login page had no link to it. Fix: added `/pair` as a public route in `App.jsx` (alongside `/login` and `/join`), and added a "Have a pairing code from the app? Pair with phone" link at the bottom of `LoginPage`. The existing `/access/pair` route stays for users who are already logged in and want to link a new browser.
+
+---
+
 ## Session — 11 May 2026 — v0.44.0: M8 bugfix iteration 1
 
 Post-M8 testing with sadaar (second user on Fire OS tablet) surfaced four Android UX bugs. Brief at `docs/briefs/M8_bugfix1_brief.md`.

@@ -116,6 +116,10 @@ export function LoginPage({ onLogin }) {
           Have an invite?{' '}
           <Link to="/join" className="text-forest underline">Create account</Link>
         </p>
+        <p className="text-xs text-text-muted mt-1 text-center">
+          Have a pairing code from the app?{' '}
+          <Link to="/pair" className="text-forest underline">Pair with phone</Link>
+        </p>
         <p className="text-[10px] text-text-muted/40 text-right mt-2">{import.meta.env.VITE_COMMIT ?? 'dev'}</p>
       </div>
     </div>
