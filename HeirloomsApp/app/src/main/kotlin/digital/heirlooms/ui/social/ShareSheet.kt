@@ -144,7 +144,13 @@ private suspend fun shareWithFriend(
     try {
         val wrappedDek = upload.wrappedDek ?: return@withContext "Couldn't share. Try again."
         val masterKey = VaultSession.masterKey
-        val dek = VaultCrypto.unwrapDekWithMasterKey(wrappedDek, masterKey)
+        val isReceivedShare = upload.dekFormat == VaultCrypto.ALG_P256_ECDH_HKDF_V1
+        val dek = if (isReceivedShare) {
+            val privkey = VaultSession.sharingPrivkey ?: return@withContext "Couldn't share. Try again."
+            VaultCrypto.unwrapWithSharingKey(wrappedDek, privkey)
+        } else {
+            VaultCrypto.unwrapDekWithMasterKey(wrappedDek, masterKey)
+        }
 
         val friendPubkey = api.getFriendSharingPubkey(friend.userId) ?: return@withContext "Couldn't share. Try again."
 
@@ -152,7 +158,12 @@ private suspend fun shareWithFriend(
         val reWrappedDekB64 = Base64.encodeToString(reWrappedDek, Base64.NO_WRAP)
 
         val reWrappedThumbDekB64 = upload.wrappedThumbnailDek?.let { wrappedThumb ->
-            val thumbDek = VaultCrypto.unwrapDekWithMasterKey(wrappedThumb, masterKey)
+            val thumbDek = if (isReceivedShare) {
+                val privkey = VaultSession.sharingPrivkey ?: return@withContext "Couldn't share. Try again."
+                VaultCrypto.unwrapWithSharingKey(wrappedThumb, privkey)
+            } else {
+                VaultCrypto.unwrapDekWithMasterKey(wrappedThumb, masterKey)
+            }
             val reWrapped = VaultCrypto.wrapMasterKeyForRecipient(thumbDek, friendPubkey)
             Base64.encodeToString(reWrapped, Base64.NO_WRAP)
         }

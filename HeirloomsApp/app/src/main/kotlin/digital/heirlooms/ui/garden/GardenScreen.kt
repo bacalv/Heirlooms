@@ -219,7 +219,7 @@ fun GardenScreen(
 
     LaunchedEffect(Unit) {
         while (true) {
-            delay(30_000L)
+            delay(5_000L)
             vm.refreshJustArrived(api)
         }
     }
