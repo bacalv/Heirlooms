@@ -24,8 +24,8 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.43.1 (11 May 2026) — Android bugfixes: QR scan, upload OOM fix, camera permission on Fire OS. M8 live in production.
-- Next milestone: M8 bugfix iteration 1 (v0.44.0) — brief at `docs/briefs/M8_bugfix1_brief.md`. Then M9 to be defined.
+- Current version: v0.44.0 (11 May 2026) — Android bugfix iteration 1: blank garden after uploads, Just Arrived scroll, BurgerPanel dismiss, thumbnail loading icon.
+- Next milestone: M9 to be defined.
   v0.36.0 = Preview clips, 1 MiB chunks, parallel prefetch, download button (server + web + Android).
   v0.35.0 = Web encrypted video playback + MSE streaming (web only).
   v0.34.0 = Web: streaming-format decrypt fix for large encrypted videos.

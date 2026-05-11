@@ -409,8 +409,8 @@ private fun PlotRowSection(
         onScrollIndex(listState.firstVisibleItemIndex)
     }
 
-    LaunchedEffect(shouldScrollToStart) {
-        if (shouldScrollToStart) listState.scrollToItem(0)
+    LaunchedEffect(newlyArrivedIds) {
+        if (isJustArrived && newlyArrivedIds.isNotEmpty()) listState.scrollToItem(0)
     }
 
     Column(Modifier.padding(top = 16.dp)) {

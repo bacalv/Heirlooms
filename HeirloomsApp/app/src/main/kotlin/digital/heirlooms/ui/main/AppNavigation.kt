@@ -189,6 +189,8 @@ fun MainNavigation(apiKey: String, onApiKeyReset: () -> Unit, store: digital.hei
                                 burgerSheetState.show()
                             }
                         } else {
+                            scope.launch { burgerSheetState.hide() }
+                            showBurger = false
                             navController.navigateToTab(tab.route)
                         }
                     },
@@ -353,7 +355,7 @@ private fun AppNavHost(navController: NavController, apiKey: String, onApiKeyRes
             UploadProgressScreen(
                 sessionTag = sessionTag,
                 fromShare = false,
-                onGoToGarden = { navController.navigateToTab(Routes.GARDEN) },
+                onGoToGarden = { navController.popBackStack() },
                 onContinueInBackground = { navController.popBackStack() },
             )
         }

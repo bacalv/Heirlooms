@@ -2,6 +2,17 @@
 
 ---
 
+## v0.44.0 — Android bugfix iteration 1 (11 May 2026)
+
+Android only.
+
+- **Bug 1 — Blank garden after "Go to Garden"** — `UploadProgressScreen` reached via Burger → Uploads is a pushed route on top of Garden. "Go to Garden" now calls `popBackStack()` instead of `navigateToTab()`, which was triggering unnecessary state save/restore machinery and producing a blank white screen.
+- **Bug 2 — New Just Arrived item at position −1** — `LaunchedEffect` in `PlotRowSection` is now keyed on `newlyArrivedIds` (a `Set`) rather than `shouldScrollToStart` (a `Boolean`). When a second item arrives while the set is already non-empty, the boolean didn't change so the scroll never re-fired; keying on the set ensures it always re-fires.
+- **Bug 3 — Garden tab doesn't dismiss BurgerPanel** — `onTabSelected` in `MainNavigation` now calls `burgerSheetState.hide()` and sets `showBurger = false` before `navigateToTab()`, so the sheet plays its dismiss animation cleanly when the user taps any tab.
+- **Bug 5 — Loading spinner instead of plant icon for thumbnails** — `EncryptedThumbnail` loading state now shows `OliveBranchIcon` (matching the failed state) instead of `CircularProgressIndicator`. Both "not yet available" states look the same.
+
+---
+
 ## v0.43.1 — Android bugfix: camera permission on Fire OS (11 May 2026)
 
 Android only.

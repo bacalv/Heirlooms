@@ -2,17 +2,19 @@
 
 ---
 
-## Session — 11 May 2026 — M8 bugfix iteration 1 brief
+## Session — 11 May 2026 — v0.44.0: M8 bugfix iteration 1
 
-Post-M8 testing with sadaar (second user on Fire OS tablet) surfaced four Android UX bugs. Brief written at `docs/briefs/M8_bugfix1_brief.md`. Target v0.44.0.
+Post-M8 testing with sadaar (second user on Fire OS tablet) surfaced four Android UX bugs. Brief at `docs/briefs/M8_bugfix1_brief.md`.
 
-**Bug 1 — Blank garden after "Go to Garden" from downloads screen.** `onGoToGarden` in the UPLOAD_PROGRESS composable uses `navigateToTab()` which triggers unnecessary save/restore state machinery. Fix: `popBackStack()` since the user always arrives at UPLOAD_PROGRESS from GARDEN.
+**Bug 1 — Blank garden after "Go to Garden" (`AppNavigation.kt`).** `onGoToGarden` changed from `navigateToTab(Routes.GARDEN)` to `popBackStack()`. UPLOAD_PROGRESS is always pushed on top of GARDEN; `navigateToTab` was triggering save/restore state machinery unnecessarily, producing a blank white screen.
 
-**Bug 2 — New Just Arrived item at position −1.** `LaunchedEffect(shouldScrollToStart)` doesn't re-fire when a second item arrives while `shouldScrollToStart` is already `true`. Lazy list key-preservation keeps the old item 0 visible, pushing the new item off-screen left. Fix: key the effect on `newlyArrivedIds` directly.
+**Bug 2 — New Just Arrived item at position −1 (`GardenScreen.kt`).** `LaunchedEffect` in `PlotRowSection` rekeyed on `newlyArrivedIds` (the `Set`) instead of `shouldScrollToStart` (a `Boolean`). When a second item arrived while the set was already non-empty, the boolean didn't change so the scroll never re-fired.
 
-**Bug 3 — Garden tab doesn't dismiss BurgerPanel.** `navigateToTab()` pops the nav stack correctly but `showBurger` is never reset. The sheet re-renders on top of the garden. Fix: set `showBurger = false` and call `burgerSheetState.hide()` in the non-Burger branch of `onTabSelected`.
+**Bug 3 — Garden tab doesn't dismiss BurgerPanel (`AppNavigation.kt`).** `onTabSelected` non-Burger branch now calls `burgerSheetState.hide()` and sets `showBurger = false` before `navigateToTab()`. Nav stack was popping correctly but `showBurger` was never reset, so the sheet re-rendered on top of the garden.
 
-**Bug 5 — Spinner while thumbnail loads; should show plant icon.** `EncryptedThumbnail` shows `CircularProgressIndicator` while loading and `OliveBranchIcon` when failed. Both states should show `OliveBranchIcon` — "not yet available" is the same regardless of cause. Fix: replace the loading branch in `HeirloomsImage.kt`.
+**Bug 5 — Spinner instead of plant icon during thumbnail load (`HeirloomsImage.kt`).** `EncryptedThumbnail` loading branch replaced `CircularProgressIndicator` with `OliveBranchIcon` (24 dp, matching the failed state). Removed unused `CircularProgressIndicator` import.
+
+versionCode 47→48, versionName 0.43.1→0.44.0.
 
 ---
 

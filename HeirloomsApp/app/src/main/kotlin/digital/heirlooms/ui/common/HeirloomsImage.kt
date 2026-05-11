@@ -5,7 +5,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -135,7 +134,7 @@ private fun EncryptedThumbnail(
             OliveBranchIcon(Modifier.size(24.dp))
         }
         else -> Box(modifier.background(Forest08), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = Forest, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+            OliveBranchIcon(Modifier.size(24.dp))
         }
     }
 }
