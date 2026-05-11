@@ -6,6 +6,18 @@ import * as vault from '../crypto/vaultCrypto'
 import * as vaultSession from '../crypto/vaultSession'
 import * as deviceKeyManager from '../crypto/deviceKeyManager'
 
+async function loadSharingKey(apiKey, masterKey) {
+  try {
+    const r = await fetch(`${API_URL}/api/sharing/me`, { headers: { 'X-Api-Key': apiKey } })
+    if (!r.ok) return
+    const { wrappedPrivkey } = await r.json()
+    if (!wrappedPrivkey) return
+    const pkcs8Bytes = await vault.unwrapDekWithMasterKey(vault.fromB64(wrappedPrivkey), masterKey)
+    const cryptoKey = await vault.importSharingPrivkey(pkcs8Bytes)
+    vaultSession.setSharingPrivkey(cryptoKey)
+  } catch { /* sharing key not set up yet — fine */ }
+}
+
 async function registerDevice(apiKey, masterKey, spki) {
   const wrapped = await vault.wrapMasterKeyForDevice(masterKey, spki)
   const body = {
@@ -87,6 +99,7 @@ export function VaultUnlockPage({ apiKey, onUnlocked }) {
       }
 
       vaultSession.unlock(masterKey)
+      loadSharingKey(apiKey, masterKey)
       onUnlocked()
     } catch (err) {
       setErrorMsg(err.message?.includes('passphrase') ? 'Incorrect passphrase.' : 'Incorrect passphrase.')

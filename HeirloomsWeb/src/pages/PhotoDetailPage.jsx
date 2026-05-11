@@ -10,9 +10,18 @@ import { WaxSealOlive } from '../brand/WaxSealOlive'
 import { WorkingDots } from '../brand/WorkingDots'
 import { AddToCapsuleModal } from '../components/AddToCapsuleModal'
 import { Toast } from '../components/Toast'
-import { getMasterKey } from '../crypto/vaultSession'
-import { unwrapDekWithMasterKey, decryptSymmetric, decryptStreamingContent, fromB64 } from '../crypto/vaultCrypto'
+import { getMasterKey, getSharingPrivkey } from '../crypto/vaultSession'
+import { unwrapDekWithMasterKey, unwrapWithSharingKey, decryptSymmetric, decryptStreamingContent, fromB64, ALG_P256_ECDH_HKDF_V1 } from '../crypto/vaultCrypto'
 import { openEncryptedVideoStream } from '../crypto/encryptedVideoStream'
+
+async function unwrapDek(wrappedDek, dekFormat, masterKey) {
+  if (dekFormat === ALG_P256_ECDH_HKDF_V1) {
+    const privkey = getSharingPrivkey()
+    if (!privkey) throw new Error('Sharing key not available')
+    return unwrapWithSharingKey(wrappedDek, privkey)
+  }
+  return unwrapDekWithMasterKey(wrappedDek, masterKey)
+}
 
 function formatDuration(totalSeconds) {
   const m = Math.floor(totalSeconds / 60)
@@ -496,7 +505,7 @@ export function PhotoDetailPage() {
         const raw = upload.wrappedDek
         if (!raw) throw new Error('Missing wrappedDek')
         const wrappedDek = typeof raw === 'string' ? fromB64(raw) : raw
-        const dek = await unwrapDekWithMasterKey(wrappedDek, masterKey)
+        const dek = await unwrapDek(wrappedDek, upload.dekFormat, masterKey)
         const r = await fetch(`${API_URL}/api/content/uploads/${upload.id}/file`, {
           headers: { 'X-Api-Key': apiKey },
         })
@@ -591,7 +600,7 @@ export function PhotoDetailPage() {
         const raw = upload.wrappedDek
         if (!raw) throw new Error('Missing wrappedDek')
         const wrappedDek = typeof raw === 'string' ? fromB64(raw) : raw
-        const dek = await unwrapDekWithMasterKey(wrappedDek, masterKey)
+        const dek = await unwrapDek(wrappedDek, upload.dekFormat, masterKey)
         const result = await openEncryptedVideoStream(upload, apiKey, dek)
         if (result.type === 'mse') {
           streamCleanup = result.cleanup
@@ -612,7 +621,7 @@ export function PhotoDetailPage() {
         const raw = upload.wrappedDek
         if (!raw) throw new Error('Missing wrappedDek')
         const wrappedDek = typeof raw === 'string' ? fromB64(raw) : raw
-        const dek = await unwrapDekWithMasterKey(wrappedDek, masterKey)
+        const dek = await unwrapDek(wrappedDek, upload.dekFormat, masterKey)
         // Envelope format starts with version byte 0x01; streaming chunk format starts with nonce bytes (never 0x01).
         const plainBytes = encBytes[0] === 0x01
           ? await decryptSymmetric(encBytes, dek)

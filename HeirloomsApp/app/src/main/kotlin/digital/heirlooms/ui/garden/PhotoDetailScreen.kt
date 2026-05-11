@@ -127,8 +127,21 @@ fun PhotoDetailScreen(
         vm.trackView(api, uploadId)
     }
 
-    // Auto-save staged changes on back navigation (system gesture or top-bar button).
+    var rotateInFlight by remember { mutableStateOf(false) }
+
+    fun rotateAndSave() {
+        if (rotateInFlight) return
+        rotateInFlight = true
+        scope.launch {
+            vm.stageRotate()
+            vm.saveChanges(api, uploadId)
+            rotateInFlight = false
+        }
+    }
+
+    // Auto-save staged changes on back navigation. Waits for any in-flight rotation save first.
     fun navigateBack() {
+        if (rotateInFlight) return
         if (isDirty) {
             scope.launch {
                 stagedTags?.let { RecentTagsStore(context).record(it) }
@@ -236,7 +249,7 @@ fun PhotoDetailScreen(
                         recentTags = recentTags,
                         innerPadding = innerPadding,
                         onTagsChange = { vm.stageTags(it) },
-                        onRotate = { vm.stageRotate() },
+                        onRotate = ::rotateAndSave,
                         onCapsuleTap = onCapsuleTap,
                         decryptedBitmap = decryptedBitmap,
                         decryptedVideoUri = decryptedVideoUri,
@@ -252,7 +265,7 @@ fun PhotoDetailScreen(
                         recentTags = recentTags,
                         innerPadding = innerPadding,
                         onTagsChange = { vm.stageTags(it) },
-                        onRotate = { vm.stageRotate() },
+                        onRotate = ::rotateAndSave,
                         onCapsuleTap = onCapsuleTap,
                         onStartCapsule = { onStartCapsuleWithPhoto(uploadId) },
                         decryptedBitmap = decryptedBitmap,

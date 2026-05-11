@@ -211,6 +211,16 @@ export async function unwrapMasterKeyForDevice(envelope, devicePrivateKey) {
   return aesGcmDecrypt(kek, nonce, ciphertextWithTag)
 }
 
+export async function importSharingPrivkey(pkcs8Bytes) {
+  return crypto.subtle.importKey(
+    'pkcs8', pkcs8Bytes, { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits'],
+  )
+}
+
+export async function unwrapWithSharingKey(envelope, sharingPrivkey) {
+  return unwrapMasterKeyForDevice(envelope, sharingPrivkey)
+}
+
 export function toB64(bytes) {
   let s = ''
   for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i])

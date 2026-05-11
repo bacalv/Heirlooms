@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../AuthContext'
 import { API_URL } from '../api'
 import { getThumb } from '../thumbCache'
-import { getMasterKey, thumbnailCache, cacheThumbnail } from '../crypto/vaultSession'
-import { unwrapDekWithMasterKey, decryptSymmetric, fromB64 } from '../crypto/vaultCrypto'
+import { getMasterKey, getSharingPrivkey, thumbnailCache, cacheThumbnail } from '../crypto/vaultSession'
+import { unwrapDekWithMasterKey, unwrapWithSharingKey, decryptSymmetric, fromB64, ALG_P256_ECDH_HKDF_V1 } from '../crypto/vaultCrypto'
 import { OliveBranchIcon } from '../brand/OliveBranchIcon'
 
 // Drop-in replacement for <img> wherever an `upload` object is in scope.
@@ -58,7 +58,9 @@ function EncryptedThumb({ upload, className, style, alt, rotation }) {
         const raw = upload.wrappedThumbnailDek
         if (!raw) return
         const wrappedDek = typeof raw === 'string' ? fromB64(raw) : raw
-        const thumbDek = await unwrapDekWithMasterKey(wrappedDek, masterKey)
+        const thumbDek = upload.thumbnailDekFormat === ALG_P256_ECDH_HKDF_V1
+          ? await unwrapWithSharingKey(wrappedDek, getSharingPrivkey())
+          : await unwrapDekWithMasterKey(wrappedDek, masterKey)
         const r = await fetch(`${API_URL}/api/content/uploads/${upload.id}/thumb`, {
           headers: { 'X-Api-Key': apiKey },
         })
