@@ -238,7 +238,7 @@ class FinUploadHandlerTest {
 
     @Test
     fun `GET uploads id file returns 200 with file bytes`() {
-        every { mockDatabase.getUploadById(knownId) } returns knownRecord
+        every { mockDatabase.findUploadByIdForUser(knownId, any()) } returns knownRecord
         every { mockStorage.get(StorageKey(knownRecord.storageKey)) } returns byteArrayOf(1, 2, 3)
 
         val response = app(Request(GET, "/api/content/uploads/$knownId/file"))
@@ -249,7 +249,7 @@ class FinUploadHandlerTest {
 
     @Test
     fun `GET uploads id file sets correct Content-Type`() {
-        every { mockDatabase.getUploadById(knownId) } returns knownRecord
+        every { mockDatabase.findUploadByIdForUser(knownId, any()) } returns knownRecord
         every { mockStorage.get(StorageKey(knownRecord.storageKey)) } returns ByteArray(0)
 
         val response = app(Request(GET, "/api/content/uploads/$knownId/file"))
@@ -259,7 +259,7 @@ class FinUploadHandlerTest {
 
     @Test
     fun `GET uploads id file returns 404 when upload not found`() {
-        every { mockDatabase.getUploadById(knownId) } returns null
+        every { mockDatabase.findUploadByIdForUser(knownId, any()) } returns null
 
         val response = app(Request(GET, "/api/content/uploads/$knownId/file"))
 
@@ -274,7 +274,7 @@ class FinUploadHandlerTest {
 
     @Test
     fun `GET uploads id file returns 500 when storage throws`() {
-        every { mockDatabase.getUploadById(knownId) } returns knownRecord
+        every { mockDatabase.findUploadByIdForUser(knownId, any()) } returns knownRecord
         every { mockStorage.get(any()) } throws RuntimeException("GCS error")
 
         val response = app(Request(GET, "/api/content/uploads/$knownId/file"))
@@ -289,7 +289,7 @@ class FinUploadHandlerTest {
 
     @Test
     fun `GET uploads id url returns signed URL for known upload`() {
-        every { mockDatabase.getUploadById(knownId) } returns knownRecord
+        every { mockDatabase.findUploadByIdForUser(knownId, any()) } returns knownRecord
         every { (mockDirectStorage as DirectUploadSupport).generateReadUrl(StorageKey(knownRecord.storageKey)) } returns "https://gcs.example.com/signed-read"
 
         val response = appWithDirectUpload(Request(GET, "/api/content/uploads/$knownId/url"))
@@ -300,7 +300,7 @@ class FinUploadHandlerTest {
 
     @Test
     fun `GET uploads id url returns 404 when upload not found`() {
-        every { mockDatabase.getUploadById(knownId) } returns null
+        every { mockDatabase.findUploadByIdForUser(knownId, any()) } returns null
 
         val response = appWithDirectUpload(Request(GET, "/api/content/uploads/$knownId/url"))
 
@@ -613,7 +613,7 @@ class FinUploadHandlerTest {
     @Test
     fun `GET uploads id thumb returns thumbnail when thumbnail key exists`() {
         val recordWithThumb = knownRecord.copy(thumbnailKey = "thumb-key.jpg")
-        every { mockDatabase.getUploadById(knownId) } returns recordWithThumb
+        every { mockDatabase.findUploadByIdForUser(knownId, any()) } returns recordWithThumb
         every { mockStorage.get(StorageKey("thumb-key.jpg")) } returns byteArrayOf(1, 2, 3)
 
         val response = app(Request(GET, "/api/content/uploads/$knownId/thumb"))
@@ -625,7 +625,7 @@ class FinUploadHandlerTest {
 
     @Test
     fun `GET uploads id thumb falls back to full file when no thumbnail key`() {
-        every { mockDatabase.getUploadById(knownId) } returns knownRecord
+        every { mockDatabase.findUploadByIdForUser(knownId, any()) } returns knownRecord
         every { mockStorage.get(StorageKey(knownRecord.storageKey)) } returns byteArrayOf(4, 5, 6)
 
         val response = app(Request(GET, "/api/content/uploads/$knownId/thumb"))
@@ -637,7 +637,7 @@ class FinUploadHandlerTest {
 
     @Test
     fun `GET uploads id thumb returns 404 when upload not found`() {
-        every { mockDatabase.getUploadById(knownId) } returns null
+        every { mockDatabase.findUploadByIdForUser(knownId, any()) } returns null
 
         val response = app(Request(GET, "/api/content/uploads/$knownId/thumb"))
 
@@ -673,8 +673,7 @@ class FinUploadHandlerTest {
 
     @Test
     fun `PATCH uploads id rotation returns 200 for valid value`() {
-        every { mockDatabase.getUploadById(knownId) } returns knownRecord
-        every { mockDatabase.updateRotation(knownId, 90) } just runs
+        every { mockDatabase.updateRotation(knownId, 90, any()) } returns true
 
         val response = app(
             Request(PATCH, "/api/content/uploads/$knownId/rotation")
@@ -683,7 +682,6 @@ class FinUploadHandlerTest {
         )
 
         assertEquals(OK, response.status)
-        verify { mockDatabase.updateRotation(knownId, 90) }
     }
 
     @Test
@@ -698,7 +696,7 @@ class FinUploadHandlerTest {
 
     @Test
     fun `PATCH uploads id rotation returns 404 when upload not found`() {
-        every { mockDatabase.getUploadById(knownId) } returns null
+        every { mockDatabase.updateRotation(knownId, 90, any()) } returns false
 
         val response = app(
             Request(PATCH, "/api/content/uploads/$knownId/rotation")
@@ -741,7 +739,7 @@ class FinUploadHandlerTest {
     fun `PATCH valid tags returns 200 with updated tags in body`() {
         val updated = knownRecord.copy(tags = listOf("family", "2026-summer"))
         every { mockDatabase.updateTags(knownId, listOf("family", "2026-summer")) } returns true
-        every { mockDatabase.getUploadById(knownId) } returns updated
+        every { mockDatabase.findUploadByIdForUser(knownId, any()) } returns updated
 
         val response = app(
             Request(PATCH, "/api/content/uploads/$knownId/tags")
@@ -759,7 +757,7 @@ class FinUploadHandlerTest {
     fun `PATCH empty tags array clears tags and shows empty array in response`() {
         val updated = knownRecord.copy(tags = emptyList())
         every { mockDatabase.updateTags(knownId, emptyList()) } returns true
-        every { mockDatabase.getUploadById(knownId) } returns updated
+        every { mockDatabase.findUploadByIdForUser(knownId, any()) } returns updated
 
         val response = app(
             Request(PATCH, "/api/content/uploads/$knownId/tags")
@@ -1067,7 +1065,7 @@ class FinUploadHandlerTest {
             wrappedDek = wrappedDek,
             dekFormat = "master-aes256gcm-v1",
         )
-        every { mockDatabase.getUploadById(knownId) } returns encryptedRecord
+        every { mockDatabase.findUploadByIdForUser(knownId, any()) } returns encryptedRecord
 
         val response = app(Request(GET, "/api/content/uploads/$knownId"))
 
@@ -1080,7 +1078,7 @@ class FinUploadHandlerTest {
 
     @Test
     fun `GET uploads id for legacy row has no E2EE fields`() {
-        every { mockDatabase.getUploadById(knownId) } returns knownRecord
+        every { mockDatabase.findUploadByIdForUser(knownId, any()) } returns knownRecord
 
         val response = app(Request(GET, "/api/content/uploads/$knownId"))
 
@@ -1108,7 +1106,7 @@ class FinUploadHandlerTest {
             storageClass = "encrypted",
             thumbnailStorageKey = "uploads/uuid-thumb.bin",
         )
-        every { mockDatabase.getUploadById(knownId) } returns encryptedRecord
+        every { mockDatabase.findUploadByIdForUser(knownId, any()) } returns encryptedRecord
         every { mockStorage.get(StorageKey("uploads/uuid-thumb.bin")) } returns byteArrayOf(7, 8, 9)
 
         val response = app(Request(GET, "/api/content/uploads/$knownId/thumb"))

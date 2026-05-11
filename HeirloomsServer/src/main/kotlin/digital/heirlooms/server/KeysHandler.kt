@@ -88,7 +88,8 @@ private fun registerDevice(request: Request, database: Database): Response {
     if (deviceKind !in VALID_DEVICE_KINDS)
         return Response(BAD_REQUEST).header("Content-Type", "application/json")
             .body("""{"error":"deviceKind must be one of: android, web, ios"}""")
-    if (database.getWrappedKeyByDeviceId(deviceId) != null)
+    val userId = request.authUserId()
+    if (database.getWrappedKeyByDeviceIdForUser(deviceId, userId) != null)
         return Response(CONFLICT).header("Content-Type", "application/json")
             .body("""{"error":"deviceId already registered"}""")
 
@@ -102,7 +103,7 @@ private fun registerDevice(request: Request, database: Database): Response {
         pubkeyFormat = pubkeyFormat, pubkey = pubkey, wrappedMasterKey = wrappedMasterKey,
         wrapFormat = wrapFormat, createdAt = now, lastUsedAt = now, retiredAt = null,
     )
-    database.insertWrappedKey(record)
+    database.insertWrappedKey(record, userId)
     return Response(CREATED).header("Content-Type", "application/json").body(record.toJson())
 }
 
@@ -110,9 +111,9 @@ private fun listDevicesRoute(database: Database): ContractRoute =
     "/devices" meta {
         summary = "List active devices"
         description = "Returns all non-retired wrapped_keys rows."
-    } bindContract GET to { _: Request ->
+    } bindContract GET to { request: Request ->
         try {
-            val keys = database.listWrappedKeys()
+            val keys = database.listWrappedKeys(request.authUserId())
             val node = JsonNodeFactory.instance.arrayNode()
             keys.forEach { node.add(keysMapper.readTree(it.toJson())) }
             Response(OK).header("Content-Type", "application/json").body(node.toString())
@@ -127,9 +128,9 @@ private fun retireDeviceRoute(database: Database): ContractRoute {
         summary = "Retire a device"
         description = "Soft-retires a device by setting retired_at. Returns 404 if not found, 409 if already retired."
     } bindContract DELETE to { dId: String ->
-        { _: Request ->
+        { request: Request ->
             try {
-                val record = database.getWrappedKeyByDeviceId(dId)
+                val record = database.getWrappedKeyByDeviceIdForUser(dId, request.authUserId())
                 when {
                     record == null -> Response(NOT_FOUND)
                     record.retiredAt != null ->
@@ -153,9 +154,9 @@ private fun touchDeviceRoute(database: Database): ContractRoute {
         summary = "Update last_used_at"
         description = "Sets last_used_at = NOW() for the given device. Returns 404 if not found or retired."
     } bindContract PATCH to { dId: String, _: String ->
-        { _: Request ->
+        { request: Request ->
             try {
-                val record = database.getWrappedKeyByDeviceId(dId)
+                val record = database.getWrappedKeyByDeviceIdForUser(dId, request.authUserId())
                 when {
                     record == null || record.retiredAt != null -> Response(NOT_FOUND)
                     else -> {
@@ -176,9 +177,9 @@ private fun getPassphraseRoute(database: Database): ContractRoute =
     "/passphrase" meta {
         summary = "Get recovery passphrase record"
         description = "Returns the passphrase-wrapped master key backup, or 404 if none exists."
-    } bindContract GET to { _: Request ->
+    } bindContract GET to { request: Request ->
         try {
-            val record = database.getRecoveryPassphrase()
+            val record = database.getRecoveryPassphrase(request.authUserId())
             if (record == null) Response(NOT_FOUND)
             else Response(OK).header("Content-Type", "application/json").body(record.toJson())
         } catch (e: Exception) {
@@ -192,13 +193,13 @@ private fun putPassphraseRoute(database: Database): ContractRoute =
         description = "Upserts the passphrase-wrapped master key."
     } bindContract PUT to { request: Request ->
         try {
-            putPassphrase(request, database)
+            putPassphrase(request, database, request.authUserId())
         } catch (e: Exception) {
             Response(INTERNAL_SERVER_ERROR).body("Failed to put passphrase: ${e.message}")
         }
     }
 
-private fun putPassphrase(request: Request, database: Database): Response {
+private fun putPassphrase(request: Request, database: Database, userId: java.util.UUID): Response {
     val node = keysMapper.readTree(request.bodyString())
     val wrappedMasterKeyB64 = node?.get("wrappedMasterKey")?.asText()
     val wrapFormat = node?.get("wrapFormat")?.asText()
@@ -219,9 +220,10 @@ private fun putPassphrase(request: Request, database: Database): Response {
             wrappedMasterKey = wrappedMasterKey, wrapFormat = wrapFormat,
             argon2Params = argon2Params.toString(), salt = salt,
             createdAt = Instant.now(), updatedAt = Instant.now(),
-        )
+        ),
+        userId,
     )
-    val updated = database.getRecoveryPassphrase()!!
+    val updated = database.getRecoveryPassphrase(userId)!!
     return Response(OK).header("Content-Type", "application/json").body(updated.toJson())
 }
 
@@ -229,9 +231,9 @@ private fun deletePassphraseRoute(database: Database): ContractRoute =
     "/passphrase" meta {
         summary = "Delete recovery passphrase"
         description = "Removes the passphrase-wrapped master key. Returns 404 if none exists."
-    } bindContract DELETE to { _: Request ->
+    } bindContract DELETE to { request: Request ->
         try {
-            val deleted = database.deleteRecoveryPassphrase()
+            val deleted = database.deleteRecoveryPassphrase(request.authUserId())
             if (deleted) Response(NO_CONTENT) else Response(NOT_FOUND)
         } catch (e: Exception) {
             Response(INTERNAL_SERVER_ERROR).body("Failed to delete passphrase: ${e.message}")
@@ -244,7 +246,7 @@ private fun initiateLinkRoute(database: Database): ContractRoute =
     "/link/initiate" meta {
         summary = "Initiate a device link"
         description = "Trusted device starts a link session. Returns a one-time code and linkId. Expires in 15 minutes."
-    } bindContract POST to { _: Request ->
+    } bindContract POST to { request: Request ->
         try {
             val id = UUID.randomUUID()
             val code = generateLinkCode()
@@ -254,6 +256,7 @@ private fun initiateLinkRoute(database: Database): ContractRoute =
                     id = id, oneTimeCode = code, expiresAt = expiresAt, state = "initiated",
                     newDeviceId = null, newDeviceLabel = null, newDeviceKind = null,
                     newPubkeyFormat = null, newPubkey = null, wrappedMasterKey = null, wrapFormat = null,
+                    userId = request.authUserId(),
                 )
             )
             Response(OK).header("Content-Type", "application/json").body("""{"linkId":"$id","code":"$code"}""")
@@ -387,6 +390,7 @@ private fun wrapLink(linkId: UUID, request: Request, database: Database): Respon
     val wrappedMasterKey = runCatching { keysDec.decode(wrappedMasterKeyB64) }.getOrNull()
         ?: return Response(BAD_REQUEST).body("wrappedMasterKey is not valid Base64")
 
+    val userId = request.authUserId()
     database.completeDeviceLink(
         id = linkId,
         wrappedMasterKey = wrappedMasterKey,
@@ -396,8 +400,9 @@ private fun wrapLink(linkId: UUID, request: Request, database: Database): Respon
         deviceKind = link.newDeviceKind!!,
         pubkeyFormat = link.newPubkeyFormat!!,
         pubkey = link.newPubkey!!,
+        userId = userId,
     )
-    val newDevice = database.getWrappedKeyByDeviceId(link.newDeviceId)!!
+    val newDevice = database.getWrappedKeyByDeviceIdForUser(link.newDeviceId, userId)!!
     return Response(CREATED).header("Content-Type", "application/json").body(newDevice.toJson())
 }
 

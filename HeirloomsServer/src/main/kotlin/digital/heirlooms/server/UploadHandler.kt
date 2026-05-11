@@ -287,9 +287,10 @@ private fun listTagsContractRoute(database: Database): ContractRoute =
     "/uploads/tags" meta {
         summary = "List all tags"
         description = "Returns all distinct tags used across non-composted uploads, sorted alphabetically."
-    } bindContract GET to { _: Request ->
+    } bindContract GET to { request: Request ->
         try {
-            val tags = database.listAllTags()
+            val userId = request.authUserId()
+            val tags = database.listAllTags(userId)
             val json = com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(tags)
             Response(OK).header("Content-Type", "application/json").body(json)
         } catch (e: Exception) {
@@ -303,8 +304,8 @@ private fun getUploadByIdContractRoute(database: Database): ContractRoute {
         summary = "Get upload by ID"
         description = "Returns a single upload by ID regardless of composted state. Returns 404 if not found."
     } bindContract GET to { uploadId: UUID ->
-        { _: Request ->
-            val record = database.getUploadById(uploadId)
+        { request: Request ->
+            val record = database.findUploadByIdForUser(uploadId, request.authUserId())
             if (record == null) Response(NOT_FOUND)
             else Response(OK).header("Content-Type", "application/json").body(record.toJson())
         }
@@ -334,8 +335,9 @@ private fun uploadHandler(
             ?.takeIf { it.isNotEmpty() }
             ?: "application/octet-stream"
 
+        val userId = request.authUserId()
         val hash = sha256Hex(body)
-        val existing = database.findByContentHash(hash)
+        val existing = database.findByContentHash(hash, userId)
         if (existing != null) {
             Response(CONFLICT)
                 .header("Content-Type", "application/json")
@@ -362,7 +364,7 @@ private fun uploadHandler(
                     deviceMake = metadata.deviceMake,
                     deviceModel = metadata.deviceModel,
                 )
-                database.recordUpload(record)
+                database.recordUpload(record, userId)
                 Response(CREATED)
                     .header("Content-Type", "application/json")
                     .body(record.toJson())
@@ -402,6 +404,7 @@ private fun listUploadsHandler(storage: FileStore, database: Database): HttpHand
             fromDate = fromDate, toDate = toDate, inCapsule = inCapsule,
             includeComposted = includeComposted, hasLocation = hasLocation,
             sort = sort, justArrived = justArrived,
+            userId = request.authUserId(),
         )
         val response = Response(OK).header("Content-Type", "application/json").body(page.toJson())
         launchCompostCleanup(storage, database)
@@ -425,7 +428,7 @@ private fun listCompostedUploadsHandler(database: Database): HttpHandler = { req
     try {
         val cursor = request.query("cursor")?.takeIf { it.isNotBlank() }
         val limit = request.query("limit")?.toIntOrNull()?.coerceIn(1, 200) ?: 50
-        val page = database.listCompostedUploadsPaginated(cursor = cursor, limit = limit)
+        val page = database.listCompostedUploadsPaginated(cursor = cursor, limit = limit, userId = request.authUserId())
         Response(OK).header("Content-Type", "application/json").body(page.toJson())
     } catch (e: Exception) {
         Response(INTERNAL_SERVER_ERROR).body("Failed to list composted uploads: ${e.message}")
@@ -467,9 +470,9 @@ private fun compostUploadContractRoute(database: Database): ContractRoute {
         summary = "Compost an upload"
         description = "Soft-deletes an upload. Requires no tags and no active capsule memberships."
     } bindContract POST to { uploadId: UUID, _: String ->
-        { _: Request ->
+        { request: Request ->
             try {
-                when (val result = database.compostUpload(uploadId)) {
+                when (val result = database.compostUpload(uploadId, request.authUserId())) {
                     is Database.CompostResult.Success ->
                         Response(OK).header("Content-Type", "application/json").body(result.record.toJson())
                     is Database.CompostResult.NotFound ->
@@ -494,9 +497,9 @@ private fun restoreUploadContractRoute(database: Database): ContractRoute {
         summary = "Restore a composted upload"
         description = "Removes composted_at from an upload, returning it to the active garden."
     } bindContract POST to { uploadId: UUID, _: String ->
-        { _: Request ->
+        { request: Request ->
             try {
-                when (val result = database.restoreUpload(uploadId)) {
+                when (val result = database.restoreUpload(uploadId, request.authUserId())) {
                     is Database.RestoreResult.Success ->
                         Response(OK).header("Content-Type", "application/json").body(result.record.toJson())
                     is Database.RestoreResult.NotFound ->
@@ -519,7 +522,7 @@ private fun fileProxyContractRoute(storage: FileStore, database: Database): Cont
         description = "Streams the raw file bytes for the given upload ID with the correct Content-Type."
     } bindContract GET to { uploadId: UUID, _: String ->
         { request: Request ->
-            val record = database.getUploadById(uploadId)
+            val record = database.findUploadByIdForUser(uploadId, request.authUserId())
             if (record == null) {
                 Response(NOT_FOUND)
             } else {
@@ -562,8 +565,8 @@ private fun thumbProxyContractRoute(storage: FileStore, database: Database): Con
         summary = "Get thumbnail"
         description = "Returns the JPEG thumbnail for the given upload ID if one exists, otherwise falls back to the full file."
     } bindContract GET to { uploadId: UUID, _: String ->
-        { _: Request ->
-            val record = database.getUploadById(uploadId)
+        { request: Request ->
+            val record = database.findUploadByIdForUser(uploadId, request.authUserId())
             if (record == null) {
                 Response(NOT_FOUND)
             } else {
@@ -598,8 +601,8 @@ private fun previewProxyContractRoute(storage: FileStore, database: Database): C
         summary = "Get encrypted preview clip"
         description = "Returns the encrypted preview clip for the given upload ID if one exists, otherwise 404."
     } bindContract GET to { uploadId: UUID, _: String ->
-        { _: Request ->
-            val record = database.getUploadById(uploadId)
+        { request: Request ->
+            val record = database.findUploadByIdForUser(uploadId, request.authUserId())
             when {
                 record == null -> Response(NOT_FOUND)
                 record.previewStorageKey == null -> Response(NOT_FOUND)
@@ -622,11 +625,11 @@ private fun readUrlContractRoute(directUpload: DirectUploadSupport?, database: D
         summary = "Get signed read URL"
         description = "Returns a 1-hour signed GCS URL for the given upload ID. Use directly as a video src for streaming."
     } bindContract GET to { uploadId: UUID, _: String ->
-        { _: Request ->
+        { request: Request ->
             if (directUpload == null) {
                 Response(NOT_IMPLEMENTED).body("Signed URLs not supported by the current storage backend")
             } else {
-                val record = database.getUploadById(uploadId)
+                val record = database.findUploadByIdForUser(uploadId, request.authUserId())
                 if (record == null) {
                     Response(NOT_FOUND)
                 } else {
@@ -740,7 +743,7 @@ private fun initiateUploadHandler(directUpload: DirectUploadSupport?, database: 
 
 private fun migrateUploadHandler(uploadId: UUID, request: Request, storage: FileStore, database: Database): Response {
     return try {
-        val existing = database.getUploadById(uploadId)
+        val existing = database.findUploadByIdForUser(uploadId, request.authUserId())
             ?: return Response(NOT_FOUND)
         if (existing.storageClass != "public")
             return Response(CONFLICT).header("Content-Type", "application/json")
@@ -826,7 +829,7 @@ private fun migrateUploadHandler(uploadId: UUID, request: Request, storage: File
             try { database.deletePendingBlob(thumbStorageKey) } catch (_: Exception) {}
         }
 
-        val updated = database.getUploadById(uploadId)
+        val updated = database.findUploadByIdForUser(uploadId, request.authUserId())
             ?: return Response(NOT_FOUND)
         Response(OK).header("Content-Type", "application/json").body(updated.toJson())
     } catch (e: Exception) {
@@ -874,7 +877,7 @@ private fun confirmUploadHandler(
     metadataExtractor: (ByteArray, String) -> MediaMetadata,
 ): HttpHandler = { request: Request ->
     try {
-        confirmUpload(request, storage, database, thumbnailGenerator, metadataExtractor)
+        confirmUpload(request, request.authUserId(), storage, database, thumbnailGenerator, metadataExtractor)
     } catch (e: Exception) {
         Response(INTERNAL_SERVER_ERROR).body("Failed to confirm upload: ${e.message}")
     }
@@ -882,6 +885,7 @@ private fun confirmUploadHandler(
 
 private fun confirmUpload(
     request: Request,
+    userId: java.util.UUID,
     storage: FileStore,
     database: Database,
     thumbnailGenerator: (ByteArray, String) -> ByteArray?,
@@ -906,9 +910,9 @@ private fun confirmUpload(
             .body("""{"error":"invalid tag","tag":"${tagValidation.tag}","reason":"${tagValidation.reason}"}""")
 
     return if (storageClassRaw == "encrypted") {
-        confirmEncryptedUpload(node, storageKey, mimeType, fileSize, contentHash, tags, database)
+        confirmEncryptedUpload(node, storageKey, mimeType, fileSize, contentHash, tags, database, userId)
     } else {
-        confirmLegacyUpload(storageKey, mimeType, fileSize, contentHash, tags, storage, database, thumbnailGenerator, metadataExtractor)
+        confirmLegacyUpload(storageKey, mimeType, fileSize, contentHash, tags, storage, database, thumbnailGenerator, metadataExtractor, userId)
     }
 }
 
@@ -920,6 +924,7 @@ private fun confirmEncryptedUpload(
     contentHash: String?,
     tags: List<String>,
     database: Database,
+    userId: java.util.UUID,
 ): Response {
     val dec = Base64.getDecoder()
     val envelopeVersion = node?.get("envelopeVersion")?.asInt()
@@ -998,9 +1003,10 @@ private fun confirmEncryptedUpload(
             previewDekFormat = previewDekFormat,
             plainChunkSize = plainChunkSize,
             durationSeconds = durationSeconds,
-        )
+        ),
+        userId,
     )
-    if (tags.isNotEmpty()) database.updateTags(id, tags)
+    if (tags.isNotEmpty()) database.updateTags(id, tags, userId)
     runCatching { database.deletePendingBlob(storageKey) }
     if (thumbStorageKey != null) runCatching { database.deletePendingBlob(thumbStorageKey) }
     if (previewStorageKey != null) runCatching { database.deletePendingBlob(previewStorageKey) }
@@ -1017,8 +1023,9 @@ private fun confirmLegacyUpload(
     database: Database,
     thumbnailGenerator: (ByteArray, String) -> ByteArray?,
     metadataExtractor: (ByteArray, String) -> MediaMetadata,
+    userId: java.util.UUID,
 ): Response {
-    val existing = if (contentHash != null) database.findByContentHash(contentHash) else null
+    val existing = if (contentHash != null) database.findByContentHash(contentHash, userId) else null
     if (existing != null)
         return Response(CONFLICT).header("Content-Type", "application/json")
             .body("""{"storageKey":"${existing.storageKey}"}""")
@@ -1049,9 +1056,10 @@ private fun confirmLegacyUpload(
             deviceMake = metadata.deviceMake,
             deviceModel = metadata.deviceModel,
             durationSeconds = durationSeconds,
-        )
+        ),
+        userId,
     )
-    if (tags.isNotEmpty()) database.updateTags(id, tags)
+    if (tags.isNotEmpty()) database.updateTags(id, tags, userId)
     runCatching { database.deletePendingBlob(storageKey) }
     return Response(CREATED)
 }
@@ -1099,12 +1107,10 @@ private fun rotationContractRoute(database: Database): ContractRoute {
                         Response(BAD_REQUEST).body("Malformed JSON")
                     body.rotation !in VALID_ROTATIONS ->
                         Response(BAD_REQUEST).body("rotation must be 0, 90, 180, or 270")
-                    database.getUploadById(uploadId) == null ->
+                    !database.updateRotation(uploadId, body.rotation, request.authUserId()) ->
                         Response(NOT_FOUND)
-                    else -> {
-                        database.updateRotation(uploadId, body.rotation)
+                    else ->
                         Response(OK)
-                    }
                 }
             } catch (e: Exception) {
                 Response(INTERNAL_SERVER_ERROR).body("Failed to update rotation: ${e.message}")
@@ -1119,13 +1125,9 @@ private fun viewUploadContractRoute(database: Database): ContractRoute {
         summary = "Record a detail view"
         description = "Sets last_viewed_at on the upload, removing it from the Just arrived plot. Idempotent — subsequent calls on an already-viewed item are no-ops."
     } bindContract POST to { uploadId: UUID, _: String ->
-        { _: Request ->
-            val exists = database.getUploadById(uploadId) != null
-            if (!exists) Response(NOT_FOUND)
-            else {
-                database.recordView(uploadId)
-                Response(NO_CONTENT)
-            }
+        { request: Request ->
+            val viewed = database.recordView(uploadId, request.authUserId())
+            if (!viewed) Response(NOT_FOUND) else Response(NO_CONTENT)
         }
     }
 }
@@ -1148,15 +1150,17 @@ private fun tagsContractRoute(database: Database): ContractRoute {
                             Response(BAD_REQUEST)
                                 .header("Content-Type", "application/json")
                                 .body("""{"error":"invalid tag","tag":"${result.tag}","reason":"${result.reason}"}""")
-                        is TagValidationResult.Valid ->
-                            if (!database.updateTags(uploadId, body.tags)) {
+                        is TagValidationResult.Valid -> {
+                            val userId = request.authUserId()
+                            if (!database.updateTags(uploadId, body.tags, userId)) {
                                 Response(NOT_FOUND)
                             } else {
-                                val record = database.getUploadById(uploadId)!!
+                                val record = database.findUploadByIdForUser(uploadId, userId)!!
                                 Response(OK)
                                     .header("Content-Type", "application/json")
                                     .body(record.toJson())
                             }
+                        }
                     }
                 }
             } catch (e: Exception) {

@@ -38,8 +38,8 @@ private fun listPlotsRoute(database: Database): ContractRoute =
     "/plots" meta {
         summary = "List plots"
         description = "Returns all plots for the current user ordered by sort_order, with tag criteria embedded."
-    } bindContract GET to { _: Request ->
-        val plots = database.listPlots()
+    } bindContract GET to { request: Request ->
+        val plots = database.listPlots(request.authUserId())
         val json = buildString {
             append("[")
             plots.forEachIndexed { i, p -> if (i > 0) append(","); append(p.toJson()) }
@@ -59,7 +59,7 @@ private fun createPlotRoute(database: Database): ContractRoute =
         } else if (name.isNullOrBlank()) {
             Response(BAD_REQUEST).body("name is required")
         } else {
-            val plot = database.createPlot(name, tagCriteria ?: emptyList())
+            val plot = database.createPlot(name, tagCriteria ?: emptyList(), request.authUserId())
             Response(CREATED).header("Content-Type", "application/json").body(plot.toJson())
         }
     }
@@ -81,7 +81,7 @@ private fun updatePlotRoute(database: Database): ContractRoute {
                     ?.takeIf { it.isArray }
                     ?.map { it.asText() }
                     ?.filter { it.isNotBlank() }
-                when (val result = database.updatePlot(plotId, name, sortOrder, tagCriteria)) {
+                when (val result = database.updatePlot(plotId, name, sortOrder, tagCriteria, request.authUserId())) {
                     is Database.PlotUpdateResult.Success ->
                         Response(OK).header("Content-Type", "application/json").body(result.plot.toJson())
                     is Database.PlotUpdateResult.NotFound -> Response(NOT_FOUND)
@@ -100,8 +100,8 @@ private fun deletePlotRoute(database: Database): ContractRoute {
         summary = "Delete a plot"
         description = "Deletes a user-defined plot. Cannot delete system-defined plots."
     } bindContract DELETE to { plotId: UUID ->
-        { _: Request ->
-            when (database.deletePlot(plotId)) {
+        { request: Request ->
+            when (database.deletePlot(plotId, request.authUserId())) {
                 is Database.PlotDeleteResult.Success -> Response(NO_CONTENT)
                 is Database.PlotDeleteResult.NotFound -> Response(NOT_FOUND)
                 is Database.PlotDeleteResult.SystemDefined ->
@@ -135,7 +135,7 @@ private fun batchReorderPlotsRoute(database: Database): ContractRoute =
                 Response(BAD_REQUEST).body("No valid {id, sort_order} entries found")
             } else {
                 try {
-                    when (database.batchReorderPlots(updates)) {
+                    when (database.batchReorderPlots(updates, request.authUserId())) {
                         is Database.BatchReorderResult.Success ->
                             Response(NO_CONTENT)
                         is Database.BatchReorderResult.SystemDefined ->

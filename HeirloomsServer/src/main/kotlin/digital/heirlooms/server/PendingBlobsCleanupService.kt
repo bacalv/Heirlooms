@@ -31,6 +31,12 @@ class PendingBlobsCleanupService(
                 delay(deviceIntervalMs)
             }
         }
+        scope.launch {
+            while (true) {
+                runSessionCleanup()
+                delay(deviceIntervalMs)
+            }
+        }
     }
 
     private fun runBlobCleanup() {
@@ -50,6 +56,14 @@ class PendingBlobsCleanupService(
             }
         } catch (e: Exception) {
             println("[blob-cleanup] ERROR: cleanup failed: ${e.message}")
+        }
+    }
+
+    private fun runSessionCleanup() {
+        try {
+            database.deleteExpiredSessions()
+        } catch (e: Exception) {
+            println("[session-cleanup] ERROR: ${e.message}")
         }
     }
 

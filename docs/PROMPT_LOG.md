@@ -2,6 +2,22 @@
 
 ---
 
+## Session — 11 May 2026 — v0.39.0: M8 E2 — Per-user enforcement + isolation tests
+
+Implements `docs/briefs/M8_E2_brief.md`. Server-only.
+
+**`SessionAuthFilter`.** New http4k `Filter` (`SessionAuthFilter.kt`) wraps the entire app. Reads `X-Api-Key` header as a session token, hashes it with SHA-256, and looks up the session in the DB. Unauthenticated paths (`/challenge`, `/login`, `/setup-existing`, `/register`, `/pairing/qr`) are allowlisted and pass through. Any other route without a valid, non-expired token returns 401. On success, injects `X-Auth-User-Id: <uuid>` into the request before forwarding. Also calls `database.refreshSession()` to update `last_used_at`. `Request.authUserId()` extension function reads the header and falls back to `FOUNDING_USER_ID` so existing unit tests that bypass the filter continue to work.
+
+**Per-user DB scoping.** `Database.kt` gains user-scoped variants of all read methods: `findUploadByIdForUser`, `findByContentHash`, `listUploadsPaginated`, `listCompostedUploadsPaginated`, `listAllTags`, `compostUpload`, `restoreUpload`, `updateRotation`, `updateTags`, `recordView`, capsule CRUD, plot CRUD, and keys CRUD — all now accept `userId: UUID` and add `AND user_id = ?` to WHERE clauses. All handler routes (`UploadHandler`, `CapsuleHandler`, `PlotHandler`, `KeysHandler`) read `request.authUserId()` and forward it.
+
+**Wiring.** `Main.kt` replaces `apiKeyFilter` with `sessionAuthFilter(database)`. `PendingBlobsCleanupService` adds a `deleteExpiredSessions()` coroutine. `registerRoute` in `AuthHandler` calls `database.createSystemPlot(newUser.id)` after user creation.
+
+**Isolation tests.** `IsolationTest` uses Testcontainers to spin up a real PostgreSQL instance, registers two users (Alice + Bob) via the auth API, and runs 23 tests verifying that uploads, plots, capsules, and sessions belonging to one user are invisible to the other. Addressed test-ordering hazard: the logout test now uses a throwaway registered user rather than the shared `aliceToken`, so Alice's session remains valid for all other tests.
+
+All 269 server tests pass.
+
+---
+
 ## Session — 11 May 2026 — v0.38.0: M8 E1 — Schema + Auth API
 
 Implements `docs/briefs/M8_E1_brief.md`. Server-only. No client changes.

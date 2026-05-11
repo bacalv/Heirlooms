@@ -295,6 +295,7 @@ private fun registerRoute(database: Database): ContractRoute =
                 authVerifier = authVerifier,
                 authSalt = authSalt,
             )
+            database.createSystemPlot(newUser.id)
 
             val now = Instant.now()
             database.insertWrappedKey(

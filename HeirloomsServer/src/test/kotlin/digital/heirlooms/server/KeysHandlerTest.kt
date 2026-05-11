@@ -74,7 +74,7 @@ class KeysHandlerTest {
 
     @Test
     fun `register device returns 201 with record`() {
-        every { mockDatabase.getWrappedKeyByDeviceId(any()) } returns null
+        every { mockDatabase.getWrappedKeyByDeviceIdForUser(any(), any()) } returns null
         every { mockDatabase.insertWrappedKey(any()) } just runs
 
         val response = app(
@@ -90,7 +90,7 @@ class KeysHandlerTest {
 
     @Test
     fun `register duplicate deviceId returns 409`() {
-        every { mockDatabase.getWrappedKeyByDeviceId("device-1") } returns makeWrappedKeyRecord("device-1")
+        every { mockDatabase.getWrappedKeyByDeviceIdForUser("device-1", any()) } returns makeWrappedKeyRecord("device-1")
 
         val response = app(
             Request(POST, "/api/keys/devices")
@@ -103,7 +103,7 @@ class KeysHandlerTest {
 
     @Test
     fun `register with invalid deviceKind returns 400`() {
-        every { mockDatabase.getWrappedKeyByDeviceId(any()) } returns null
+        every { mockDatabase.getWrappedKeyByDeviceIdForUser(any(), any()) } returns null
 
         val response = app(
             Request(POST, "/api/keys/devices")
@@ -132,7 +132,7 @@ class KeysHandlerTest {
     @Test
     fun `retire device returns 204`() {
         val record = makeWrappedKeyRecord("device-1")
-        every { mockDatabase.getWrappedKeyByDeviceId("device-1") } returns record
+        every { mockDatabase.getWrappedKeyByDeviceIdForUser("device-1", any()) } returns record
         every { mockDatabase.retireWrappedKey(record.id, any()) } just runs
 
         val response = app(Request(DELETE, "/api/keys/devices/device-1"))
@@ -143,7 +143,7 @@ class KeysHandlerTest {
 
     @Test
     fun `retire already-retired device returns 409`() {
-        every { mockDatabase.getWrappedKeyByDeviceId("device-1") } returns makeWrappedKeyRecord("device-1", retired = true)
+        every { mockDatabase.getWrappedKeyByDeviceIdForUser("device-1", any()) } returns makeWrappedKeyRecord("device-1", retired = true)
 
         val response = app(Request(DELETE, "/api/keys/devices/device-1"))
 
@@ -155,7 +155,7 @@ class KeysHandlerTest {
     @Test
     fun `touch device returns 204 and updates last_used_at`() {
         val record = makeWrappedKeyRecord("device-1")
-        every { mockDatabase.getWrappedKeyByDeviceId("device-1") } returns record
+        every { mockDatabase.getWrappedKeyByDeviceIdForUser("device-1", any()) } returns record
         every { mockDatabase.touchWrappedKey(record.id) } just runs
 
         val response = app(Request(PATCH, "/api/keys/devices/device-1/used"))
@@ -166,7 +166,7 @@ class KeysHandlerTest {
 
     @Test
     fun `touch unknown device returns 404`() {
-        every { mockDatabase.getWrappedKeyByDeviceId("unknown") } returns null
+        every { mockDatabase.getWrappedKeyByDeviceIdForUser("unknown", any()) } returns null
 
         val response = app(Request(PATCH, "/api/keys/devices/unknown/used"))
 

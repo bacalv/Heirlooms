@@ -2,6 +2,19 @@
 
 ---
 
+## v0.39.0 — M8 E2: Per-user auth enforcement + isolation tests (11 May 2026)
+
+Server only.
+
+- **`SessionAuthFilter`** — http4k `Filter` wrapping the whole app. Validates `X-Api-Key` as a session token (`SHA256(token)` lookup), attaches `X-Auth-User-Id` to the forwarded request, refreshes `last_used_at`. Unauthenticated paths (`/api/auth/challenge`, `/login`, `/setup-existing`, `/register`, `/pairing/qr`) bypass the filter. All other routes return `401` with no token or an expired/invalid token.
+- **Per-user DB scoping** — All read/write operations now scope to the authenticated `userId`. All upload, capsule, plot, and keys handler routes read `request.authUserId()` and pass it to the DB layer.
+- **`Main.kt`** — `apiKeyFilter` replaced with `sessionAuthFilter(database)`.
+- **`PendingBlobsCleanupService`** — periodic coroutine now also calls `database.deleteExpiredSessions()`.
+- **`createSystemPlot` on register** — `registerRoute` calls `database.createSystemPlot(userId)` after user creation, ensuring every new user has a `__just_arrived__` system plot.
+- **`IsolationTest`** — Two-user Testcontainers integration suite (Alice + Bob). 23 tests covering upload, plot, capsule, and auth isolation. All 269 server tests pass.
+
+---
+
 ## v0.38.0 — M8 E1: Schema + Auth API (11 May 2026)
 
 Server only.

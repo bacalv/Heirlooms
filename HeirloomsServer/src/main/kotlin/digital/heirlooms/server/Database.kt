@@ -232,7 +232,7 @@ class Database(private val dataSource: DataSource) {
         }
     }
 
-    fun findByContentHash(hash: String): UploadRecord? {
+    fun findByContentHash(hash: String, userId: UUID = FOUNDING_USER_ID): UploadRecord? {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
@@ -242,9 +242,10 @@ class Database(private val dataSource: DataSource) {
                           encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
                           wrapped_thumbnail_dek, thumbnail_dek_format, preview_storage_key,
                           wrapped_preview_dek, preview_dek_format, plain_chunk_size, duration_seconds
-                   FROM uploads WHERE content_hash = ? LIMIT 1"""
+                   FROM uploads WHERE content_hash = ? AND user_id = ? LIMIT 1"""
             ).use { stmt ->
                 stmt.setString(1, hash)
+                stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
                 if (!rs.next()) return null
                 return rs.toUploadRecord()
@@ -272,20 +273,42 @@ class Database(private val dataSource: DataSource) {
         }
     }
 
-    fun recordView(id: UUID): Boolean {
+    fun findUploadByIdForUser(id: UUID, userId: UUID = FOUNDING_USER_ID): UploadRecord? {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
-                "UPDATE uploads SET last_viewed_at = NOW() WHERE id = ?"
+                """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
+                          taken_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
+                          composted_at, exif_processed_at, last_viewed_at,
+                          storage_class, envelope_version, wrapped_dek, dek_format,
+                          encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
+                          wrapped_thumbnail_dek, thumbnail_dek_format, preview_storage_key,
+                          wrapped_preview_dek, preview_dek_format, plain_chunk_size, duration_seconds
+                   FROM uploads WHERE id = ? AND user_id = ?"""
             ).use { stmt ->
                 stmt.setObject(1, id)
+                stmt.setObject(2, userId)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return null
+                return rs.toUploadRecord()
+            }
+        }
+    }
+
+    fun recordView(id: UUID, userId: UUID = FOUNDING_USER_ID): Boolean {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                "UPDATE uploads SET last_viewed_at = NOW() WHERE id = ? AND user_id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, id)
+                stmt.setObject(2, userId)
                 return stmt.executeUpdate() > 0
             }
         }
     }
 
-    fun listUploads(tag: String? = null, excludeTag: String? = null): List<UploadRecord> {
+    fun listUploads(tag: String? = null, excludeTag: String? = null, userId: UUID = FOUNDING_USER_ID): List<UploadRecord> {
         dataSource.connection.use { conn: Connection ->
-            val conditions = mutableListOf("composted_at IS NULL")
+            val conditions = mutableListOf("composted_at IS NULL", "user_id = ?")
             if (tag != null) conditions.add("tags @> ARRAY[?]::text[]")
             if (excludeTag != null) conditions.add("NOT (tags @> ARRAY[?]::text[])")
             val where = "WHERE ${conditions.joinToString(" AND ")}"
@@ -300,6 +323,7 @@ class Database(private val dataSource: DataSource) {
                    FROM uploads $where ORDER BY uploaded_at DESC"""
             ).use { stmt ->
                 var idx = 1
+                stmt.setObject(idx++, userId)
                 if (tag != null) stmt.setString(idx++, tag)
                 if (excludeTag != null) stmt.setString(idx, excludeTag)
                 val rs = stmt.executeQuery()
@@ -310,7 +334,7 @@ class Database(private val dataSource: DataSource) {
         }
     }
 
-    fun listCompostedUploads(): List<UploadRecord> {
+    fun listCompostedUploads(userId: UUID = FOUNDING_USER_ID): List<UploadRecord> {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
@@ -320,8 +344,9 @@ class Database(private val dataSource: DataSource) {
                           encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
                           wrapped_thumbnail_dek, thumbnail_dek_format, preview_storage_key,
                           wrapped_preview_dek, preview_dek_format, plain_chunk_size, duration_seconds
-                   FROM uploads WHERE composted_at IS NOT NULL ORDER BY composted_at DESC"""
+                   FROM uploads WHERE composted_at IS NOT NULL AND user_id = ? ORDER BY composted_at DESC"""
             ).use { stmt ->
+                stmt.setObject(1, userId)
                 val rs = stmt.executeQuery()
                 val results = mutableListOf<UploadRecord>()
                 while (rs.next()) results.add(rs.toUploadRecord())
@@ -337,27 +362,29 @@ class Database(private val dataSource: DataSource) {
         object PreconditionFailed : CompostResult()
     }
 
-    fun compostUpload(id: UUID): CompostResult {
+    fun compostUpload(id: UUID, userId: UUID = FOUNDING_USER_ID): CompostResult {
         withTransaction { conn ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
                           taken_at, latitude, longitude, altitude, device_make, device_model, rotation, tags,
                           composted_at
-                   FROM uploads WHERE id = ? FOR UPDATE"""
+                   FROM uploads WHERE id = ? AND user_id = ? FOR UPDATE"""
             ).use { stmt ->
                 stmt.setObject(1, id)
+                stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
                 if (!rs.next()) return CompostResult.NotFound
                 val compostedAt = rs.getTimestamp("composted_at")
                 if (compostedAt != null) return CompostResult.AlreadyComposted
                 if (!canCompost(id, conn)) return CompostResult.PreconditionFailed
             }
-            conn.prepareStatement("UPDATE uploads SET composted_at = NOW() WHERE id = ?").use { stmt ->
+            conn.prepareStatement("UPDATE uploads SET composted_at = NOW() WHERE id = ? AND user_id = ?").use { stmt ->
                 stmt.setObject(1, id)
+                stmt.setObject(2, userId)
                 stmt.executeUpdate()
             }
         }
-        return getUploadById(id)?.let { CompostResult.Success(it) } ?: CompostResult.NotFound
+        return findUploadByIdForUser(id, userId)?.let { CompostResult.Success(it) } ?: CompostResult.NotFound
     }
 
     sealed class RestoreResult {
@@ -366,23 +393,25 @@ class Database(private val dataSource: DataSource) {
         object NotComposted : RestoreResult()
     }
 
-    fun restoreUpload(id: UUID): RestoreResult {
+    fun restoreUpload(id: UUID, userId: UUID = FOUNDING_USER_ID): RestoreResult {
         withTransaction { conn ->
             conn.prepareStatement(
-                "SELECT composted_at FROM uploads WHERE id = ? FOR UPDATE"
+                "SELECT composted_at FROM uploads WHERE id = ? AND user_id = ? FOR UPDATE"
             ).use { stmt ->
                 stmt.setObject(1, id)
+                stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
                 if (!rs.next()) return RestoreResult.NotFound
                 val compostedAt = rs.getTimestamp("composted_at")
                 if (compostedAt == null) return RestoreResult.NotComposted
             }
-            conn.prepareStatement("UPDATE uploads SET composted_at = NULL WHERE id = ?").use { stmt ->
+            conn.prepareStatement("UPDATE uploads SET composted_at = NULL WHERE id = ? AND user_id = ?").use { stmt ->
                 stmt.setObject(1, id)
+                stmt.setObject(2, userId)
                 stmt.executeUpdate()
             }
         }
-        return getUploadById(id)?.let { RestoreResult.Success(it) } ?: RestoreResult.NotFound
+        return findUploadByIdForUser(id, userId)?.let { RestoreResult.Success(it) } ?: RestoreResult.NotFound
     }
 
     fun fetchExpiredCompostedUploads(): List<UploadRecord> {
@@ -439,21 +468,23 @@ class Database(private val dataSource: DataSource) {
         return !inActiveCapsule
     }
 
-    fun updateRotation(id: UUID, rotation: Int) {
+    fun updateRotation(id: UUID, rotation: Int, userId: UUID = FOUNDING_USER_ID): Boolean {
         dataSource.connection.use { conn: Connection ->
-            conn.prepareStatement("UPDATE uploads SET rotation = ? WHERE id = ?").use { stmt ->
+            conn.prepareStatement("UPDATE uploads SET rotation = ? WHERE id = ? AND user_id = ?").use { stmt ->
                 stmt.setInt(1, rotation)
                 stmt.setObject(2, id)
-                stmt.executeUpdate()
+                stmt.setObject(3, userId)
+                return stmt.executeUpdate() > 0
             }
         }
     }
 
-    fun updateTags(id: UUID, tags: List<String>): Boolean {
+    fun updateTags(id: UUID, tags: List<String>, userId: UUID = FOUNDING_USER_ID): Boolean {
         dataSource.connection.use { conn: Connection ->
-            conn.prepareStatement("UPDATE uploads SET tags = ? WHERE id = ?").use { stmt ->
+            conn.prepareStatement("UPDATE uploads SET tags = ? WHERE id = ? AND user_id = ?").use { stmt ->
                 stmt.setArray(1, conn.createArrayOf("text", tags.toTypedArray()))
                 stmt.setObject(2, id)
+                stmt.setObject(3, userId)
                 return stmt.executeUpdate() > 0
             }
         }
@@ -461,10 +492,11 @@ class Database(private val dataSource: DataSource) {
 
     // ---- Capsule operations ------------------------------------------------
 
-    fun uploadExists(id: UUID): Boolean {
+    fun uploadExists(id: UUID, userId: UUID = FOUNDING_USER_ID): Boolean {
         dataSource.connection.use { conn ->
-            conn.prepareStatement("SELECT 1 FROM uploads WHERE id = ?").use { stmt ->
+            conn.prepareStatement("SELECT 1 FROM uploads WHERE id = ? AND user_id = ?").use { stmt ->
                 stmt.setObject(1, id)
+                stmt.setObject(2, userId)
                 return stmt.executeQuery().next()
             }
         }
@@ -503,17 +535,18 @@ class Database(private val dataSource: DataSource) {
                 insertMessage(conn, id, message, 1)
             }
         }
-        return getCapsuleById(id)!!
+        return getCapsuleById(id, userId)!!
     }
 
-    fun getCapsuleById(id: UUID): CapsuleDetail? {
+    fun getCapsuleById(id: UUID, userId: UUID = FOUNDING_USER_ID): CapsuleDetail? {
         dataSource.connection.use { conn ->
             val record = conn.prepareStatement(
                 """SELECT id, created_at, updated_at, created_by_user, shape, state,
                           unlock_at, cancelled_at, delivered_at
-                   FROM capsules WHERE id = ?"""
+                   FROM capsules WHERE id = ? AND user_id = ?"""
             ).use { stmt ->
                 stmt.setObject(1, id)
+                stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
                 if (!rs.next()) return null
                 rs.toCapsuleRecord()
@@ -525,7 +558,7 @@ class Database(private val dataSource: DataSource) {
         }
     }
 
-    fun listCapsules(states: List<CapsuleState>, orderBy: String): List<CapsuleSummary> {
+    fun listCapsules(states: List<CapsuleState>, orderBy: String, userId: UUID = FOUNDING_USER_ID): List<CapsuleSummary> {
         if (states.isEmpty()) return emptyList()
         dataSource.connection.use { conn ->
             val stateArr = conn.createArrayOf("text", states.map { it.name.lowercase() }.toTypedArray())
@@ -536,10 +569,11 @@ class Database(private val dataSource: DataSource) {
                           (SELECT COUNT(*) FROM capsule_contents cc WHERE cc.capsule_id = c.id) AS upload_count,
                           (SELECT EXISTS(SELECT 1 FROM capsule_messages cm WHERE cm.capsule_id = c.id)) AS has_message
                    FROM capsules c
-                   WHERE c.state = ANY(?)
+                   WHERE c.state = ANY(?) AND c.user_id = ?
                    ORDER BY $orderCol DESC"""
             ).use { stmt ->
                 stmt.setArray(1, stateArr)
+                stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
                 val results = mutableListOf<CapsuleSummary>()
                 while (rs.next()) {
@@ -566,6 +600,7 @@ class Database(private val dataSource: DataSource) {
 
     fun updateCapsule(
         id: UUID,
+        userId: UUID = FOUNDING_USER_ID,
         unlockAt: OffsetDateTime?,
         recipients: List<String>?,
         uploadIds: List<UUID>?,
@@ -573,9 +608,10 @@ class Database(private val dataSource: DataSource) {
     ): UpdateResult {
         withTransaction { conn ->
             val record = conn.prepareStatement(
-                "SELECT id, created_at, updated_at, created_by_user, shape, state, unlock_at, cancelled_at, delivered_at FROM capsules WHERE id = ? FOR UPDATE"
+                "SELECT id, created_at, updated_at, created_by_user, shape, state, unlock_at, cancelled_at, delivered_at FROM capsules WHERE id = ? AND user_id = ? FOR UPDATE"
             ).use { stmt ->
                 stmt.setObject(1, id)
+                stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
                 if (!rs.next()) return UpdateResult.NotFound
                 rs.toCapsuleRecord()
@@ -589,8 +625,9 @@ class Database(private val dataSource: DataSource) {
             }
             if (uploadIds != null) {
                 for (uid in uploadIds) {
-                    val exists = conn.prepareStatement("SELECT 1 FROM uploads WHERE id = ?").use { stmt ->
+                    val exists = conn.prepareStatement("SELECT 1 FROM uploads WHERE id = ? AND user_id = ?").use { stmt ->
                         stmt.setObject(1, uid)
+                        stmt.setObject(2, userId)
                         stmt.executeQuery().next()
                     }
                     if (!exists) return UpdateResult.UnknownUpload
@@ -600,11 +637,12 @@ class Database(private val dataSource: DataSource) {
             val setClauses = mutableListOf("updated_at = ?")
             if (unlockAt != null) setClauses.add("unlock_at = ?")
 
-            conn.prepareStatement("UPDATE capsules SET ${setClauses.joinToString(", ")} WHERE id = ?").use { stmt ->
+            conn.prepareStatement("UPDATE capsules SET ${setClauses.joinToString(", ")} WHERE id = ? AND user_id = ?").use { stmt ->
                 var idx = 1
                 stmt.setTimestamp(idx++, Timestamp.from(Instant.now()))
                 if (unlockAt != null) stmt.setObject(idx++, unlockAt)
-                stmt.setObject(idx, id)
+                stmt.setObject(idx++, id)
+                stmt.setObject(idx, userId)
                 stmt.executeUpdate()
             }
 
@@ -647,7 +685,7 @@ class Database(private val dataSource: DataSource) {
                 }
             }
         }
-        return getCapsuleById(id)?.let { UpdateResult.Success(it) } ?: UpdateResult.NotFound
+        return getCapsuleById(id, userId)?.let { UpdateResult.Success(it) } ?: UpdateResult.NotFound
     }
 
     sealed class SealResult {
@@ -657,12 +695,13 @@ class Database(private val dataSource: DataSource) {
         object Empty : SealResult()
     }
 
-    fun sealCapsule(id: UUID): SealResult {
+    fun sealCapsule(id: UUID, userId: UUID = FOUNDING_USER_ID): SealResult {
         withTransaction { conn ->
             val record = conn.prepareStatement(
-                "SELECT id, created_at, updated_at, created_by_user, shape, state, unlock_at, cancelled_at, delivered_at FROM capsules WHERE id = ? FOR UPDATE"
+                "SELECT id, created_at, updated_at, created_by_user, shape, state, unlock_at, cancelled_at, delivered_at FROM capsules WHERE id = ? AND user_id = ? FOR UPDATE"
             ).use { stmt ->
                 stmt.setObject(1, id)
+                stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
                 if (!rs.next()) return SealResult.NotFound
                 rs.toCapsuleRecord()
@@ -689,7 +728,7 @@ class Database(private val dataSource: DataSource) {
                 stmt.executeUpdate()
             }
         }
-        return getCapsuleById(id)?.let { SealResult.Success(it) } ?: SealResult.NotFound
+        return getCapsuleById(id, userId)?.let { SealResult.Success(it) } ?: SealResult.NotFound
     }
 
     sealed class CancelResult {
@@ -698,12 +737,13 @@ class Database(private val dataSource: DataSource) {
         object WrongState : CancelResult()
     }
 
-    fun cancelCapsule(id: UUID): CancelResult {
+    fun cancelCapsule(id: UUID, userId: UUID = FOUNDING_USER_ID): CancelResult {
         withTransaction { conn ->
             val record = conn.prepareStatement(
-                "SELECT id, created_at, updated_at, created_by_user, shape, state, unlock_at, cancelled_at, delivered_at FROM capsules WHERE id = ? FOR UPDATE"
+                "SELECT id, created_at, updated_at, created_by_user, shape, state, unlock_at, cancelled_at, delivered_at FROM capsules WHERE id = ? AND user_id = ? FOR UPDATE"
             ).use { stmt ->
                 stmt.setObject(1, id)
+                stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
                 if (!rs.next()) return CancelResult.NotFound
                 rs.toCapsuleRecord()
@@ -715,21 +755,23 @@ class Database(private val dataSource: DataSource) {
 
             val now = Timestamp.from(Instant.now())
             conn.prepareStatement(
-                "UPDATE capsules SET state = 'cancelled', cancelled_at = ?, updated_at = ? WHERE id = ?"
+                "UPDATE capsules SET state = 'cancelled', cancelled_at = ?, updated_at = ? WHERE id = ? AND user_id = ?"
             ).use { stmt ->
                 stmt.setTimestamp(1, now)
                 stmt.setTimestamp(2, now)
                 stmt.setObject(3, id)
+                stmt.setObject(4, userId)
                 stmt.executeUpdate()
             }
         }
-        return getCapsuleById(id)?.let { CancelResult.Success(it) } ?: CancelResult.NotFound
+        return getCapsuleById(id, userId)?.let { CancelResult.Success(it) } ?: CancelResult.NotFound
     }
 
-    fun getCapsulesForUpload(uploadId: UUID): List<CapsuleSummary>? {
+    fun getCapsulesForUpload(uploadId: UUID, userId: UUID = FOUNDING_USER_ID): List<CapsuleSummary>? {
         dataSource.connection.use { conn ->
-            val uploadExists = conn.prepareStatement("SELECT 1 FROM uploads WHERE id = ?").use { stmt ->
+            val uploadExists = conn.prepareStatement("SELECT 1 FROM uploads WHERE id = ? AND user_id = ?").use { stmt ->
                 stmt.setObject(1, uploadId)
+                stmt.setObject(2, userId)
                 stmt.executeQuery().next()
             }
             if (!uploadExists) return null
@@ -870,6 +912,7 @@ class Database(private val dataSource: DataSource) {
         hasLocation: Boolean? = null,
         sort: UploadSort = UploadSort.UPLOAD_NEWEST,
         justArrived: Boolean = false,
+        userId: UUID = FOUNDING_USER_ID,
     ): UploadPage {
         val effectiveLimit = limit.coerceIn(1, 200)
         val effectiveSort = if (justArrived) UploadSort.UPLOAD_NEWEST else sort
@@ -882,6 +925,10 @@ class Database(private val dataSource: DataSource) {
             // Each setter receives (stmt, currentIdx) and returns the next available index.
             val conditions = mutableListOf<String>()
             val setters = mutableListOf<(PreparedStatement, Int) -> Int>()
+
+            // Always scope to the authenticated user
+            conditions += "user_id = ?"
+            setters += { stmt, idx -> stmt.setObject(idx, userId); idx + 1 }
 
             if (justArrived) {
                 conditions += "tags = '{}'::text[]"
@@ -1018,14 +1065,14 @@ class Database(private val dataSource: DataSource) {
         }
     }
 
-    fun listCompostedUploadsPaginated(cursor: String? = null, limit: Int = 50): UploadPage {
+    fun listCompostedUploadsPaginated(cursor: String? = null, limit: Int = 50, userId: UUID = FOUNDING_USER_ID): UploadPage {
         val effectiveLimit = limit.coerceIn(1, 200)
         val decoded = cursor?.let { decodeCompostedCursor(it) }
         dataSource.connection.use { conn: Connection ->
             val where = if (decoded != null)
-                "WHERE composted_at IS NOT NULL AND (composted_at < ? OR (composted_at = ? AND id < ?::uuid))"
+                "WHERE composted_at IS NOT NULL AND user_id = ? AND (composted_at < ? OR (composted_at = ? AND id < ?::uuid))"
             else
-                "WHERE composted_at IS NOT NULL"
+                "WHERE composted_at IS NOT NULL AND user_id = ?"
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash,
                           thumbnail_key, taken_at, latitude, longitude, altitude,
@@ -1040,6 +1087,7 @@ class Database(private val dataSource: DataSource) {
                    LIMIT ?"""
             ).use { stmt ->
                 var idx = 1
+                stmt.setObject(idx++, userId)
                 if (decoded != null) {
                     stmt.setTimestamp(idx++, Timestamp.from(decoded.first))
                     stmt.setTimestamp(idx++, Timestamp.from(decoded.first))
@@ -1057,11 +1105,12 @@ class Database(private val dataSource: DataSource) {
         }
     }
 
-    fun listAllTags(): List<String> {
+    fun listAllTags(userId: UUID = FOUNDING_USER_ID): List<String> {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
-                "SELECT DISTINCT UNNEST(tags) AS tag FROM uploads WHERE composted_at IS NULL ORDER BY tag"
+                "SELECT DISTINCT UNNEST(tags) AS tag FROM uploads WHERE composted_at IS NULL AND user_id = ? ORDER BY tag"
             ).use { stmt ->
+                stmt.setObject(1, userId)
                 val rs = stmt.executeQuery()
                 val tags = mutableListOf<String>()
                 while (rs.next()) tags.add(rs.getString("tag"))
@@ -1193,12 +1242,13 @@ class Database(private val dataSource: DataSource) {
         object SystemDefined : PlotUpdateResult()
     }
 
-    fun updatePlot(id: UUID, name: String?, sortOrder: Int?, tagCriteria: List<String>?): PlotUpdateResult {
+    fun updatePlot(id: UUID, name: String?, sortOrder: Int?, tagCriteria: List<String>?, userId: UUID = FOUNDING_USER_ID): PlotUpdateResult {
         withTransaction { conn ->
             val (isSystemDefined) = conn.prepareStatement(
-                "SELECT is_system_defined FROM plots WHERE id = ? FOR UPDATE"
+                "SELECT is_system_defined FROM plots WHERE id = ? AND owner_user_id = ? FOR UPDATE"
             ).use { stmt ->
                 stmt.setObject(1, id)
+                stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
                 if (!rs.next()) return PlotUpdateResult.NotFound
                 listOf(rs.getBoolean("is_system_defined"))
@@ -1208,12 +1258,13 @@ class Database(private val dataSource: DataSource) {
             val setClauses = mutableListOf("updated_at = ?")
             if (name != null) setClauses.add("name = ?")
             if (sortOrder != null) setClauses.add("sort_order = ?")
-            conn.prepareStatement("UPDATE plots SET ${setClauses.joinToString(", ")} WHERE id = ?").use { stmt ->
+            conn.prepareStatement("UPDATE plots SET ${setClauses.joinToString(", ")} WHERE id = ? AND owner_user_id = ?").use { stmt ->
                 var idx = 1
                 stmt.setTimestamp(idx++, Timestamp.from(Instant.now()))
                 if (name != null) stmt.setString(idx++, name.trim())
                 if (sortOrder != null) stmt.setInt(idx++, sortOrder)
-                stmt.setObject(idx, id)
+                stmt.setObject(idx++, id)
+                stmt.setObject(idx, userId)
                 stmt.executeUpdate()
             }
             if (tagCriteria != null) replacePlotTagCriteria(conn, id, tagCriteria)
@@ -1227,16 +1278,18 @@ class Database(private val dataSource: DataSource) {
         object SystemDefined : PlotDeleteResult()
     }
 
-    fun deletePlot(id: UUID): PlotDeleteResult {
+    fun deletePlot(id: UUID, userId: UUID = FOUNDING_USER_ID): PlotDeleteResult {
         dataSource.connection.use { conn: Connection ->
-            conn.prepareStatement("SELECT is_system_defined FROM plots WHERE id = ?").use { stmt ->
+            conn.prepareStatement("SELECT is_system_defined FROM plots WHERE id = ? AND owner_user_id = ?").use { stmt ->
                 stmt.setObject(1, id)
+                stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
                 if (!rs.next()) return PlotDeleteResult.NotFound
                 if (rs.getBoolean("is_system_defined")) return PlotDeleteResult.SystemDefined
             }
-            conn.prepareStatement("DELETE FROM plots WHERE id = ?").use { stmt ->
+            conn.prepareStatement("DELETE FROM plots WHERE id = ? AND owner_user_id = ?").use { stmt ->
                 stmt.setObject(1, id)
+                stmt.setObject(2, userId)
                 stmt.executeUpdate()
             }
         }
@@ -1249,13 +1302,14 @@ class Database(private val dataSource: DataSource) {
         object SystemDefined : BatchReorderResult()
     }
 
-    fun batchReorderPlots(updates: List<Pair<UUID, Int>>): BatchReorderResult {
+    fun batchReorderPlots(updates: List<Pair<UUID, Int>>, userId: UUID = FOUNDING_USER_ID): BatchReorderResult {
         withTransaction { conn ->
             for ((id, _) in updates) {
                 conn.prepareStatement(
-                    "SELECT is_system_defined FROM plots WHERE id = ? FOR UPDATE"
+                    "SELECT is_system_defined FROM plots WHERE id = ? AND owner_user_id = ? FOR UPDATE"
                 ).use { stmt ->
                     stmt.setObject(1, id)
+                    stmt.setObject(2, userId)
                     val rs = stmt.executeQuery()
                     if (!rs.next()) return BatchReorderResult.NotFound
                     if (rs.getBoolean("is_system_defined")) return BatchReorderResult.SystemDefined
@@ -1264,11 +1318,12 @@ class Database(private val dataSource: DataSource) {
             val now = Timestamp.from(Instant.now())
             for ((id, sortOrder) in updates) {
                 conn.prepareStatement(
-                    "UPDATE plots SET sort_order = ?, updated_at = ? WHERE id = ?"
+                    "UPDATE plots SET sort_order = ?, updated_at = ? WHERE id = ? AND owner_user_id = ?"
                 ).use { stmt ->
                     stmt.setInt(1, sortOrder)
                     stmt.setTimestamp(2, now)
                     stmt.setObject(3, id)
+                    stmt.setObject(4, userId)
                     stmt.executeUpdate()
                 }
             }
@@ -1408,13 +1463,14 @@ class Database(private val dataSource: DataSource) {
         }
     }
 
-    fun listWrappedKeys(includeRetired: Boolean = false): List<WrappedKeyRecord> {
+    fun listWrappedKeys(userId: UUID = FOUNDING_USER_ID, includeRetired: Boolean = false): List<WrappedKeyRecord> {
         dataSource.connection.use { conn ->
             val sql = if (includeRetired)
-                "SELECT id, device_id, device_label, device_kind, pubkey_format, pubkey, wrapped_master_key, wrap_format, created_at, last_used_at, retired_at FROM wrapped_keys ORDER BY created_at DESC"
+                "SELECT id, device_id, device_label, device_kind, pubkey_format, pubkey, wrapped_master_key, wrap_format, created_at, last_used_at, retired_at FROM wrapped_keys WHERE user_id = ? ORDER BY created_at DESC"
             else
-                "SELECT id, device_id, device_label, device_kind, pubkey_format, pubkey, wrapped_master_key, wrap_format, created_at, last_used_at, retired_at FROM wrapped_keys WHERE retired_at IS NULL ORDER BY created_at DESC"
+                "SELECT id, device_id, device_label, device_kind, pubkey_format, pubkey, wrapped_master_key, wrap_format, created_at, last_used_at, retired_at FROM wrapped_keys WHERE user_id = ? AND retired_at IS NULL ORDER BY created_at DESC"
             conn.prepareStatement(sql).use { stmt ->
+                stmt.setObject(1, userId)
                 val rs = stmt.executeQuery()
                 val list = mutableListOf<WrappedKeyRecord>()
                 while (rs.next()) list.add(rs.toWrappedKeyRecord())
@@ -1429,6 +1485,20 @@ class Database(private val dataSource: DataSource) {
                 "SELECT id, device_id, device_label, device_kind, pubkey_format, pubkey, wrapped_master_key, wrap_format, created_at, last_used_at, retired_at FROM wrapped_keys WHERE device_id = ?"
             ).use { stmt ->
                 stmt.setString(1, deviceId)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return null
+                return rs.toWrappedKeyRecord()
+            }
+        }
+    }
+
+    fun getWrappedKeyByDeviceIdForUser(deviceId: String, userId: UUID): WrappedKeyRecord? {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "SELECT id, device_id, device_label, device_kind, pubkey_format, pubkey, wrapped_master_key, wrap_format, created_at, last_used_at, retired_at FROM wrapped_keys WHERE device_id = ? AND user_id = ?"
+            ).use { stmt ->
+                stmt.setString(1, deviceId)
+                stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
                 if (!rs.next()) return null
                 return rs.toWrappedKeyRecord()
