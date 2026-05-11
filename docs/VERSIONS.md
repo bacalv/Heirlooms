@@ -2,6 +2,43 @@
 
 ---
 
+## v0.37.0 — Duration-based playback threshold, preview label + end overlay (11 May 2026)
+
+Server + Web + Android.
+
+- **Server** — V19 migration: `duration_seconds INTEGER` column on `uploads`. Plaintext video confirms extract duration via `ffprobe`. Encrypted confirms store the client-supplied `durationSeconds`.
+- **Web** — `FULL_PLAYBACK_THRESHOLD_SECONDS = 120` (2 min). Duration read from `<video>.duration` at upload time and sent in confirm. Under threshold → play full video; over threshold + preview clip → `PreviewVideoPlayer`; over threshold, no preview → thumbnail only. `PreviewVideoPlayer` shows "Preview · 0:08 of 5:32" label while playing; full translucent overlay with Download button on `ended` event.
+- **Android** — Duration extracted via `MediaExtractor` at upload time; sent in confirm. Per-device playback threshold stored in `SharedPreferences` via `EndpointStore.getVideoPlaybackThreshold()` (default 300s / 5 min). Settings screen gains a "Play full video up to" segmented picker: 1 min / 5 min / 15 min / No limit. No limit always plays the full video, preview system invisible. `PhotoDetailViewModel.load()` takes the threshold. `PreviewVideoPlayer` composable shows label (ExoPlayer position polled every 500ms) and overlay on `STATE_ENDED`.
+
+---
+
+## v0.36.0 — Preview clips, 1 MiB chunks, parallel prefetch, download button (11 May 2026)
+
+Server + Web + Android.
+
+- **Server** — V18 migration: `preview_storage_key`, `wrapped_preview_dek`, `preview_dek_format`, `plain_chunk_size` columns on `uploads`. `GET /api/settings` returns `previewDurationSeconds` (env `PREVIEW_DURATION_SECONDS`, default 15). `GET /api/content/uploads/{id}/preview` proxies the encrypted preview clip.
+- **Web** — ffmpeg.wasm (`@ffmpeg/ffmpeg`, `@ffmpeg/core`) trims the first N seconds of large encrypted videos into a preview clip at upload time; clip encrypted with its own DEK and uploaded. Full video accessible via Download button only. Chunk size drops from 4 MiB to 1 MiB for new uploads; `plain_chunk_size` stored per-upload so old files decrypt correctly. MSE streaming gains 4-wide parallel prefetch. `PhotoDetailPage` uses preview clip for large videos.
+- **Android** — Same 1 MiB chunk size. Preview clip via `MediaExtractor` + `MediaMuxer`. `downloadFullFile()` saves plaintext to Downloads folder via `MediaStore`. `DecryptingDataSource` chunk size read from upload record.
+
+---
+
+## v0.35.0 — Web encrypted video playback + MSE streaming (10 May 2026)
+
+Web only.
+
+- Encrypted videos play in the browser without full download. Strategy: download chunk 0, detect faststart (moov in chunk 0) via mp4box. Faststart → MSE streaming (raw decrypted bytes appended to `SourceBuffer`). Non-faststart → full download then blob URL.
+- `openEncryptedVideoStream()` in `encryptedVideoStream.js`. Codec sniffing via mp4box `onReady` fires synchronously on `appendBuffer` for faststart files.
+
+---
+
+## v0.34.0 — Web streaming-format decrypt fix for large encrypted videos (10 May 2026)
+
+Web only. Bug fix.
+
+- `decryptStreamingContent` was using a fixed 4 MiB block size that didn't match the actual chunk boundaries of streaming-encrypted content, producing GCM authentication failures on large files. Fixed by aligning reads to the correct cipher chunk boundaries (nonce + ciphertext + tag per chunk).
+
+---
+
 ## v0.33.0 — Streaming encryption for large files (10 May 2026)
 
 Server + Android + Web. No schema changes.

@@ -3090,3 +3090,69 @@ Server `heirlooms-server-00036-9hw` (V17 migration). APK v0.32.0 installed on KF
 
 Streaming encryption for large files (88 MB video). Brief at
 `docs/briefs/streaming_encryption.md`.
+
+## Session — 10 May 2026 (Streaming encryption + web video playback — v0.33.0–v0.35.0)
+
+**v0.33.0 — Streaming encryption for large files**
+
+Brief at `docs/briefs/streaming_encryption.md`. Server endpoint `POST /api/content/uploads/resumable` added. Android and web `encryptAndUpload` restructured: files > 10 MB use GCS resumable upload, encrypting and PUTting in 4 MiB plaintext chunks (`[nonce(12)][ciphertext+tag(n+16)]`). `aesGcmEncryptWithAad` added for chunk-level AAD binding. `decryptStreamingContent` added to both platforms.
+
+**v0.34.0 — Web streaming-format decrypt fix**
+
+`decryptStreamingContent` in `vaultCrypto.js` was not aligning reads to correct chunk boundaries, causing GCM auth failures on large encrypted files. Fixed.
+
+**v0.35.0 — Web encrypted video playback + MSE streaming**
+
+`openEncryptedVideoStream()` in `encryptedVideoStream.js`. Downloads chunk 0, probes with mp4box to detect faststart. Faststart → MSE streaming (raw decrypted bytes appended to SourceBuffer). Non-faststart → full download then blob URL. `PhotoDetailPage` routes large encrypted videos through this path.
+
+**Deployment:** Server `heirlooms-server-00035-qwc`. Web `heirlooms-web-00039-g86`.
+
+---
+
+## Session — 11 May 2026 (Preview clips, chunk size, parallel prefetch, download — v0.36.0)
+
+**Brief:** Improve encrypted video performance. Replace MSE streaming complexity with a short preview clip approach: client generates the first N seconds of any large encrypted video at upload time; the detail page plays the clip inline. Download button provides access to the full file. Chunk size drops from 4 MiB to 1 MiB for new encrypted uploads; stored per-upload for backward compat. MSE streaming gains 4-wide parallel prefetch.
+
+**Server changes:**
+- V18 migration: `preview_storage_key`, `wrapped_preview_dek`, `preview_dek_format`, `plain_chunk_size` columns on `uploads`.
+- `GET /api/settings` → `{"previewDurationSeconds":N}` (env `PREVIEW_DURATION_SECONDS`, default 15).
+- `GET /api/content/uploads/{id}/preview` → proxies encrypted preview clip bytes.
+- `confirmEncryptedUpload` accepts and stores all new fields.
+
+**Web changes:**
+- `@ffmpeg/ffmpeg`, `@ffmpeg/util`, `@ffmpeg/core` added. WASM copied to `public/` via postinstall (`scripts/copy-ffmpeg.mjs`). Dockerfile uses `--ignore-scripts` then explicit copy.
+- `fetchSettings(apiKey)` fetches and caches `previewDurationSeconds`.
+- Large video uploads: initiate a second GCS slot for preview, run ffmpeg.wasm to trim first N seconds, encrypt with separate DEK, upload. `plainChunkSize` and preview fields sent in confirm.
+- `encryptedVideoStream.js` rewritten: chunk size read from `upload.plainChunkSize` (default old 4 MiB), 4-wide parallel prefetch in both MSE and full-download paths.
+- `PhotoDetailPage`: encrypted videos with `previewStorageKey` play the preview clip; download button for full file.
+
+**Android changes:**
+- `CHUNK_SIZE` → 1 MiB. `generatePreviewClip()` via `MediaExtractor` + `MediaMuxer`. Preview clip encrypted and uploaded; fields sent in confirm. `DecryptingDataSource` chunk size from upload record. `downloadFullFile()` saves to Downloads via `MediaStore`.
+
+**Deployment:** Server `heirlooms-server-00039-62p`. Web `heirlooms-web-00052-n5k`. APK installed.
+
+---
+
+## Session — 11 May 2026 (Duration-based playback threshold + preview UX — v0.37.0)
+
+**Brief:** `docs/briefs/preview_clip_playback.md`. Store video duration per upload; use it to decide whether to play the full video or preview clip. Per-device threshold on Android; hardcoded default on web. Show preview label while clip plays; full translucent overlay on end.
+
+**Server changes:**
+- V19 migration: `duration_seconds INTEGER` on `uploads`.
+- Plaintext video confirms extract duration via `ffprobe` (`extractVideoDuration()` in `ThumbnailGenerator.kt`, same ProcessBuilder pattern as thumbnail generation).
+- Encrypted confirms accept `durationSeconds` from client, store it.
+
+**Web changes:**
+- `FULL_PLAYBACK_THRESHOLD_SECONDS = 120` constant in `PhotoDetailPage.jsx`.
+- `getVideoDurationSeconds(file)` reads `<video>.duration` at upload time; sent in confirm.
+- Playback routing: known duration → compare to threshold; unknown duration → fall back to 10 MB file-size check.
+- `PreviewVideoPlayer` component: "Preview · 0:08 of 5:32" label via `timeupdate`; full translucent overlay on `ended` with Download button; overlay dismissible by clicking outside button.
+
+**Android changes:**
+- `extractFileDurationSeconds(file)` via `MediaExtractor.getTrackFormat(KEY_DURATION)`; sent in confirm.
+- `EndpointStore.getVideoPlaybackThreshold()` / `setVideoPlaybackThreshold()` backed by `SharedPreferences`.
+- Settings screen: "Play full video up to" segmented picker — 1 min / 5 min / 15 min / No limit (default 5 min). No limit = `Int.MAX_VALUE`, always plays full video.
+- `PhotoDetailViewModel.load()` accepts `thresholdSeconds`. Routing mirrors web logic.
+- `PreviewVideoPlayer` composable: `Player.Listener` for `STATE_ENDED`; 500ms position poll via `LaunchedEffect`; overlay as `Box` over the `AndroidView`.
+
+**Deployment:** Server `heirlooms-server-00040-w5h`. Web `heirlooms-web-00053-gbw`. APK installed.
