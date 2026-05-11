@@ -2,6 +2,20 @@
 
 ---
 
+## Session — 11 May 2026 — M8 bugfix iteration 1 brief
+
+Post-M8 testing with sadaar (second user on Fire OS tablet) surfaced four Android UX bugs. Brief written at `docs/briefs/M8_bugfix1_brief.md`. Target v0.44.0.
+
+**Bug 1 — Blank garden after "Go to Garden" from downloads screen.** `onGoToGarden` in the UPLOAD_PROGRESS composable uses `navigateToTab()` which triggers unnecessary save/restore state machinery. Fix: `popBackStack()` since the user always arrives at UPLOAD_PROGRESS from GARDEN.
+
+**Bug 2 — New Just Arrived item at position −1.** `LaunchedEffect(shouldScrollToStart)` doesn't re-fire when a second item arrives while `shouldScrollToStart` is already `true`. Lazy list key-preservation keeps the old item 0 visible, pushing the new item off-screen left. Fix: key the effect on `newlyArrivedIds` directly.
+
+**Bug 3 — Garden tab doesn't dismiss BurgerPanel.** `navigateToTab()` pops the nav stack correctly but `showBurger` is never reset. The sheet re-renders on top of the garden. Fix: set `showBurger = false` and call `burgerSheetState.hide()` in the non-Burger branch of `onTabSelected`.
+
+**Bug 5 — Spinner while thumbnail loads; should show plant icon.** `EncryptedThumbnail` shows `CircularProgressIndicator` while loading and `OliveBranchIcon` when failed. Both states should show `OliveBranchIcon` — "not yet available" is the same regardless of cause. Fix: replace the loading branch in `HeirloomsImage.kt`.
+
+---
+
 ## Session — 11 May 2026 — v0.43.1: Camera permission on Fire OS
 
 **Camera permission crash on Fire OS (bug).** Adding `zxing-android-embedded` in v0.43.0 merged the `CAMERA` permission into the app manifest. Fire OS enforces declared permissions strictly — `TakePicture`/`CaptureVideo` in `GardenScreen.launchCamera()` crashed without a runtime grant. Photo worked fine on Bret's Android phone (confirmed), crash was Fire OS specific. Fix: added `cameraPermissionLauncher` (RequestPermission) in `GardenScreen`; `launchCamera()` checks `ContextCompat.checkSelfPermission` first and requests the permission if missing, otherwise launches the camera intent directly. Note: `PackageManager.PERMISSION_GRANTED` import added.
