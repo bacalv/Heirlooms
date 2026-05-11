@@ -117,7 +117,12 @@ class PhotoDetailViewModel(
                 }
 
                 val wrappedDek = upload.wrappedDek ?: return@runCatching
-                val dek = VaultCrypto.unwrapDekWithMasterKey(wrappedDek, mk)
+                val dek = if (upload.dekFormat == VaultCrypto.ALG_P256_ECDH_HKDF_V1) {
+                    val privkey = VaultSession.sharingPrivkey ?: return@runCatching
+                    VaultCrypto.unwrapWithSharingKey(wrappedDek, privkey)
+                } else {
+                    VaultCrypto.unwrapDekWithMasterKey(wrappedDek, mk)
+                }
 
                 if (upload.isVideo && exceedsThreshold && upload.previewStorageKey == null) {
                     // Exceeds threshold but no preview clip — show nothing (thumbnail displays).
@@ -168,7 +173,12 @@ class PhotoDetailViewModel(
             runCatching {
                 val mk = VaultSession.masterKey
                 val wrappedDek = upload.wrappedDek ?: return@runCatching
-                val dek = VaultCrypto.unwrapDekWithMasterKey(wrappedDek, mk)
+                val dek = if (upload.dekFormat == VaultCrypto.ALG_P256_ECDH_HKDF_V1) {
+                    val privkey = VaultSession.sharingPrivkey ?: return@runCatching
+                    VaultCrypto.unwrapWithSharingKey(wrappedDek, privkey)
+                } else {
+                    VaultCrypto.unwrapDekWithMasterKey(wrappedDek, mk)
+                }
                 val encryptedBytes = api.fetchBytes(api.fileUrl(upload.id))
                 val plainBytes = if (encryptedBytes.isNotEmpty() && (encryptedBytes[0].toInt() and 0xFF) == 1) {
                     VaultCrypto.decryptSymmetric(encryptedBytes, dek)

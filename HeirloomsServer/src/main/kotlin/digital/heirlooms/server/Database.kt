@@ -586,8 +586,8 @@ class Database(private val dataSource: DataSource) {
                     thumbnail_storage_key, wrapped_thumbnail_dek, thumbnail_dek_format,
                     preview_storage_key, wrapped_preview_dek, preview_dek_format,
                     plain_chunk_size, duration_seconds, exif_processed_at,
-                    shared_from_upload_id, shared_from_user_id, user_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?)"""
+                    shared_from_upload_id, shared_from_user_id, user_id, rotation)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?)"""
             ).use { stmt ->
                 stmt.setObject(1, newId)
                 stmt.setString(2, fromRecord.storageKey)
@@ -610,6 +610,7 @@ class Database(private val dataSource: DataSource) {
                 stmt.setObject(19, fromRecord.id)
                 stmt.setObject(20, fromUserId)
                 stmt.setObject(21, toUserId)
+                stmt.setInt(22, fromRecord.rotation)
                 stmt.executeUpdate()
             }
         }
@@ -619,7 +620,7 @@ class Database(private val dataSource: DataSource) {
             wrappedThumbnailDek = wrappedThumbnailDek,
             dekFormat = dekFormat,
             thumbnailDekFormat = if (wrappedThumbnailDek != null) dekFormat else null,
-            rotation = 0,
+            rotation = fromRecord.rotation,
             tags = emptyList(),
             sharedFromUploadId = fromRecord.id,
             sharedFromUserId = fromUserId,

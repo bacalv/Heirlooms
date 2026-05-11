@@ -1,13 +1,17 @@
 package digital.heirlooms.ui.main
 
+import android.net.Uri
 import android.util.Base64
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -15,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -24,6 +29,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -32,6 +38,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import digital.heirlooms.api.HeirloomsApi
 import digital.heirlooms.app.EndpointStore
 import digital.heirlooms.crypto.DeviceKeyManager
@@ -66,6 +74,13 @@ fun InviteRedemptionScreen(onRegistered: (sessionToken: String) -> Unit) {
 
     val (focusUsername, focusDisplayName, focusPassphrase, focusConfirm) =
         remember { List(4) { FocusRequester() } }
+
+    val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        result.contents?.let { scanned ->
+            val token = Uri.parse(scanned).getQueryParameter("token") ?: scanned
+            inviteToken = token
+        }
+    }
 
     fun submit() {
         if (!canSubmit || working) return
@@ -133,13 +148,28 @@ fun InviteRedemptionScreen(onRegistered: (sessionToken: String) -> Unit) {
             style = MaterialTheme.typography.bodyMedium, color = Forest)
         Spacer(Modifier.height(32.dp))
 
-        OutlinedTextField(
-            value = inviteToken, onValueChange = { inviteToken = it },
-            label = { Text("Invite code") }, modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-            keyboardActions = KeyboardActions(onNext = { focusUsername.requestFocus() }),
-            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Forest, unfocusedBorderColor = Forest15),
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = inviteToken, onValueChange = { inviteToken = it },
+                label = { Text("Invite code") },
+                modifier = Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                keyboardActions = KeyboardActions(onNext = { focusUsername.requestFocus() }),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Forest, unfocusedBorderColor = Forest15),
+            )
+            Spacer(Modifier.width(8.dp))
+            OutlinedButton(
+                onClick = {
+                    scanLauncher.launch(ScanOptions().apply {
+                        setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                        setPrompt("Scan invite QR code")
+                        setBeepEnabled(false)
+                        setOrientationLocked(false)
+                    })
+                },
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Forest),
+            ) { Text("Scan") }
+        }
         Spacer(Modifier.height(12.dp))
         OutlinedTextField(
             value = username, onValueChange = { username = it },
