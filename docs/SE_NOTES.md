@@ -69,6 +69,22 @@ Three Gradle subprojects under `/Users/bac/IdeaProjects/Heirlooms/`:
 - In http4k two-level contract lambdas (`bindContract METHOD to { param: T, _ -> { req -> ... } }`),
   `return` from the inner lambda does not compile as non-local. Extract the inner body
   to a named function and use regular `return` — see `KeysHandler.kt`.
+- **`catch (_: Exception)` does not catch `OutOfMemoryError` (v0.43.0):** `OutOfMemoryError` is a
+  subclass of `Error`, not `Exception`. Any "best-effort, swallow all failures" block in Android code
+  must use `catch (_: Throwable)`, not `catch (_: Exception)`, or an OOM will escape and crash the
+  enclosing Worker/coroutine. WorkManager treats an uncaught `Throwable` from `doWork()` as a
+  permanent failure (not a retry), so the work silently stops with no notification. Diagnostic
+  signature: GCS objects present but no `/confirm` call in server logs. Also wrap the top-level
+  uploader call in `UploadWorker.doWork()` in `try/catch (t: Throwable)` as a safety net.
+
+- **`zxing-android-embedded` adds `CAMERA` to merged manifest — must request at runtime (v0.43.1):**
+  Adding `com.journeyapps:zxing-android-embedded` merges `CAMERA` into the app's manifest. On Fire OS
+  (and Android 6+), once `CAMERA` is in the manifest the system enforces a runtime grant before any
+  camera intent (`TakePicture`, `CaptureVideo`) can fire — without it the app crashes. Previously this
+  worked because no CAMERA permission was declared and the implicit intent bypassed the check. Fix:
+  `ContextCompat.checkSelfPermission` in `launchCamera()` + a `cameraPermissionLauncher`
+  (`RequestPermission`) before launching any camera intent.
+
 - **mp4box v2 (npm `mp4box ^2.3.0`) pitfalls (v0.35.0):**
   - No `default` export — import as `const MP4Box = await import('mp4box')`, then `MP4Box.createFile()`.
   - `initializeSegmentation()` returns `{ tracks, buffer }` (one combined init segment), NOT an iterable array.
