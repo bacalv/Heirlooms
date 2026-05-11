@@ -199,6 +199,18 @@ export async function wrapMasterKeyForDevice(masterKey, devicePubkeySpki) {
   return buildAsymmetricEnvelope(ALG_P256_ECDH_HKDF_V1, ephemeralPubkeyBytes, nonce, ct)
 }
 
+export async function unwrapMasterKeyForDevice(envelope, devicePrivateKey) {
+  const { ephemeralPubkeyBytes, nonce, ciphertextWithTag } = parseAsymmetricEnvelope(envelope)
+  const ephemeralPubkey = await crypto.subtle.importKey(
+    'raw', ephemeralPubkeyBytes, { name: 'ECDH', namedCurve: 'P-256' }, false, [],
+  )
+  const sharedSecret = new Uint8Array(
+    await crypto.subtle.deriveBits({ name: 'ECDH', public: ephemeralPubkey }, devicePrivateKey, 256),
+  )
+  const kek = await hkdf(sharedSecret, null, new TextEncoder().encode('heirlooms-v1'))
+  return aesGcmDecrypt(kek, nonce, ciphertextWithTag)
+}
+
 export function toB64(bytes) {
   let s = ''
   for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i])
@@ -207,4 +219,17 @@ export function toB64(bytes) {
 
 export function fromB64(str) {
   return Uint8Array.from(atob(str), c => c.charCodeAt(0))
+}
+
+export function toB64url(bytes) {
+  return toB64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
+
+export function fromB64url(str) {
+  const padded = str.replace(/-/g, '+').replace(/_/g, '/').padEnd(str.length + (4 - str.length % 4) % 4, '=')
+  return fromB64(padded)
+}
+
+export async function sha256(bytes) {
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
 }

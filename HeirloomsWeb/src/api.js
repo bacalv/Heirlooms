@@ -16,6 +16,63 @@ export async function apiFetch(path, apiKey, options = {}) {
   return fetch(`${API_URL}${path}`, { ...options, headers })
 }
 
+// ---- Auth API ---------------------------------------------------------------
+
+export async function authChallenge(username) {
+  const r = await fetch(`${API_URL}/api/auth/challenge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username }),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json() // { auth_salt: base64url }
+}
+
+export async function authLogin(username, authKeyB64url) {
+  const r = await fetch(`${API_URL}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, auth_key: authKeyB64url }),
+  })
+  return r // caller checks status
+}
+
+export async function authLogout(sessionToken) {
+  await fetch(`${API_URL}/api/auth/logout`, {
+    method: 'POST',
+    headers: { 'X-Api-Key': sessionToken },
+  })
+}
+
+export async function authRegister(body) {
+  const r = await fetch(`${API_URL}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return r // caller checks status
+}
+
+export async function getInvite(sessionToken) {
+  const r = await apiFetch('/api/auth/invites', sessionToken)
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json() // { token, expires_at }
+}
+
+export async function pairingQr(code) {
+  const r = await fetch(`${API_URL}/api/auth/pairing/qr`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  })
+  return r // caller checks status
+}
+
+export async function pairingStatus(sessionId) {
+  const r = await fetch(`${API_URL}/api/auth/pairing/status?session_id=${encodeURIComponent(sessionId)}`)
+  return r // caller checks status
+}
+
 // ---- Keys API ---------------------------------------------------------------
 
 export async function putPassphrase(apiKey, { wrappedMasterKeyB64, wrapFormat, argon2Params, saltB64 }) {

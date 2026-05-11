@@ -2,6 +2,23 @@
 
 ---
 
+## v0.40.0 — M8 E3: Web client auth (11 May 2026)
+
+Web only.
+
+- **`LoginPage`** — Replaced API-key input with username + passphrase form. Challenge flow: `POST /api/auth/challenge` → Argon2id(passphrase, auth_salt, m=65536, t=3, p=1, 64 bytes) → derive auth_key (bytes 0–31) + master_key_seed (bytes 32–63) → `POST /api/auth/login` with base64url auth_key → receive session token. After login, attempts to auto-unlock vault using device private key from IndexedDB if the device was previously registered.
+- **`JoinPage`** (new, route `/join`) — Invite registration. Token from URL query param or manual entry. Generates P-256 keypair, generates random master key, wraps with P-256 pubkey (ECDH-HKDF-AES-GCM). Posts to `POST /api/auth/register`. Unlocks vault immediately in memory. Shows inline errors for 409 (username taken) and 410 (expired invite).
+- **`AccessPage`** (new, route `/access`) — Devices & Access. "Generate invite link" button calls `GET /api/auth/invites` and shows shareable `/join?token=<token>` URL with copy-to-clipboard and expiry countdown. "Pair with phone" link navigates to `/access/pair`.
+- **`PairPage`** (new, route `/access/pair`) — QR pairing. Numeric code entry → `POST /api/auth/pairing/qr` → generate ephemeral P-256 keypair (private key in memory) → QR code displayed (JSON `{session_id, pubkey}`) → polls `GET /api/auth/pairing/status` every 1 second → on complete: ECDH-unwrap master key, store session token, navigate to `/`.
+- **Session storage** — Session token stored in `localStorage` under `heirlooms_session_token`. `sessionToken` replaces `apiKey` as the canonical context value; `apiKey` alias retained for backwards compat with existing pages and tests.
+- **`App.jsx`** — `sessionToken` state; new routes `/join`, `/access`, `/access/pair`. `handleSignOut` calls `POST /api/auth/logout`. `handleLogin(token, masterKey?)` sets session and optionally unlocks vault.
+- **`Nav.jsx`** — "Access" link added to both desktop and mobile menus.
+- **`api.js`** — Added: `authChallenge`, `authLogin`, `authLogout`, `authRegister`, `getInvite`, `pairingQr`, `pairingStatus`.
+- **`vaultCrypto.js`** — Added: `unwrapMasterKeyForDevice` (ECDH-HKDF-AES-GCM decrypt), `toB64url`, `fromB64url`, `sha256`.
+- **10 new vitest tests** — cover login, login failure, registration, 409/410 errors, pairing flow, invite generation, logout, RequireAuth redirect. All 113 web tests pass.
+
+---
+
 ## v0.39.0 — M8 E2: Per-user auth enforcement + isolation tests (11 May 2026)
 
 Server only.

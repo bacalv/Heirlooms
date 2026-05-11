@@ -2,6 +2,22 @@
 
 ---
 
+## Session — 11 May 2026 — v0.40.0: M8 E3 — Web client auth
+
+Implements `docs/briefs/M8_E3_brief.md`. Web-only.
+
+**Session model.** `heirlooms_session_token` in localStorage replaces `heirlooms-apiKey`. `App.jsx` reads it on mount; `sessionToken` is the canonical context value with `apiKey` as an alias for backwards compat. `handleSignOut` calls `POST /api/auth/logout` before clearing state. `RequireAuth` checks `sessionToken`.
+
+**Auth flows.** `LoginPage` implements challenge → Argon2id → login → vault auto-unlock (via device private key from IndexedDB if registered). `JoinPage` (`/join`) handles invite registration: P-256 keypair generation, master key wrapping, `POST /api/auth/register`; shows 409/410 inline errors. `PairPage` (`/access/pair`) implements QR pairing: code entry, ephemeral P-256 keypair, QR code display, 1-second poll, ECDH master key unwrap on completion.
+
+**`AccessPage`** (`/access`) provides invite generation (copy-to-clipboard URL + expiry) and a link to the pairing flow. Added as "Access" entry in Nav.
+
+**`api.js`** additions: `authChallenge`, `authLogin`, `authLogout`, `authRegister`, `getInvite`, `pairingQr`, `pairingStatus`. **`vaultCrypto.js`** additions: `unwrapMasterKeyForDevice`, `toB64url`, `fromB64url`, `sha256`.
+
+**Tests.** 10 new vitest tests in `auth.test.jsx`. Key testing challenge: `vi.useFakeTimers` conflicts with `waitFor`'s internal setTimeout retry loop — resolved by running polling tests with real timers and extended timeouts. All 113 web tests pass.
+
+---
+
 ## Session — 11 May 2026 — v0.39.0: M8 E2 — Per-user enforcement + isolation tests
 
 Implements `docs/briefs/M8_E2_brief.md`. Server-only.

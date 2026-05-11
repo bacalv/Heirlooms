@@ -40,7 +40,8 @@ export function Nav() {
             <NavLink to="/capsules" className={navLinkClass}>Capsules</NavLink>
           </nav>
 
-          <div className="hidden sm:flex items-center">
+          <div className="hidden sm:flex items-center gap-6">
+            <NavLink to="/access" className={navLinkClass}>Access</NavLink>
             <button
               onClick={onSignOut}
               className="text-sm text-text-muted hover:text-forest transition-colors"
@@ -99,6 +100,15 @@ export function Nav() {
                 onClick={() => setMenuOpen(false)}
               >
                 Capsules
+              </NavLink>
+              <NavLink
+                to="/access"
+                className={({ isActive }) =>
+                  `font-sans ${isActive ? 'text-forest border-b-2 border-earth pb-0.5 self-start' : 'text-forest-75'}`
+                }
+                onClick={() => setMenuOpen(false)}
+              >
+                Access
               </NavLink>
             </nav>
             <div className="mt-auto border-t border-forest-15 pt-4">
