@@ -119,7 +119,8 @@ class ShareActivity : ComponentActivity() {
         screenState = ReceiveState.Uploading(sessionTag)
 
         val store = EndpointStore.create(applicationContext)
-        val apiKey = store.getApiKey().takeIf { it.isNotEmpty() } ?: ""
+        val apiKey = store.getSessionToken().takeIf { it.isNotEmpty() }
+            ?: store.getApiKey().takeIf { it.isNotEmpty() } ?: ""
         val wifiOnly = store.getWifiOnly()
         val tags = viewModel.pendingTags
         val uris = pendingUris.toList()

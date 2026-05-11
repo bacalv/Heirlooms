@@ -40,6 +40,7 @@ fun BurgerPanel(
     uploadsInProgress: Boolean = false,
     onUploadsTap: () -> Unit = {},
     onDiagnosticsTap: () -> Unit = {},
+    onDevicesAccessTap: () -> Unit = {},
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -48,6 +49,8 @@ fun BurgerPanel(
     ) {
         Column(Modifier.padding(bottom = 24.dp)) {
             BurgerRow(label = "Settings", onClick = { onDismiss(); onSettingsTap() })
+            HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Forest15)
+            BurgerRow(label = "Devices & Access", onClick = { onDismiss(); onDevicesAccessTap() })
             HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Forest15)
             BurgerRow(label = "Compost heap", onClick = { onDismiss(); onCompostHeapTap() })
             HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Forest15)

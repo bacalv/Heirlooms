@@ -78,6 +78,8 @@ internal object Routes {
     const val PHOTO_PICKER = "photo_picker"
     const val SETTINGS = "settings"
     const val DIAGNOSTICS = "diagnostics"
+    const val DEVICES_ACCESS = "devices_access"
+    const val PAIRING = "pairing"
     const val UPLOAD_PROGRESS = "upload_progress/{sessionTag}"
     fun uploadProgress(sessionTag: String) = "upload_progress/$sessionTag"
 
@@ -171,6 +173,7 @@ fun MainNavigation(apiKey: String, onApiKeyReset: () -> Unit, store: digital.hei
                     activeSessionTag?.let { navController.navigate(Routes.uploadProgress(it)) }
                 },
                 onDiagnosticsTap = { navController.navigate(Routes.DIAGNOSTICS) },
+                onDevicesAccessTap = { navController.navigate(Routes.DEVICES_ACCESS) },
             )
         }
 
@@ -329,6 +332,18 @@ private fun AppNavHost(navController: NavController, apiKey: String, onApiKeyRes
         }
         composable(Routes.DIAGNOSTICS) {
             DiagnosticsScreen(apiKey = apiKey, onBack = { navController.popBackStack() })
+        }
+        composable(Routes.DEVICES_ACCESS) {
+            DevicesAccessScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToPairing = { navController.navigate(Routes.PAIRING) },
+            )
+        }
+        composable(Routes.PAIRING) {
+            PairingScreen(
+                onBack = { navController.popBackStack() },
+                onPaired = { navController.popBackStack() },
+            )
         }
         composable(
             route = Routes.UPLOAD_PROGRESS,

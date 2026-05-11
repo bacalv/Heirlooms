@@ -43,6 +43,20 @@ class EndpointStore(private val store: PreferenceStore) {
     fun getApiKey(): String = store.getString(KEY_API_KEY, "")
     fun setApiKey(apiKey: String) = store.putString(KEY_API_KEY, apiKey.trim())
 
+    // ---- M8 session token ---------------------------------------------------
+
+    fun getSessionToken(): String = store.getString(KEY_SESSION_TOKEN, "")
+    fun setSessionToken(token: String) = store.putString(KEY_SESSION_TOKEN, token.trim())
+    fun clearSessionToken() = store.putString(KEY_SESSION_TOKEN, "")
+
+    fun getUsername(): String = store.getString(KEY_USERNAME, "")
+    fun setUsername(username: String) = store.putString(KEY_USERNAME, username.trim())
+
+    fun getAuthSalt(): String = store.getString(KEY_AUTH_SALT, "")
+    fun setAuthSalt(salt: String) = store.putString(KEY_AUTH_SALT, salt)
+
+    // ---- Other settings ------------------------------------------------------
+
     fun getWifiOnly(): Boolean = store.getString(KEY_WIFI_ONLY, "false") == "true"
     fun setWifiOnly(enabled: Boolean) = store.putString(KEY_WIFI_ONLY, if (enabled) "true" else "false")
 
@@ -59,7 +73,10 @@ class EndpointStore(private val store: PreferenceStore) {
         store.putString(KEY_VIDEO_THRESHOLD, seconds.toString())
 
     companion object {
-        private const val KEY_API_KEY = "api_key"
+        const val KEY_API_KEY = "api_key"          // retained for migration detection
+        private const val KEY_SESSION_TOKEN = "session_token"
+        private const val KEY_USERNAME = "username"
+        private const val KEY_AUTH_SALT = "auth_salt"
         private const val KEY_WIFI_ONLY = "wifi_only"
         private const val KEY_WELCOMED = "welcomed"
         private const val KEY_VIDEO_THRESHOLD = "video_playback_threshold"

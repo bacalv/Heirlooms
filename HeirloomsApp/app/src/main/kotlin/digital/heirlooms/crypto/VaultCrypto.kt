@@ -245,4 +245,83 @@ object VaultCrypto {
         val ctWithTag = envelope.copyOfRange(off, envelope.size)
         return ParsedAsymmetricEnvelope(algorithmId, ephemeralPubkey, nonce, ctWithTag)
     }
+
+    // ---- M8 auth helpers ----------------------------------------------------
+
+    /**
+     * Runs Argon2id(passphrase, salt, m=65536, t=3, p=1, outputLen=64).
+     * Returns (auth_key = bytes[0..31], master_key_seed = bytes[32..63]).
+     */
+    fun deriveAuthAndMasterKeys(
+        passphrase: String,
+        salt: ByteArray,
+        params: Argon2Params = Argon2Params(),
+    ): Pair<ByteArray, ByteArray> {
+        val passphraseBytes = passphrase.toByteArray(Charsets.UTF_8)
+        return try {
+            val argon2Params = Argon2Parameters.Builder(Argon2Parameters.ARGON2_id)
+                .withSalt(salt)
+                .withMemoryAsKB(params.m)
+                .withIterations(params.t)
+                .withParallelism(params.p)
+                .build()
+            val generator = Argon2BytesGenerator()
+            generator.init(argon2Params)
+            val output = ByteArray(64)
+            generator.generateBytes(passphraseBytes, output)
+            val authKey = output.copyOfRange(0, 32)
+            val masterKeySeed = output.copyOfRange(32, 64)
+            Pair(authKey, masterKeySeed)
+        } finally {
+            passphraseBytes.fill(0)
+        }
+    }
+
+    /** SHA-256 of authKey — sent as auth_verifier during registration or setup-existing. */
+    fun computeAuthVerifier(authKey: ByteArray): ByteArray =
+        java.security.MessageDigest.getInstance("SHA-256").digest(authKey)
+
+    /**
+     * Wrap master key for an arbitrary P-256 recipient using ECDH-HKDF-AES-256-GCM.
+     * recipientSpki: X.509 SPKI DER bytes of the recipient's P-256 public key.
+     * Returns a p256-ecdh-hkdf-aes256gcm-v1 asymmetric envelope.
+     */
+    fun wrapMasterKeyForRecipient(masterKey: ByteArray, recipientSpki: ByteArray): ByteArray {
+        val recipientPub = java.security.KeyFactory.getInstance("EC")
+            .generatePublic(java.security.spec.X509EncodedKeySpec(recipientSpki))
+
+        val ephKpg = java.security.KeyPairGenerator.getInstance("EC")
+        ephKpg.initialize(java.security.spec.ECGenParameterSpec("secp256r1"))
+        val ephKp = ephKpg.generateKeyPair()
+
+        val ephPubEc = ephKp.public as java.security.interfaces.ECPublicKey
+        val x = ephPubEc.w.affineX.toByteArray().let {
+            if (it.size > 32) it.copyOfRange(it.size - 32, it.size) else it.padStart(32)
+        }
+        val y = ephPubEc.w.affineY.toByteArray().let {
+            if (it.size > 32) it.copyOfRange(it.size - 32, it.size) else it.padStart(32)
+        }
+        val ephPubSec1 = byteArrayOf(0x04.toByte()) + x + y
+
+        val ka = javax.crypto.KeyAgreement.getInstance("ECDH")
+        ka.init(ephKp.private)
+        ka.doPhase(recipientPub, true)
+        val sharedSecret = ka.generateSecret()
+
+        val kek = hkdf(sharedSecret, info = "heirlooms-v1".toByteArray(Charsets.UTF_8))
+        val nonce = generateNonce()
+        val ct = aesGcmEncrypt(kek, nonce, masterKey)
+        return buildAsymmetricEnvelope(ALG_P256_ECDH_HKDF_V1, ephPubSec1, nonce, ct)
+    }
+
+    /** Base64url-encode bytes (no padding). */
+    fun toBase64Url(bytes: ByteArray): String =
+        java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+
+    /** Decode base64url (with or without padding). */
+    fun fromBase64Url(s: String): ByteArray =
+        java.util.Base64.getUrlDecoder().decode(s.padEnd(s.length + (4 - s.length % 4) % 4, '='))
+
+    private fun ByteArray.padStart(size: Int): ByteArray =
+        if (this.size >= size) this else ByteArray(size - this.size) + this
 }

@@ -176,6 +176,115 @@ class HeirloomsApi(
     suspend fun cancelCapsule(id: String): CapsuleDetail =
         JSONObject(post("/api/capsules/$id/cancel")).toCapsuleDetail()
 
+    // ── Auth ─────────────────────────────────────────────────────────────────
+
+    data class ChallengeResponse(val authSaltB64url: String)
+    data class LoginResponse(val sessionToken: String)
+    data class InviteResponse(val token: String, val expiresAt: String)
+    data class PairingInitiateResponse(val code: String, val expiresAt: String)
+
+    /** Returns the stored auth_salt (base64url) for the given username. */
+    suspend fun authChallenge(username: String): ChallengeResponse = withContext(Dispatchers.IO) {
+        val body = """{"username":"${username.jsonEsc().drop(1).dropLast(1)}"}"""
+        val request = Request.Builder()
+            .url("$baseUrl/api/auth/challenge")
+            .post(body.toRequestBody("application/json".toMediaType()))
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+            val json = JSONObject(response.body?.string() ?: throw IOException("Empty response"))
+            ChallengeResponse(json.getString("auth_salt"))
+        }
+    }
+
+    /** Authenticates with auth_key (base64url); returns session token. */
+    suspend fun authLogin(username: String, authKeyB64url: String): LoginResponse = withContext(Dispatchers.IO) {
+        val body = """{"username":${username.jsonEsc()},"auth_key":"$authKeyB64url"}"""
+        val request = Request.Builder()
+            .url("$baseUrl/api/auth/login")
+            .post(body.toRequestBody("application/json".toMediaType()))
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (response.code == 401) throw IOException("UNAUTHORIZED")
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+            val json = JSONObject(response.body?.string() ?: throw IOException("Empty response"))
+            LoginResponse(json.getString("session_token"))
+        }
+    }
+
+    /** One-time migration path for the founding user: sets auth credentials. */
+    suspend fun setupExisting(
+        username: String,
+        deviceId: String,
+        authSaltB64url: String,
+        authVerifierB64url: String,
+    ): LoginResponse = withContext(Dispatchers.IO) {
+        val body = """{"username":${username.jsonEsc()},"device_id":"$deviceId","auth_salt":"$authSaltB64url","auth_verifier":"$authVerifierB64url"}"""
+        val request = Request.Builder()
+            .url("$baseUrl/api/auth/setup-existing")
+            .post(body.toRequestBody("application/json".toMediaType()))
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+            val json = JSONObject(response.body?.string() ?: throw IOException("Empty response"))
+            LoginResponse(json.getString("session_token"))
+        }
+    }
+
+    suspend fun authLogout() = withContext(Dispatchers.IO) {
+        try { post("/api/auth/logout") } catch (_: Exception) {}
+    }
+
+    suspend fun getInvite(): InviteResponse = withContext(Dispatchers.IO) {
+        val json = JSONObject(get("/api/auth/invites"))
+        InviteResponse(json.getString("token"), json.getString("expires_at"))
+    }
+
+    suspend fun pairingInitiate(): PairingInitiateResponse = withContext(Dispatchers.IO) {
+        val json = JSONObject(post("/api/auth/pairing/initiate"))
+        PairingInitiateResponse(json.getString("code"), json.getString("expires_at"))
+    }
+
+    data class RegisterResponse(val sessionToken: String)
+
+    suspend fun authRegister(
+        inviteToken: String,
+        username: String,
+        displayName: String,
+        authSaltB64url: String,
+        authVerifierB64url: String,
+        wrappedMasterKeyB64: String,
+        pubkeyB64: String,
+        deviceId: String,
+        deviceLabel: String,
+    ): RegisterResponse = withContext(Dispatchers.IO) {
+        val body = """{"invite_token":"$inviteToken","username":${username.jsonEsc()},"display_name":${displayName.jsonEsc()},"auth_salt":"$authSaltB64url","auth_verifier":"$authVerifierB64url","wrapped_master_key":"$wrappedMasterKeyB64","wrap_format":"${VaultCrypto.ALG_P256_ECDH_HKDF_V1}","pubkey_format":"p256-spki","pubkey":"$pubkeyB64","device_id":"$deviceId","device_label":${deviceLabel.jsonEsc()},"device_kind":"android"}"""
+        val request = Request.Builder()
+            .url("$baseUrl/api/auth/register")
+            .post(body.toRequestBody("application/json".toMediaType()))
+            .build()
+        client.newCall(request).execute().use { response ->
+            when (response.code) {
+                409 -> throw IOException("409 Username already taken")
+                410 -> throw IOException("410 Invite invalid or expired")
+                else -> {
+                    if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+                    val json = JSONObject(response.body?.string() ?: throw IOException("Empty response"))
+                    RegisterResponse(json.getString("session_token"))
+                }
+            }
+        }
+    }
+
+    suspend fun pairingComplete(
+        sessionId: String,
+        wrappedMasterKeyB64: String,
+        webPubkeyB64url: String,
+    ) = post(
+        "/api/auth/pairing/complete",
+        """{"session_id":"$sessionId","wrapped_master_key":"$wrappedMasterKeyB64","wrap_format":"${VaultCrypto.ALG_P256_ECDH_HKDF_V1}","web_pubkey":"$webPubkeyB64url","web_pubkey_format":"p256-spki"}""",
+    )
+
     // ── Diagnostics ──────────────────────────────────────────────────────────
 
     suspend fun getSettings(): AppSettings = withContext(Dispatchers.IO) {

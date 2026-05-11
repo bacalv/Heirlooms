@@ -11,46 +11,71 @@ import digital.heirlooms.app.EndpointStore
 import digital.heirlooms.crypto.DeviceKeyManager
 import digital.heirlooms.crypto.VaultSession
 
+/**
+ * Entry-point for the main UI. Detects which first-run path to show:
+ *
+ * 1. Has session_token AND vault ready → normal app
+ * 2. Has session_token but vault not ready → VaultSetupScreen (passphrase)
+ * 3. Has api_key (legacy) but no session_token → MigrationScreen (setup-existing)
+ * 4. Neither → InviteRedemptionScreen (first-run invite)
+ * 5. (Handled in AppNavigation) 401 during use → LoginScreen
+ */
 @Composable
 fun MainApp() {
     val context = LocalContext.current
     val store = remember { EndpointStore.create(context) }
     val deviceKeyManager = remember { DeviceKeyManager(context) }
 
-    // rememberSaveable so the key survives Activity recreation (rotation, OS process kill + restore).
-    // SharedPreferences is the authoritative store; this is a Bundle-backed safety net.
-    var apiKey by rememberSaveable { mutableStateOf(store.getApiKey()) }
+    var sessionToken by rememberSaveable { mutableStateOf(store.getSessionToken()) }
     var welcomed by rememberSaveable { mutableStateOf(store.getWelcomed()) }
     var vaultReady by rememberSaveable { mutableStateOf(deviceKeyManager.isVaultSetUp()) }
 
+    val hasLegacyApiKey = store.getApiKey().isNotEmpty()
+
     when {
-        apiKey.isEmpty() -> ApiKeyScreen(
-            onKeyEntered = { key ->
-                store.setApiKey(key)
-                apiKey = key
+        // ── First-run: invite redemption ────────────────────────────────────
+        sessionToken.isEmpty() && !hasLegacyApiKey -> InviteRedemptionScreen(
+            onRegistered = { token ->
+                store.setWelcomed(true)
+                welcomed = true
+                sessionToken = token
+                vaultReady = true
             }
         )
+
+        // ── Migration: founding user sets passphrase ─────────────────────────
+        sessionToken.isEmpty() && hasLegacyApiKey -> MigrationScreen(
+            onMigrated = { token ->
+                sessionToken = token
+                vaultReady = deviceKeyManager.isVaultSetUp()
+            }
+        )
+
+        // ── Welcome screen (first time after registration) ──────────────────
         !welcomed -> WelcomeScreen(
             onGetStarted = {
                 store.setWelcomed(true)
                 welcomed = true
             }
         )
+
+        // ── Vault setup (session valid, but vault not yet configured) ────────
         !vaultReady -> VaultSetupScreen(
-            apiKey = apiKey,
+            apiKey = sessionToken,
             onComplete = { vaultReady = true },
         )
+
+        // ── Normal app ───────────────────────────────────────────────────────
         else -> {
-            // Auto-unlock vault on process restart (Keystore AES decrypt is fast, safe on main thread).
             if (!VaultSession.isUnlocked) {
                 deviceKeyManager.loadMasterKey()?.let { VaultSession.unlock(it) }
             }
             MainNavigation(
-                apiKey = apiKey,
+                apiKey = sessionToken,
                 onApiKeyReset = {
-                    store.setApiKey("")
-                    apiKey = ""
-                    // Welcome flag intentionally NOT reset — welcome shows once per install.
+                    store.clearSessionToken()
+                    sessionToken = ""
+                    VaultSession.lock()
                 },
                 store = store,
             )

@@ -2,6 +2,27 @@
 
 ---
 
+## v0.41.0 — M8 E4: Android auth migration, Devices & Access, capsule ViewModel (11 May 2026)
+
+Android only. Milestone 8 complete.
+
+- **Session token** — `EndpointStore` gains `getSessionToken/setSessionToken/clearSessionToken`, `getUsername/setUsername`, `getAuthSalt/setAuthSalt`. `ShareActivity` uses session token (falls back to legacy api_key) for upload workers.
+- **`VaultCrypto` additions** — `deriveAuthAndMasterKeys(passphrase, salt)`: Argon2id with 64-byte output, returns `(auth_key[0..31], master_key_seed[32..63])`. `computeAuthVerifier(authKey)`: SHA-256. `wrapMasterKeyForRecipient(masterKey, recipientSpki)`: ECDH-HKDF-AES-GCM wrap for any P-256 SPKI recipient. `toBase64Url` / `fromBase64Url` / `padStart` helpers (pure JVM).
+- **`HeirloomsApi` auth endpoints** — `authChallenge`, `authLogin`, `setupExisting`, `authLogout`, `getInvite`, `pairingInitiate`, `pairingComplete`, `authRegister`.
+- **`MainApp`** — Multi-path first-run: has session_token → normal; has api_key but no session_token → `MigrationScreen`; neither → `InviteRedemptionScreen`. `WelcomeScreen` follows registration; `VaultSetupScreen` for vault-not-ready.
+- **`MigrationScreen`** — One-time founding user passphrase setup via `POST /api/auth/setup-existing`. Clears the old api_key on success.
+- **`InviteRedemptionScreen`** — First-run invite registration. Argon2id auth key derivation + P-256 device keypair + `POST /api/auth/register`.
+- **`LoginScreen`** — Re-auth screen for expired sessions. Challenge → Argon2id → login → store session.
+- **`DevicesAccessScreen`** — Invite section: QR code (ZXing) + Android share sheet. Pairing section: shows 8-digit code, navigates to PairingScreen.
+- **`PairingScreen`** — Accepts QR JSON from web browser; ECDH-wraps master key to web pubkey; calls `POST /api/auth/pairing/complete`.
+- **`PairingQrParser`** — Pure utility for parsing `{session_id, pubkey}` JSON from pairing QR.
+- **`CapsuleCreateViewModel`** — New ViewModel with `recipient`, `unlockDate`, `message`, `selectedPhotos`, `isSubmitting` StateFlows. Validates recipient (required), unlock date (must be future). `submit(api)` calls `POST /api/capsules`.
+- **Nav** — Devices & Access entry added to BurgerPanel. `DEVICES_ACCESS` and `PAIRING` routes added to AppNavigation.
+- **13 new unit tests** — 8 auth tests (VaultCrypto KDF, challenge/login flow, session detection, pairing QR parse, logout) + 5 capsule ViewModel tests. All 117 Android tests pass.
+- **Build** — `com.google.zxing:core:3.5.3` (QR generation), `org.json:json:20231013` (test JVM JSON), added to dependencies.
+
+---
+
 ## v0.40.0 — M8 E3: Web client auth (11 May 2026)
 
 Web only.

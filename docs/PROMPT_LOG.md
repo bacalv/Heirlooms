@@ -2,6 +2,22 @@
 
 ---
 
+## Session — 11 May 2026 — v0.41.0: M8 E4 — Android auth + Devices & Access
+
+Implements `docs/briefs/M8_E4_brief.md`. Android-only. Milestone 8 complete.
+
+**Auth migration.** `EndpointStore` gains session token, username, and auth_salt slots. `MainApp` detects three paths: session present → normal; legacy api_key present → `MigrationScreen` (calls `setup-existing`); neither → `InviteRedemptionScreen`. `LoginScreen` handles expired-session re-auth (challenge → Argon2id → login). `ShareActivity` and `UploadWorker` read from session token first.
+
+**Crypto.** `VaultCrypto` gains `deriveAuthAndMasterKeys` (64-byte Argon2id, splits to auth_key + master_key_seed), `computeAuthVerifier` (SHA-256), `wrapMasterKeyForRecipient` (ECDH-HKDF-AES-GCM for any P-256 SPKI — used by PairingScreen), `toBase64Url`/`fromBase64Url` (pure JVM, avoids android.util.Base64 in unit tests).
+
+**Devices & Access.** `DevicesAccessScreen` generates invite QR codes (ZXing) + Android share sheet, and shows a pairing code with instructions. `PairingScreen` accepts the web client's QR JSON, ECDH-wraps the vault master key to the web pubkey, and calls `pairingComplete`. `PairingQrParser` is a pure JVM utility for parsing `{session_id, pubkey}` JSON.
+
+**CapsuleCreateViewModel.** New ViewModel with StateFlows for all form state. Validates recipient (required) and unlock date (must be future). `submit(api)` calls `createCapsule`. The existing `CapsuleCreateScreen` uses local state; the ViewModel is an independent addition (screens can be migrated later). Both compile and tests pass.
+
+**Tests.** 8 auth unit tests + 5 capsule ViewModel tests = 13 new. Key challenge: `org.json.JSONObject` is an Android stub in JVM tests — resolved by adding `org.json:json` to testImplementation. ViewModel IO tests: `Thread.sleep(300)` + second `advanceUntilIdle()` needed after `server.takeRequest` to allow OkHttp to finish processing on the IO thread before the Main dispatcher continuation runs. All 117 Android tests pass.
+
+---
+
 ## Session — 11 May 2026 — v0.40.0: M8 E3 — Web client auth
 
 Implements `docs/briefs/M8_E3_brief.md`. Web-only.

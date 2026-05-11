@@ -85,10 +85,16 @@ dependencies {
     // BouncyCastle — Argon2id for passphrase key derivation.
     implementation("org.bouncycastle:bcprov-jdk18on:1.79")
 
+    // QR code generation for invite and pairing screens
+    implementation("com.google.zxing:core:3.5.3")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.bouncycastle:bcprov-jdk18on:1.79")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation("com.google.zxing:core:3.5.3")
+    // Provides a real org.json implementation for JVM unit tests (Android SDK stubs are mocked)
+    testImplementation("org.json:json:20231013")
 
     // Compose UI tests (instrumented — require device or emulator).
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.12.01"))

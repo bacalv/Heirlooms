@@ -24,8 +24,8 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.37.0 (11 May 2026) — Duration-based playback threshold, preview label + end overlay.
-- Next milestone: M8 — Multi-user access. Briefs written 11 May 2026 (M8_E1–E4_brief.md).
+- Current version: v0.41.0 (11 May 2026) — M8 E4: Android auth migration, Devices & Access, capsule ViewModel. M8 complete.
+- Next milestone: M9 — to be defined.
   v0.36.0 = Preview clips, 1 MiB chunks, parallel prefetch, download button (server + web + Android).
   v0.35.0 = Web encrypted video playback + MSE streaming (web only).
   v0.34.0 = Web: streaming-format decrypt fix for large encrypted videos.

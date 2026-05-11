@@ -276,7 +276,7 @@ between phone and web is a feature rather than something to hide.
 Existing data is discarded; M7 starts from a clean slate. Friend tester does
 not arrive yet — they wait for M8.
 
-**Milestone 8 — Multi-user access** *(briefs written 11 May 2026 — E1–E4)*
+**Milestone 8 — Multi-user access** *(shipped 11 May 2026 — v0.38.0–v0.41.0)*
 Per-user accounts and data isolation. The current single-user/shared-API-key
 model becomes per-user authentication. Bret backfilled as the existing user
 during the migration. Cross-user reads return 404 (privacy-preserving — a
