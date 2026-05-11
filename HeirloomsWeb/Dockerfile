@@ -3,7 +3,7 @@ ARG VITE_API_URL
 ARG VITE_COMMIT=dev
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 COPY . .
 RUN node scripts/copy-ffmpeg.mjs && npm run build
 
