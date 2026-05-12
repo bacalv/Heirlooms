@@ -24,9 +24,10 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.45.5 (12 May 2026) — M9 bug fix iteration 1: shared item decryption
-  (Android + web), rotation copy on share, re-sharing with correct key, dedup guard,
-  invite QR scan, web sharing key load. First human tester (Wighty) onboarded.
+- Current version: v0.45.8 (12 May 2026) — M9 bug fix iteration 2: EXIF orientation on Android
+  (thumbnail generation + full-image display + auto-stage to DB), rotation included in share
+  payload, web sharing key loaded on all auto-unlock paths (IDB pairing + login device key).
+  First human tester (Wighty) onboarded.
 - Next milestone: M10 (shared plots) — to be briefed.
   v0.36.0 = Preview clips, 1 MiB chunks, parallel prefetch, download button (server + web + Android).
   v0.35.0 = Web encrypted video playback + MSE streaming (web only).
@@ -105,8 +106,8 @@ the pre-launch period.
 - License: Deliberately deferred
 - **First human tester (Wighty) onboarded 12 May 2026.** TCL T517D, Android 15. Friendship
   with Bret confirmed. Sharing both directions tested. Sadaar (Fire OS tablet) also tested as
-  a share recipient. Remaining M9 test items: rotation preserved on share (partially fixed),
-  3 of 4 shared web thumbnails still showing fallback (wrappedThumbnailDek format TBD).
+  share recipient. M9 bug fix iteration 2 complete: EXIF orientation, rotation-on-share, and
+  web shared-item decryption all confirmed working.
 
 ---
 
@@ -561,8 +562,8 @@ with manual env vars achieves the same result.
 | Artifact Registry | heirlooms (europe-west2) |
 | HeirloomsServer image | europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server |
 | HeirloomsWeb image | europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-web |
-| HeirloomsServer Cloud Run URL | https://heirlooms-server-340655233963.us-central1.run.app (revision heirlooms-server-00042-qmx, 2Gi) |
-| HeirloomsWeb Cloud Run URL | https://heirlooms-web-340655233963.us-central1.run.app (revision heirlooms-web-00056-zln) |
+| HeirloomsServer Cloud Run URL | https://heirlooms-server-340655233963.us-central1.run.app (revision heirlooms-server-00043-4ss, 2Gi) |
+| HeirloomsWeb Cloud Run URL | https://heirlooms-web-340655233963.us-central1.run.app (revision heirlooms-web-00057-jcp) |
 | Target domain (web) | https://heirlooms.digital (live) |
 | Target domain (server) | https://api.heirlooms.digital (live) |
 

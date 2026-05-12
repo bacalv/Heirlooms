@@ -2,6 +2,16 @@
 
 ---
 
+## v0.45.6–v0.45.8 — M9 bug fix iteration 2 (12 May 2026)
+
+Android (v0.45.6–v0.45.7), server (v0.45.7), web (v0.45.8).
+
+- **EXIF orientation on Android (v0.45.6)** — `BitmapFactory` ignores the JPEG Orientation tag; browsers apply it automatically. Three-part fix: (1) `generateThumbnail()` applies EXIF rotation to the bitmap before encoding, so new thumbnails have correct pixel orientation. (2) `loadEncryptedContent()` reads EXIF from decrypted bytes and auto-stages the rotation; it saves to the `rotation` column via the navigate-back save path, fixing the garden thumbnail on next refresh. EXIF is not applied to bitmap pixels (would double-rotate manually-corrected images). `rotation` column is the single source of truth. Added `androidx.exifinterface:exifinterface:1.3.7`.
+- **Rotation included in share payload (v0.45.7)** — When re-sharing a received item, the server read `rotation` from DB at share time, but the sender's rotation save could race with the share call. Fix: client sends `upload.rotation` in the share body; server uses it as `rotationOverride` in `createSharedUpload`, bypassing the race.
+- **Web sharing key on all auto-unlock paths (v0.45.8)** — `loadSharingKey` was only called from `VaultUnlockPage.handleUnlock`. IDB auto-unlock (page refresh) and login-time auto-unlock (stored device key) bypassed it entirely, leaving all p256-DEK thumbnails and images silently blank. Fix: extracted `loadSharingKey` to `App.jsx` and called it on both auto-unlock paths, awaited before `setVaultUnlocked(true)`.
+
+---
+
 ## v0.45.0 — M9: Friends, item sharing, Android plot management (11 May 2026)
 
 Server + Android. No web changes.

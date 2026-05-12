@@ -134,6 +134,38 @@ Three Gradle subprojects under `/Users/bac/IdeaProjects/Heirlooms/`:
   to connect to the DB. Always pass the full flag set: `--set-env-vars`, `--set-secrets`,
   `--add-cloudsql-instances`, `--service-account`. The correct command is in PA_NOTES.md.
 
+- **EXIF Orientation on Android — three-part fix (v0.45.6):**
+  `BitmapFactory.decodeFile()` and `decodeByteArray()` ignore the JPEG EXIF Orientation tag;
+  browsers apply it automatically via `image-orientation: from-image`. Fix has three parts:
+  (1) `generateThumbnail()` in `Uploader.kt` — apply EXIF rotation to the bitmap before
+  encoding, so new thumbnails have correct pixels. Add `androidx.exifinterface:exifinterface:1.3.7`.
+  (2) `loadEncryptedContent()` in `PhotoDetailViewModel.kt` — read EXIF from decrypted bytes;
+  if non-zero and `upload.rotation == 0` and no staged rotation, auto-stage the EXIF value.
+  The staged rotation saves to DB via the existing `navigateBack()` → `saveChanges()` path,
+  and the Garden refreshes on re-entry picking up the corrected `rotation` column.
+  Do NOT apply EXIF directly to the bitmap pixels — that would double-rotate images that
+  were manually corrected to compensate for missing EXIF. The `rotation` column is the
+  single source of truth; EXIF auto-staging populates it on first open.
+
+- **Rotation-on-share race — send rotation in payload (v0.45.7):**
+  The server reads `rotation` from DB when creating a shared copy. If the sender's rotation
+  save (from EXIF auto-stage or manual rotate) races with the share API call, the copy gets
+  rotation=0. Fix: include `upload.rotation` from the client in the share request body;
+  server reads it as `rotationOverride` and uses it in `createSharedUpload` instead of
+  relying solely on the DB value. Client: `HeirloomsApi.shareUpload()` sends `rotation`;
+  `ShareSheet.shareWithFriend()` passes `upload.rotation`. Server: `handleShareUpload`
+  reads optional `rotation` field; `createSharedUpload` accepts `rotationOverride: Int? = null`.
+
+- **Web sharing key not loaded on auto-unlock paths (v0.45.8):**
+  `loadSharingKey` was only called from `VaultUnlockPage.handleUnlock`. Two paths in
+  `App.jsx` bypass `VaultUnlockPage` and never loaded the sharing key, leaving
+  `getSharingPrivkey()` null so all p256-DEK thumbnails and images failed silently:
+  (1) IDB auto-unlock on page refresh (stored pairing material in `loadPairingMaterial()`).
+  (2) Login-time auto-unlock when `tryUnlockVaultAfterLogin` succeeds (device key in IDB).
+  Fix: extracted `loadSharingKey` as a top-level async function in `App.jsx`; call it in
+  both paths, awaited before `setVaultUnlocked(true)`. Pattern: any new auto-unlock path
+  in `App.jsx` MUST call `loadSharingKey` before marking the vault as unlocked.
+
 - **mp4box v2 (npm `mp4box ^2.3.0`) pitfalls (v0.35.0):**
   - No `default` export — import as `const MP4Box = await import('mp4box')`, then `MP4Box.createFile()`.
   - `initializeSegmentation()` returns `{ tracks, buffer }` (one combined init segment), NOT an iterable array.
