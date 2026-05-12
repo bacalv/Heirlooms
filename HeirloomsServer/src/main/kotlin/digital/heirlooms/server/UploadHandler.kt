@@ -121,7 +121,7 @@ fun buildApp(
     val capsuleContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
         descriptionPath = "/openapi.json"
-        routes += capsuleRoutes(database) + plotRoutes(database)
+        routes += capsuleRoutes(database) + plotRoutes(database) + flowRoutes(database) + plotItemRoutes(database)
     }
 
     val keysContract = contract {

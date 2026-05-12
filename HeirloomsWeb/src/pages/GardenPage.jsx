@@ -564,7 +564,10 @@ function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMo
         >
           <DragHandleIcon />
         </button>
-        <h2 className="font-sans text-forest text-sm font-medium flex-1">{plot.name}</h2>
+        <h2 className="font-sans text-forest text-sm font-medium flex-1 flex items-center gap-1.5">
+          {!plot.criteria && <span title="Collection plot" className="text-[10px] text-text-muted font-normal border border-forest-15 rounded px-1">collection</span>}
+          {plot.name}
+        </h2>
         <PlotGearMenu
           plot={plot}
           isFirst={isFirst}
@@ -1150,7 +1153,11 @@ export function GardenPage() {
         </button>
       </div>
 
-      <div className="mt-12">
+      <div className="mt-12 flex flex-col gap-2">
+        <Link to="/flows"
+          className="text-sm font-sans text-text-muted hover:text-forest transition-colors">
+          Flows
+        </Link>
         <Link
           to="/compost"
           className={`text-sm font-sans hover:text-forest transition-colors ${compostCount === 0 ? 'text-text-muted opacity-60' : 'text-text-muted'}`}

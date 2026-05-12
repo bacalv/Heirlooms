@@ -2,6 +2,32 @@
 
 ---
 
+## Session — 12 May 2026 — M10 E2: Flows + staging (v0.48.0)
+
+Server + Web. No Android changes.
+
+**V25a migration (`V25a__flows_staging.sql`).** Three new tables: `plot_items` (explicit item collections, with E2EE columns NULL for now), `flows` (criteria → target collection plot, `requires_staging`), `plot_staging_decisions` (per-`(plot_id, upload_id)` approve/reject, keyed to plot not flow). FK: `plot_items.source_flow_id → flows(id) ON DELETE SET NULL`. Indexes: `idx_plot_staging(plot_id, decision)`, `idx_flows_user(user_id)`.
+
+**`FlowRecord` / `PlotItemRecord` domain models (Database.kt).** Added to the plot section. `FlowRecord` includes `criteria: String` (raw JSONB), `targetPlotId`, `requiresStaging`. `PlotItemRecord` is a lightweight struct for the join row.
+
+**Flow CRUD (Database.kt).** `listFlows`, `getFlowById`, `createFlow` (validates collection plot target), `updateFlow`, `deleteFlow`. `createFlow` uses `getPlotById` to validate target — must have `criteria IS NULL` and be owned by the user. `FlowCreateResult.Error` / `FlowUpdateResult.NotFound` sealed classes.
+
+**Staging operations (Database.kt).** `getStagingItems(flowId)`: runs `CriteriaEvaluator` against the flow's criteria and excludes items already in `plot_staging_decisions` or `plot_items`. `getStagingItemsForPlot(plotId)`: union across all `requires_staging = true` flows targeting the plot (de-duplicated by upload ID). `approveStagingItem`: inserts into `plot_items` + upserts `plot_staging_decisions('approved')` in a transaction. `rejectStagingItem`: checks not already in `plot_items` (409 if so), inserts `plot_staging_decisions('rejected')`. `deleteDecision` (un-reject). `getRejectedItems`. `getPlotItems`. `addPlotItem` / `removePlotItem`.
+
+**`FlowHandler.kt` (new).** `flowRoutes` (flow CRUD + `GET /api/flows/:id/staging`) and `plotItemRoutes` (plot-level staging + collection items CRUD). Path signatures follow the http4k pattern: literal segments consume `_: String` params in the two-level lambda; inner bodies extracted to named functions where early `return` is needed. Registered in `capsuleContract` alongside plot routes.
+
+**Web — `StagingPanel.jsx` (new).** Accepts `plotId` + optional `flowId`. Fetches pending (from flow or plot staging endpoint) + rejected in parallel. Per-item approve/reject buttons with in-flight state. Collapsed rejected section with "Restore" buttons.
+
+**Web — `FlowsPage.jsx` (new).** Route `/flows`. Flow list (name, target plot name, criteria description, requiresStaging). Create modal (FlowForm with CriteriaBuilder, target plot picker for collection plots only, staging toggle). Edit modal (name, criteria, requiresStaging; target immutable). Delete confirmation (notes existing items are kept). Inline `StagingPanel` per flow card.
+
+**Web — `GardenPage.jsx` updated.** "Flows" link in bottom sidebar nav. `SortablePlotRow` heading shows a `collection` badge (border-box label) when `plot.criteria` is null, visually distinguishing collection plots from query plots.
+
+**Web — `App.jsx` updated.** `/flows` route added under `RequireAuth`.
+
+**Tests.** 4 V25a `SchemaMigrationTest` canaries (tables exist, FK SET NULL on flow delete). `FlowApiTest.kt` (HeirloomsTest): 20 integration tests covering flow CRUD, staging appear/approve/reject/un-reject/double-approve-409/reject-approved-409, multi-flow staging aggregation, DELETE-flow-keeps-items, manual add/remove.
+
+---
+
 ## Session — 12 May 2026 — M10 E1: Predicate/criteria system (v0.47.0)
 
 Server + Web. No Android changes.

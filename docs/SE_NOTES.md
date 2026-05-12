@@ -166,6 +166,15 @@ Three Gradle subprojects under `/Users/bac/IdeaProjects/Heirlooms/`:
   both paths, awaited before `setVaultUnlocked(true)`. Pattern: any new auto-unlock path
   in `App.jsx` MUST call `loadSharingKey` before marking the vault as unlocked.
 
+- **Literal path segments consume `_: String` params in http4k contract lambdas (v0.48.0):**
+  When a contract path has a mix of UUID params and literal string segments, the two-level lambda
+  must declare each literal segment as `_: String` (or `_s1: String, _s2: String` when more than
+  one is needed). Example: `"/plots" / plotId / "staging" / uploadId / "approve"` → lambda is
+  `{ pId: UUID, _s1: String, uId: UUID, _s2: String -> { request: Request -> ... } }`. Kotlin
+  cannot infer these types without explicit annotations — you'll get "Cannot infer a type" errors
+  at compile time. Four-segment paths with two UUIDs produce `ContractRouteSpec4<UUID, String, UUID, String>`.
+  For routes where the inner handler needs an early `return`, still extract to a named function.
+
 - **`CriteriaEvaluator` usage pattern (v0.47.0):**
   `CriteriaEvaluator.evaluate(criteriaJson, userId, conn)` returns `CriteriaFragment(sql, setters)`.
   The `sql` field is appended to the `conditions` list in `listUploadsPaginated`; `setters` is appended

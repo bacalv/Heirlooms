@@ -195,6 +195,28 @@ data class PlotRecord(
     val visibility: String,
 )
 
+// ---- Flow domain model -----------------------------------------------
+
+data class FlowRecord(
+    val id: UUID,
+    val userId: UUID,
+    val name: String,
+    val criteria: String,
+    val targetPlotId: UUID,
+    val requiresStaging: Boolean,
+    val createdAt: Instant,
+    val updatedAt: Instant,
+)
+
+data class PlotItemRecord(
+    val id: UUID,
+    val plotId: UUID,
+    val uploadId: UUID,
+    val addedBy: UUID,
+    val sourceFlowId: UUID?,
+    val addedAt: Instant,
+)
+
 class Database(private val dataSource: DataSource) {
 
     fun runMigrations() {
@@ -1603,6 +1625,435 @@ class Database(private val dataSource: DataSource) {
                 visibility = rs.getString("visibility"),
             )
         }
+
+    // ---- Flow operations --------------------------------------------------
+
+    fun listFlows(userId: UUID = FOUNDING_USER_ID): List<FlowRecord> {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """SELECT id, user_id, name, criteria, target_plot_id, requires_staging, created_at, updated_at
+                   FROM flows WHERE user_id = ? ORDER BY created_at ASC"""
+            ).use { stmt ->
+                stmt.setObject(1, userId)
+                val rs = stmt.executeQuery()
+                val results = mutableListOf<FlowRecord>()
+                while (rs.next()) results.add(rs.toFlowRecord())
+                return results
+            }
+        }
+    }
+
+    fun getFlowById(id: UUID, userId: UUID = FOUNDING_USER_ID): FlowRecord? {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """SELECT id, user_id, name, criteria, target_plot_id, requires_staging, created_at, updated_at
+                   FROM flows WHERE id = ? AND user_id = ?"""
+            ).use { stmt ->
+                stmt.setObject(1, id)
+                stmt.setObject(2, userId)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return null
+                return rs.toFlowRecord()
+            }
+        }
+    }
+
+    sealed class FlowCreateResult {
+        data class Success(val flow: FlowRecord) : FlowCreateResult()
+        data class Error(val message: String) : FlowCreateResult()
+    }
+
+    fun createFlow(
+        name: String,
+        criteriaJson: String,
+        targetPlotId: UUID,
+        requiresStaging: Boolean,
+        userId: UUID = FOUNDING_USER_ID,
+    ): FlowCreateResult {
+        val targetPlot = getPlotById(targetPlotId) ?: return FlowCreateResult.Error("Target plot not found")
+        if (targetPlot.ownerUserId != userId) return FlowCreateResult.Error("Target plot not found")
+        if (targetPlot.criteria != null) return FlowCreateResult.Error("Target plot must be a collection plot (criteria IS NULL)")
+
+        val id = UUID.randomUUID()
+        val now = Instant.now()
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """INSERT INTO flows (id, user_id, name, criteria, target_plot_id, requires_staging, created_at, updated_at)
+                   VALUES (?, ?, ?, ?::jsonb, ?, ?, ?, ?)"""
+            ).use { stmt ->
+                stmt.setObject(1, id)
+                stmt.setObject(2, userId)
+                stmt.setString(3, name.trim())
+                stmt.setString(4, criteriaJson)
+                stmt.setObject(5, targetPlotId)
+                stmt.setBoolean(6, requiresStaging)
+                stmt.setTimestamp(7, Timestamp.from(now))
+                stmt.setTimestamp(8, Timestamp.from(now))
+                stmt.executeUpdate()
+            }
+        }
+        return FlowCreateResult.Success(getFlowById(id, userId)!!)
+    }
+
+    sealed class FlowUpdateResult {
+        data class Success(val flow: FlowRecord) : FlowUpdateResult()
+        object NotFound : FlowUpdateResult()
+    }
+
+    fun updateFlow(
+        id: UUID,
+        name: String?,
+        criteriaJson: String?,
+        requiresStaging: Boolean?,
+        userId: UUID = FOUNDING_USER_ID,
+    ): FlowUpdateResult {
+        val setClauses = mutableListOf("updated_at = ?")
+        if (name != null) setClauses.add("name = ?")
+        if (criteriaJson != null) setClauses.add("criteria = ?::jsonb")
+        if (requiresStaging != null) setClauses.add("requires_staging = ?")
+
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "UPDATE flows SET ${setClauses.joinToString(", ")} WHERE id = ? AND user_id = ?"
+            ).use { stmt ->
+                var idx = 1
+                stmt.setTimestamp(idx++, Timestamp.from(Instant.now()))
+                if (name != null) stmt.setString(idx++, name.trim())
+                if (criteriaJson != null) stmt.setString(idx++, criteriaJson)
+                if (requiresStaging != null) stmt.setBoolean(idx++, requiresStaging)
+                stmt.setObject(idx++, id)
+                stmt.setObject(idx, userId)
+                val updated = stmt.executeUpdate()
+                if (updated == 0) return FlowUpdateResult.NotFound
+            }
+        }
+        return getFlowById(id, userId)?.let { FlowUpdateResult.Success(it) } ?: FlowUpdateResult.NotFound
+    }
+
+    fun deleteFlow(id: UUID, userId: UUID = FOUNDING_USER_ID): Boolean {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement("DELETE FROM flows WHERE id = ? AND user_id = ?").use { stmt ->
+                stmt.setObject(1, id)
+                stmt.setObject(2, userId)
+                return stmt.executeUpdate() > 0
+            }
+        }
+    }
+
+    // ---- Staging operations -----------------------------------------------
+
+    fun getStagingItems(flowId: UUID, userId: UUID = FOUNDING_USER_ID): List<UploadRecord> {
+        val flow = getFlowById(flowId, userId) ?: return emptyList()
+        val plotId = flow.targetPlotId
+
+        dataSource.connection.use { conn ->
+            val fragment = CriteriaEvaluator.evaluate(flow.criteria, userId, conn)
+            val sql = buildString {
+                append("""SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash,
+                                  thumbnail_key, taken_at, latitude, longitude, altitude,
+                                  device_make, device_model, rotation, tags, composted_at, exif_processed_at,
+                                  last_viewed_at, storage_class, envelope_version, wrapped_dek, dek_format,
+                                  encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
+                                  wrapped_thumbnail_dek, thumbnail_dek_format, preview_storage_key,
+                                  wrapped_preview_dek, preview_dek_format, plain_chunk_size, duration_seconds,
+                                  shared_from_upload_id, shared_from_user_id
+                           FROM uploads
+                           WHERE user_id = ?
+                             AND composted_at IS NULL
+                             AND (""")
+                append(fragment.sql)
+                append(""")
+                             AND NOT EXISTS (SELECT 1 FROM plot_staging_decisions psd
+                                            WHERE psd.plot_id = ? AND psd.upload_id = uploads.id)
+                             AND NOT EXISTS (SELECT 1 FROM plot_items pi
+                                            WHERE pi.plot_id = ? AND pi.upload_id = uploads.id)
+                           ORDER BY uploaded_at DESC, id DESC""")
+            }
+            conn.prepareStatement(sql).use { stmt ->
+                var idx = 1
+                stmt.setObject(idx++, userId)
+                for (setter in fragment.setters) idx = setter(stmt, idx)
+                stmt.setObject(idx++, plotId)
+                stmt.setObject(idx, plotId)
+                val rs = stmt.executeQuery()
+                val results = mutableListOf<UploadRecord>()
+                while (rs.next()) results.add(rs.toUploadRecord())
+                return results
+            }
+        }
+    }
+
+    fun getStagingItemsForPlot(plotId: UUID, userId: UUID = FOUNDING_USER_ID): List<UploadRecord> {
+        val flows = listFlows(userId).filter { it.targetPlotId == plotId && it.requiresStaging }
+        if (flows.isEmpty()) return emptyList()
+
+        dataSource.connection.use { conn ->
+            val allItems = mutableMapOf<UUID, UploadRecord>()
+            for (flow in flows) {
+                try {
+                    val fragment = CriteriaEvaluator.evaluate(flow.criteria, userId, conn)
+                    val sql = buildString {
+                        append("""SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash,
+                                          thumbnail_key, taken_at, latitude, longitude, altitude,
+                                          device_make, device_model, rotation, tags, composted_at, exif_processed_at,
+                                          last_viewed_at, storage_class, envelope_version, wrapped_dek, dek_format,
+                                          encrypted_metadata, encrypted_metadata_format, thumbnail_storage_key,
+                                          wrapped_thumbnail_dek, thumbnail_dek_format, preview_storage_key,
+                                          wrapped_preview_dek, preview_dek_format, plain_chunk_size, duration_seconds,
+                                          shared_from_upload_id, shared_from_user_id
+                                   FROM uploads
+                                   WHERE user_id = ?
+                                     AND composted_at IS NULL
+                                     AND (""")
+                        append(fragment.sql)
+                        append(""")
+                                     AND NOT EXISTS (SELECT 1 FROM plot_staging_decisions psd
+                                                    WHERE psd.plot_id = ? AND psd.upload_id = uploads.id)
+                                     AND NOT EXISTS (SELECT 1 FROM plot_items pi
+                                                    WHERE pi.plot_id = ? AND pi.upload_id = uploads.id)
+                                   ORDER BY uploaded_at DESC, id DESC""")
+                    }
+                    conn.prepareStatement(sql).use { stmt ->
+                        var idx = 1
+                        stmt.setObject(idx++, userId)
+                        for (setter in fragment.setters) idx = setter(stmt, idx)
+                        stmt.setObject(idx++, plotId)
+                        stmt.setObject(idx, plotId)
+                        val rs = stmt.executeQuery()
+                        while (rs.next()) {
+                            val u = rs.toUploadRecord()
+                            allItems[u.id] = u
+                        }
+                    }
+                } catch (_: CriteriaValidationException) { /* skip invalid flow */ }
+            }
+            return allItems.values.sortedByDescending { it.uploadedAt }
+        }
+    }
+
+    sealed class ApproveResult {
+        object Success : ApproveResult()
+        object NotFound : ApproveResult()
+        object AlreadyApproved : ApproveResult()
+        object PlotNotOwned : ApproveResult()
+    }
+
+    fun approveStagingItem(plotId: UUID, uploadId: UUID, sourceFlowId: UUID?, userId: UUID = FOUNDING_USER_ID): ApproveResult {
+        val plot = getPlotById(plotId) ?: return ApproveResult.NotFound
+        if (plot.ownerUserId != userId) return ApproveResult.PlotNotOwned
+
+        withTransaction { conn ->
+            // Check not already in plot_items
+            val exists = conn.prepareStatement(
+                "SELECT 1 FROM plot_items WHERE plot_id = ? AND upload_id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, plotId); stmt.setObject(2, uploadId)
+                stmt.executeQuery().next()
+            }
+            if (exists) return ApproveResult.AlreadyApproved
+
+            // Insert plot_items row
+            conn.prepareStatement(
+                """INSERT INTO plot_items (plot_id, upload_id, added_by, source_flow_id, added_at)
+                   VALUES (?, ?, ?, ?, NOW())"""
+            ).use { stmt ->
+                stmt.setObject(1, plotId); stmt.setObject(2, uploadId)
+                stmt.setObject(3, userId); stmt.setObject(4, sourceFlowId)
+                stmt.executeUpdate()
+            }
+
+            // Upsert staging decision as approved
+            conn.prepareStatement(
+                """INSERT INTO plot_staging_decisions (plot_id, upload_id, decision, source_flow_id)
+                   VALUES (?, ?, 'approved', ?)
+                   ON CONFLICT (plot_id, upload_id) DO UPDATE SET decision = 'approved', decided_at = NOW()"""
+            ).use { stmt ->
+                stmt.setObject(1, plotId); stmt.setObject(2, uploadId); stmt.setObject(3, sourceFlowId)
+                stmt.executeUpdate()
+            }
+        }
+        return ApproveResult.Success
+    }
+
+    sealed class RejectResult {
+        object Success : RejectResult()
+        object NotFound : RejectResult()
+        object AlreadyApproved : RejectResult()
+        object PlotNotOwned : RejectResult()
+    }
+
+    fun rejectStagingItem(plotId: UUID, uploadId: UUID, sourceFlowId: UUID?, userId: UUID = FOUNDING_USER_ID): RejectResult {
+        val plot = getPlotById(plotId) ?: return RejectResult.NotFound
+        if (plot.ownerUserId != userId) return RejectResult.PlotNotOwned
+
+        dataSource.connection.use { conn ->
+            // Check not already approved (in plot_items)
+            val approved = conn.prepareStatement(
+                "SELECT 1 FROM plot_items WHERE plot_id = ? AND upload_id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, plotId); stmt.setObject(2, uploadId)
+                stmt.executeQuery().next()
+            }
+            if (approved) return RejectResult.AlreadyApproved
+
+            conn.prepareStatement(
+                """INSERT INTO plot_staging_decisions (plot_id, upload_id, decision, source_flow_id)
+                   VALUES (?, ?, 'rejected', ?)
+                   ON CONFLICT (plot_id, upload_id) DO UPDATE SET decision = 'rejected', decided_at = NOW()"""
+            ).use { stmt ->
+                stmt.setObject(1, plotId); stmt.setObject(2, uploadId); stmt.setObject(3, sourceFlowId)
+                stmt.executeUpdate()
+            }
+        }
+        return RejectResult.Success
+    }
+
+    fun deleteDecision(plotId: UUID, uploadId: UUID, userId: UUID = FOUNDING_USER_ID): Boolean {
+        val plot = getPlotById(plotId) ?: return false
+        if (plot.ownerUserId != userId) return false
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "DELETE FROM plot_staging_decisions WHERE plot_id = ? AND upload_id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, plotId); stmt.setObject(2, uploadId)
+                return stmt.executeUpdate() > 0
+            }
+        }
+    }
+
+    fun getRejectedItems(plotId: UUID, userId: UUID = FOUNDING_USER_ID): List<UploadRecord> {
+        val plot = getPlotById(plotId) ?: return emptyList()
+        if (plot.ownerUserId != userId) return emptyList()
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """SELECT u.id, u.storage_key, u.mime_type, u.file_size, u.uploaded_at, u.content_hash,
+                          u.thumbnail_key, u.taken_at, u.latitude, u.longitude, u.altitude,
+                          u.device_make, u.device_model, u.rotation, u.tags, u.composted_at, u.exif_processed_at,
+                          u.last_viewed_at, u.storage_class, u.envelope_version, u.wrapped_dek, u.dek_format,
+                          u.encrypted_metadata, u.encrypted_metadata_format, u.thumbnail_storage_key,
+                          u.wrapped_thumbnail_dek, u.thumbnail_dek_format, u.preview_storage_key,
+                          u.wrapped_preview_dek, u.preview_dek_format, u.plain_chunk_size, u.duration_seconds,
+                          u.shared_from_upload_id, u.shared_from_user_id
+                   FROM uploads u
+                   JOIN plot_staging_decisions psd ON psd.upload_id = u.id
+                   WHERE psd.plot_id = ? AND psd.decision = 'rejected'
+                   ORDER BY psd.decided_at DESC"""
+            ).use { stmt ->
+                stmt.setObject(1, plotId)
+                val rs = stmt.executeQuery()
+                val results = mutableListOf<UploadRecord>()
+                while (rs.next()) results.add(rs.toUploadRecord())
+                return results
+            }
+        }
+    }
+
+    // ---- Collection plot item operations ----------------------------------
+
+    fun getPlotItems(plotId: UUID, userId: UUID = FOUNDING_USER_ID): List<UploadRecord> {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """SELECT u.id, u.storage_key, u.mime_type, u.file_size, u.uploaded_at, u.content_hash,
+                          u.thumbnail_key, u.taken_at, u.latitude, u.longitude, u.altitude,
+                          u.device_make, u.device_model, u.rotation, u.tags, u.composted_at, u.exif_processed_at,
+                          u.last_viewed_at, u.storage_class, u.envelope_version, u.wrapped_dek, u.dek_format,
+                          u.encrypted_metadata, u.encrypted_metadata_format, u.thumbnail_storage_key,
+                          u.wrapped_thumbnail_dek, u.thumbnail_dek_format, u.preview_storage_key,
+                          u.wrapped_preview_dek, u.preview_dek_format, u.plain_chunk_size, u.duration_seconds,
+                          u.shared_from_upload_id, u.shared_from_user_id
+                   FROM uploads u
+                   JOIN plot_items pi ON pi.upload_id = u.id
+                   WHERE pi.plot_id = ?
+                     AND (u.user_id = ? OR pi.added_by = ?)
+                   ORDER BY pi.added_at DESC"""
+            ).use { stmt ->
+                stmt.setObject(1, plotId); stmt.setObject(2, userId); stmt.setObject(3, userId)
+                val rs = stmt.executeQuery()
+                val results = mutableListOf<UploadRecord>()
+                while (rs.next()) results.add(rs.toUploadRecord())
+                return results
+            }
+        }
+    }
+
+    sealed class AddItemResult {
+        object Success : AddItemResult()
+        object AlreadyPresent : AddItemResult()
+        object PlotNotOwned : AddItemResult()
+        object UploadNotOwned : AddItemResult()
+        data class Error(val message: String) : AddItemResult()
+    }
+
+    fun addPlotItem(plotId: UUID, uploadId: UUID, userId: UUID = FOUNDING_USER_ID): AddItemResult {
+        val plot = getPlotById(plotId) ?: return AddItemResult.PlotNotOwned
+        if (plot.ownerUserId != userId) return AddItemResult.PlotNotOwned
+        if (plot.criteria != null) return AddItemResult.Error("Plot is a query plot, not a collection plot")
+        if (!uploadExists(uploadId, userId)) return AddItemResult.UploadNotOwned
+
+        return try {
+            dataSource.connection.use { conn ->
+                conn.prepareStatement(
+                    """INSERT INTO plot_items (plot_id, upload_id, added_by) VALUES (?, ?, ?)"""
+                ).use { stmt ->
+                    stmt.setObject(1, plotId); stmt.setObject(2, uploadId); stmt.setObject(3, userId)
+                    stmt.executeUpdate()
+                }
+            }
+            AddItemResult.Success
+        } catch (_: java.sql.SQLIntegrityConstraintViolationException) {
+            AddItemResult.AlreadyPresent
+        } catch (e: java.sql.SQLException) {
+            if (e.sqlState?.startsWith("23") == true) AddItemResult.AlreadyPresent
+            else AddItemResult.Error(e.message ?: "DB error")
+        }
+    }
+
+    sealed class RemoveItemResult {
+        object Success : RemoveItemResult()
+        object NotFound : RemoveItemResult()
+        object Forbidden : RemoveItemResult()
+    }
+
+    fun removePlotItem(plotId: UUID, uploadId: UUID, userId: UUID = FOUNDING_USER_ID): RemoveItemResult {
+        dataSource.connection.use { conn ->
+            // Check the item exists and whether this user added it or owns the plot
+            val row = conn.prepareStatement(
+                """SELECT pi.added_by, p.owner_user_id
+                   FROM plot_items pi
+                   JOIN plots p ON p.id = pi.plot_id
+                   WHERE pi.plot_id = ? AND pi.upload_id = ?"""
+            ).use { stmt ->
+                stmt.setObject(1, plotId); stmt.setObject(2, uploadId)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return RemoveItemResult.NotFound
+                Pair(
+                    rs.getObject("added_by", UUID::class.java),
+                    rs.getObject("owner_user_id", UUID::class.java)
+                )
+            }
+            val (addedBy, ownerUserId) = row
+            if (ownerUserId != userId && addedBy != userId) return RemoveItemResult.Forbidden
+
+            conn.prepareStatement(
+                "DELETE FROM plot_items WHERE plot_id = ? AND upload_id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, plotId); stmt.setObject(2, uploadId)
+                stmt.executeUpdate()
+            }
+        }
+        return RemoveItemResult.Success
+    }
+
+    private fun java.sql.ResultSet.toFlowRecord() = FlowRecord(
+        id             = getObject("id", UUID::class.java),
+        userId         = getObject("user_id", UUID::class.java),
+        name           = getString("name"),
+        criteria       = getString("criteria"),
+        targetPlotId   = getObject("target_plot_id", UUID::class.java),
+        requiresStaging = getBoolean("requires_staging"),
+        createdAt      = getTimestamp("created_at").toInstant(),
+        updatedAt      = getTimestamp("updated_at").toInstant(),
+    )
 
     // ---- Cursor helpers ---------------------------------------------------
 

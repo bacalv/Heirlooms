@@ -235,4 +235,65 @@ class SchemaMigrationTest {
         val n = count("SELECT COUNT(*) FROM plots WHERE visibility != 'private'")
         assertEquals(0, n, "all plots should have visibility='private' after V24")
     }
+
+    // ---- V25a flows/staging canary tests ------------------------------------
+
+    @Test
+    fun `V25a flows table exists with expected columns`() {
+        val n = count("""
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_name = 'flows'
+              AND column_name IN ('id','user_id','name','criteria','target_plot_id','requires_staging','created_at','updated_at')
+        """.trimIndent())
+        assertEquals(8, n, "flows table should have 8 columns after V25a")
+    }
+
+    @Test
+    fun `V25a plot_items table exists with expected columns`() {
+        val n = count("""
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_name = 'plot_items'
+              AND column_name IN ('id','plot_id','upload_id','added_by','source_flow_id','added_at')
+        """.trimIndent())
+        assertEquals(6, n, "plot_items should have expected columns after V25a")
+    }
+
+    @Test
+    fun `V25a plot_staging_decisions table exists`() {
+        val n = count("""
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_name = 'plot_staging_decisions'
+        """.trimIndent())
+        assertEquals(1, n, "plot_staging_decisions should exist after V25a")
+    }
+
+    @Test
+    fun `V25a deleting a flow sets source_flow_id to NULL on plot_items`() {
+        val userId = FOUNDING_USER_UUID
+        // Create a collection plot (criteria IS NULL, use show_in_garden/visibility defaults)
+        val plotId = java.util.UUID.randomUUID()
+        exec("INSERT INTO plots (id, owner_user_id, name, show_in_garden, visibility) VALUES ('$plotId', '$userId', 'v25a-test-plot', true, 'private')")
+
+        // Create a flow targeting that plot
+        val flowId = java.util.UUID.randomUUID()
+        exec("""INSERT INTO flows (id, user_id, name, criteria, target_plot_id, requires_staging)
+                VALUES ('$flowId', '$userId', 'v25a-flow', '{"type":"composted"}'::jsonb, '$plotId', true)""")
+
+        // Create a plot_items row referencing the flow
+        val uploadId = java.util.UUID.randomUUID()
+        exec("""INSERT INTO uploads (id, storage_key, mime_type, file_size, storage_class, user_id)
+                VALUES ('$uploadId', 'v25a/$uploadId.jpg', 'image/jpeg', 1024, 'public', '$userId')""")
+        exec("""INSERT INTO plot_items (plot_id, upload_id, added_by, source_flow_id)
+                VALUES ('$plotId', '$uploadId', '$userId', '$flowId')""")
+
+        // Deleting the flow should SET NULL the source_flow_id
+        exec("DELETE FROM flows WHERE id = '$flowId'")
+        val n = count("SELECT COUNT(*) FROM plot_items WHERE source_flow_id IS NULL AND upload_id = '$uploadId'")
+        assertEquals(1, n, "source_flow_id should be NULL after flow deletion")
+
+        // Cleanup
+        exec("DELETE FROM plot_items WHERE upload_id = '$uploadId'")
+        exec("DELETE FROM uploads WHERE id = '$uploadId'")
+        exec("DELETE FROM plots WHERE id = '$plotId'")
+    }
 }

@@ -2,6 +2,21 @@
 
 ---
 
+## v0.48.0 — M10 E2: Flows + staging (12 May 2026)
+
+Server + Web. No Android (E4).
+
+- **V25a migration** — `plot_items`, `flows`, `plot_staging_decisions` tables. `plot_items.source_flow_id` FK sets NULL on flow delete.
+- **Flow CRUD** (`GET/POST /api/flows`, `PUT/DELETE /api/flows/:id`) — `criteria` + `targetPlotId` + `requiresStaging`. Validates that target is a collection plot; rejects `near` atom; rejects targeting a query plot.
+- **Staging** — derived view: `GET /api/flows/:id/staging`, `GET /api/plots/:id/staging`, `POST .../approve` (→ `plot_items`), `POST .../reject` (→ `plot_staging_decisions`), `DELETE .../decision` (un-reject). Plot-level staging aggregates all flows targeting the plot. Approve → 409 if already in collection; reject → 409 if already approved.
+- **Collection plot items** — `GET /api/plots/:id/items`, `POST /api/plots/:id/items` (manual add), `DELETE /api/plots/:id/items/:uploadId`. Owner removes any; member removes own only.
+- **`FlowsPage.jsx`** — Flow management UI: list, create (criteria builder + target plot picker + staging toggle), edit (name/criteria/requiresStaging), delete (with confirmation). Inline staging review panel per flow (`StagingPanel`).
+- **`StagingPanel.jsx`** — Reusable staging review component: pending grid with approve/reject per item, collapsed rejected list with restore-to-staging.
+- **`GardenPage.jsx`** — "Flows" link in sidebar. Collection plots (criteria IS NULL) show a `collection` badge on their row header.
+- **`App.jsx`** — `/flows` route added.
+
+---
+
 ## v0.47.0 — M10 E1: Predicate/criteria system (12 May 2026)
 
 Server + Web. No Android (E4).

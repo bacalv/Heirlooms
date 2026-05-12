@@ -24,12 +24,11 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.47.0 (12 May 2026) — M10 E1: predicate/criteria system. `plots.criteria`
-  JSONB replaces `plot_tag_criteria`. `CriteriaEvaluator` on server. Plot API uses criteria JSON.
-  Garden passes `plot_id` to upload listing. Explore gains media_type + is_received filters and
-  full-criteria "Save as plot". V24 migration. Server + Web only (Android in E4).
+- Current version: v0.48.0 (12 May 2026) — M10 E2: flows + staging. `plot_items`, `flows`,
+  `plot_staging_decisions` tables (V25a). Flow CRUD + staging review endpoints. `FlowsPage`,
+  `StagingPanel`, collection plot badge in Garden. Server + Web only (Android in E4).
 - Active milestone: M10 (shared plots) — brief at `docs/briefs/M10_brief.md`.
-  E1 ✓ (v0.47.0, not yet deployed). E2 is next (flows + staging, V25 partial).
+  E1 ✓ (v0.47.0). E2 ✓ (v0.48.0, not yet deployed). E3 is next (shared plots + E2EE).
   E3: shared plots + E2EE group key. E4: Android.
   Key decisions: per-plot group key (AES-256-GCM, `plot-aes256gcm-v1`), member roles owner/member,
   invite via friends list (primary) + invite link (fallback), staging flag on flow not plot,
