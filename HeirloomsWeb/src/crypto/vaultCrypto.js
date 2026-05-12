@@ -213,7 +213,7 @@ export async function unwrapMasterKeyForDevice(envelope, devicePrivateKey) {
 
 // Wrap a DEK under a friend's sharing public key (raw 65-byte uncompressed P-256 point).
 // Produces an asymmetric envelope with dekFormat = ALG_P256_ECDH_HKDF_V1.
-export async function wrapDekForFriend(dek, friendPubkeyRawBytes) {
+export async function wrapDekForFriend(dek, friendPubkeySpkiBytes) {
   const ephemeral = await crypto.subtle.generateKey(
     { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'],
   )
@@ -221,7 +221,7 @@ export async function wrapDekForFriend(dek, friendPubkeyRawBytes) {
     await crypto.subtle.exportKey('raw', ephemeral.publicKey),
   )
   const recipientKey = await crypto.subtle.importKey(
-    'raw', friendPubkeyRawBytes, { name: 'ECDH', namedCurve: 'P-256' }, false, [],
+    'spki', friendPubkeySpkiBytes, { name: 'ECDH', namedCurve: 'P-256' }, false, [],
   )
   const sharedSecret = new Uint8Array(
     await crypto.subtle.deriveBits({ name: 'ECDH', public: recipientKey }, ephemeral.privateKey, 256),
