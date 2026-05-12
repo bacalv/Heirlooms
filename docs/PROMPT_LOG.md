@@ -2,6 +2,26 @@
 
 ---
 
+## Session — 12 May 2026 — v0.46.0–v0.46.2: Web sharing flow + thumbnail display fix
+
+**Web sharing flow (v0.46.0–v0.46.1).** Friends can now be shared with directly from the web, matching Android M9 behaviour.
+
+- **`api.js`:** `getFriends`, `getFriendSharingKey`, `shareUpload`. Server returns a bare array with `userId` field (not `{friends:[]}` with `id`) — normalised in the adapter.
+- **`vaultCrypto.js`:** `wrapDekForFriend(dek, spkiBytes)` — same ECDH-HKDF-AES-GCM as device key wrapping, but imports the recipient's pubkey in SPKI format. Android stores sharing pubkeys as `kp.public.encoded` (X.509 SPKI DER, 91 bytes); importing as `'raw'` fails silently — must use `'spki'`.
+- **`ShareModal` (`src/components/ShareModal.jsx`):** Friend picker modal. On selection: unwraps sender's DEK + thumbnail DEK with master key, re-wraps both under friend's sharing pubkey, POSTs to `POST /api/content/uploads/{id}/share`. Extracted to a shared component so it can be used from both `PhotoDetailPage` and `GardenPage`.
+- **`PhotoDetailPage`:** Share button (owned encrypted items, not composted). "Shared by [name]" attribution for received items — display name resolved by fetching friends list and matching `sharedFromUserId`.
+- **`GardenPage` (v0.46.1):** Share icon on thumbnail hover (bottom-right corner), same modal. `onShareClick` threaded through `PlotThumbCard → PlotItemsRow → SystemPlotRow / SortablePlotRow`.
+
+No server changes — `POST /api/content/uploads/{id}/share` and the sharing key APIs already existed from M9.
+
+**Thumbnail display fix (v0.46.2).** Garden thumbnails were cropping images (cutting off heads). The thumbnail bytes are full-frame; the cropping was at display time.
+- **Web:** `object-cover` → `object-contain` in `PlotThumbCard`.
+- **Android:** `ContentScale.Crop` → `ContentScale.Fit` as default in `HeirloomsImage`, `UploadThumbnail`, `EncryptedThumbnail`. Callers that explicitly need crop (`CompostHeapScreen`, `IdleScreen`) already passed `ContentScale.Crop` explicitly — unaffected.
+
+Android deployed to device (versionCode 51→52). Web deployed as Cloud Run revisions `heirlooms-web-00059-rfk` through `heirlooms-web-00063-pnw`.
+
+---
+
 ## Session — 12 May 2026 — v0.45.9: "Hi, [name]" greeting (web + Android)
 
 **Display name greeting.** Web nav bar (desktop) and Android burger panel now show "Hi, [name]" so the logged-in user is always visible.
