@@ -739,9 +739,59 @@ class Database(private val dataSource: DataSource) {
                 stmt.setArray(1, conn.createArrayOf("text", tags.toTypedArray()))
                 stmt.setObject(2, id)
                 stmt.setObject(3, userId)
-                return stmt.executeUpdate() > 0
+                val updated = stmt.executeUpdate() > 0
+                if (updated) runUnstagedFlowsForUpload(conn, id, userId)
+                return updated
             }
         }
+    }
+
+    // Inserts upload into plot_items for every unstaged flow whose criteria it satisfies.
+    private fun runUnstagedFlowsForUpload(conn: Connection, uploadId: UUID, userId: UUID) {
+        val flows = listFlows(userId).filter { !it.requiresStaging }
+        for (flow in flows) {
+            try {
+                val fragment = CriteriaEvaluator.evaluate(flow.criteria, userId, conn)
+                conn.prepareStatement(
+                    """INSERT INTO plot_items (upload_id, plot_id, source_flow_id, added_by)
+                       SELECT id, ?, ?, ?
+                       FROM uploads
+                       WHERE id = ? AND user_id = ? AND (${fragment.sql})
+                       ON CONFLICT (plot_id, upload_id) DO NOTHING"""
+                ).use { stmt ->
+                    var idx = 1
+                    stmt.setObject(idx++, flow.targetPlotId)
+                    stmt.setObject(idx++, flow.id)
+                    stmt.setObject(idx++, userId)
+                    stmt.setObject(idx++, uploadId)
+                    stmt.setObject(idx++, userId)
+                    for (setter in fragment.setters) idx = setter(stmt, idx)
+                    stmt.executeUpdate()
+                }
+            } catch (_: Exception) { /* best-effort; bad criteria skipped */ }
+        }
+    }
+
+    // Bulk-inserts all existing matching uploads into plot_items for a new unstaged flow.
+    private fun autoPopulateFlow(conn: Connection, flow: FlowRecord, userId: UUID) {
+        try {
+            val fragment = CriteriaEvaluator.evaluate(flow.criteria, userId, conn)
+            conn.prepareStatement(
+                """INSERT INTO plot_items (upload_id, plot_id, source_flow_id, added_by)
+                   SELECT id, ?, ?, ?
+                   FROM uploads
+                   WHERE user_id = ? AND composted_at IS NULL AND (${fragment.sql})
+                   ON CONFLICT (plot_id, upload_id) DO NOTHING"""
+            ).use { stmt ->
+                var idx = 1
+                stmt.setObject(idx++, flow.targetPlotId)
+                stmt.setObject(idx++, flow.id)
+                stmt.setObject(idx++, userId)
+                stmt.setObject(idx++, userId)
+                for (setter in fragment.setters) idx = setter(stmt, idx)
+                stmt.executeUpdate()
+            }
+        } catch (_: Exception) { /* bad criteria — skip */ }
     }
 
     // ---- Capsule operations ------------------------------------------------
@@ -1736,8 +1786,10 @@ class Database(private val dataSource: DataSource) {
                 stmt.setTimestamp(8, Timestamp.from(now))
                 stmt.executeUpdate()
             }
+            val flow = getFlowById(id, userId)!!
+            if (!requiresStaging) autoPopulateFlow(conn, flow, userId)
+            return FlowCreateResult.Success(flow)
         }
-        return FlowCreateResult.Success(getFlowById(id, userId)!!)
     }
 
     sealed class FlowUpdateResult {
