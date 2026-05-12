@@ -3453,10 +3453,20 @@ Changes:
   decrypted image bytes and rotates the bitmap accordingly, so the full-image detail view
   displays correctly on Android without requiring a manual rotation
 
-The `rotation` column remains as a manual-adjustment layer on top of EXIF rotation. Images that
-were previously manually rotated to compensate for the missing EXIF handling (e.g. rotation=90 set
-by the user on a photo whose EXIF already encodes 90°) will need to be reset to rotation=0 — they
-will otherwise double-rotate after this fix.
+Two-part fix:
+1. `generateThumbnail()` in Uploader.kt applies EXIF rotation to the bitmap before encoding, so
+   new upload thumbnails have correct pixel orientation from day one.
+2. `loadEncryptedContent()` in PhotoDetailViewModel.kt reads EXIF rotation from the decrypted
+   full-image bytes. If non-zero and the upload has no manual rotation set, it auto-stages that
+   value as a rotation — which gets saved to the DB when the user navigates back. This causes the
+   Garden to refresh with the updated rotation column, fixing the thumbnail on subsequent views.
+
+This approach avoids applying EXIF directly to the decoded bitmap (which would double-rotate
+images that were already manually corrected). Instead, the rotation column becomes the single
+source of truth, populated from EXIF on first open for images that haven't been manually rotated.
+
+Images previously hand-rotated to compensate for missing EXIF (rotation=90 on a photo whose EXIF
+also encodes 90°) will double-rotate and need to be reset to rotation=0.
 
 ### Deployment
 Server `heirlooms-server-00003-gxp` (v0.45.2 dedup guard). Web `heirlooms-web-00008-qcc` (v0.45.5).

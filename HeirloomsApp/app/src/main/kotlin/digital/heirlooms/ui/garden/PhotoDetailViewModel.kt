@@ -1,9 +1,7 @@
 package digital.heirlooms.ui.garden
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Matrix
 import androidx.exifinterface.media.ExifInterface
 import android.net.Uri
 import androidx.compose.ui.graphics.ImageBitmap
@@ -164,8 +162,13 @@ class PhotoDetailViewModel(
                     tempFile.writeBytes(decryptedBytes)
                     _decryptedVideoUri.value = Uri.fromFile(tempFile)
                 } else {
+                    val exif = exifRotationDegrees(decryptedBytes)
+                    val ready = _state.value as? PhotoDetailState.Ready
+                    if (exif != 0 && ready?.upload?.rotation == 0 && _stagedRotation.value == null) {
+                        _stagedRotation.value = exif
+                    }
                     val bmp = BitmapFactory.decodeByteArray(decryptedBytes, 0, decryptedBytes.size)
-                    _decryptedBitmap.value = bmp?.applyExifRotation(decryptedBytes)?.asImageBitmap()
+                    _decryptedBitmap.value = bmp?.asImageBitmap()
                 }
             }
         }
@@ -201,21 +204,16 @@ class PhotoDetailViewModel(
     private companion object {
         const val LARGE_VIDEO_THRESHOLD = 10L * 1024 * 1024
 
-        fun Bitmap.applyExifRotation(bytes: ByteArray): Bitmap {
-            val degrees = try {
-                when (ExifInterface(bytes.inputStream()).getAttributeInt(
-                    ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
-                )) {
-                    ExifInterface.ORIENTATION_ROTATE_90  -> 90f
-                    ExifInterface.ORIENTATION_ROTATE_180 -> 180f
-                    ExifInterface.ORIENTATION_ROTATE_270 -> 270f
-                    else -> 0f
-                }
-            } catch (_: Exception) { 0f }
-            if (degrees == 0f) return this
-            val m = Matrix().apply { postRotate(degrees) }
-            return Bitmap.createBitmap(this, 0, 0, width, height, m, true)
-        }
+        fun exifRotationDegrees(bytes: ByteArray): Int = try {
+            when (ExifInterface(bytes.inputStream()).getAttributeInt(
+                ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
+            )) {
+                ExifInterface.ORIENTATION_ROTATE_90  -> 90
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                else -> 0
+            }
+        } catch (_: Exception) { 0 }
     }
 
     fun trackView(api: HeirloomsApi, uploadId: String) {
