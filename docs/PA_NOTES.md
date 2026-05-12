@@ -24,9 +24,10 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.45.9 (12 May 2026) — "Hi, [name]" greeting in web nav bar (desktop) and
-  Android burger panel. Display name fetched from `GET /api/auth/me` after login; stored in
-  localStorage (web) and SharedPreferences (Android). No server changes.
+- Current version: v0.46.2 (12 May 2026) — Web sharing flow: friends can share items from the
+  web photo detail page and garden thumbnails. `ShareModal` with friend picker, ECDH-HKDF DEK
+  re-wrapping, "Shared by [name]" attribution on received items. Garden thumbnails now show full
+  image (object-contain / ContentScale.Fit) instead of cropping. Android versionCode 52.
 - Next milestone: M10 (shared plots) — to be briefed.
   v0.36.0 = Preview clips, 1 MiB chunks, parallel prefetch, download button (server + web + Android).
   v0.35.0 = Web encrypted video playback + MSE streaming (web only).
