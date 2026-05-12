@@ -51,7 +51,7 @@ function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, onIm
     <div className="relative w-full h-full">
       <UploadThumb
         upload={upload}
-        className="w-full h-full object-cover"
+        className="w-full h-full object-contain"
         style={isComposted ? saturate : undefined}
         rotation={upload.rotation}
         alt=""

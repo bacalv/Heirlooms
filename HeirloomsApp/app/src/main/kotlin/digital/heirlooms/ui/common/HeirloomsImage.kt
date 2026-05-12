@@ -38,7 +38,7 @@ fun HeirloomsImage(
     url: String,
     contentDescription: String?,
     modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Crop,
+    contentScale: ContentScale = ContentScale.Fit,
     colorFilter: ColorFilter? = null,
     rotation: Int = 0,
 ) {
@@ -59,7 +59,7 @@ fun UploadThumbnail(
     upload: Upload,
     contentDescription: String?,
     modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Crop,
+    contentScale: ContentScale = ContentScale.Fit,
     colorFilter: ColorFilter? = null,
     rotation: Int = 0,
 ) {
@@ -90,7 +90,7 @@ private fun EncryptedThumbnail(
     upload: Upload,
     contentDescription: String?,
     modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Crop,
+    contentScale: ContentScale = ContentScale.Fit,
     colorFilter: ColorFilter? = null,
     rotation: Int = 0,
 ) {
