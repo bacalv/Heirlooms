@@ -17,6 +17,7 @@ function FlowForm({ plots, initial, onSave, onCancel, saving, error }) {
   )
 
   const collectionPlots = plots.filter((p) => !p.criteria && !p.is_system_defined)
+  const selectedPlot = collectionPlots.find((p) => p.id === targetPlotId) ?? null
 
   function handleSubmit(e) {
     e.preventDefault()
@@ -30,7 +31,7 @@ function FlowForm({ plots, initial, onSave, onCancel, saving, error }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 text-sm font-sans">
+    <form onSubmit={handleSubmit} className="space-y-3 text-sm font-sans">
       <div>
         <label className="block text-text-muted mb-1">Flow name</label>
         <input type="text" value={name} onChange={(e) => setName(e.target.value)} required
@@ -61,11 +62,13 @@ function FlowForm({ plots, initial, onSave, onCancel, saving, error }) {
         <CriteriaBuilder state={criteriaState} onChange={setCriteriaState} />
       </div>
 
-      <label className="flex items-center gap-2 cursor-pointer select-none">
-        <input type="checkbox" checked={requiresStaging} onChange={(e) => setRequiresStaging(e.target.checked)}
-          className="accent-forest" />
-        <span className="text-forest">Require staging review before items enter the plot</span>
-      </label>
+      {selectedPlot?.visibility === 'shared' && (
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input type="checkbox" checked={requiresStaging} onChange={(e) => setRequiresStaging(e.target.checked)}
+            className="accent-forest" />
+          <span className="text-forest">Require staging review before items enter the plot</span>
+        </label>
+      )}
 
       {error && <p className="text-earth text-xs">{error}</p>}
 
@@ -221,34 +224,40 @@ export function FlowsPage() {
 
       {showCreate && (
         <BrandModal onClose={() => setShowCreate(false)} width="max-w-lg">
-          <h2 className="font-serif italic text-forest text-lg mb-4">New flow</h2>
-          <FlowForm plots={plots} onSave={handleCreate} onCancel={() => setShowCreate(false)}
-            saving={saving} error={saveError} />
+          <div className="p-6">
+            <h2 className="font-serif italic text-forest text-lg mb-4 mt-0">New flow</h2>
+            <FlowForm plots={plots} onSave={handleCreate} onCancel={() => setShowCreate(false)}
+              saving={saving} error={saveError} />
+          </div>
         </BrandModal>
       )}
 
       {editFlow && (
         <BrandModal onClose={() => setEditFlow(null)} width="max-w-lg">
-          <h2 className="font-serif italic text-forest text-lg mb-4">Edit "{editFlow.name}"</h2>
-          <FlowForm plots={plots} initial={editFlow} onSave={handleUpdate}
-            onCancel={() => setEditFlow(null)} saving={saving} error={saveError} />
+          <div className="p-6">
+            <h2 className="font-serif italic text-forest text-lg mb-4 mt-0">Edit "{editFlow.name}"</h2>
+            <FlowForm plots={plots} initial={editFlow} onSave={handleUpdate}
+              onCancel={() => setEditFlow(null)} saving={saving} error={saveError} />
+          </div>
         </BrandModal>
       )}
 
       {deleteConfirm && (
         <BrandModal onClose={() => setDeleteConfirm(null)} width="max-w-sm">
-          <p className="font-sans text-sm text-forest mb-4">
-            Delete "<span className="font-medium">{deleteConfirm.name}</span>"? Items already approved into the collection will be kept.
-          </p>
-          <div className="flex gap-2 justify-end">
-            <button onClick={() => setDeleteConfirm(null)}
-              className="px-3 py-1.5 text-text-muted hover:text-forest text-sm transition-colors">
-              Cancel
-            </button>
-            <button onClick={() => handleDelete(deleteConfirm.id)}
-              className="px-3 py-1.5 bg-earth text-parchment rounded-button text-sm hover:opacity-90 transition-opacity">
-              Delete
-            </button>
+          <div className="p-6 space-y-4">
+            <p className="font-sans text-sm text-forest">
+              Delete "<span className="font-medium">{deleteConfirm.name}</span>"? Items already approved into the collection will be kept.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setDeleteConfirm(null)}
+                className="px-3 py-1.5 text-text-muted hover:text-forest text-sm transition-colors">
+                Cancel
+              </button>
+              <button onClick={() => handleDelete(deleteConfirm.id)}
+                className="px-3 py-1.5 bg-earth text-parchment rounded-button text-sm hover:opacity-90 transition-opacity">
+                Delete
+              </button>
+            </div>
           </div>
         </BrandModal>
       )}

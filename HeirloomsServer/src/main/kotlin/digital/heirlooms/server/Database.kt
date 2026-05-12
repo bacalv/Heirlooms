@@ -1769,6 +1769,14 @@ class Database(private val dataSource: DataSource) {
         if (targetPlot.ownerUserId != userId) return FlowCreateResult.Error("Target plot not found")
         if (targetPlot.criteria != null) return FlowCreateResult.Error("Target plot must be a collection plot (criteria IS NULL)")
 
+        // Staging policy: private plots never need staging (your own content);
+        // public plots always require staging; shared plots respect the caller's preference.
+        val effectiveStaging = when (targetPlot.visibility) {
+            "private" -> false
+            "public"  -> true
+            else      -> requiresStaging
+        }
+
         val id = UUID.randomUUID()
         val now = Instant.now()
         dataSource.connection.use { conn ->
@@ -1781,13 +1789,13 @@ class Database(private val dataSource: DataSource) {
                 stmt.setString(3, name.trim())
                 stmt.setString(4, criteriaJson)
                 stmt.setObject(5, targetPlotId)
-                stmt.setBoolean(6, requiresStaging)
+                stmt.setBoolean(6, effectiveStaging)
                 stmt.setTimestamp(7, Timestamp.from(now))
                 stmt.setTimestamp(8, Timestamp.from(now))
                 stmt.executeUpdate()
             }
             val flow = getFlowById(id, userId)!!
-            if (!requiresStaging) autoPopulateFlow(conn, flow, userId)
+            if (!effectiveStaging) autoPopulateFlow(conn, flow, userId)
             return FlowCreateResult.Success(flow)
         }
     }
@@ -1804,10 +1812,22 @@ class Database(private val dataSource: DataSource) {
         requiresStaging: Boolean?,
         userId: UUID = FOUNDING_USER_ID,
     ): FlowUpdateResult {
+        val existingFlow = getFlowById(id, userId) ?: return FlowUpdateResult.NotFound
+        val targetPlot = getPlotById(existingFlow.targetPlotId)
+
+        // Enforce same staging policy as createFlow
+        val effectiveStaging = requiresStaging?.let {
+            when (targetPlot?.visibility) {
+                "private" -> false
+                "public"  -> true
+                else      -> it
+            }
+        }
+
         val setClauses = mutableListOf("updated_at = ?")
         if (name != null) setClauses.add("name = ?")
         if (criteriaJson != null) setClauses.add("criteria = ?::jsonb")
-        if (requiresStaging != null) setClauses.add("requires_staging = ?")
+        if (effectiveStaging != null) setClauses.add("requires_staging = ?")
 
         dataSource.connection.use { conn ->
             conn.prepareStatement(
@@ -1817,14 +1837,17 @@ class Database(private val dataSource: DataSource) {
                 stmt.setTimestamp(idx++, Timestamp.from(Instant.now()))
                 if (name != null) stmt.setString(idx++, name.trim())
                 if (criteriaJson != null) stmt.setString(idx++, criteriaJson)
-                if (requiresStaging != null) stmt.setBoolean(idx++, requiresStaging)
+                if (effectiveStaging != null) stmt.setBoolean(idx++, effectiveStaging)
                 stmt.setObject(idx++, id)
                 stmt.setObject(idx, userId)
                 val updated = stmt.executeUpdate()
                 if (updated == 0) return FlowUpdateResult.NotFound
             }
+            val updatedFlow = getFlowById(id, userId) ?: return FlowUpdateResult.NotFound
+            // If flow is now unstaged (newly or due to criteria change), populate missing items
+            if (!updatedFlow.requiresStaging) autoPopulateFlow(conn, updatedFlow, userId)
+            return FlowUpdateResult.Success(updatedFlow)
         }
-        return getFlowById(id, userId)?.let { FlowUpdateResult.Success(it) } ?: FlowUpdateResult.NotFound
     }
 
     fun deleteFlow(id: UUID, userId: UUID = FOUNDING_USER_ID): Boolean {
