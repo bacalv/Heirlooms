@@ -2,6 +2,26 @@
 
 ---
 
+## v0.50.0 — M10 E4: Android adoption (12 May 2026)
+
+Android-only. Brings M10 features to the Android app.
+
+- **`VaultCrypto` plot key helpers** — `generatePlotKey`, `wrapPlotKeyForMember`, `unwrapPlotKey`, `wrapDekWithPlotKey`, `unwrapDekWithPlotKey`. Mirrors web `vaultCrypto.js`.
+- **`VaultSession.plotKeys`** — `ConcurrentHashMap<String, ByteArray>` for caching per-plot raw keys. Cleared on vault lock alongside master key.
+- **`Models.kt`** — `Plot` updated: `criteria: String?`, `showInGarden`, `visibility`, `isSystemDefined`; removed `tagCriteria`. New models: `Flow`, `StagingItem`, `PlotMember`, `PlotItem`. Extension props: `Plot.isCollection`, `Plot.isShared`.
+- **`HeirloomsApi`** — full M10 API coverage: flows CRUD, staging approve/reject/restore, plot key + members, invite flow, plot items CRUD. `listUploadsPage` accepts `plotId`. `createPlot` supports `visibility`, `wrappedPlotKey`, `plotKeyFormat`.
+- **`GardenViewModel`** — `load`/`refresh` use the system plot's ID (found via `isSystemDefined`) for Just Arrived; `ensurePlotKeys` fetches + unwraps shared plot keys after `ensureSharingKey` completes.
+- **`HeirloomsImage`** — `EncryptedThumbnail` decrypts `plot-aes256gcm-v1` envelopes by trying all cached plot keys from `VaultSession.plotKeys`.
+- **`PlotSheets`** — `PlotCreateSheet` / `PlotEditSheet` simplified: name-only (collection plot). Removed `tagCriteria` / `TagInputField` from plot creation/editing.
+- **`ExploreViewModel`** — `ExploreFilters` gains `plotId`; new `applyPlotFilter(plotId)` method. `listUploadsPage` calls forward `plotId`.
+- **Navigation** — Garden → Explore now passes `plotId` instead of tag list; `exploreWithPlot(plotId)` route added.
+- **`FlowsScreen` + `FlowsViewModel`** — list flows with pending staging counts; create/delete; accessible from burger menu.
+- **`StagingScreen` + `StagingViewModel`** — 3-column grid of pending items with approve/reject buttons; rejected section with restore.
+- **`BurgerPanel`** — Flows link added.
+- **VaultCrypto unit tests** — 4 new tests: `generatePlotKey`, `wrapDekWithPlotKey` round-trip, wrong-key throws, `wrapPlotKeyForMember` / `unwrapPlotKey` round-trip via real keypair.
+
+---
+
 ## v0.49.0 — M10 E3: Shared plots + E2EE (12 May 2026)
 
 Server + Web. No Android (E4).

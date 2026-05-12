@@ -84,13 +84,17 @@ internal object Routes {
     const val FRIENDS = "friends"
     const val PAIRING = "pairing"
     const val UPLOAD_PROGRESS = "upload_progress/{sessionTag}"
+    const val FLOWS = "flows"
+    const val STAGING = "staging/{flowId}/{plotId}"
     fun uploadProgress(sessionTag: String) = "upload_progress/$sessionTag"
+    fun staging(flowId: String, plotId: String) = "staging/$flowId/$plotId"
 
     fun photoDetail(uploadId: String, from: String = "garden") = "photo/$uploadId?from=$from"
     fun capsuleDetail(capsuleId: String) = "capsules/$capsuleId"
     // Navigate to Explore with pre-applied filters (pushes on back stack, not a tab switch).
     fun exploreWithTags(tags: List<String>) = "explore?initial_tags=${tags.joinToString(",")}"
     fun exploreJustArrived() = "explore?just_arrived=true"
+    fun exploreWithPlot(plotId: String) = "explore?initial_plot_id=$plotId"
 }
 
 // Compose Nav's currentRoute returns the full pattern including query placeholders.
@@ -190,6 +194,7 @@ fun MainNavigation(apiKey: String, onApiKeyReset: () -> Unit, store: digital.hei
                 onDiagnosticsTap = { navController.navigate(Routes.DIAGNOSTICS) },
                 onDevicesAccessTap = { navController.navigate(Routes.DEVICES_ACCESS) },
                 onFriendsTap = { navController.navigate(Routes.FRIENDS) },
+                onFlowsTap = { navController.navigate(Routes.FLOWS) },
                 displayName = displayName,
             )
         }
@@ -272,25 +277,31 @@ private fun AppNavHost(navController: NavController, apiKey: String, onApiKeyRes
         composable(Routes.GARDEN) {
             GardenScreen(
                 onPhotoTap = { uploadId -> navController.navigate(Routes.photoDetail(uploadId, "garden")) },
-                onNavigateToExplore = { tags, justArrived ->
-                    if (justArrived) navController.navigate(Routes.exploreJustArrived())
-                    else navController.navigate(Routes.exploreWithTags(tags))
+                onNavigateToExplore = { plotId, justArrived ->
+                    when {
+                        justArrived -> navController.navigate(Routes.exploreJustArrived())
+                        plotId != null -> navController.navigate(Routes.exploreWithPlot(plotId))
+                        else -> navController.navigate(Routes.EXPLORE)
+                    }
                 },
             )
         }
         composable(
-            route = "explore?initial_tags={initial_tags}&just_arrived={just_arrived}",
+            route = "explore?initial_tags={initial_tags}&just_arrived={just_arrived}&initial_plot_id={initial_plot_id}",
             arguments = listOf(
                 navArgument("initial_tags") { type = NavType.StringType; defaultValue = "" },
                 navArgument("just_arrived") { type = NavType.BoolType; defaultValue = false },
+                navArgument("initial_plot_id") { type = NavType.StringType; defaultValue = "" },
             ),
         ) { backStack ->
             val initialTagsStr = backStack.arguments?.getString("initial_tags") ?: ""
             val initialTags = if (initialTagsStr.isNotEmpty()) initialTagsStr.split(",") else emptyList()
             val justArrived = backStack.arguments?.getBoolean("just_arrived") ?: false
+            val initialPlotId = backStack.arguments?.getString("initial_plot_id")?.takeIf { it.isNotEmpty() }
             ExploreScreen(
                 initialTags = initialTags,
                 initialJustArrived = justArrived,
+                initialPlotId = initialPlotId,
                 onPhotoTap = { uploadId -> navController.navigate(Routes.photoDetail(uploadId, "explore")) },
             )
         }
@@ -348,6 +359,27 @@ private fun AppNavHost(navController: NavController, apiKey: String, onApiKeyRes
         }
         composable(Routes.FRIENDS) {
             FriendsScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.FLOWS) {
+            digital.heirlooms.ui.flows.FlowsScreen(
+                onBack = { navController.popBackStack() },
+                onStagingTap = { flowId, plotId -> navController.navigate(Routes.staging(flowId, plotId)) },
+            )
+        }
+        composable(
+            route = Routes.STAGING,
+            arguments = listOf(
+                navArgument("flowId") { type = NavType.StringType },
+                navArgument("plotId") { type = NavType.StringType },
+            ),
+        ) { backStack ->
+            val flowId = backStack.arguments?.getString("flowId") ?: return@composable
+            val plotId = backStack.arguments?.getString("plotId") ?: return@composable
+            digital.heirlooms.ui.flows.StagingScreen(
+                flowId = flowId,
+                plotId = plotId,
+                onBack = { navController.popBackStack() },
+            )
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(onApiKeyReset = onApiKeyReset, store = store)

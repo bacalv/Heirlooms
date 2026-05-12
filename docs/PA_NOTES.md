@@ -24,15 +24,10 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.49.0 (12 May 2026) — M10 E3: shared plots + E2EE. `plot_members`,
-  `plot_invites` tables (V25b). Per-plot group key, friends invite + async invite-link flow,
-  InviteMemberModal, PlotJoinPage. Server + Web only (Android in E4).
-- Active milestone: M10 (shared plots) — brief at `docs/briefs/M10_brief.md`.
-  E1 ✓ (v0.47.0). E2 ✓ (v0.48.0). E3 ✓ (v0.49.0, not yet deployed). E4 is next (Android).
-  E3: shared plots + E2EE group key. E4: Android.
-  Key decisions: per-plot group key (AES-256-GCM, `plot-aes256gcm-v1`), member roles owner/member,
-  invite via friends list (primary) + invite link (fallback), staging flag on flow not plot,
-  staging decisions keyed (plot_id, upload_id). Public plots always require staging (deferred, enforced server-side).
+- Current version: v0.50.0 (12 May 2026) — M10 E4: Android adoption. M10 milestone complete.
+  All four increments shipped: E1 predicate/criteria, E2 flows+staging, E3 shared plots E2EE,
+  E4 Android (VaultCrypto plot key helpers, FlowsScreen, StagingScreen, plot key caching).
+- Active milestone: none — M10 complete. M11 TBD (strong sealing + social recovery).
   v0.36.0 = Preview clips, 1 MiB chunks, parallel prefetch, download button (server + web + Android).
   v0.35.0 = Web encrypted video playback + MSE streaming (web only).
   v0.34.0 = Web: streaming-format decrypt fix for large encrypted videos.

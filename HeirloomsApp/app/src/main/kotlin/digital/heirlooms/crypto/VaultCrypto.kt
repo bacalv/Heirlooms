@@ -12,6 +12,7 @@ object VaultCrypto {
 
     const val ALG_AES256GCM_V1          = "aes256gcm-v1"
     const val ALG_MASTER_AES256GCM_V1   = "master-aes256gcm-v1"
+    const val ALG_PLOT_AES256GCM_V1     = "plot-aes256gcm-v1"
     const val ALG_ARGON2ID_AES256GCM_V1 = "argon2id-aes256gcm-v1"
     const val ALG_P256_ECDH_HKDF_V1     = "p256-ecdh-hkdf-aes256gcm-v1"
 
@@ -358,6 +359,30 @@ object VaultCrypto {
         val kek = hkdf(sharedSecret, info = "heirlooms-v1".toByteArray(Charsets.UTF_8))
         return aesGcmDecrypt(kek, parsed.nonce, parsed.ciphertextWithTag)
     }
+
+    // ---- Plot key (M10 E4) --------------------------------------------------
+
+    fun generatePlotKey(): ByteArray = ByteArray(32).also { rng.nextBytes(it) }
+
+    /**
+     * Wrap a raw plot key to a member's sharing pubkey (ECDH-HKDF-AES-GCM).
+     * recipientSpki: X.509 SPKI DER bytes of the recipient's P-256 sharing pubkey.
+     * Returns a p256-ecdh-hkdf-aes256gcm-v1 envelope.
+     */
+    fun wrapPlotKeyForMember(plotKeyBytes: ByteArray, recipientSpki: ByteArray): ByteArray =
+        wrapMasterKeyForRecipient(plotKeyBytes, recipientSpki)
+
+    /** Unwrap a plot key envelope using own sharing private key (PKCS8 DER). */
+    fun unwrapPlotKey(envelope: ByteArray, sharingPrivkeyPkcs8: ByteArray): ByteArray =
+        unwrapWithSharingKey(envelope, sharingPrivkeyPkcs8)
+
+    /** Wrap an item DEK under the plot key (symmetric AES-256-GCM, plot-aes256gcm-v1). */
+    fun wrapDekWithPlotKey(dekBytes: ByteArray, plotKeyBytes: ByteArray): ByteArray =
+        encryptSymmetric(ALG_PLOT_AES256GCM_V1, plotKeyBytes, dekBytes)
+
+    /** Unwrap an item DEK that was wrapped under the plot key. */
+    fun unwrapDekWithPlotKey(envelope: ByteArray, plotKeyBytes: ByteArray): ByteArray =
+        decryptSymmetric(envelope, plotKeyBytes)
 
     /** Base64url-encode bytes (no padding). */
     fun toBase64Url(bytes: ByteArray): String =

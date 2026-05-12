@@ -51,21 +51,24 @@ class GardenViewModel(
         if (_state.value is GardenLoadState.Loading) return  // initial load already in flight
         viewModelScope.launch {
             try {
-                val (plots, justArrived) = coroutineScope {
-                    val plotsDeferred = async { api.listPlots() }
-                    val jaDeferred = async { api.listUploadsPage(justArrived = true) }
-                    Pair(plotsDeferred.await(), jaDeferred.await())
+                val allPlots = api.listPlots()
+                val systemPlot = allPlots.firstOrNull { it.isSystemDefined }
+                val userPlots = allPlots.filter { !it.isSystemDefined && it.showInGarden }
+                val (justArrived) = coroutineScope {
+                    val ja = async { systemPlot?.let { api.listUploadsPage(plotId = it.id) }
+                        ?: api.listUploadsPage(justArrived = true) }
+                    listOf(ja.await())
                 }
                 val rows = buildList {
                     add(PlotRowState(
-                        plot = null,
+                        plot = systemPlot,
                         uploads = justArrived.uploads,
                         nextCursor = justArrived.nextCursor,
                         loading = false,
                         loadingMore = false,
                     ))
-                    plots.filter { !it.isSystemDefined }.forEach { plot ->
-                        val page = api.listUploadsPage(tags = plot.tagCriteria)
+                    userPlots.forEach { plot ->
+                        val page = api.listUploadsPage(plotId = plot.id)
                         add(PlotRowState(
                             plot = plot,
                             uploads = page.uploads,
@@ -75,7 +78,6 @@ class GardenViewModel(
                         ))
                     }
                 }
-                // Reset Just arrived scroll to top so the newest items are visible.
                 knownJustArrivedIds = justArrived.uploads.map { it.id }.toSet()
                 scrollPositions["__just_arrived__"] = 0
                 _state.value = GardenLoadState.Ready(rows)
@@ -87,22 +89,22 @@ class GardenViewModel(
         viewModelScope.launch {
             _state.value = GardenLoadState.Loading
             try {
-                val (plots, justArrived) = coroutineScope {
-                    val plotsDeferred = async { api.listPlots() }
-                    val justArrivedDeferred = async { api.listUploadsPage(justArrived = true) }
-                    Pair(plotsDeferred.await(), justArrivedDeferred.await())
-                }
+                val allPlots = api.listPlots()
+                val systemPlot = allPlots.firstOrNull { it.isSystemDefined }
+                val userPlots = allPlots.filter { !it.isSystemDefined && it.showInGarden }
+                val justArrived = systemPlot?.let { api.listUploadsPage(plotId = it.id) }
+                    ?: api.listUploadsPage(justArrived = true)
 
                 val rows = buildList {
                     add(PlotRowState(
-                        plot = null,
+                        plot = systemPlot,
                         uploads = justArrived.uploads,
                         nextCursor = justArrived.nextCursor,
                         loading = false,
                         loadingMore = false,
                     ))
-                    plots.filter { !it.isSystemDefined }.forEach { plot ->
-                        val page = api.listUploadsPage(tags = plot.tagCriteria)
+                    userPlots.forEach { plot ->
+                        val page = api.listUploadsPage(plotId = plot.id)
                         add(PlotRowState(
                             plot = plot,
                             uploads = page.uploads,
@@ -139,10 +141,10 @@ class GardenViewModel(
 
         viewModelScope.launch {
             try {
-                val page = if (row.plot == null) {
-                    api.listUploadsPage(cursor = cursor, justArrived = true)
+                val page = if (row.plot == null || row.plot.isSystemDefined) {
+                    api.listUploadsPage(cursor = cursor, plotId = row.plot?.id, justArrived = row.plot == null)
                 } else {
-                    api.listUploadsPage(cursor = cursor, tags = row.plot.tagCriteria)
+                    api.listUploadsPage(cursor = cursor, plotId = row.plot.id)
                 }
                 val fresh = (_state.value as? GardenLoadState.Ready)?.rows?.toMutableList() ?: return@launch
                 fresh[rowIndex] = fresh[rowIndex].copy(
@@ -224,6 +226,7 @@ class GardenViewModel(
 
     // Called once after vault unlock. Checks for a sharing key on the server;
     // generates and uploads one if missing, then stores it in VaultSession.
+    // Also triggers plot key loading so encrypted shared-plot thumbnails can decrypt.
     fun ensureSharingKey(api: HeirloomsApi) {
         if (VaultSession.sharingPrivkey != null) return
         viewModelScope.launch {
@@ -242,29 +245,60 @@ class GardenViewModel(
                     api.putSharingKey(pubkeyB64, wrappedPrivkeyB64, VaultCrypto.ALG_MASTER_AES256GCM_V1)
                     VaultSession.setSharingPrivkey(privkeyPkcs8)
                 }
+                ensurePlotKeys(api)
             } catch (_: Exception) { /* best-effort; retry on next load */ }
+        }
+    }
+
+    // Loads and caches raw plot keys for all shared plots the user is a member of.
+    // Requires the sharing private key to be set in VaultSession first.
+    fun ensurePlotKeys(api: HeirloomsApi) {
+        viewModelScope.launch {
+            try {
+                val privkey = VaultSession.sharingPrivkey ?: return@launch
+                val plots = api.listPlots()
+                plots.filter { it.visibility == "shared" && VaultSession.getPlotKey(it.id) == null }.forEach { plot ->
+                    try {
+                        val (wrappedKey, _) = api.getPlotKey(plot.id)
+                        val rawKey = VaultCrypto.unwrapPlotKey(
+                            android.util.Base64.decode(wrappedKey, android.util.Base64.DEFAULT),
+                            privkey,
+                        )
+                        VaultSession.setPlotKey(plot.id, rawKey)
+                    } catch (_: Exception) { }
+                }
+            } catch (_: Exception) { }
         }
     }
 
     // ---- Plot management ---------------------------------------------------
 
-    fun createPlot(api: HeirloomsApi, name: String, tagCriteria: List<String>) {
+    fun createPlot(api: HeirloomsApi, name: String, criteria: String? = null, showInGarden: Boolean = true) {
         viewModelScope.launch {
             try {
-                api.createPlot(name, tagCriteria)
+                api.createPlot(name, criteria = criteria, showInGarden = showInGarden)
                 load(api)
             } catch (_: Exception) { }
         }
     }
 
-    fun renamePlot(api: HeirloomsApi, plot: Plot, newName: String, newTagCriteria: List<String>) {
+    fun createSharedPlot(api: HeirloomsApi, name: String, wrappedPlotKey: String, plotKeyFormat: String) {
+        viewModelScope.launch {
+            try {
+                api.createPlot(name, visibility = "shared", wrappedPlotKey = wrappedPlotKey, plotKeyFormat = plotKeyFormat)
+                load(api)
+            } catch (_: Exception) { }
+        }
+    }
+
+    fun renamePlot(api: HeirloomsApi, plot: Plot, newName: String) {
         val current = _state.value as? GardenLoadState.Ready ?: return
         _state.value = GardenLoadState.Ready(current.rows.map { row ->
-            if (row.plot?.id == plot.id) row.copy(plot = plot.copy(name = newName, tagCriteria = newTagCriteria)) else row
+            if (row.plot?.id == plot.id) row.copy(plot = plot.copy(name = newName)) else row
         })
         viewModelScope.launch {
             try {
-                api.updatePlot(plot.id, newName, newTagCriteria)
+                api.updatePlot(plot.id, name = newName)
                 load(api)
             } catch (_: Exception) {
                 _state.value = GardenLoadState.Ready(current.rows)

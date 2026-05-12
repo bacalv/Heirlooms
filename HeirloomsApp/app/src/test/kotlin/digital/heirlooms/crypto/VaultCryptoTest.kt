@@ -192,6 +192,48 @@ class VaultCryptoTest {
         assertArrayEquals(masterKey, recovered)
     }
 
+    @Test
+    fun `generatePlotKey returns 32 random bytes`() {
+        val a = VaultCrypto.generatePlotKey()
+        val b = VaultCrypto.generatePlotKey()
+        assertTrue(a.size == 32)
+        assertFalse(a.contentEquals(b))
+    }
+
+    @Test
+    fun `wrapDekWithPlotKey unwrapDekWithPlotKey round-trip`() {
+        val plotKey = VaultCrypto.generatePlotKey()
+        val dek = VaultCrypto.generateDek()
+        val envelope = VaultCrypto.wrapDekWithPlotKey(dek, plotKey)
+        val recovered = VaultCrypto.unwrapDekWithPlotKey(envelope, plotKey)
+        assertArrayEquals(dek, recovered)
+    }
+
+    @Test
+    fun `wrapDekWithPlotKey with wrong plot key throws`() {
+        val plotKey = VaultCrypto.generatePlotKey()
+        val wrongKey = VaultCrypto.generatePlotKey()
+        val dek = VaultCrypto.generateDek()
+        val envelope = VaultCrypto.wrapDekWithPlotKey(dek, plotKey)
+        var threw = false
+        try { VaultCrypto.unwrapDekWithPlotKey(envelope, wrongKey) } catch (_: Exception) { threw = true }
+        assertTrue(threw)
+    }
+
+    @Test
+    fun `wrapPlotKeyForMember unwrapPlotKey round-trip via sharing keypair`() {
+        val kpg = KeyPairGenerator.getInstance("EC")
+        kpg.initialize(ECGenParameterSpec("secp256r1"))
+        val kp = kpg.generateKeyPair()
+        val spki = kp.public.encoded // SubjectPublicKeyInfo DER
+        val pkcs8 = kp.private.encoded
+
+        val plotKey = VaultCrypto.generatePlotKey()
+        val envelope = VaultCrypto.wrapPlotKeyForMember(plotKey, spki)
+        val recovered = VaultCrypto.unwrapPlotKey(envelope, pkcs8)
+        assertArrayEquals(plotKey, recovered)
+    }
+
     private fun decodeEcSec1(bytes: ByteArray): java.security.PublicKey {
         val x = java.math.BigInteger(1, bytes.copyOfRange(1, 33))
         val y = java.math.BigInteger(1, bytes.copyOfRange(33, 65))

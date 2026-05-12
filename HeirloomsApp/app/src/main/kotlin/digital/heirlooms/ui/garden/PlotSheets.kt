@@ -24,7 +24,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import digital.heirlooms.api.Plot
-import digital.heirlooms.ui.common.TagInputField
 import digital.heirlooms.ui.theme.Forest
 import digital.heirlooms.ui.theme.Parchment
 import digital.heirlooms.ui.theme.TextMuted
@@ -32,13 +31,11 @@ import digital.heirlooms.ui.theme.TextMuted
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlotCreateSheet(
-    availableTags: List<String>,
     onDismiss: () -> Unit,
-    onCreate: (name: String, tagCriteria: List<String>) -> Unit,
+    onCreate: (name: String) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var name by remember { mutableStateOf("") }
-    var tags by remember { mutableStateOf(emptyList<String>()) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -61,19 +58,11 @@ fun PlotCreateSheet(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            Text("Show items tagged with:", style = MaterialTheme.typography.bodySmall, color = TextMuted)
-            TagInputField(
-                tags = tags,
-                onTagsChange = { tags = it },
-                availableTags = availableTags,
-                recentTags = emptyList(),
-                modifier = Modifier.fillMaxWidth(),
-            )
             Spacer(Modifier.height(4.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onDismiss) { Text("Cancel", color = TextMuted) }
                 TextButton(
-                    onClick = { if (name.isNotBlank()) onCreate(name.trim(), tags) },
+                    onClick = { if (name.isNotBlank()) onCreate(name.trim()) },
                     enabled = name.isNotBlank(),
                 ) { Text("Create", color = Forest) }
             }
@@ -85,14 +74,12 @@ fun PlotCreateSheet(
 @Composable
 fun PlotEditSheet(
     plot: Plot,
-    availableTags: List<String>,
     onDismiss: () -> Unit,
-    onSave: (name: String, tagCriteria: List<String>) -> Unit,
+    onSave: (name: String) -> Unit,
     onDelete: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var name by remember { mutableStateOf(plot.name) }
-    var tags by remember { mutableStateOf(plot.tagCriteria) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     if (showDeleteConfirm) {
@@ -132,14 +119,6 @@ fun PlotEditSheet(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            Text("Show items tagged with:", style = MaterialTheme.typography.bodySmall, color = TextMuted)
-            TagInputField(
-                tags = tags,
-                onTagsChange = { tags = it },
-                availableTags = availableTags,
-                recentTags = emptyList(),
-                modifier = Modifier.fillMaxWidth(),
-            )
             Spacer(Modifier.height(4.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 TextButton(onClick = { showDeleteConfirm = true }) {
@@ -148,7 +127,7 @@ fun PlotEditSheet(
                 Row {
                     TextButton(onClick = onDismiss) { Text("Cancel", color = TextMuted) }
                     TextButton(
-                        onClick = { if (name.isNotBlank()) onSave(name.trim(), tags) },
+                        onClick = { if (name.isNotBlank()) onSave(name.trim()) },
                         enabled = name.isNotBlank(),
                     ) { Text("Save", color = Forest) }
                 }

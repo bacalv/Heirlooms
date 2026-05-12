@@ -104,12 +104,22 @@ private fun EncryptedThumbnail(
             try {
                 val wrappedDek = upload.wrappedThumbnailDek
                 if (wrappedDek == null) { failed = true; return@withContext }
-                val dek = if (upload.thumbnailDekFormat == VaultCrypto.ALG_P256_ECDH_HKDF_V1) {
-                    val privkey = VaultSession.sharingPrivkey
-                    if (privkey == null) { failed = true; return@withContext }
-                    VaultCrypto.unwrapWithSharingKey(wrappedDek, privkey)
-                } else {
-                    VaultCrypto.unwrapDekWithMasterKey(wrappedDek, VaultSession.masterKey)
+                val dek = when (upload.thumbnailDekFormat) {
+                    VaultCrypto.ALG_P256_ECDH_HKDF_V1 -> {
+                        val privkey = VaultSession.sharingPrivkey
+                        if (privkey == null) { failed = true; return@withContext }
+                        VaultCrypto.unwrapWithSharingKey(wrappedDek, privkey)
+                    }
+                    VaultCrypto.ALG_PLOT_AES256GCM_V1 -> {
+                        // Find the plot this upload belongs to by checking all cached plot keys.
+                        // If not cached yet, decryption will fail gracefully (thumbnail shows empty).
+                        val plotKey = VaultSession.plotKeys.values.firstOrNull { key ->
+                            runCatching { VaultCrypto.unwrapDekWithPlotKey(wrappedDek, key) }.isSuccess
+                        }
+                        if (plotKey == null) { failed = true; return@withContext }
+                        VaultCrypto.unwrapDekWithPlotKey(wrappedDek, plotKey)
+                    }
+                    else -> VaultCrypto.unwrapDekWithMasterKey(wrappedDek, VaultSession.masterKey)
                 }
                 val encryptedBytes = api.fetchBytes(api.thumbUrl(upload.id))
                 val decryptedBytes = VaultCrypto.decryptSymmetric(encryptedBytes, dek)

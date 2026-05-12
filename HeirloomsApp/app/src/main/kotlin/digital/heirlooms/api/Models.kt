@@ -44,9 +44,42 @@ data class UploadPage(
 data class Plot(
     val id: String,
     val name: String,
-    val tagCriteria: List<String>,
+    val criteria: String?,          // null = collection plot; JSON string for query plots
+    val showInGarden: Boolean,
+    val visibility: String,         // "private", "shared", "public"
     val sortOrder: Int,
     val isSystemDefined: Boolean,
+)
+
+val Plot.isCollection: Boolean get() = criteria == null
+val Plot.isShared: Boolean get() = visibility == "shared"
+
+data class Flow(
+    val id: String,
+    val name: String,
+    val criteria: String,           // JSON string
+    val targetPlotId: String,
+    val requiresStaging: Boolean,
+)
+
+data class StagingItem(
+    val upload: Upload,
+)
+
+data class PlotMember(
+    val userId: String,
+    val displayName: String,
+    val username: String,
+    val role: String,
+)
+
+data class PlotItem(
+    val upload: Upload,
+    val addedBy: String,
+    val wrappedItemDek: String?,
+    val itemDekFormat: String?,
+    val wrappedThumbnailDek: String?,
+    val thumbnailDekFormat: String?,
 )
 
 data class CapsuleSummary(

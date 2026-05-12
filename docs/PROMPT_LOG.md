@@ -2,6 +2,40 @@
 
 ---
 
+## Session — 12 May 2026 — M10 E4: Android adoption (v0.50.0)
+
+Android-only. Completes the M10 milestone.
+
+**`VaultCrypto.kt` — plot key helpers.** `generatePlotKey(): ByteArray` (32 random bytes). `wrapPlotKeyForMember(plotKeyBytes, recipientSpki)`: wraps via ECDH-HKDF. `unwrapPlotKey(envelope, privkeyPkcs8)`. `wrapDekWithPlotKey(dek, plotKeyBytes)`: symmetric AES-256-GCM under plot key. `unwrapDekWithPlotKey`. Constant `ALG_PLOT_AES256GCM_V1 = "plot-aes256gcm-v1"`.
+
+**`VaultSession.kt` — `plotKeys` cache.** `ConcurrentHashMap<String, ByteArray>` for per-plot AES-256-GCM keys. Cleared on vault lock.
+
+**`Models.kt` — updated.** `Plot` gains `criteria: String?`, `showInGarden`, `visibility`, `isSystemDefined`; `tagCriteria` removed. `Plot.isCollection`, `Plot.isShared` extension properties. New: `Flow`, `StagingItem`, `PlotMember`, `PlotItem`.
+
+**`HeirloomsApi.kt` — full M10 API.** `listUploadsPage` accepts `plotId`. `createPlot` supports `visibility`, `wrappedPlotKey`, `plotKeyFormat`. All flow/staging/shared-plot methods added.
+
+**`GardenViewModel.kt` — refactored.** System plot found via `isSystemDefined`. `ensureSharingKey` → `ensurePlotKeys`: loads+caches raw plot keys for all shared plots via `getPlotKey` + `unwrapPlotKey` + `VaultSession.setPlotKey`.
+
+**`HeirloomsImage.kt` — `plot-aes256gcm-v1` path.** `EncryptedThumbnail` tries all cached `VaultSession.plotKeys` to unwrap the thumbnail DEK.
+
+**`PlotSheets.kt` — simplified.** Name-only create/edit (collection plots). `tagCriteria` + `TagInputField` removed.
+
+**`ExploreViewModel.kt` + `ExploreScreen.kt`.** `ExploreFilters` gains `plotId`. `applyPlotFilter(plotId)`. Both `load`/`loadMore` forward `plotId`. `ExploreScreen` accepts `initialPlotId`.
+
+**Navigation.** `onNavigateToExplore(plotId, justArrived)` signature. `exploreWithPlot(plotId)` route. Explore route gains `initial_plot_id` arg.
+
+**`FlowsViewModel.kt` + `FlowsScreen.kt` (new).** List flows + pending staging counts; create (defaults `just_arrived` criteria) + delete. Accessible from burger menu.
+
+**`StagingViewModel.kt` + `StagingScreen.kt` (new).** Approve/reject/restore staging items for a flow's target plot. 3-column grid with inline action FABs.
+
+**`BurgerPanel.kt` — Flows link.** `AppNavigation.kt` — FLOWS + STAGING routes.
+
+**VaultCrypto unit tests — 4 new.**
+
+**Version: v0.50.0 / versionCode 53.**
+
+---
+
 ## Session — 12 May 2026 — M10 E3: Shared plots + E2EE (v0.49.0)
 
 Server + Web. No Android changes.

@@ -91,13 +91,18 @@ class HeirloomsApi(
         sort: String = "upload_newest",
         fromDate: String? = null,
         toDate: String? = null,
+        plotId: String? = null,
     ): UploadPage {
         val params = buildString {
             append("?limit=$limit&sort=$sort")
             cursor?.let { append("&cursor=${it.encodeParam()}") }
-            if (tags.isNotEmpty()) append("&tag=${tags.joinToString(",") { it.encodeParam() }}")
+            if (plotId != null) {
+                append("&plot_id=${plotId.encodeParam()}")
+            } else {
+                if (tags.isNotEmpty()) append("&tag=${tags.joinToString(",") { it.encodeParam() }}")
+                if (justArrived) append("&just_arrived=true")
+            }
             if (excludeTags.isNotEmpty()) append("&exclude_tag=${excludeTags.joinToString(",") { it.encodeParam() }}")
-            if (justArrived) append("&just_arrived=true")
             inCapsule?.let { append("&in_capsule=$it") }
             hasLocation?.let { append("&has_location=$it") }
             if (includeComposted) append("&include_composted=true")
@@ -143,14 +148,38 @@ class HeirloomsApi(
     suspend fun listPlots(): List<Plot> =
         JSONArray(get("/api/plots")).toPlotList()
 
-    suspend fun createPlot(name: String, tagCriteria: List<String>): Plot {
-        val tagsJson = "[${tagCriteria.joinToString(",") { "\"${it.replace("\"", "\\\"")}\"" }}]"
-        return JSONObject(post("/api/plots", """{"name":${name.jsonEsc()},"tag_criteria":$tagsJson}""")).toPlot()
+    suspend fun createPlot(
+        name: String,
+        criteria: String? = null,
+        showInGarden: Boolean = true,
+        visibility: String = "private",
+        wrappedPlotKey: String? = null,
+        plotKeyFormat: String? = null,
+    ): Plot {
+        val body = buildString {
+            append("""{"name":${name.jsonEsc()}""")
+            if (criteria != null) append(""","criteria":$criteria""")
+            else append(""","criteria":null""")
+            append(""","show_in_garden":$showInGarden""")
+            append(""","visibility":${visibility.jsonEsc()}""")
+            if (wrappedPlotKey != null) append(""","wrappedPlotKey":${wrappedPlotKey.jsonEsc()}""")
+            if (plotKeyFormat != null) append(""","plotKeyFormat":${plotKeyFormat.jsonEsc()}""")
+            append("}")
+        }
+        return JSONObject(post("/api/plots", body)).toPlot()
     }
 
-    suspend fun updatePlot(id: String, name: String, tagCriteria: List<String>): Plot {
-        val tagsJson = "[${tagCriteria.joinToString(",") { "\"${it.replace("\"", "\\\"")}\"" }}]"
-        return JSONObject(put("/api/plots/$id", """{"name":${name.jsonEsc()},"tag_criteria":$tagsJson}""")).toPlot()
+    suspend fun updatePlot(
+        id: String,
+        name: String? = null,
+        criteria: String? = null,
+        showInGarden: Boolean? = null,
+    ): Plot {
+        val parts = mutableListOf<String>()
+        name?.let { parts.add(""""name":${it.jsonEsc()}""") }
+        criteria?.let { parts.add(""""criteria":$it""") }
+        showInGarden?.let { parts.add(""""show_in_garden":$it""") }
+        return JSONObject(put("/api/plots/$id", "{${parts.joinToString(",")}}")).toPlot()
     }
 
     suspend fun deletePlot(id: String) {
@@ -163,6 +192,152 @@ class HeirloomsApi(
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
             }
+        }
+    }
+
+    // ── Plot key + members ───────────────────────────────────────────────────
+
+    suspend fun getPlotKey(plotId: String): Pair<String, String> {
+        val obj = JSONObject(get("/api/plots/$plotId/plot-key"))
+        return Pair(obj.getString("wrappedPlotKey"), obj.getString("plotKeyFormat"))
+    }
+
+    suspend fun listPlotMembers(plotId: String): List<PlotMember> {
+        val arr = JSONArray(get("/api/plots/$plotId/members"))
+        return (0 until arr.length()).map {
+            val o = arr.getJSONObject(it)
+            PlotMember(
+                userId = o.getString("userId"),
+                displayName = o.getString("displayName"),
+                username = o.getString("username"),
+                role = o.getString("role"),
+            )
+        }
+    }
+
+    suspend fun addPlotMember(plotId: String, userId: String, wrappedPlotKey: String, plotKeyFormat: String) {
+        post("/api/plots/$plotId/members",
+            """{"userId":${userId.jsonEsc()},"wrappedPlotKey":${wrappedPlotKey.jsonEsc()},"plotKeyFormat":${plotKeyFormat.jsonEsc()}}""")
+    }
+
+    suspend fun generatePlotInvite(plotId: String): Pair<String, String> {
+        val obj = JSONObject(post("/api/plots/$plotId/invites", "{}"))
+        return Pair(obj.getString("token"), obj.getString("expiresAt"))
+    }
+
+    suspend fun listPendingInvites(plotId: String): List<Map<String, String>> {
+        val arr = JSONArray(get("/api/plots/$plotId/members/pending"))
+        return (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            mapOf(
+                "inviteId" to o.optString("inviteId", ""),
+                "recipientPubkey" to o.optString("recipientPubkey", ""),
+                "displayName" to o.optString("displayName", ""),
+            )
+        }
+    }
+
+    suspend fun confirmInvite(plotId: String, inviteId: String, wrappedPlotKey: String, plotKeyFormat: String) {
+        post("/api/plots/$plotId/members/pending/$inviteId/confirm",
+            """{"wrappedPlotKey":${wrappedPlotKey.jsonEsc()},"plotKeyFormat":${plotKeyFormat.jsonEsc()}}""")
+    }
+
+    // ── Collection plot items ────────────────────────────────────────────────
+
+    suspend fun listPlotItems(plotId: String): List<PlotItem> {
+        val arr = JSONArray(get("/api/plots/$plotId/items"))
+        return (0 until arr.length()).map { arr.getJSONObject(it).toPlotItem() }
+    }
+
+    suspend fun addPlotItem(
+        plotId: String,
+        uploadId: String,
+        wrappedItemDek: String,
+        itemDekFormat: String,
+        wrappedThumbnailDek: String,
+        thumbnailDekFormat: String,
+    ) {
+        post("/api/plots/$plotId/items",
+            """{"uploadId":${uploadId.jsonEsc()},"wrappedItemDek":${wrappedItemDek.jsonEsc()},"itemDekFormat":${itemDekFormat.jsonEsc()},"wrappedThumbnailDek":${wrappedThumbnailDek.jsonEsc()},"thumbnailDekFormat":${thumbnailDekFormat.jsonEsc()}}""")
+    }
+
+    suspend fun removePlotItem(plotId: String, uploadId: String) {
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url("$baseUrl/api/plots/$plotId/items/$uploadId")
+                .withAuth().delete().build()
+            client.newCall(request).execute().use { if (!it.isSuccessful) throw IOException("HTTP ${it.code}") }
+        }
+    }
+
+    // ── Flows ────────────────────────────────────────────────────────────────
+
+    suspend fun listFlows(): List<Flow> {
+        val arr = JSONArray(get("/api/flows"))
+        return (0 until arr.length()).map { arr.getJSONObject(it).toFlow() }
+    }
+
+    suspend fun createFlow(name: String, criteria: String, targetPlotId: String, requiresStaging: Boolean): Flow =
+        JSONObject(post("/api/flows",
+            """{"name":${name.jsonEsc()},"criteria":$criteria,"targetPlotId":${targetPlotId.jsonEsc()},"requiresStaging":$requiresStaging}"""
+        )).toFlow()
+
+    suspend fun updateFlow(id: String, name: String, criteria: String, requiresStaging: Boolean): Flow =
+        JSONObject(put("/api/flows/$id",
+            """{"name":${name.jsonEsc()},"criteria":$criteria,"requiresStaging":$requiresStaging}"""
+        )).toFlow()
+
+    suspend fun deleteFlow(id: String) {
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url("$baseUrl/api/flows/$id")
+                .withAuth().delete().build()
+            client.newCall(request).execute().use { if (!it.isSuccessful) throw IOException("HTTP ${it.code}") }
+        }
+    }
+
+    // ── Staging ──────────────────────────────────────────────────────────────
+
+    suspend fun getFlowStaging(flowId: String): List<StagingItem> {
+        val arr = JSONArray(get("/api/flows/$flowId/staging"))
+        return (0 until arr.length()).map { StagingItem(arr.getJSONObject(it).toUpload()) }
+    }
+
+    suspend fun getPlotStaging(plotId: String): List<StagingItem> {
+        val arr = JSONArray(get("/api/plots/$plotId/staging"))
+        return (0 until arr.length()).map { StagingItem(arr.getJSONObject(it).toUpload()) }
+    }
+
+    suspend fun getRejectedItems(plotId: String): List<StagingItem> {
+        val arr = JSONArray(get("/api/plots/$plotId/staging/rejected"))
+        return (0 until arr.length()).map { StagingItem(arr.getJSONObject(it).toUpload()) }
+    }
+
+    suspend fun approveItem(
+        plotId: String,
+        uploadId: String,
+        wrappedItemDek: String? = null,
+        itemDekFormat: String? = null,
+        wrappedThumbnailDek: String? = null,
+        thumbnailDekFormat: String? = null,
+    ) {
+        val parts = mutableListOf<String>()
+        wrappedItemDek?.let { parts.add(""""wrappedItemDek":${it.jsonEsc()}""") }
+        itemDekFormat?.let { parts.add(""""itemDekFormat":${it.jsonEsc()}""") }
+        wrappedThumbnailDek?.let { parts.add(""""wrappedThumbnailDek":${it.jsonEsc()}""") }
+        thumbnailDekFormat?.let { parts.add(""""thumbnailDekFormat":${it.jsonEsc()}""") }
+        post("/api/plots/$plotId/staging/$uploadId/approve", "{${parts.joinToString(",")}}")
+    }
+
+    suspend fun rejectItem(plotId: String, uploadId: String) =
+        post("/api/plots/$plotId/staging/$uploadId/reject", "{}")
+
+    suspend fun unrejectItem(plotId: String, uploadId: String) {
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url("$baseUrl/api/plots/$plotId/staging/$uploadId/decision")
+                .withAuth().delete().build()
+            client.newCall(request).execute().use { if (!it.isSuccessful) throw IOException("HTTP ${it.code}") }
         }
     }
 
@@ -579,9 +754,29 @@ class HeirloomsApi(
     private fun JSONObject.toPlot() = Plot(
         id = getString("id"),
         name = getString("name"),
-        tagCriteria = getJSONArray("tag_criteria").let { arr -> (0 until arr.length()).map { arr.getString(it) } },
+        criteria = if (isNull("criteria")) null else optString("criteria", null)?.takeIf { it.isNotEmpty() }
+            ?: opt("criteria")?.let { it.toString().takeIf { s -> s != "null" } },
+        showInGarden = optBoolean("show_in_garden", true),
+        visibility = optString("visibility", "private"),
         sortOrder = optInt("sort_order", 0),
         isSystemDefined = optBoolean("is_system_defined", false),
+    )
+
+    private fun JSONObject.toFlow() = Flow(
+        id = getString("id"),
+        name = getString("name"),
+        criteria = opt("criteria")?.toString() ?: "{}",
+        targetPlotId = getString("targetPlotId"),
+        requiresStaging = optBoolean("requiresStaging", true),
+    )
+
+    private fun JSONObject.toPlotItem() = PlotItem(
+        upload = toUpload(),
+        addedBy = optString("added_by", ""),
+        wrappedItemDek = optString("wrapped_item_dek", null)?.takeIf { it.isNotEmpty() },
+        itemDekFormat = optString("item_dek_format", null)?.takeIf { it.isNotEmpty() },
+        wrappedThumbnailDek = optString("wrapped_thumbnail_dek", null)?.takeIf { it.isNotEmpty() },
+        thumbnailDekFormat = optString("thumbnail_dek_format", null)?.takeIf { it.isNotEmpty() },
     )
 
     private fun JSONArray.toCapsuleSummaryList(): List<CapsuleSummary> =

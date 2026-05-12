@@ -23,6 +23,16 @@ object VaultSession {
     // Cleared when the vault is locked (process restart).
     val thumbnailCache: ConcurrentHashMap<String, ImageBitmap> = ConcurrentHashMap()
 
+    // Per-plot raw AES-256-GCM plot keys, keyed by plot ID.
+    // Populated lazily on first shared-plot access. Cleared on vault lock.
+    val plotKeys: ConcurrentHashMap<String, ByteArray> = ConcurrentHashMap()
+
+    fun setPlotKey(plotId: String, rawKeyBytes: ByteArray) {
+        plotKeys[plotId] = rawKeyBytes.copyOf()
+    }
+
+    fun getPlotKey(plotId: String): ByteArray? = plotKeys[plotId]?.copyOf()
+
     fun unlock(masterKey: ByteArray) {
         _masterKey = masterKey.copyOf()
     }
@@ -37,5 +47,7 @@ object VaultSession {
         _sharingPrivkey?.fill(0)
         _sharingPrivkey = null
         thumbnailCache.clear()
+        plotKeys.values.forEach { it.fill(0) }
+        plotKeys.clear()
     }
 }

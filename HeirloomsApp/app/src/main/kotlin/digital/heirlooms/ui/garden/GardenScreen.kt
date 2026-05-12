@@ -110,7 +110,7 @@ private const val THUMBNAIL_SIZE_DP = 108
 @Composable
 fun GardenScreen(
     onPhotoTap: (String) -> Unit,
-    onNavigateToExplore: (tags: List<String>, justArrived: Boolean) -> Unit,
+    onNavigateToExplore: (plotId: String?, justArrived: Boolean) -> Unit,
     vm: GardenViewModel = viewModel(),
 ) {
     val api = LocalHeirloomsApi.current
@@ -230,11 +230,10 @@ fun GardenScreen(
 
     if (showCreatePlot) {
         PlotCreateSheet(
-            availableTags = availableTags,
             onDismiss = { showCreatePlot = false },
-            onCreate = { name, tags ->
+            onCreate = { name ->
                 showCreatePlot = false
-                vm.createPlot(api, name, tags)
+                vm.createPlot(api, name)
             },
         )
     }
@@ -276,7 +275,6 @@ fun GardenScreen(
                                 val rowKey = row.plot?.id ?: "__just_arrived__"
                                 val rowLabel = row.plot?.name ?: "Just arrived"
                                 val isJustArrived = row.plot == null
-                                val tags = row.plot?.tagCriteria ?: emptyList()
 
                                 PlotRowSection(
                                     label = rowLabel,
@@ -287,9 +285,9 @@ fun GardenScreen(
                                     savedScrollIndex = vm.scrollPositions[rowKey] ?: 0,
                                     onScrollIndex = { vm.saveScrollPosition(rowKey, it) },
                                     onPhotoTap = onPhotoTap,
-                                    onTitleTap = { onNavigateToExplore(tags, isJustArrived) },
+                                    onTitleTap = { onNavigateToExplore(row.plot?.id, isJustArrived) },
                                     onLoadMore = { vm.loadMoreForRow(api, index) },
-                                    onExploreAll = { onNavigateToExplore(tags, isJustArrived) },
+                                    onExploreAll = { onNavigateToExplore(row.plot?.id, isJustArrived) },
                                     isJustArrived = isJustArrived,
                                     newlyArrivedIds = if (isJustArrived) newlyArrivedIds else emptySet(),
                                     onClearNewlyArrived = { vm.clearNewlyArrived() },
@@ -312,8 +310,8 @@ fun GardenScreen(
                                             catch (_: Exception) { vm.optimisticTag(uploadId, oldTags) }
                                         }
                                     },
-                                    onRenamePlot = { newName, newTags ->
-                                        row.plot?.let { vm.renamePlot(api, it, newName, newTags) }
+                                    onRenamePlot = { newName ->
+                                        row.plot?.let { vm.renamePlot(api, it, newName) }
                                     },
                                     onDeletePlot = {
                                         row.plot?.let { vm.deletePlot(api, it.id) }
@@ -442,7 +440,7 @@ private fun PlotRowSection(
     friends: List<HeirloomsApi.Friend> = emptyList(),
     onQuickRotate: (uploadId: String, currentRotation: Int) -> Unit,
     onTagsUpdated: (uploadId: String, oldTags: List<String>, newTags: List<String>) -> Unit,
-    onRenamePlot: (name: String, tagCriteria: List<String>) -> Unit = { _, _ -> },
+    onRenamePlot: (name: String) -> Unit = {},
     onDeletePlot: () -> Unit = {},
     emptyLabel: String,
 ) {
@@ -452,9 +450,8 @@ private fun PlotRowSection(
     if (showEditPlot && plot != null) {
         PlotEditSheet(
             plot = plot,
-            availableTags = availableTags,
             onDismiss = { showEditPlot = false },
-            onSave = { name, tags -> showEditPlot = false; onRenamePlot(name, tags) },
+            onSave = { name -> showEditPlot = false; onRenamePlot(name) },
             onDelete = { showEditPlot = false; onDeletePlot() },
         )
     }

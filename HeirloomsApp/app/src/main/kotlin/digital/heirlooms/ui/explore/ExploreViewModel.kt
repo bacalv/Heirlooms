@@ -18,6 +18,7 @@ data class ExploreFilters(
     val hasLocation: Boolean? = null,
     val includeComposted: Boolean = false,
     val sort: String = "upload_newest",
+    val plotId: String? = null,
 )
 
 sealed class ExploreState {
@@ -45,6 +46,7 @@ class ExploreViewModel(private val savedState: SavedStateHandle) : ViewModel() {
             hasLocation = savedState["filter_has_location"],
             includeComposted = savedState["filter_include_composted"] ?: false,
             sort = savedState["filter_sort"] ?: "upload_newest",
+            plotId = savedState["filter_plot_id"],
         )
         set(v) {
             savedState["filter_tags"] = v.tags.toTypedArray()
@@ -55,6 +57,7 @@ class ExploreViewModel(private val savedState: SavedStateHandle) : ViewModel() {
             savedState["filter_has_location"] = v.hasLocation
             savedState["filter_include_composted"] = v.includeComposted
             savedState["filter_sort"] = v.sort
+            savedState["filter_plot_id"] = v.plotId
         }
 
     var scrollPosition: Int
@@ -63,6 +66,10 @@ class ExploreViewModel(private val savedState: SavedStateHandle) : ViewModel() {
 
     fun applyInitialFilters(tags: List<String>, justArrived: Boolean) {
         filters = ExploreFilters(tags = tags, justArrived = justArrived)
+    }
+
+    fun applyPlotFilter(plotId: String) {
+        filters = ExploreFilters(plotId = plotId)
     }
 
     fun load(api: HeirloomsApi) {
@@ -79,6 +86,7 @@ class ExploreViewModel(private val savedState: SavedStateHandle) : ViewModel() {
                     hasLocation = f.hasLocation,
                     includeComposted = f.includeComposted,
                     sort = f.sort,
+                    plotId = f.plotId,
                 )
                 _state.value = ExploreState.Ready(page.uploads, page.nextCursor)
             } catch (e: Exception) {
@@ -109,6 +117,7 @@ class ExploreViewModel(private val savedState: SavedStateHandle) : ViewModel() {
                     hasLocation = f.hasLocation,
                     includeComposted = f.includeComposted,
                     sort = f.sort,
+                    plotId = f.plotId,
                 )
                 val fresh = _state.value as? ExploreState.Ready ?: return@launch
                 _state.value = fresh.copy(

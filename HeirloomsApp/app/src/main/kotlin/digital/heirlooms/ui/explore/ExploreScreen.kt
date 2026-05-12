@@ -82,6 +82,7 @@ import digital.heirlooms.ui.theme.TextMuted
 fun ExploreScreen(
     initialTags: List<String> = emptyList(),
     initialJustArrived: Boolean = false,
+    initialPlotId: String? = null,
     onPhotoTap: (String) -> Unit,
     vm: ExploreViewModel = viewModel(),
 ) {
@@ -95,8 +96,9 @@ fun ExploreScreen(
     LaunchedEffect(Unit) {
         if (!filtersApplied.value) {
             filtersApplied.value = true
-            if (initialTags.isNotEmpty() || initialJustArrived) {
-                vm.applyInitialFilters(initialTags, initialJustArrived)
+            when {
+                initialPlotId != null -> vm.applyPlotFilter(initialPlotId)
+                initialTags.isNotEmpty() || initialJustArrived -> vm.applyInitialFilters(initialTags, initialJustArrived)
             }
             vm.load(api)
         }
