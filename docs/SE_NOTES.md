@@ -166,6 +166,31 @@ Three Gradle subprojects under `/Users/bac/IdeaProjects/Heirlooms/`:
   both paths, awaited before `setVaultUnlocked(true)`. Pattern: any new auto-unlock path
   in `App.jsx` MUST call `loadSharingKey` before marking the vault as unlocked.
 
+- **`CriteriaEvaluator` usage pattern (v0.47.0):**
+  `CriteriaEvaluator.evaluate(criteriaJson, userId, conn)` returns `CriteriaFragment(sql, setters)`.
+  The `sql` field is appended to the `conditions` list in `listUploadsPaginated`; `setters` is appended
+  to the parallel `setters` list. The `Connection` is passed through because `plot_ref` atoms need
+  a DB lookup. Calling code must be inside a `dataSource.connection.use` block — no connection is
+  opened by the evaluator itself. Validation at write time (create/update plot) goes through
+  `Database.withCriteriaValidation`, which opens its own connection.
+
+- **`just_arrived` predicate discrepancy — evaluator vs legacy path (v0.47.0):**
+  `CriteriaEvaluator`'s `just_arrived` atom includes `last_viewed_at IS NULL`. The legacy
+  `listUploadsPaginated(justArrived = true)` path does NOT include this condition (historical
+  omission). After E4, Android will switch to `plot_id` and the legacy `just_arrived=true`
+  parameter can be deprecated. Until then: web Garden (via `plot_id`) and Android (via
+  `just_arrived=true`) have slightly different semantics — viewed-but-untagged items vanish
+  from web "Just arrived" but remain on Android. Don't "fix" the legacy path without coordinating
+  the Android release.
+
+- **`handler@` label for early returns in `HttpHandler` lambdas (v0.47.0):**
+  For a simple `HttpHandler = { request -> }` (no path params), labeling the lambda
+  (`= handler@{ request -> }`) allows `return@handler Response(...)` for early returns.
+  This is the right pattern for single-level handlers. For two-level contract lambdas
+  (`bindContract METHOD to { param -> { req -> ... } }`), extract the inner body to a named
+  function instead (non-local return does not compile from the inner lambda). Both patterns
+  are now in use — see `listUploadsHandler` vs `handleUpdatePlot` in `PlotHandler.kt`.
+
 - **mp4box v2 (npm `mp4box ^2.3.0`) pitfalls (v0.35.0):**
   - No `default` export — import as `const MP4Box = await import('mp4box')`, then `MP4Box.createFile()`.
   - `initializeSegmentation()` returns `{ tracks, buffer }` (one combined init segment), NOT an iterable array.

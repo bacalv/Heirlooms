@@ -28,8 +28,9 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
   JSONB replaces `plot_tag_criteria`. `CriteriaEvaluator` on server. Plot API uses criteria JSON.
   Garden passes `plot_id` to upload listing. Explore gains media_type + is_received filters and
   full-criteria "Save as plot". V24 migration. Server + Web only (Android in E4).
-- Next milestone: M10 (shared plots) — brief at `docs/briefs/M10_brief.md`.
-  Four increments: E1 predicate/criteria system, E2 flows + staging, E3 shared plots + E2EE, E4 Android.
+- Active milestone: M10 (shared plots) — brief at `docs/briefs/M10_brief.md`.
+  E1 ✓ (v0.47.0, not yet deployed). E2 is next (flows + staging, V25 partial).
+  E3: shared plots + E2EE group key. E4: Android.
   Key decisions: per-plot group key (AES-256-GCM, `plot-aes256gcm-v1`), member roles owner/member,
   invite via friends list (primary) + invite link (fallback), staging flag on flow not plot,
   staging decisions keyed (plot_id, upload_id). Public plots always require staging (deferred, enforced server-side).
