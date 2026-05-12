@@ -75,7 +75,7 @@ function EncryptedThumb({ upload, className, style, alt, rotation }) {
         } else {
           URL.revokeObjectURL(url)
         }
-      } catch { /* show fallback below */ }
+      } catch { /* show fallback */ }
       if (!cancelled) setLoading(false)
     })()
     return () => { cancelled = true }

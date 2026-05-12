@@ -8,7 +8,7 @@ import * as deviceKeyManager from '../crypto/deviceKeyManager'
 
 async function loadSharingKey(apiKey, masterKey) {
   try {
-    const r = await fetch(`${API_URL}/api/sharing/me`, { headers: { 'X-Api-Key': apiKey } })
+    const r = await fetch(`${API_URL}/api/keys/sharing/me`, { headers: { 'X-Api-Key': apiKey } })
     if (!r.ok) return
     const { wrappedPrivkey } = await r.json()
     if (!wrappedPrivkey) return
@@ -99,7 +99,7 @@ export function VaultUnlockPage({ apiKey, onUnlocked }) {
       }
 
       vaultSession.unlock(masterKey)
-      loadSharingKey(apiKey, masterKey)
+      await loadSharingKey(apiKey, masterKey)
       onUnlocked()
     } catch (err) {
       setErrorMsg(err.message?.includes('passphrase') ? 'Incorrect passphrase.' : 'Incorrect passphrase.')
