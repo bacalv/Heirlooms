@@ -236,61 +236,61 @@ class SchemaMigrationTest {
         assertEquals(0, n, "all plots should have visibility='private' after V24")
     }
 
-    // ---- V25a flows/staging canary tests ------------------------------------
+    // ---- V25 flows/staging canary tests ------------------------------------
 
     @Test
-    fun `V25a flows table exists with expected columns`() {
+    fun `V25 flows table exists with expected columns`() {
         val n = count("""
             SELECT COUNT(*) FROM information_schema.columns
             WHERE table_name = 'flows'
               AND column_name IN ('id','user_id','name','criteria','target_plot_id','requires_staging','created_at','updated_at')
         """.trimIndent())
-        assertEquals(8, n, "flows table should have 8 columns after V25a")
+        assertEquals(8, n, "flows table should have 8 columns after V25")
     }
 
     @Test
-    fun `V25a plot_items table exists with expected columns`() {
+    fun `V25 plot_items table exists with expected columns`() {
         val n = count("""
             SELECT COUNT(*) FROM information_schema.columns
             WHERE table_name = 'plot_items'
               AND column_name IN ('id','plot_id','upload_id','added_by','source_flow_id','added_at')
         """.trimIndent())
-        assertEquals(6, n, "plot_items should have expected columns after V25a")
+        assertEquals(6, n, "plot_items should have expected columns after V25")
     }
 
     @Test
-    fun `V25a plot_staging_decisions table exists`() {
+    fun `V25 plot_staging_decisions table exists`() {
         val n = count("""
             SELECT COUNT(*) FROM information_schema.tables
             WHERE table_name = 'plot_staging_decisions'
         """.trimIndent())
-        assertEquals(1, n, "plot_staging_decisions should exist after V25a")
+        assertEquals(1, n, "plot_staging_decisions should exist after V25")
     }
 
-    // ---- V25b plot_members / plot_invites canary tests ----------------------
+    // ---- V26 plot_members / plot_invites canary tests ----------------------
 
     @Test
-    fun `V25b plot_members table exists with correct columns`() {
+    fun `V26 plot_members table exists with correct columns`() {
         val n = count("""
             SELECT COUNT(*) FROM information_schema.columns
             WHERE table_name = 'plot_members'
               AND column_name IN ('plot_id','user_id','role','wrapped_plot_key','plot_key_format','joined_at')
         """.trimIndent())
-        assertEquals(6, n, "plot_members should have 6 expected columns after V25b")
+        assertEquals(6, n, "plot_members should have 6 expected columns after V26")
     }
 
     @Test
-    fun `V25b plot_invites table exists with correct columns`() {
+    fun `V26 plot_invites table exists with correct columns`() {
         val n = count("""
             SELECT COUNT(*) FROM information_schema.columns
             WHERE table_name = 'plot_invites'
               AND column_name IN ('id','plot_id','created_by','token','recipient_user_id','recipient_pubkey','used_by','used_at','expires_at','created_at')
         """.trimIndent())
-        assertEquals(10, n, "plot_invites should have 10 expected columns after V25b")
+        assertEquals(10, n, "plot_invites should have 10 expected columns after V26")
     }
 
     @Test
-    fun `V25b plot_members cascade delete removes members when plot deleted`() {
+    fun `V26 plot_members cascade delete removes members when plot deleted`() {
         val userId = FOUNDING_USER_UUID
         val plotId = java.util.UUID.randomUUID()
         exec("INSERT INTO plots (id, owner_user_id, name, show_in_garden, visibility) VALUES ('$plotId', '$userId', 'v25b-cascade', true, 'shared')")
@@ -301,7 +301,7 @@ class SchemaMigrationTest {
     }
 
     @Test
-    fun `V25a deleting a flow sets source_flow_id to NULL on plot_items`() {
+    fun `V25 deleting a flow sets source_flow_id to NULL on plot_items`() {
         val userId = FOUNDING_USER_UUID
         // Create a collection plot (criteria IS NULL, use show_in_garden/visibility defaults)
         val plotId = java.util.UUID.randomUUID()
