@@ -49,6 +49,19 @@ References @PROMPT_LOG.md for project context at the start of significant tasks.
 
 ---
 
+## Early Users
+
+The first humans outside the founding team to use Heirlooms on real devices.
+
+**Sadaar** — Bret's daughter. Account on Fire OS tablet. First account created via
+the invite flow (M8). Used for cross-device sharing testing with Bret's account.
+
+**Wighty** — Bret's friend. Account on TCL T517D (Android 15). First external human
+tester onboarded 2026-05-11. Used for real-world friend-sharing and cross-account
+testing across M9 features.
+
+---
+
 ## How the team works together
 
 Bret brings direction. The PA brings perspective and documentation. The Software
