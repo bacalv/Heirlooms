@@ -84,7 +84,8 @@ export async function pairingStatus(sessionId) {
 export async function getFriends(apiKey) {
   const r = await apiFetch('/api/friends', apiKey)
   if (!r.ok) throw new Error(`HTTP ${r.status}`)
-  return r.json() // { friends: [{id, username, displayName}] }
+  const arr = await r.json() // server returns a bare array with userId field
+  return { friends: arr.map((f) => ({ id: f.userId, username: f.username, displayName: f.displayName })) }
 }
 
 export async function getFriendSharingKey(apiKey, userId) {
