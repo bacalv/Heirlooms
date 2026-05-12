@@ -3341,3 +3341,101 @@ Brief at `docs/briefs/streaming_encryption.md`. Server endpoint `POST /api/conte
 - `PreviewVideoPlayer` composable: `Player.Listener` for `STATE_ENDED`; 500ms position poll via `LaunchedEffect`; overlay as `Box` over the `AndroidView`.
 
 **Deployment:** Server `heirlooms-server-00040-w5h`. Web `heirlooms-web-00053-gbw`. APK installed.
+
+---
+
+## Sessions — 11 May 2026 (M8 bugfixes v0.38.0–v0.43.1, M9 v0.45.0)
+
+*Note: Sessions between v0.37.0 and v0.45.0 were not logged here at the time. Brief summary:*
+
+**v0.38.0–v0.43.1 — M8: Multi-user, QR pairing, Fire OS fixes**
+- Multi-user auth (Argon2id passphrase → auth_key + master_key_seed), invite-only registration,
+  per-user session tokens, Android passphrase setup flow (`setup-existing` for founding user).
+- Web device pairing: Android generates numeric code → web encodes pubkey as QR → Android wraps
+  master key → web polls for completion. Deep link `heirlooms://pair?session=...` triggers pairing screen.
+- `PairPage.jsx` added as public route; `navigate()` race fixed with `window.location.replace('/')`.
+- Fire OS `CaptureVideo()` crash: replaced with plain `ACTION_VIDEO_CAPTURE` intent.
+- `zxing-android-embedded` adds `CAMERA` to manifest; runtime permission request added.
+- OOM fix: `catch (_: Exception)` → `catch (_: Throwable)` in `UploadWorker`.
+- Android versionCode 35→46, versionName 0.33.0→0.43.0.
+
+**v0.44.0 — M8 bugfix iteration 1**
+- Brief at `docs/briefs/M8_bugfix_iteration_1.md`.
+- QR scan in `PairingScreen`, upload OOM fix, CAMERA permission request, Fire OS video intent.
+
+**v0.45.0 — M9: Friends, item sharing, Android plot management**
+- DB: `account_sharing_keys`, `friendships` tables (V23 migration). `shared_from_upload_id`,
+  `shared_from_user_id` nullable columns on `uploads`.
+- Server: `SharingKeyHandler` (`PUT/GET /api/keys/sharing`, `GET /api/keys/sharing/{userId}`),
+  `FriendsHandler` (`GET /api/friends`), `shareUploadContractRoute`, `hasLiveSharedReference`
+  compost guard, friendship created on `register`.
+- Android: P-256 sharing keypair generation (`generateSharingKeypair`, `sec1ToSpki`,
+  `unwrapWithSharingKey`), `VaultSession.sharingPrivkey`, `ensureSharingKey()` lazy init,
+  `ShareSheet`, `FriendsScreen`, `PlotCreateSheet`, `PlotEditSheet`, `GardenScreen` share icon
+  + friend indicator + plot management. `HeirloomsImage` routes decryption by `thumbnailDekFormat`.
+- versionCode 49, versionName 0.45.0. Deployed: server `heirlooms-server-00036-xxx`.
+
+---
+
+## Session — 12 May 2026 (M9 bug fix iteration 1, first human tester — v0.45.1–v0.45.5)
+
+### What was built / fixed
+
+**First human tester onboarded:** Wighty (TCL T517D, Android 15) invited by Bret via Devices &
+Access → Generate invite link. Friendship confirmed in DB. APK installed via ADB.
+Added `InviteRedemptionScreen` "Scan" button so new users can scan the invite QR code directly.
+
+**v0.45.1 — Shared item decryption + rotation copy + invite scan**
+- `PhotoDetailViewModel`: unwrap DEK via `unwrapWithSharingKey` when `dekFormat == ALG_P256_ECDH_HKDF_V1`.
+  Same fix for `downloadFullFile`. Without this, full-screen shared images spun forever.
+- `Database.createSharedUpload`: added `rotation` to INSERT and copied from `fromRecord.rotation`
+  (was hardcoded 0 — shared items always arrived unrotated).
+- `InviteRedemptionScreen`: "Scan" button using ZXing `ScanContract`; extracts `token` query
+  param from the scanned URL, populates the invite code field.
+
+**v0.45.2 — Re-share dedup guard**
+- `Database.userAlreadyHasStorageKey`: checks if recipient already has any live upload with
+  the same storage key.
+- `handleShareUpload`: returns 409 if recipient already has the item.
+- `ShareSheet`: shows "X already has this item." on 409, generic message on other errors.
+
+**v0.45.3 — Re-sharing fix + poll interval**
+- `ShareSheet.shareWithFriend`: was always using `unwrapDekWithMasterKey`. Fixed to check
+  `upload.dekFormat` and use `unwrapWithSharingKey` when re-sharing a received item (same
+  fix as PhotoDetailViewModel — received items have DEK wrapped with sharing privkey, not master key).
+- `GardenScreen`: Just Arrived poll interval 30s → 5s.
+
+**v0.45.4 — Web sharing decryption + rotation race guard**
+- Web: `vaultSession.js` gains `_sharingPrivkey`, `setSharingPrivkey`, `getSharingPrivkey`.
+  `vaultCrypto.js` gains `importSharingPrivkey`, `unwrapWithSharingKey`.
+  `VaultUnlockPage`: `loadSharingKey()` fetches `GET /api/keys/sharing/me`, unwraps privkey
+  with master key, imports as P-256 CryptoKey, stores in session. Awaited before `onUnlocked()`.
+  `UploadThumb` and `PhotoDetailPage`: check `thumbnailDekFormat`/`dekFormat`, route to
+  `unwrapWithSharingKey` for `ALG_P256_ECDH_HKDF_V1`.
+- Android `PhotoDetailScreen`: `rotateAndSave()` sets `rotateInFlight` flag; `navigateBack()`
+  bails early while flag is set, preventing share from racing the rotation save.
+
+**v0.45.5 — Web sharing key path fix**
+- `VaultUnlockPage.loadSharingKey`: URL was `/api/sharing/me` (404) — corrected to
+  `/api/keys/sharing/me` (sharing routes live in `keysContract` bound to `/api/keys`).
+- First shared video thumbnail now loads in browser after vault unlock. 3 of 4 shared
+  image thumbnails still showing fallback — under investigation (possible `wrappedThumbnailDek`
+  format difference for older shares).
+
+### Early users
+- **Wighty** onboarded 12 May 2026. TCL T517D, Android 15.
+- **Sadaar** (Fire OS tablet) used as share recipient for cross-device testing.
+- TEAM.md updated with Early Users section.
+
+### Design notes
+- **Comments/messages system deferred to M10:** User wanted encrypted per-share messages with
+  audience targeting and revocation. Scope grew to a comments system — parked for M10.
+- **drand timelock encryption noted for future:** BLS12-381 pairing operations not in Android
+  standard crypto stack; requires dedicated milestone.
+- **Rotation save must complete before sharing:** Share API re-reads upload from DB. If rotation
+  save is still in flight when share fires, recipient gets old rotation. Fixed by blocking back
+  navigation while save is in flight.
+
+### Deployment
+Server `heirlooms-server-00003-gxp` (v0.45.2 dedup guard). Web `heirlooms-web-00008-qcc` (v0.45.5).
+APK v0.45.1–v0.45.4 installed on Bret's Samsung A02, wighty's TCL T517D, Sadaar's Fire OS tablet.

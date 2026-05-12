@@ -24,7 +24,9 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.45.0 (11 May 2026) — M9: friends, item sharing, Android plot management.
+- Current version: v0.45.5 (12 May 2026) — M9 bug fix iteration 1: shared item decryption
+  (Android + web), rotation copy on share, re-sharing with correct key, dedup guard,
+  invite QR scan, web sharing key load. First human tester (Wighty) onboarded.
 - Next milestone: M10 (shared plots) — to be briefed.
   v0.36.0 = Preview clips, 1 MiB chunks, parallel prefetch, download button (server + web + Android).
   v0.35.0 = Web encrypted video playback + MSE streaming (web only).
@@ -101,8 +103,10 @@ the pre-launch period.
 - Swagger UI confirmed at https://api.heirlooms.digital/docs/index.html
 - heirlooms.com: Currently parked on venture.com. Worth monitoring
 - License: Deliberately deferred
-- **First human tester onboarding pending.** Tester has an older Android phone. Onboarding
-  and full M9 feature testing planned for the next session.
+- **First human tester (Wighty) onboarded 12 May 2026.** TCL T517D, Android 15. Friendship
+  with Bret confirmed. Sharing both directions tested. Sadaar (Fire OS tablet) also tested as
+  a share recipient. Remaining M9 test items: rotation preserved on share (partially fixed),
+  3 of 4 shared web thumbnails still showing fallback (wrappedThumbnailDek format TBD).
 
 ---
 

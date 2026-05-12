@@ -107,6 +107,33 @@ Three Gradle subprojects under `/Users/bac/IdeaProjects/Heirlooms/`:
   `ContextCompat.checkSelfPermission` in `launchCamera()` + a `cameraPermissionLauncher`
   (`RequestPermission`) before launching any camera intent.
 
+- **Shared item decryption — always check `dekFormat` before unwrapping (v0.45.1–v0.45.3):**
+  Any code path that unwraps a DEK must check `dekFormat` (or `thumbnailDekFormat`) first.
+  If it is `ALG_P256_ECDH_HKDF_V1`, use `unwrapWithSharingKey` with the session's sharing
+  private key. If it is anything else, use `unwrapDekWithMasterKey`. This applies to:
+  Android: `PhotoDetailViewModel` (full image + download), `HeirloomsImage` (thumbnail),
+  `ShareSheet` (re-sharing a received item). Web: `UploadThumb` (thumbnail),
+  `PhotoDetailPage` (full image + download). Forgetting this causes silent decryption failure
+  (wrong key type → AES-GCM auth failure caught by the catch block, showing the fallback).
+
+- **Web sharing key API path is `/api/keys/sharing/me`, not `/api/sharing/me` (v0.45.5):**
+  Sharing key routes live in `keysContract` which is bound to `/api/keys`. The correct path
+  for the web to fetch Bret's own sharing keypair (to decrypt received shared items) is
+  `GET /api/keys/sharing/me`. Load this at vault unlock time, await it before `onUnlocked()`,
+  so thumbnails start loading with the key already available.
+
+- **Rotation save race: block back navigation while save is in flight (v0.45.4):**
+  `rotateAndSave()` fires an async save. If the user navigates back and shares before the
+  save API call completes, the share reads the old rotation from the DB. Fix: set
+  `rotateInFlight = true` at the start of `rotateAndSave`, false at the end, and make
+  `navigateBack()` bail early if `rotateInFlight` is true.
+
+- **`gcloud run deploy` without full flags loses env vars (v0.45.x):**
+  Passing only `--image` to `gcloud run deploy` on a service that has env vars and Cloud SQL
+  connections will create a revision that starts without those vars — the container will fail
+  to connect to the DB. Always pass the full flag set: `--set-env-vars`, `--set-secrets`,
+  `--add-cloudsql-instances`, `--service-account`. The correct command is in PA_NOTES.md.
+
 - **mp4box v2 (npm `mp4box ^2.3.0`) pitfalls (v0.35.0):**
   - No `default` export — import as `const MP4Box = await import('mp4box')`, then `MP4Box.createFile()`.
   - `initializeSegmentation()` returns `{ tracks, buffer }` (one combined init segment), NOT an iterable array.
