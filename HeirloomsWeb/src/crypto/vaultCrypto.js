@@ -1,9 +1,10 @@
 import { argon2id } from '@noble/hashes/argon2'
 
-export const ALG_AES256GCM_V1         = 'aes256gcm-v1'
-export const ALG_MASTER_AES256GCM_V1  = 'master-aes256gcm-v1'
+export const ALG_AES256GCM_V1          = 'aes256gcm-v1'
+export const ALG_MASTER_AES256GCM_V1   = 'master-aes256gcm-v1'
+export const ALG_PLOT_AES256GCM_V1     = 'plot-aes256gcm-v1'
 export const ALG_ARGON2ID_AES256GCM_V1 = 'argon2id-aes256gcm-v1'
-export const ALG_P256_ECDH_HKDF_V1    = 'p256-ecdh-hkdf-aes256gcm-v1'
+export const ALG_P256_ECDH_HKDF_V1     = 'p256-ecdh-hkdf-aes256gcm-v1'
 
 export function generateMasterKey() {
   const b = new Uint8Array(32); crypto.getRandomValues(b); return b
@@ -240,6 +241,39 @@ export async function importSharingPrivkey(pkcs8Bytes) {
 
 export async function unwrapWithSharingKey(envelope, sharingPrivkey) {
   return unwrapMasterKeyForDevice(envelope, sharingPrivkey)
+}
+
+// ---- Plot key (M10 E3) ------------------------------------------------------
+
+export function generatePlotKey() {
+  const b = new Uint8Array(32)
+  crypto.getRandomValues(b)
+  return b
+}
+
+// Wrap a raw plot key under a member's sharing pubkey (SPKI bytes).
+// Returns { wrappedKey: Uint8Array, format: 'p256-ecdh-hkdf-aes256gcm-v1' }
+export async function wrapPlotKeyForMember(plotKeyBytes, memberSharingPubkeySpki) {
+  const wrapped = await wrapMasterKeyForDevice(plotKeyBytes, memberSharingPubkeySpki)
+  return { wrappedKey: wrapped, format: ALG_P256_ECDH_HKDF_V1 }
+}
+
+// Unwrap a wrapped plot key using own sharing private key.
+// Returns raw 32-byte plot key.
+export async function unwrapPlotKey(wrappedPlotKey, sharingPrivkey) {
+  return unwrapWithSharingKey(wrappedPlotKey, sharingPrivkey)
+}
+
+// Wrap a DEK under a plot key (AES-256-GCM symmetric wrap).
+// Returns { wrappedDek: Uint8Array, format: 'plot-aes256gcm-v1' }
+export async function wrapDekWithPlotKey(dekBytes, plotKeyBytes) {
+  const wrapped = await encryptSymmetric(ALG_PLOT_AES256GCM_V1, plotKeyBytes, dekBytes)
+  return { wrappedDek: wrapped, format: ALG_PLOT_AES256GCM_V1 }
+}
+
+// Unwrap a DEK that was wrapped with a plot key.
+export async function unwrapDekWithPlotKey(wrappedDek, plotKeyBytes) {
+  return decryptSymmetric(wrappedDek, plotKeyBytes)
 }
 
 export function toB64(bytes) {

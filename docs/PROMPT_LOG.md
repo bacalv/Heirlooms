@@ -2,6 +2,50 @@
 
 ---
 
+## Session — 12 May 2026 — M10 E3: Shared plots + E2EE (v0.49.0)
+
+Server + Web. No Android changes.
+
+**V25b migration (`V25b__plot_members_invites.sql`).** `plot_members` (PK: `plot_id + user_id`; columns: role TEXT CHECK('owner'|'member'), `wrapped_plot_key BYTEA NULL`, `plot_key_format TEXT NULL`, `joined_at`) and `plot_invites` (id, plot_id, created_by, token UNIQUE, `recipient_user_id NULL`, `recipient_pubkey NULL`, used_by, used_at, expires_at). Both cascade-delete when the plot is deleted. `idx_plot_members_user` and `idx_plot_invites_token WHERE used_at IS NULL` indexes.
+
+**`AlgorithmIds.PLOT_AES256GCM_V1`** = `"plot-aes256gcm-v1"` added to `SYMMETRIC` set in `EnvelopeFormat.kt`. Used as the `item_dek_format` / `thumbnail_dek_format` for items in shared plots.
+
+**`createPlot` updated** — now accepts `wrappedPlotKeyB64` and `plotKeyFormat` optional params. When `visibility == "shared"` and both are provided, inserts `plot_members` row for the owner with `role = 'owner'` in the same transaction.
+
+**`listPlots` updated** — now `DISTINCT` query that includes shared plots where the requesting user has a `plot_members` row (not just owned plots). Garden sidebar shows shared plots the user is a member of.
+
+**`PlotRecord.toPlotRecord()` extracted** as a `ResultSet` extension to avoid duplication across `listPlots`, `getPlotById`, `getPlotByIdForUser`.
+
+**`isMember` / `isMemberConn`** — new DB helpers for membership checks. Used in `getPlotByIdForUser`, `getPlotItems`, `addPlotItem`, `approveStagingItem`, `listMembers`, `addMember`, `createInvite`, `listPendingInvites`, `confirmInvite`.
+
+**`getPlotItems` signature change** — now returns `List<PlotItemWithUpload>` (new data class) instead of `List<UploadRecord>`. Includes `addedBy`, `wrappedItemDek`, `itemDekFormat`, `wrappedThumbnailDek`, `thumbnailDekFormat` alongside the upload. `FlowHandler.kt` adds a local `PlotItemWithUpload.toJson()` that embeds DEK fields.
+
+**`addPlotItem` updated** — checks membership for shared plots (not just ownership). Accepts optional DEK byte arrays + formats. For shared plots, requires DEK fields (handler enforces, DB stores).
+
+**`approveStagingItem` updated** — checks membership for shared plots. Accepts and stores DEK fields in `plot_items`. Handler reads DEK fields from request body and returns 400 if missing on a shared plot.
+
+**`SharedPlotHandler.kt` (new)** — `sharedPlotRoutes`: GET plot-key, GET/POST members, POST invites, GET join-info, POST join, GET members/pending, POST members/pending/:inviteId/confirm. All inner handlers extracted to named functions (per SE_NOTES non-local return pattern). `confirmInvite` uses a `RETURNING` clause to get the recipient_user_id atomically.
+
+**`friendships` check in `addMember`** — uses `LEAST/GREATEST` pattern (same as V23 schema constraint) to canonicalize pair ordering.
+
+**`redeemInvite`** — uses `UPDATE ... RETURNING` to atomically update recipient pubkey and retrieve the invite ID + inviter display name. Checks `isMemberConn` before storing to prevent duplicate redemptions.
+
+**Invite link design decision** — chose the 2-step async flow (recipient stores pubkey; inviter confirms) over requiring the inviter to be online at redeem time. Limitation: inviter must check "pending joins" and confirm. Fully async key delivery deferred to M11+.
+
+**Web — `vaultCrypto.js`** — added: `ALG_PLOT_AES256GCM_V1`, `generatePlotKey()`, `wrapPlotKeyForMember(plotKeyBytes, spkiBytes)`, `unwrapPlotKey(wrapped, sharingPrivkey)`, `wrapDekWithPlotKey(dek, plotKeyBytes)`, `unwrapDekWithPlotKey(wrapped, plotKeyBytes)`. Plot key wrapping reuses `wrapMasterKeyForDevice` (ECDH-HKDF-AES-GCM); unwrapping reuses `unwrapWithSharingKey`.
+
+**Web — `vaultSession.js`** — `_plotKeys: Map<plotId, Uint8Array>` added. `setPlotKey`, `getPlotKey` exports. `lock()` clears the map.
+
+**Web — `InviteMemberModal.jsx` (new)** — Two-tab modal: Friends (fetch friend list, wrap plot key via `wrapPlotKeyForMember`, post to `/api/plots/:id/members`) and Invite link (generate token, show copyable `https://heirlooms.digital/plots/join?token=...` link with note about async confirmation).
+
+**Web — `PlotJoinPage.jsx` (new)** — Route `/plots/join?token=...`. Fetches join-info on mount, shows plot name + inviter, calls `POST /api/plots/join` with own sharing pubkey from `/api/keys/sharing/me`. Shows "pending" state after submission.
+
+**Web — `GardenPage.jsx` updated** — imports `generatePlotKey`, `wrapPlotKeyForMember`, `InviteMemberModal`. `+ Shared plot` button opens inline BrandModal: generates plot key, wraps to own sharing pubkey (fetches `/api/keys/sharing/me`), posts with `visibility:'shared'`. `PlotGearMenu` gains `onManageMembers` prop; shows "Manage members" for shared plots. `SortablePlotRow` gains `onManageMembers` prop; shows `shared` badge. `manageMembersPlot` state drives `InviteMemberModal`. `showNewSharedPlot` + `handleCreateSharedPlot` state/handler.
+
+**Tests** — 3 V25b `SchemaMigrationTest` canaries. `SharedPlotApiTest.kt` (17 integration tests): creation, plot-key 200/403/404, members list, items with DEK required/allowed, staging approve DEK required, invite token, join-info, access control.
+
+---
+
 ## Session — 12 May 2026 — M10 E2: Flows + staging (v0.48.0)
 
 Server + Web. No Android changes.

@@ -166,6 +166,28 @@ Three Gradle subprojects under `/Users/bac/IdeaProjects/Heirlooms/`:
   both paths, awaited before `setVaultUnlocked(true)`. Pattern: any new auto-unlock path
   in `App.jsx` MUST call `loadSharingKey` before marking the vault as unlocked.
 
+- **`plot-aes256gcm-v1` envelope format (v0.49.0):**
+  Per-plot group key wraps item DEKs symmetrically. The envelope layout is identical to
+  `master-aes256gcm-v1` — same `encryptSymmetric` / `decryptSymmetric` path, just keyed by
+  the plot key rather than the master key. The plot key itself is wrapped asymmetrically using
+  `p256-ecdh-hkdf-aes256gcm-v1` (same as device key wrapping). `wrapDekWithPlotKey` /
+  `unwrapDekWithPlotKey` in `vaultCrypto.js` handle the symmetric layer.
+  Any code path that unwraps a `plot_items.wrapped_item_dek` must check `item_dek_format`:
+  if `plot-aes256gcm-v1`, use `unwrapDekWithPlotKey`; if anything else, use the existing DEK
+  unwrap path. Same pattern as the `dekFormat` check for shared uploads (SE_NOTES v0.45.1–v0.45.3).
+
+- **Invite link async join — inviter must confirm (v0.49.0 M10 constraint):**
+  Invite link redemption is a 2-step flow: recipient stores their sharing pubkey on the invite,
+  inviter wraps the plot key and calls the confirm endpoint. The inviter must check
+  `GET /api/plots/:id/members/pending` to see waiting joins. Fully async key delivery
+  (no inviter action needed) is an M11+ concern.
+
+- **`LEAST/GREATEST` pattern for friendship pair ordering (v0.49.0):**
+  The `friendships` table has a CHECK constraint `user_id_1 < user_id_2` (string-lexicographic order
+  per SE_NOTES v0.45.0 UUID comparison note). Queries must canonicalize the pair:
+  `WHERE user_id_1 = LEAST(?, ?) AND user_id_2 = GREATEST(?, ?)` with the same two UUIDs
+  repeated in both positions. See `addMember` in `Database.kt`.
+
 - **Literal path segments consume `_: String` params in http4k contract lambdas (v0.48.0):**
   When a contract path has a mix of UUID params and literal string segments, the two-level lambda
   must declare each literal segment as `_: String` (or `_s1: String, _s2: String` when more than

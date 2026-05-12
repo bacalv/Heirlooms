@@ -178,11 +178,30 @@ private fun approveStagingRoute(database: Database): ContractRoute {
 }
 
 private fun handleApproveStagingItem(plotId: UUID, uploadId: UUID, request: Request, database: Database): Response {
-    val sourceFlowId = try {
-        flowMapper.readTree(request.bodyString())?.get("sourceFlowId")?.asText()
-            ?.let { UUID.fromString(it) }
-    } catch (_: Exception) { null }
-    return when (database.approveStagingItem(plotId, uploadId, sourceFlowId, request.authUserId())) {
+    val node = try { flowMapper.readTree(request.bodyString()) } catch (_: Exception) { null }
+    val sourceFlowId = try { node?.get("sourceFlowId")?.asText()?.let { UUID.fromString(it) } } catch (_: Exception) { null }
+
+    val plot = database.getPlotById(plotId)
+    var dekBytes: ByteArray? = null
+    var dekFormat: String? = null
+    var thumbBytes: ByteArray? = null
+    var thumbFormat: String? = null
+
+    if (plot?.visibility == "shared") {
+        val wrappedItemDek = node?.get("wrappedItemDek")?.asText()
+            ?: return Response(BAD_REQUEST).body("wrappedItemDek required for shared plots")
+        dekFormat = node.get("itemDekFormat")?.asText()
+            ?: return Response(BAD_REQUEST).body("itemDekFormat required for shared plots")
+        dekBytes = try { java.util.Base64.getDecoder().decode(wrappedItemDek) }
+            catch (_: Exception) { return Response(BAD_REQUEST).body("wrappedItemDek is not valid base64") }
+        val wrappedThumb = node.get("wrappedThumbnailDek")?.asText()
+        thumbFormat = node.get("thumbnailDekFormat")?.asText()
+        thumbBytes = wrappedThumb?.let {
+            try { java.util.Base64.getDecoder().decode(it) } catch (_: Exception) { null }
+        }
+    }
+
+    return when (database.approveStagingItem(plotId, uploadId, sourceFlowId, request.authUserId(), dekBytes, dekFormat, thumbBytes, thumbFormat)) {
         Database.ApproveResult.Success         -> Response(NO_CONTENT)
         Database.ApproveResult.AlreadyApproved -> Response(CONFLICT).body("Item is already in the collection")
         Database.ApproveResult.NotFound        -> Response(NOT_FOUND)
@@ -254,6 +273,17 @@ private fun getPlotItemsRoute(database: Database): ContractRoute {
     }
 }
 
+private fun PlotItemWithUpload.toJson(): String {
+    val factory = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance
+    val node = flowMapper.readTree(upload.toJson()).deepCopy<com.fasterxml.jackson.databind.node.ObjectNode>()
+    node.put("added_by", addedBy.toString())
+    if (wrappedItemDek != null) node.put("wrapped_item_dek", java.util.Base64.getEncoder().encodeToString(wrappedItemDek))
+    if (itemDekFormat != null) node.put("item_dek_format", itemDekFormat)
+    if (wrappedThumbnailDek != null) node.put("wrapped_thumbnail_dek", java.util.Base64.getEncoder().encodeToString(wrappedThumbnailDek))
+    if (thumbnailDekFormat != null) node.put("thumbnail_dek_format", thumbnailDekFormat)
+    return node.toString()
+}
+
 private fun addPlotItemRoute(database: Database): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id / "items" meta {
@@ -270,6 +300,28 @@ private fun handleAddPlotItem(plotId: UUID, request: Request, database: Database
         ?: return Response(BAD_REQUEST).body("uploadId is required")
     val uploadId = try { UUID.fromString(uploadIdStr) }
         catch (_: Exception) { return Response(BAD_REQUEST).body("uploadId is not a valid UUID") }
+
+    val plot = database.getPlotById(plotId)
+    if (plot?.visibility == "shared") {
+        val wrappedItemDek = node.get("wrappedItemDek")?.asText()
+            ?: return Response(BAD_REQUEST).body("wrappedItemDek required for shared plots")
+        val itemDekFormat = node.get("itemDekFormat")?.asText()
+            ?: return Response(BAD_REQUEST).body("itemDekFormat required for shared plots")
+        val wrappedThumbnailDek = node.get("wrappedThumbnailDek")?.asText()
+        val thumbnailDekFormat = node.get("thumbnailDekFormat")?.asText()
+        val dekBytes = try { java.util.Base64.getDecoder().decode(wrappedItemDek) }
+            catch (_: Exception) { return Response(BAD_REQUEST).body("wrappedItemDek is not valid base64") }
+        val thumbBytes = wrappedThumbnailDek?.let {
+            try { java.util.Base64.getDecoder().decode(it) } catch (_: Exception) { null }
+        }
+        return when (database.addPlotItem(plotId, uploadId, request.authUserId(), dekBytes, itemDekFormat, thumbBytes, thumbnailDekFormat)) {
+            Database.AddItemResult.Success        -> Response(CREATED)
+            Database.AddItemResult.AlreadyPresent -> Response(CONFLICT).body("Item already in collection")
+            Database.AddItemResult.PlotNotOwned   -> Response(NOT_FOUND)
+            Database.AddItemResult.UploadNotOwned -> Response(NOT_FOUND)
+            is Database.AddItemResult.Error       -> Response(BAD_REQUEST).body("Cannot add item")
+        }
+    }
 
     return when (database.addPlotItem(plotId, uploadId, request.authUserId())) {
         Database.AddItemResult.Success        -> Response(CREATED)

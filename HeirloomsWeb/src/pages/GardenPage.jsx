@@ -24,11 +24,13 @@ import { API_URL, apiFetch, initiateEncryptedUpload, initiateResumableUpload, pu
 import { ShareModal } from '../components/ShareModal'
 import { WorkingDots } from '../brand/WorkingDots'
 import { ConfirmDialog } from '../components/ConfirmDialog'
-import { getMasterKey } from '../crypto/vaultSession'
+import { getMasterKey, getSharingPrivkey } from '../crypto/vaultSession'
 import {
   generateDek, encryptSymmetric, wrapDekUnderMasterKey, ALG_AES256GCM_V1, ALG_MASTER_AES256GCM_V1,
   decryptSymmetric, unwrapDekWithMasterKey, fromB64, toB64, aesGcmEncryptWithAad,
+  generatePlotKey, wrapPlotKeyForMember,
 } from '../crypto/vaultCrypto'
+import { InviteMemberModal } from '../components/InviteMemberModal'
 import { parse as parseExif } from 'exifr'
 
 const JUST_ARRIVED_SENTINEL = '__just_arrived__'
@@ -331,7 +333,7 @@ function DragHandleIcon() {
 
 // ---- Gear menu for user-defined plots --------------------------------------
 
-function PlotGearMenu({ plot, isFirst, isLast, onEdit, onDelete, onMoveUp, onMoveDown }) {
+function PlotGearMenu({ plot, isFirst, isLast, onEdit, onDelete, onMoveUp, onMoveDown, onManageMembers }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -353,8 +355,14 @@ function PlotGearMenu({ plot, isFirst, isLast, onEdit, onDelete, onMoveUp, onMov
       </button>
       {open && (
         <div className="absolute right-0 top-7 z-20 w-36 bg-white border border-forest-15 rounded shadow-md text-sm py-1">
+          {plot.visibility === 'shared' && onManageMembers && (
+            <button className="w-full text-left px-3 py-1.5 hover:bg-forest-04 text-forest"
+              onClick={() => { setOpen(false); onManageMembers() }}>Manage members</button>
+          )}
+          {plot.visibility !== 'shared' && (
           <button className="w-full text-left px-3 py-1.5 hover:bg-forest-04 text-forest"
             onClick={() => { setOpen(false); onEdit() }}>Edit</button>
+          )}
           <button className="w-full text-left px-3 py-1.5 hover:bg-forest-04 text-forest disabled:opacity-40"
             disabled={isFirst}
             onClick={() => { setOpen(false); onMoveUp() }}>Move up</button>
@@ -536,7 +544,7 @@ function SystemPlotRow({ plot, apiKey, onTagClick, onVideoPlay, onImagePreview, 
 
 // ---- Sortable user plot row ------------------------------------------------
 
-function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMoveUp, onMoveDown, onTagClick, onVideoPlay, onImagePreview, onCompostClick, onShareClick, refreshKey, excludeIds }) {
+function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMoveUp, onMoveDown, onManageMembers, onTagClick, onVideoPlay, onImagePreview, onCompostClick, onShareClick, refreshKey, excludeIds }) {
   const {
     attributes,
     listeners,
@@ -568,6 +576,9 @@ function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMo
           {!plot.criteria && <span title="Collection plot" className="text-[10px] text-text-muted font-normal border border-forest-15 rounded px-1">collection</span>}
           {plot.name}
         </h2>
+        {plot.visibility === 'shared' && (
+          <span title="Shared plot" className="text-[10px] text-text-muted font-normal border border-forest-15 rounded px-1">shared</span>
+        )}
         <PlotGearMenu
           plot={plot}
           isFirst={isFirst}
@@ -576,6 +587,7 @@ function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMo
           onDelete={onDelete}
           onMoveUp={onMoveUp}
           onMoveDown={onMoveDown}
+          onManageMembers={onManageMembers}
         />
       </div>
       <PlotItemsRow plot={plot} apiKey={apiKey}
@@ -918,6 +930,11 @@ export function GardenPage() {
   const [justArrivedExclude, setJustArrivedExclude] = useState(new Set())
   const [uploadStatus, setUploadStatus] = useState('')   // '', 'Encrypting…', 'Uploading…', 'Done'
   const [uploadError, setUploadError] = useState(null)
+  const [manageMembersPlot, setManageMembersPlot] = useState(null)
+  const [showNewSharedPlot, setShowNewSharedPlot] = useState(false)
+  const [sharedPlotName, setSharedPlotName] = useState('')
+  const [creatingShared, setCreatingShared] = useState(false)
+  const [sharedPlotError, setSharedPlotError] = useState(null)
   const fileInputRef = useRef(null)
 
   const sensors = useSensors(
@@ -1048,6 +1065,48 @@ export function GardenPage() {
     }
   }
 
+  async function handleCreateSharedPlot() {
+    if (!sharedPlotName.trim()) return
+    setCreatingShared(true); setSharedPlotError(null)
+    try {
+      const sharingPrivkey = getSharingPrivkey()
+      if (!sharingPrivkey) throw new Error('Sharing key not loaded — try logging in again')
+
+      // Generate plot key
+      const plotKeyBytes = generatePlotKey()
+
+      // Fetch own sharing pubkey to wrap the plot key for ourselves
+      const spkResp = await apiFetch('/api/keys/sharing/me', apiKey)
+      if (!spkResp.ok) throw new Error('Could not fetch own sharing pubkey')
+      const { pubkey: ownPubkeyB64 } = await spkResp.json()
+      const ownPubkey = fromB64(ownPubkeyB64)
+
+      const { wrappedKey, format } = await wrapPlotKeyForMember(plotKeyBytes, ownPubkey)
+
+      const r = await apiFetch('/api/plots', apiKey, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: sharedPlotName.trim(),
+          visibility: 'shared',
+          wrappedPlotKey: toB64(wrappedKey),
+          plotKeyFormat: format,
+        }),
+      })
+      if (!r.ok) {
+        const msg = await r.text()
+        throw new Error(msg || `HTTP ${r.status}`)
+      }
+      const newPlot = await r.json()
+      setPlots((prev) => [...prev, newPlot])
+      setShowNewSharedPlot(false)
+      setSharedPlotName('')
+    } catch (e) {
+      setSharedPlotError(e.message)
+    } finally {
+      setCreatingShared(false)
+    }
+  }
+
   async function handleDeletePlot(plot) {
     try {
       const r = await apiFetch(`/api/plots/${plot.id}`, apiKey, { method: 'DELETE' })
@@ -1133,6 +1192,7 @@ export function GardenPage() {
                   onDelete={() => setConfirmDelete(plot)}
                   onMoveUp={() => handleMoveUp(plot.id)}
                   onMoveDown={() => handleMoveDown(plot.id)}
+                  onManageMembers={() => setManageMembersPlot(plot)}
                   onTagClick={setQuickTagUpload}
                   onVideoPlay={setVideoUpload}
                   onImagePreview={setPreviewUpload}
@@ -1145,12 +1205,20 @@ export function GardenPage() {
           </SortableContext>
         </DndContext>
 
-        <button
-          onClick={() => navigate('/explore?new_plot=true')}
-          className="text-sm font-sans text-forest border border-forest-25 rounded-button px-3 py-1.5 hover:bg-forest-04 transition-colors"
-        >
-          + Add a plot
-        </button>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => navigate('/explore?new_plot=true')}
+            className="text-sm font-sans text-forest border border-forest-25 rounded-button px-3 py-1.5 hover:bg-forest-04 transition-colors"
+          >
+            + Add a plot
+          </button>
+          <button
+            onClick={() => setShowNewSharedPlot(true)}
+            className="text-sm font-sans text-forest border border-forest-25 rounded-button px-3 py-1.5 hover:bg-forest-04 transition-colors"
+          >
+            + Shared plot
+          </button>
+        </div>
       </div>
 
       <div className="mt-12 flex flex-col gap-2">
@@ -1224,6 +1292,42 @@ export function GardenPage() {
         >
           {compostError && <p className="text-xs text-earth -mt-1">{compostError}</p>}
         </ConfirmDialog>
+      )}
+
+      {showNewSharedPlot && (
+        <BrandModal onClose={() => { setShowNewSharedPlot(false); setSharedPlotName('') }} width="max-w-sm">
+          <h2 className="font-serif italic text-forest text-lg mb-4">New shared plot</h2>
+          <p className="text-sm text-text-muted font-sans mb-3">
+            A shared plot has a per-plot encryption key. Invite members after creation — they'll each get a wrapped copy of the key.
+          </p>
+          <div className="space-y-3">
+            <input type="text" value={sharedPlotName} onChange={(e) => setSharedPlotName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCreateSharedPlot()}
+              placeholder="Plot name…" maxLength={100} autoFocus
+              className="w-full px-3 py-1.5 border border-forest-25 rounded text-forest bg-parchment text-sm focus:outline-none focus:border-forest"
+            />
+            {sharedPlotError && <p className="text-earth text-xs">{sharedPlotError}</p>}
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => { setShowNewSharedPlot(false); setSharedPlotName('') }}
+                className="px-3 py-1.5 text-text-muted hover:text-forest text-sm transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleCreateSharedPlot} disabled={creatingShared || !sharedPlotName.trim()}
+                className="px-4 py-1.5 bg-forest text-parchment rounded-button text-sm hover:opacity-90 transition-opacity disabled:opacity-40">
+                {creatingShared ? '…' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </BrandModal>
+      )}
+
+      {manageMembersPlot && (
+        <InviteMemberModal
+          plotId={manageMembersPlot.id}
+          apiKey={apiKey}
+          onClose={() => setManageMembersPlot(null)}
+          onMemberAdded={() => setPlotRefreshKey((k) => k + 1)}
+        />
       )}
     </main>
   )

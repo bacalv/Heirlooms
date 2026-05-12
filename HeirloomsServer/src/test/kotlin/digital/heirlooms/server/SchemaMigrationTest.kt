@@ -267,6 +267,39 @@ class SchemaMigrationTest {
         assertEquals(1, n, "plot_staging_decisions should exist after V25a")
     }
 
+    // ---- V25b plot_members / plot_invites canary tests ----------------------
+
+    @Test
+    fun `V25b plot_members table exists with correct columns`() {
+        val n = count("""
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_name = 'plot_members'
+              AND column_name IN ('plot_id','user_id','role','wrapped_plot_key','plot_key_format','joined_at')
+        """.trimIndent())
+        assertEquals(6, n, "plot_members should have 6 expected columns after V25b")
+    }
+
+    @Test
+    fun `V25b plot_invites table exists with correct columns`() {
+        val n = count("""
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_name = 'plot_invites'
+              AND column_name IN ('id','plot_id','created_by','token','recipient_user_id','recipient_pubkey','used_by','used_at','expires_at','created_at')
+        """.trimIndent())
+        assertEquals(10, n, "plot_invites should have 10 expected columns after V25b")
+    }
+
+    @Test
+    fun `V25b plot_members cascade delete removes members when plot deleted`() {
+        val userId = FOUNDING_USER_UUID
+        val plotId = java.util.UUID.randomUUID()
+        exec("INSERT INTO plots (id, owner_user_id, name, show_in_garden, visibility) VALUES ('$plotId', '$userId', 'v25b-cascade', true, 'shared')")
+        exec("INSERT INTO plot_members (plot_id, user_id, role) VALUES ('$plotId', '$userId', 'owner')")
+        exec("DELETE FROM plots WHERE id = '$plotId'")
+        val n = count("SELECT COUNT(*) FROM plot_members WHERE plot_id = '$plotId'")
+        assertEquals(0, n, "plot_members should cascade-delete when plot is deleted")
+    }
+
     @Test
     fun `V25a deleting a flow sets source_flow_id to NULL on plot_items`() {
         val userId = FOUNDING_USER_UUID

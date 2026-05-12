@@ -5,10 +5,11 @@ import java.nio.charset.StandardCharsets
 object AlgorithmIds {
     const val AES256GCM_V1                 = "aes256gcm-v1"
     const val MASTER_AES256GCM_V1          = "master-aes256gcm-v1"
+    const val PLOT_AES256GCM_V1            = "plot-aes256gcm-v1"
     const val P256_ECDH_HKDF_AES256GCM_V1 = "p256-ecdh-hkdf-aes256gcm-v1"
     const val ARGON2ID_AES256GCM_V1        = "argon2id-aes256gcm-v1"
 
-    val SYMMETRIC  = setOf(AES256GCM_V1, MASTER_AES256GCM_V1, ARGON2ID_AES256GCM_V1)
+    val SYMMETRIC  = setOf(AES256GCM_V1, MASTER_AES256GCM_V1, PLOT_AES256GCM_V1, ARGON2ID_AES256GCM_V1)
     val ASYMMETRIC = setOf(P256_ECDH_HKDF_AES256GCM_V1)
     val ALL        = SYMMETRIC + ASYMMETRIC
 }

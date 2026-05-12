@@ -2,6 +2,27 @@
 
 ---
 
+## v0.49.0 — M10 E3: Shared plots + E2EE (12 May 2026)
+
+Server + Web. No Android (E4).
+
+- **V25b migration** — `plot_members` (plot_id + user_id PK, role, `wrapped_plot_key BYTEA`, `plot_key_format`) and `plot_invites` (token, `recipient_user_id`, `recipient_pubkey` for async join) tables.
+- **`PLOT_AES256GCM_V1`** — new algorithm ID registered in `AlgorithmIds.SYMMETRIC`. Used for DEK re-wrapping under the per-plot group key.
+- **Shared plot creation** — `POST /api/plots` with `visibility:'shared'` + `wrappedPlotKey` + `plotKeyFormat` inserts the owner's wrapped key into `plot_members`. Client generates 256-bit plot key, wraps it to own sharing pubkey, posts together with the plot.
+- **`GET /api/plots` for members** — `listPlots` now includes shared plots where the user is a member (via `plot_members` join), not just owned plots.
+- **Plot key endpoint** — `GET /api/plots/:id/plot-key` returns the calling user's wrapped plot key. 403 on private plots; 404 if not a member.
+- **Members** — `GET /api/plots/:id/members` (lists with roles), `POST /api/plots/:id/members` (friends path: wraps plot key for friend client-side, posts). Validates friendship via `friendships` table.
+- **Invite link flow (2-step)** — `POST /api/plots/:id/invites` generates 48h token; `GET /api/plots/join-info?token=` returns plot name + inviter; `POST /api/plots/join` stores recipient pubkey on invite; `GET /api/plots/:id/members/pending` shows waiting joins; `POST /api/plots/:id/members/pending/:inviteId/confirm` wraps key + adds to `plot_members`.
+- **DEK re-wrapping for shared plots** — `POST /api/plots/:id/items` and approve staging require `wrappedItemDek`, `itemDekFormat`, `wrappedThumbnailDek`, `thumbnailDekFormat` on shared plots (400 if missing).
+- **`getPlotItems`** returns `PlotItemWithUpload` with DEK fields (`wrapped_item_dek`, `item_dek_format`, `added_by`) alongside the upload record.
+- **Access control** — members can access shared plots. `addPlotItem` / `approveStagingItem` / `listMembers` check `plot_members` membership. Non-member access → 404.
+- **Web crypto** — `generatePlotKey`, `wrapPlotKeyForMember`, `unwrapPlotKey`, `wrapDekWithPlotKey`, `unwrapDekWithPlotKey` in `vaultCrypto.js`. Plot key cache (`Map<plotId, bytes>`) in `vaultSession.js`.
+- **`InviteMemberModal.jsx`** — Friends tab (wraps plot key client-side, posts immediately) + Invite link tab (generates token, shows copyable link).
+- **`PlotJoinPage.jsx`** — `/plots/join` route for invite link redemption. Fetches join-info, shows plot name + inviter, calls `POST /api/plots/join` with own sharing pubkey.
+- **`GardenPage.jsx`** — `+ Shared plot` button with inline creation modal (generates plot key, wraps to own pubkey, posts). "Manage members" gear entry for shared plots (opens `InviteMemberModal`). `shared` badge on plot rows. "Collection" badge removed from shared plots (shown only on private collection plots).
+
+---
+
 ## v0.48.0 — M10 E2: Flows + staging (12 May 2026)
 
 Server + Web. No Android (E4).

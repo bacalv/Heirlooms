@@ -24,11 +24,11 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.48.0 (12 May 2026) — M10 E2: flows + staging. `plot_items`, `flows`,
-  `plot_staging_decisions` tables (V25a). Flow CRUD + staging review endpoints. `FlowsPage`,
-  `StagingPanel`, collection plot badge in Garden. Server + Web only (Android in E4).
+- Current version: v0.49.0 (12 May 2026) — M10 E3: shared plots + E2EE. `plot_members`,
+  `plot_invites` tables (V25b). Per-plot group key, friends invite + async invite-link flow,
+  InviteMemberModal, PlotJoinPage. Server + Web only (Android in E4).
 - Active milestone: M10 (shared plots) — brief at `docs/briefs/M10_brief.md`.
-  E1 ✓ (v0.47.0). E2 ✓ (v0.48.0, not yet deployed). E3 is next (shared plots + E2EE).
+  E1 ✓ (v0.47.0). E2 ✓ (v0.48.0). E3 ✓ (v0.49.0, not yet deployed). E4 is next (Android).
   E3: shared plots + E2EE group key. E4: Android.
   Key decisions: per-plot group key (AES-256-GCM, `plot-aes256gcm-v1`), member roles owner/member,
   invite via friends list (primary) + invite link (fallback), staging flag on flow not plot,

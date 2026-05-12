@@ -58,6 +58,13 @@ private fun createPlotRoute(database: Database): ContractRoute =
             body.error != null -> Response(BAD_REQUEST).body(body.error)
             body.name.isNullOrBlank() -> Response(BAD_REQUEST).body("name is required")
             else -> {
+                val vis = body.visibility ?: "private"
+                if (vis == "shared") {
+                    if (body.wrappedPlotKey.isNullOrBlank())
+                        return@to Response(BAD_REQUEST).body("wrappedPlotKey required for shared plots")
+                    if (body.plotKeyFormat.isNullOrBlank())
+                        return@to Response(BAD_REQUEST).body("plotKeyFormat required for shared plots")
+                }
                 val criteriaJson = body.criteriaNode?.let { validateAndSerializeCriteria(it, request.authUserId(), database) }
                 if (criteriaJson is CriteriaSerializeResult.Error)
                     return@to Response(BAD_REQUEST).body(criteriaJson.message)
@@ -65,7 +72,9 @@ private fun createPlotRoute(database: Database): ContractRoute =
                     name = body.name,
                     criteria = (criteriaJson as? CriteriaSerializeResult.Ok)?.json,
                     showInGarden = body.showInGarden ?: true,
-                    visibility = body.visibility ?: "private",
+                    visibility = vis,
+                    wrappedPlotKeyB64 = body.wrappedPlotKey,
+                    plotKeyFormat = body.plotKeyFormat,
                     userId = request.authUserId(),
                 )
                 Response(CREATED).header("Content-Type", "application/json").body(plot.toJson())
@@ -170,6 +179,8 @@ private data class PlotBodyParsed(
     val criteriaNode: JsonNode?,
     val showInGarden: Boolean?,
     val visibility: String?,
+    val wrappedPlotKey: String?,
+    val plotKeyFormat: String?,
     val error: String?,
 )
 
@@ -181,9 +192,11 @@ private fun parsePlotBody(request: Request): PlotBodyParsed {
         val showInGarden = node?.get("show_in_garden")?.asBoolean()
             ?: node?.get("showInGarden")?.asBoolean()
         val visibility = node?.get("visibility")?.asText()
-        PlotBodyParsed(name, criteriaNode, showInGarden, visibility, null)
+        val wrappedPlotKey = node?.get("wrappedPlotKey")?.asText()
+        val plotKeyFormat = node?.get("plotKeyFormat")?.asText()
+        PlotBodyParsed(name, criteriaNode, showInGarden, visibility, wrappedPlotKey, plotKeyFormat, null)
     } catch (_: Exception) {
-        PlotBodyParsed(null, null, null, null, "Invalid JSON")
+        PlotBodyParsed(null, null, null, null, null, null, "Invalid JSON")
     }
 }
 

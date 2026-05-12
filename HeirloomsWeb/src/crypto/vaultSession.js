@@ -2,6 +2,7 @@ const MEM_MAX = 300
 
 let _masterKey = null
 let _sharingPrivkey = null
+const _plotKeys = new Map() // plotId → raw 32-byte Uint8Array
 
 export const thumbnailCache = new Map()
 
@@ -17,9 +18,18 @@ export function getSharingPrivkey() {
   return _sharingPrivkey
 }
 
+export function setPlotKey(plotId, rawKeyBytes) {
+  _plotKeys.set(plotId, rawKeyBytes)
+}
+
+export function getPlotKey(plotId) {
+  return _plotKeys.get(plotId) ?? null
+}
+
 export function lock() {
   _masterKey = null
   _sharingPrivkey = null
+  _plotKeys.clear()
   thumbnailCache.forEach(url => URL.revokeObjectURL(url))
   thumbnailCache.clear()
 }
