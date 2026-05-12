@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -150,6 +151,18 @@ fun MainNavigation(apiKey: String, onApiKeyReset: () -> Unit, store: digital.hei
         val burgerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val scope = rememberCoroutineScope()
         var showBurger by remember { mutableStateOf(false) }
+        var displayName by remember { mutableStateOf(store.getDisplayName()) }
+
+        // Back-fill display name for users already logged in before v0.45.9.
+        LaunchedEffect(Unit) {
+            if (displayName.isEmpty()) {
+                try {
+                    val me = api.authMe()
+                    store.setDisplayName(me.displayName)
+                    displayName = me.displayName
+                } catch (_: Exception) {}
+            }
+        }
 
         // Observe active uploads so the Burger entry appears only when needed.
         val activeWorkInfos by WorkManager.getInstance(context)
@@ -177,7 +190,7 @@ fun MainNavigation(apiKey: String, onApiKeyReset: () -> Unit, store: digital.hei
                 onDiagnosticsTap = { navController.navigate(Routes.DIAGNOSTICS) },
                 onDevicesAccessTap = { navController.navigate(Routes.DEVICES_ACCESS) },
                 onFriendsTap = { navController.navigate(Routes.FRIENDS) },
-                displayName = store.getDisplayName(),
+                displayName = displayName,
             )
         }
 
