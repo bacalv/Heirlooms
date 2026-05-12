@@ -5,6 +5,7 @@ import { apiFetch } from '../api'
 import { PhotoGrid } from '../components/PhotoGrid'
 import { WorkingDots } from '../brand/WorkingDots'
 import { UploadThumb } from '../components/UploadThumb'
+import { builderStateToCriteria, criteriaToBuilderState, criteriaDescription } from '../components/CriteriaBuilder'
 
 // ---- Multi-tag picker for filter chrome ------------------------------------
 
@@ -117,7 +118,8 @@ function SegmentedControl({ value, onChange, anyLabel = 'Any', yesLabel = 'Yes',
 
 function FilterChrome({ tags, setTags, fromDate, setFromDate, toDate, setToDate,
   inCapsule, setInCapsule, includeComposted, setIncludeComposted,
-  hasLocation, setHasLocation, sort, setSort, onReset, hasActiveFilters }) {
+  hasLocation, setHasLocation, mediaType, setMediaType,
+  isReceived, setIsReceived, sort, setSort, onReset, hasActiveFilters }) {
 
   const [collapsed, setCollapsed] = useState(false)
 
@@ -201,6 +203,33 @@ function FilterChrome({ tags, setTags, fromDate, setFromDate, toDate, setToDate,
             value={hasLocation} onChange={setHasLocation}
             anyLabel="Any" yesLabel="Has location" noLabel="No location"
           />
+        </div>
+
+        {/* Media type */}
+        <div className="flex flex-col gap-0.5">
+          <label className="text-[10px] text-text-muted uppercase tracking-wide">Media type</label>
+          <div className="inline-flex border border-forest-15 rounded overflow-hidden">
+            {[['', 'All'], ['image', 'Photos'], ['video', 'Videos']].map(([val, label]) => (
+              <button key={val} type="button"
+                onClick={() => setMediaType(val || null)}
+                className={`px-2 py-0.5 text-xs transition-colors ${
+                  mediaType === (val || null)
+                    ? 'bg-forest text-parchment'
+                    : 'text-text-muted hover:text-forest hover:bg-forest-04'
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Received */}
+        <div className="flex flex-col gap-0.5 justify-end">
+          <label className="flex items-center gap-1.5 text-xs text-text-muted cursor-pointer select-none">
+            <input type="checkbox" checked={isReceived} onChange={(e) => setIsReceived(e.target.checked)}
+              className="rounded" />
+            Received only
+          </label>
         </div>
 
         {/* Composted toggle */}
@@ -300,6 +329,8 @@ export function ExplorePage() {
   const [inCapsule, setInCapsule] = useState(null)
   const [includeComposted, setIncludeComposted] = useState(false)
   const [hasLocation, setHasLocation] = useState(null)
+  const [mediaType, setMediaType] = useState(null)
+  const [isReceived, setIsReceived] = useState(false)
   const [sort, setSort] = useState('upload_newest')
 
   // Items
@@ -309,20 +340,30 @@ export function ExplorePage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState(null)
 
+  function applyPlotCriteria(plot) {
+    const s = criteriaToBuilderState(plot.criteria)
+    setTags(s.tags)
+    setMediaType(s.mediaType)
+    setFromDate(s.fromDate)
+    setToDate(s.toDate)
+    setHasLocation(s.hasLocation ? true : null)
+    setIsReceived(s.isReceived)
+  }
+
   // Load plot data when entering edit mode
   useEffect(() => {
     if (!editPlotId) { setEditPlot(null); return }
     const fromState = location.state?.plot
     if (fromState?.id === editPlotId) {
       setEditPlot({ id: fromState.id, name: fromState.name })
-      setTags(fromState.tag_criteria ?? [])
+      applyPlotCriteria(fromState)
       return
     }
     apiFetch('/api/plots', apiKey)
       .then((r) => r.ok ? r.json() : [])
       .then((plots) => {
         const p = Array.isArray(plots) ? plots.find((x) => x.id === editPlotId) : null
-        if (p) { setEditPlot({ id: p.id, name: p.name }); setTags(p.tag_criteria ?? []) }
+        if (p) { setEditPlot({ id: p.id, name: p.name }); applyPlotCriteria(p) }
       })
       .catch(() => {})
   }, [editPlotId, apiKey])
@@ -331,13 +372,18 @@ export function ExplorePage() {
     if (showSaveForm) saveNameRef.current?.focus()
   }, [showSaveForm])
 
+  function currentCriteria() {
+    return builderStateToCriteria({ tags, mediaType, fromDate, toDate,
+      hasLocation: hasLocation === true, isReceived })
+  }
+
   async function handleSavePlot() {
     if (!saveName.trim()) return
     setSaving(true); setSaveError(null)
     try {
       const r = await apiFetch('/api/plots', apiKey, {
         method: 'POST',
-        body: JSON.stringify({ name: saveName.trim(), tag_criteria: tags }),
+        body: JSON.stringify({ name: saveName.trim(), criteria: currentCriteria() }),
       })
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
       navigate('/', { state: { plotSaved: saveName.trim() } })
@@ -350,7 +396,7 @@ export function ExplorePage() {
     try {
       const r = await apiFetch(`/api/plots/${editPlot.id}`, apiKey, {
         method: 'PUT',
-        body: JSON.stringify({ tag_criteria: tags }),
+        body: JSON.stringify({ criteria: currentCriteria() }),
       })
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
       navigate('/', { state: { plotSaved: editPlot.name } })
@@ -358,7 +404,7 @@ export function ExplorePage() {
   }
 
   const hasActiveFilters = !!(tags.length > 0 || fromDate || toDate || inCapsule !== null ||
-    includeComposted || hasLocation !== null || sort !== 'upload_newest')
+    includeComposted || hasLocation !== null || mediaType || isReceived || sort !== 'upload_newest')
 
   const buildUrl = useCallback((cursor) => {
     const params = new URLSearchParams({ limit: '50' })
@@ -370,10 +416,12 @@ export function ExplorePage() {
     if (includeComposted) params.set('include_composted', 'true')
     if (hasLocation === true) params.set('has_location', 'true')
     else if (hasLocation === false) params.set('has_location', 'false')
+    if (mediaType) params.set('media_type', mediaType)
+    if (isReceived) params.set('is_received', 'true')
     if (sort !== 'upload_newest') params.set('sort', sort)
     if (cursor) params.set('cursor', cursor)
     return `/api/content/uploads?${params}`
-  }, [tags.join(','), fromDate, toDate, inCapsule, includeComposted, hasLocation, sort])
+  }, [tags.join(','), fromDate, toDate, inCapsule, includeComposted, hasLocation, mediaType, isReceived, sort])
 
   useEffect(() => {
     document.title = 'Explore · Heirlooms'
@@ -408,7 +456,8 @@ export function ExplorePage() {
   function handleReset() {
     setTags([]); setFromDate(''); setToDate('')
     setInCapsule(null); setIncludeComposted(false)
-    setHasLocation(null); setSort('upload_newest')
+    setHasLocation(null); setMediaType(null); setIsReceived(false)
+    setSort('upload_newest')
   }
 
   return (
@@ -420,7 +469,7 @@ export function ExplorePage() {
         <div className="mb-4 flex items-center gap-3 px-4 py-2.5 bg-forest-08 border border-forest-25 rounded-card text-sm">
           <span className="text-forest font-sans flex-1">
             Editing <span className="font-medium">"{editPlot.name}"</span>
-            {tags.length > 0 ? <span className="text-text-muted"> — tags: {tags.join(', ')}</span> : <span className="text-text-muted"> — no tags set</span>}
+            <span className="text-text-muted"> — {criteriaDescription(currentCriteria())}</span>
           </span>
           {saveError && <span className="text-earth text-xs">{saveError}</span>}
           <button onClick={handleUpdatePlot} disabled={saving}
@@ -437,7 +486,7 @@ export function ExplorePage() {
       {/* New-plot hint */}
       {newPlotMode && !editPlot && (
         <div className="mb-4 px-4 py-2.5 bg-forest-04 border border-forest-15 rounded-card text-sm text-text-muted font-sans">
-          Apply a <span className="font-medium text-forest">Tag</span> filter below, then click <span className="font-medium text-forest">Save as plot</span> when the results look right.
+          Apply filters below, then click <span className="font-medium text-forest">Save as plot</span> when the results look right.
         </div>
       )}
 
@@ -448,19 +497,18 @@ export function ExplorePage() {
         inCapsule={inCapsule} setInCapsule={setInCapsule}
         includeComposted={includeComposted} setIncludeComposted={setIncludeComposted}
         hasLocation={hasLocation} setHasLocation={setHasLocation}
+        mediaType={mediaType} setMediaType={setMediaType}
+        isReceived={isReceived} setIsReceived={setIsReceived}
         sort={sort} setSort={setSort}
         onReset={handleReset}
         hasActiveFilters={hasActiveFilters}
       />
 
-      {/* Save-as-plot bar (not in edit mode, tag filter active) */}
-      {!editPlot && tags.length > 0 && !showSaveForm && (
+      {/* Save-as-plot bar (not in edit mode, any filter active) */}
+      {!editPlot && hasActiveFilters && !showSaveForm && (
         <div className="mb-4 flex items-center gap-3 px-4 py-2 bg-forest-04 border border-forest-15 rounded-card text-sm">
           <span className="text-text-muted font-sans flex-1">
-            {tags.length === 1
-              ? <span>Tag: <span className="text-forest font-medium">{tags[0]}</span></span>
-              : <span>Tags: {tags.map((t, i) => <span key={t}><span className="text-forest font-medium">{t}</span>{i < tags.length - 1 ? ', ' : ''}</span>)}</span>
-            }
+            {criteriaDescription(currentCriteria())}
           </span>
           <button onClick={() => setShowSaveForm(true)}
             className="px-3 py-1 text-forest border border-forest-25 rounded-button text-xs hover:bg-forest-08 transition-colors">

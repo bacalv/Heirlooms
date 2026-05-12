@@ -195,15 +195,10 @@ function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, onImagePreview, o
   const isJustArrived = plot.name === JUST_ARRIVED_SENTINEL
 
   const buildUrl = useCallback((cursor) => {
-    const params = new URLSearchParams({ limit: '50' })
-    if (plot.name === JUST_ARRIVED_SENTINEL) {
-      params.set('just_arrived', 'true')
-    } else if (plot.tag_criteria?.length > 0) {
-      params.set('tag', plot.tag_criteria.join(','))
-    }
+    const params = new URLSearchParams({ limit: '50', plot_id: plot.id })
     if (cursor) params.set('cursor', cursor)
     return `/api/content/uploads?${params}`
-  }, [plot.name, plot.tag_criteria?.join(',')])
+  }, [plot.id])
 
   // Full reload (shows loading state) — for initial mount and plot criteria changes
   useEffect(() => {
@@ -941,7 +936,7 @@ export function GardenPage() {
     document.title = 'Garden · Heirlooms'
     apiFetch('/api/plots', apiKey)
       .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then((data) => setPlots(Array.isArray(data) ? data : []))
+      .then((data) => setPlots(Array.isArray(data) ? data.filter((p) => p.show_in_garden !== false) : []))
       .catch((e) => setPlotsError(e.message))
       .finally(() => setPlotsLoading(false))
   }, [apiKey])

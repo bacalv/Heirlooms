@@ -16,6 +16,37 @@ export async function apiFetch(path, apiKey, options = {}) {
   return fetch(`${API_URL}${path}`, { ...options, headers })
 }
 
+// ---- Plot API ---------------------------------------------------------------
+
+export async function listPlots(apiKey) {
+  const r = await apiFetch('/api/plots', apiKey)
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json()
+}
+
+export async function createPlot(apiKey, { name, criteria, showInGarden = true, visibility = 'private' }) {
+  const r = await apiFetch('/api/plots', apiKey, {
+    method: 'POST',
+    body: JSON.stringify({ name, criteria: criteria ?? null, show_in_garden: showInGarden, visibility }),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json()
+}
+
+export async function updatePlot(apiKey, id, { name, criteria, showInGarden, sortOrder } = {}) {
+  const body = {}
+  if (name !== undefined) body.name = name
+  if (criteria !== undefined) body.criteria = criteria
+  if (showInGarden !== undefined) body.show_in_garden = showInGarden
+  if (sortOrder !== undefined) body.sort_order = sortOrder
+  const r = await apiFetch(`/api/plots/${id}`, apiKey, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json()
+}
+
 // ---- Auth API ---------------------------------------------------------------
 
 export async function authChallenge(username) {

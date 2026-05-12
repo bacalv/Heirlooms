@@ -190,7 +190,9 @@ data class PlotRecord(
     val isSystemDefined: Boolean,
     val createdAt: Instant,
     val updatedAt: Instant,
-    val tagCriteria: List<String>,
+    val criteria: String?,
+    val showInGarden: Boolean,
+    val visibility: String,
 )
 
 class Database(private val dataSource: DataSource) {
@@ -1110,6 +1112,9 @@ class Database(private val dataSource: DataSource) {
         hasLocation: Boolean? = null,
         sort: UploadSort = UploadSort.UPLOAD_NEWEST,
         justArrived: Boolean = false,
+        mediaType: String? = null,
+        isReceived: Boolean? = null,
+        plotId: UUID? = null,
         userId: UUID = FOUNDING_USER_ID,
     ): UploadPage {
         val effectiveLimit = limit.coerceIn(1, 200)
@@ -1175,6 +1180,23 @@ class Database(private val dataSource: DataSource) {
                 }
                 if (hasLocation == true) conditions += "latitude IS NOT NULL"
                 else if (hasLocation == false) conditions += "latitude IS NULL"
+
+                if (mediaType == "image") conditions += "mime_type LIKE 'image/%'"
+                else if (mediaType == "video") conditions += "mime_type LIKE 'video/%'"
+
+                if (isReceived == true) conditions += "shared_from_user_id IS NOT NULL"
+                else if (isReceived == false) conditions += "shared_from_user_id IS NULL"
+            }
+
+            if (plotId != null) {
+                val plot = getPlotByIdForUser(conn, plotId, userId)
+                    ?: throw IllegalArgumentException("Plot $plotId not found")
+                val criteriaJson = plot.criteria
+                if (criteriaJson != null) {
+                    val fragment = CriteriaEvaluator.evaluate(criteriaJson, userId, conn)
+                    conditions += fragment.sql
+                    setters += fragment.setters
+                }
             }
 
             // Cursor condition appended last so its params bind after filter params
@@ -1365,26 +1387,27 @@ class Database(private val dataSource: DataSource) {
     fun listPlots(userId: UUID = FOUNDING_USER_ID): List<PlotRecord> {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
-                """SELECT p.id, p.owner_user_id, p.name, p.sort_order, p.is_system_defined,
-                          p.created_at, p.updated_at
-                   FROM plots p
-                   WHERE p.owner_user_id = ?
-                   ORDER BY p.sort_order ASC, p.created_at ASC"""
+                """SELECT id, owner_user_id, name, sort_order, is_system_defined,
+                          created_at, updated_at, criteria, show_in_garden, visibility
+                   FROM plots
+                   WHERE owner_user_id = ?
+                   ORDER BY sort_order ASC, created_at ASC"""
             ).use { stmt ->
                 stmt.setObject(1, userId)
                 val rs = stmt.executeQuery()
                 val results = mutableListOf<PlotRecord>()
                 while (rs.next()) {
-                    val id = rs.getObject("id", UUID::class.java)
                     results.add(PlotRecord(
-                        id = id,
+                        id = rs.getObject("id", UUID::class.java),
                         ownerUserId = rs.getObject("owner_user_id", UUID::class.java),
                         name = rs.getString("name"),
                         sortOrder = rs.getInt("sort_order"),
                         isSystemDefined = rs.getBoolean("is_system_defined"),
                         createdAt = rs.getTimestamp("created_at").toInstant(),
                         updatedAt = rs.getTimestamp("updated_at").toInstant(),
-                        tagCriteria = queryPlotTagCriteria(conn, id),
+                        criteria = rs.getString("criteria"),
+                        showInGarden = rs.getBoolean("show_in_garden"),
+                        visibility = rs.getString("visibility"),
                     ))
                 }
                 return results
@@ -1395,41 +1418,53 @@ class Database(private val dataSource: DataSource) {
     fun getPlotById(id: UUID): PlotRecord? {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
-                """SELECT id, owner_user_id, name, sort_order, is_system_defined, created_at, updated_at
+                """SELECT id, owner_user_id, name, sort_order, is_system_defined,
+                          created_at, updated_at, criteria, show_in_garden, visibility
                    FROM plots WHERE id = ?"""
             ).use { stmt ->
                 stmt.setObject(1, id)
                 val rs = stmt.executeQuery()
                 if (!rs.next()) return null
                 return PlotRecord(
-                    id = id,
+                    id = rs.getObject("id", UUID::class.java),
                     ownerUserId = rs.getObject("owner_user_id", UUID::class.java),
                     name = rs.getString("name"),
                     sortOrder = rs.getInt("sort_order"),
                     isSystemDefined = rs.getBoolean("is_system_defined"),
                     createdAt = rs.getTimestamp("created_at").toInstant(),
                     updatedAt = rs.getTimestamp("updated_at").toInstant(),
-                    tagCriteria = queryPlotTagCriteria(conn, id),
+                    criteria = rs.getString("criteria"),
+                    showInGarden = rs.getBoolean("show_in_garden"),
+                    visibility = rs.getString("visibility"),
                 )
             }
         }
     }
 
-    fun createPlot(name: String, tagCriteria: List<String>, userId: UUID = FOUNDING_USER_ID): PlotRecord {
+    fun createPlot(
+        name: String,
+        criteria: String?,
+        showInGarden: Boolean,
+        visibility: String,
+        userId: UUID = FOUNDING_USER_ID,
+    ): PlotRecord {
         val id = UUID.randomUUID()
         val now = Instant.now()
         withTransaction { conn ->
             conn.prepareStatement(
-                "INSERT INTO plots (id, owner_user_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+                """INSERT INTO plots (id, owner_user_id, name, criteria, show_in_garden, visibility, created_at, updated_at)
+                   VALUES (?, ?, ?, ?::jsonb, ?, ?, ?, ?)"""
             ).use { stmt ->
                 stmt.setObject(1, id)
                 stmt.setObject(2, userId)
                 stmt.setString(3, name.trim())
-                stmt.setTimestamp(4, Timestamp.from(now))
-                stmt.setTimestamp(5, Timestamp.from(now))
+                stmt.setString(4, criteria)
+                stmt.setBoolean(5, showInGarden)
+                stmt.setString(6, visibility)
+                stmt.setTimestamp(7, Timestamp.from(now))
+                stmt.setTimestamp(8, Timestamp.from(now))
                 stmt.executeUpdate()
             }
-            replacePlotTagCriteria(conn, id, tagCriteria)
         }
         return getPlotById(id)!!
     }
@@ -1440,7 +1475,14 @@ class Database(private val dataSource: DataSource) {
         object SystemDefined : PlotUpdateResult()
     }
 
-    fun updatePlot(id: UUID, name: String?, sortOrder: Int?, tagCriteria: List<String>?, userId: UUID = FOUNDING_USER_ID): PlotUpdateResult {
+    fun updatePlot(
+        id: UUID,
+        name: String?,
+        sortOrder: Int?,
+        criteria: String?,
+        showInGarden: Boolean?,
+        userId: UUID = FOUNDING_USER_ID,
+    ): PlotUpdateResult {
         withTransaction { conn ->
             val (isSystemDefined) = conn.prepareStatement(
                 "SELECT is_system_defined FROM plots WHERE id = ? AND owner_user_id = ? FOR UPDATE"
@@ -1456,16 +1498,19 @@ class Database(private val dataSource: DataSource) {
             val setClauses = mutableListOf("updated_at = ?")
             if (name != null) setClauses.add("name = ?")
             if (sortOrder != null) setClauses.add("sort_order = ?")
+            if (criteria != null) setClauses.add("criteria = ?::jsonb")
+            if (showInGarden != null) setClauses.add("show_in_garden = ?")
             conn.prepareStatement("UPDATE plots SET ${setClauses.joinToString(", ")} WHERE id = ? AND owner_user_id = ?").use { stmt ->
                 var idx = 1
                 stmt.setTimestamp(idx++, Timestamp.from(Instant.now()))
                 if (name != null) stmt.setString(idx++, name.trim())
                 if (sortOrder != null) stmt.setInt(idx++, sortOrder)
+                if (criteria != null) stmt.setString(idx++, criteria)
+                if (showInGarden != null) stmt.setBoolean(idx++, showInGarden)
                 stmt.setObject(idx++, id)
                 stmt.setObject(idx, userId)
                 stmt.executeUpdate()
             }
-            if (tagCriteria != null) replacePlotTagCriteria(conn, id, tagCriteria)
         }
         return getPlotById(id)?.let { PlotUpdateResult.Success(it) } ?: PlotUpdateResult.NotFound
     }
@@ -1529,28 +1574,35 @@ class Database(private val dataSource: DataSource) {
         return BatchReorderResult.Success
     }
 
-    private fun queryPlotTagCriteria(conn: Connection, plotId: UUID): List<String> =
-        conn.prepareStatement("SELECT tag FROM plot_tag_criteria WHERE plot_id = ? ORDER BY tag").use { stmt ->
-            stmt.setObject(1, plotId)
-            val rs = stmt.executeQuery()
-            val tags = mutableListOf<String>()
-            while (rs.next()) tags.add(rs.getString("tag"))
-            tags
-        }
-
-    private fun replacePlotTagCriteria(conn: Connection, plotId: UUID, tags: List<String>) {
-        conn.prepareStatement("DELETE FROM plot_tag_criteria WHERE plot_id = ?").use { stmt ->
-            stmt.setObject(1, plotId)
-            stmt.executeUpdate()
-        }
-        for (tag in tags) {
-            conn.prepareStatement("INSERT INTO plot_tag_criteria (plot_id, tag) VALUES (?, ?)").use { stmt ->
-                stmt.setObject(1, plotId)
-                stmt.setString(2, tag.trim())
-                stmt.executeUpdate()
-            }
+    fun withCriteriaValidation(node: com.fasterxml.jackson.databind.JsonNode, userId: UUID) {
+        dataSource.connection.use { conn: Connection ->
+            CriteriaEvaluator.validate(node, userId, conn)
         }
     }
+
+    private fun getPlotByIdForUser(conn: Connection, id: UUID, userId: UUID): PlotRecord? =
+        conn.prepareStatement(
+            """SELECT id, owner_user_id, name, sort_order, is_system_defined,
+                      created_at, updated_at, criteria, show_in_garden, visibility
+               FROM plots WHERE id = ? AND owner_user_id = ?"""
+        ).use { stmt ->
+            stmt.setObject(1, id)
+            stmt.setObject(2, userId)
+            val rs = stmt.executeQuery()
+            if (!rs.next()) return null
+            PlotRecord(
+                id = rs.getObject("id", UUID::class.java),
+                ownerUserId = rs.getObject("owner_user_id", UUID::class.java),
+                name = rs.getString("name"),
+                sortOrder = rs.getInt("sort_order"),
+                isSystemDefined = rs.getBoolean("is_system_defined"),
+                createdAt = rs.getTimestamp("created_at").toInstant(),
+                updatedAt = rs.getTimestamp("updated_at").toInstant(),
+                criteria = rs.getString("criteria"),
+                showInGarden = rs.getBoolean("show_in_garden"),
+                visibility = rs.getString("visibility"),
+            )
+        }
 
     // ---- Cursor helpers ---------------------------------------------------
 

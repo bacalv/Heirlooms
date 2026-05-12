@@ -385,7 +385,7 @@ private fun uploadHandler(
     }
 }
 
-private fun listUploadsHandler(storage: FileStore, database: Database): HttpHandler = { request ->
+private fun listUploadsHandler(storage: FileStore, database: Database): HttpHandler = handler@{ request ->
     try {
         val cursor = request.query("cursor")?.takeIf { it.isNotBlank() }
         val limit = request.query("limit")?.toIntOrNull()?.coerceIn(1, 200) ?: 50
@@ -408,14 +408,26 @@ private fun listUploadsHandler(storage: FileStore, database: Database): HttpHand
             else            -> UploadSort.UPLOAD_NEWEST
         }
         val justArrived = request.query("just_arrived") == "true"
+        val mediaType = request.query("media_type")?.takeIf { it == "image" || it == "video" }
+        val isReceived = request.query("is_received")?.let {
+            when (it) { "true" -> true; "false" -> false; else -> null }
+        }
+        val plotId = request.query("plot_id")?.let {
+            try { java.util.UUID.fromString(it) } catch (_: Exception) { null }
+        }
 
-        val page = database.listUploadsPaginated(
-            cursor = cursor, limit = limit, tags = tags, excludeTag = excludeTag,
-            fromDate = fromDate, toDate = toDate, inCapsule = inCapsule,
-            includeComposted = includeComposted, hasLocation = hasLocation,
-            sort = sort, justArrived = justArrived,
-            userId = request.authUserId(),
-        )
+        val page = try {
+            database.listUploadsPaginated(
+                cursor = cursor, limit = limit, tags = tags, excludeTag = excludeTag,
+                fromDate = fromDate, toDate = toDate, inCapsule = inCapsule,
+                includeComposted = includeComposted, hasLocation = hasLocation,
+                sort = sort, justArrived = justArrived,
+                mediaType = mediaType, isReceived = isReceived, plotId = plotId,
+                userId = request.authUserId(),
+            )
+        } catch (e: IllegalArgumentException) {
+            return@handler Response(NOT_FOUND).body(e.message ?: "Plot not found")
+        }
         val response = Response(OK).header("Content-Type", "application/json").body(page.toJson())
         launchCompostCleanup(storage, database)
         response

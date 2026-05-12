@@ -24,10 +24,10 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.46.2 (12 May 2026) — Web sharing flow: friends can share items from the
-  web photo detail page and garden thumbnails. `ShareModal` with friend picker, ECDH-HKDF DEK
-  re-wrapping, "Shared by [name]" attribution on received items. Garden thumbnails now show full
-  image (object-contain / ContentScale.Fit) instead of cropping. Android versionCode 52.
+- Current version: v0.47.0 (12 May 2026) — M10 E1: predicate/criteria system. `plots.criteria`
+  JSONB replaces `plot_tag_criteria`. `CriteriaEvaluator` on server. Plot API uses criteria JSON.
+  Garden passes `plot_id` to upload listing. Explore gains media_type + is_received filters and
+  full-criteria "Save as plot". V24 migration. Server + Web only (Android in E4).
 - Next milestone: M10 (shared plots) — brief at `docs/briefs/M10_brief.md`.
   Four increments: E1 predicate/criteria system, E2 flows + staging, E3 shared plots + E2EE, E4 Android.
   Key decisions: per-plot group key (AES-256-GCM, `plot-aes256gcm-v1`), member roles owner/member,

@@ -2,6 +2,20 @@
 
 ---
 
+## v0.47.0 — M10 E1: Predicate/criteria system (12 May 2026)
+
+Server + Web. No Android (E4).
+
+- **V24 migration** — `plots` table gains `criteria JSONB`, `show_in_garden BOOLEAN`, `visibility TEXT`. Existing tag criteria migrated to expression format. System plot gets `criteria = {"type":"just_arrived"}`. `plot_tag_criteria` junction table dropped.
+- **`CriteriaEvaluator`** — New server component evaluates a JSON boolean expression tree (`tag`, `media_type`, `taken_after`, `taken_before`, `uploaded_after`, `uploaded_before`, `has_location`, `device_make`, `device_model`, `is_received`, `received_from`, `in_capsule`, `just_arrived`, `composted`, `plot_ref`, `and`, `or`, `not`) into parameterised SQL. `plot_ref` is recursive with cycle detection. `near` deferred.
+- **Plot API** — CRUD now uses `criteria` JSON + `show_in_garden` + `visibility`; `tag_criteria` removed. Criteria validated server-side before persist (`near` → 400, cycles → 400).
+- **Upload listing** — `GET /api/content/uploads` gains `plot_id`, `media_type` (`image`|`video`), `is_received` params. `plot_id` evaluates the plot's criteria via `CriteriaEvaluator`. Unknown `plot_id` → 404.
+- **Garden** — `PlotItemsRow` passes `plot_id=<uuid>` for all plots; server evaluates criteria. Hidden plots (`show_in_garden = false`) filtered from Garden sidebar.
+- **Explore** — Added `mediaType` and `isReceived` filter controls. "Save as plot" sends full criteria expression from all active filters. Edit-mode banner shows criteria description. `CriteriaBuilder.jsx` component with serialise/deserialise utilities.
+- **`api.js`** — Added `listPlots`, `createPlot`, `updatePlot` helpers.
+
+---
+
 ## v0.46.0–v0.46.2 — Web sharing flow + thumbnail display fix (12 May 2026)
 
 Web (v0.46.0–v0.46.1) + Android (v0.46.2).

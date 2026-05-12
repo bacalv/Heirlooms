@@ -191,4 +191,48 @@ class SchemaMigrationTest {
         """.trimIndent())
         assertEquals(3, n, "pending_device_links should have user_id, web_session_id, raw_session_token columns")
     }
+
+    // ---- V24 predicate/criteria system canary tests -------------------------
+
+    @Test
+    fun `V24 plots has criteria show_in_garden and visibility columns`() {
+        val n = count("""
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_name = 'plots'
+              AND column_name IN ('criteria', 'show_in_garden', 'visibility')
+        """.trimIndent())
+        assertEquals(3, n, "plots should have criteria, show_in_garden, visibility after V24")
+    }
+
+    @Test
+    fun `V24 plot_tag_criteria table no longer exists`() {
+        val n = count("""
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_name = 'plot_tag_criteria'
+        """.trimIndent())
+        assertEquals(0, n, "plot_tag_criteria should be dropped after V24")
+    }
+
+    @Test
+    fun `V24 system just_arrived plot has criteria set`() {
+        val n = count("""
+            SELECT COUNT(*) FROM plots
+            WHERE is_system_defined = TRUE
+              AND name = '__just_arrived__'
+              AND criteria = '{"type": "just_arrived"}'::jsonb
+        """.trimIndent())
+        assertEquals(1, n, "system __just_arrived__ plot should have criteria after V24")
+    }
+
+    @Test
+    fun `V24 all plots have show_in_garden true by default`() {
+        val n = count("SELECT COUNT(*) FROM plots WHERE show_in_garden = FALSE")
+        assertEquals(0, n, "all plots should have show_in_garden=true after V24 (no user plots in test DB)")
+    }
+
+    @Test
+    fun `V24 all plots have visibility private by default`() {
+        val n = count("SELECT COUNT(*) FROM plots WHERE visibility != 'private'")
+        assertEquals(0, n, "all plots should have visibility='private' after V24")
+    }
 }

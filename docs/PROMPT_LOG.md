@@ -2,6 +2,32 @@
 
 ---
 
+## Session — 12 May 2026 — M10 E1: Predicate/criteria system (v0.47.0)
+
+Server + Web. No Android changes.
+
+**V24 migration (`V24__predicate_criteria.sql`).** `plots` table gets `criteria JSONB NULL`, `show_in_garden BOOLEAN NOT NULL DEFAULT TRUE`, `visibility TEXT NOT NULL DEFAULT 'private' CHECK (...)`. Existing `plot_tag_criteria` rows migrated: 0 tags → NULL criteria, 1 tag → `{type:tag,tag:x}`, n tags → `{type:and,operands:[...]}`. System `__just_arrived__` plot gets `criteria = {"type":"just_arrived"}`. `plot_tag_criteria` table dropped. Partial index `idx_plots_garden` on `(owner_user_id, show_in_garden, sort_order) WHERE show_in_garden = TRUE` added.
+
+**`CriteriaEvaluator.kt` (new).** Walks a JSON expression tree and returns a `CriteriaFragment(sql, setters)` for use in parameterised queries. Atom types: `tag`, `media_type`, `taken_after`, `taken_before`, `uploaded_after`, `uploaded_before`, `has_location`, `device_make`, `device_model`, `is_received`, `received_from`, `in_capsule`, `just_arrived`, `composted`, `plot_ref`. Composition: `and`, `or`, `not`. `plot_ref` resolution uses a DB `Connection`, tracks visited IDs (`CriteriaCycleException` on cycle), max depth 10. `near` deferred — throws `CriteriaValidationException`. Unknown types fail loudly. Exceptions: `CriteriaValidationException`, `CriteriaCycleException`.
+
+**`PlotRecord` updated.** Fields `tagCriteria: List<String>` removed; `criteria: String?`, `showInGarden: Boolean`, `visibility: String` added. `listPlots`, `getPlotById` now select these columns. `createPlot` signature: `(name, criteria, showInGarden, visibility, userId)`. `updatePlot` signature: `(id, name, sortOrder, criteria, showInGarden, userId)`. `queryPlotTagCriteria` / `replacePlotTagCriteria` removed. New private `getPlotByIdForUser(conn, id, userId)` helper for in-transaction use. `withCriteriaValidation(node, userId)` public method opens a connection and calls `CriteriaEvaluator.validate` — used by `PlotHandler` for request-time validation.
+
+**`PlotHandler.kt` rewritten.** Request bodies parsed for `criteria` (JSON), `show_in_garden` / `showInGarden` (boolean), `visibility`. Inner lambda of `updatePlotRoute` extracted to named function `handleUpdatePlot` (non-local return pattern from SE_NOTES). `PlotRecord.toJson()` outputs `criteria` (as embedded JSON object or null), `show_in_garden`, `visibility`; no longer outputs `tag_criteria`.
+
+**`UploadHandler.kt` updated.** `listUploadsHandler` labeled `handler@` to allow early return. New query params: `plot_id` (UUID → `CriteriaEvaluator` path, 404 if not found), `media_type` (`image`|`video`), `is_received` (`true`|`false`). `listUploadsPaginated` signature gains `mediaType`, `isReceived`, `plotId` params. `plotId` evaluation occurs after the `justArrived/else` block; criteria fragment appended to `conditions`.
+
+**Web — `CriteriaBuilder.jsx` (new).** Exports: `builderStateToCriteria(state)` → criteria object, `criteriaToBuilderState(criteria)` → state (handles flat AND-of-atoms shape only), `criteriaDescription(criteria)` → human-readable string, `CriteriaBuilder` component (tags, media type, date from/to, has location, received), `emptyCriteriaState()`. Used by `ExplorePage` for serialise/deserialise.
+
+**Web — `GardenPage.jsx` updated.** `PlotItemsRow.buildUrl` now passes `plot_id=<uuid>` for all plots; removed `just_arrived=true` / `tag=...` special cases. Garden plot list fetch now filters out `show_in_garden === false` plots before setting state.
+
+**Web — `ExplorePage.jsx` updated.** Added `mediaType` / `isReceived` filter state + filter chrome controls (media type toggle, received checkbox). `handleReset` clears new state. Edit-mode loading (`applyPlotCriteria`) deserialises `plot.criteria` via `criteriaToBuilderState`. `handleSavePlot` / `handleUpdatePlot` send `criteria: currentCriteria()` instead of `tag_criteria`. `hasActiveFilters` includes new state. `buildUrl` adds `media_type` / `is_received` params. Save-as-plot bar now triggers on `hasActiveFilters` (not just tag length). Edit-mode banner shows `criteriaDescription`. New-plot hint updated.
+
+**Web — `api.js` updated.** Added `listPlots`, `createPlot`, `updatePlot` helper functions.
+
+**Tests.** New `CriteriaEvaluatorTest.kt` (20 unit tests covering all atoms, composition, plot_ref cycle/missing, near/unknown). `SchemaMigrationTest.kt` gains 5 V24 canary tests. `PlotHandlerTest.kt` updated for new `PlotRecord` and method signatures. `PlotApiTest.kt` (HeirloomsTest) rewritten: criteria CRUD, `show_in_garden`, `plot_id` upload filtering, regression for `tag_criteria` absence.
+
+---
+
 ## Session — 12 May 2026 — M10 design: predicate system, plots, flows, shared plots
 
 Architecture and design session. No code written. Outputs: `docs/briefs/M10_brief.md`
