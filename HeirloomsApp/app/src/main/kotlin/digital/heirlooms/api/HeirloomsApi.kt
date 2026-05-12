@@ -282,8 +282,16 @@ class HeirloomsApi(
 
     data class ChallengeResponse(val authSaltB64url: String)
     data class LoginResponse(val sessionToken: String)
+    data class MeResponse(val userId: String, val username: String, val displayName: String)
     data class InviteResponse(val token: String, val expiresAt: String)
     data class PairingInitiateResponse(val code: String, val expiresAt: String)
+
+    /** Returns the authenticated user's profile. */
+    suspend fun authMe(): MeResponse {
+        val body = get("/api/auth/me")
+        val json = JSONObject(body)
+        return MeResponse(json.getString("user_id"), json.getString("username"), json.getString("display_name"))
+    }
 
     /** Returns the stored auth_salt (base64url) for the given username. */
     suspend fun authChallenge(username: String): ChallengeResponse = withContext(Dispatchers.IO) {

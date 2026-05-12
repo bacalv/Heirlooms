@@ -105,6 +105,10 @@ fun LoginScreen(
                         store.setSessionToken(resp.sessionToken)
                         store.setUsername(u)
                         store.setAuthSalt(saltB64url)
+                        try {
+                            val me = HeirloomsApi(apiKey = resp.sessionToken).authMe()
+                            store.setDisplayName(me.displayName)
+                        } catch (_: Exception) {}
                         onLoginSuccess(resp.sessionToken)
                     } catch (e: Exception) {
                         error = if (e.message?.contains("UNAUTHORIZED") == true)

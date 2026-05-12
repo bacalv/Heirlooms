@@ -125,6 +125,10 @@ fun MigrationScreen(onMigrated: (sessionToken: String) -> Unit) {
                         store.setUsername(u)
                         store.setAuthSalt(authSaltB64url)
                         store.setApiKey("")  // clear old api_key after migration
+                        try {
+                            val me = HeirloomsApi(apiKey = resp.sessionToken).authMe()
+                            store.setDisplayName(me.displayName)
+                        } catch (_: Exception) {}
                         onMigrated(resp.sessionToken)
                     } catch (e: Exception) {
                         error = e.message ?: "Something went wrong."

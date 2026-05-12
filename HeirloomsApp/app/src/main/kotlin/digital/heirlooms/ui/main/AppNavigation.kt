@@ -177,6 +177,7 @@ fun MainNavigation(apiKey: String, onApiKeyReset: () -> Unit, store: digital.hei
                 onDiagnosticsTap = { navController.navigate(Routes.DIAGNOSTICS) },
                 onDevicesAccessTap = { navController.navigate(Routes.DEVICES_ACCESS) },
                 onFriendsTap = { navController.navigate(Routes.FRIENDS) },
+                displayName = store.getDisplayName(),
             )
         }
 

@@ -2,6 +2,14 @@
 
 ---
 
+## v0.45.9 — "Hi, [name]" greeting (12 May 2026)
+
+Web + Android.
+
+- **Display name greeting** — Web nav bar shows "Hi, [name]" in the top-right when logged in. Android burger panel shows "Hi, [name]" at the top of the sheet. Display name is fetched from `GET /api/auth/me` after login and stored in localStorage (web) / SharedPreferences (Android). Page refresh (web) and first burger open (Android) both surface the correct name without any extra login steps.
+
+---
+
 ## v0.45.6–v0.45.8 — M9 bug fix iteration 2 (12 May 2026)
 
 Android (v0.45.6–v0.45.7), server (v0.45.7), web (v0.45.8).

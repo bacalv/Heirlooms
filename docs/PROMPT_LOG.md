@@ -2,6 +2,27 @@
 
 ---
 
+## Session — 12 May 2026 — v0.45.9: "Hi, [name]" greeting (web + Android)
+
+**Display name greeting.** Web nav bar (desktop) and Android burger panel now show "Hi, [name]" so the logged-in user is always visible.
+
+**Web (`App.jsx`, `Nav.jsx`):**
+- Mount effect parses the `authMe` response body to refresh `displayName` from the server on page refresh, keeping localStorage in sync.
+- `handleLogin` fires a fire-and-forget `authMe` call after any login to populate `displayName` in localStorage and React state.
+- `Nav.jsx` renders `Hi, {displayName}` as muted text in the desktop nav bar (between the nav links and Access / Log out). Hidden on mobile (mobile menu already has the display name visible in the panel itself if needed later).
+
+**Android (`EndpointStore.kt`, `HeirloomsApi.kt`, `LoginScreen.kt`, `InviteRedemptionScreen.kt`, `MigrationScreen.kt`, `BurgerPanel.kt`, `AppNavigation.kt`):**
+- `EndpointStore`: added `getDisplayName()` / `setDisplayName()` in SharedPreferences.
+- `HeirloomsApi`: added `MeResponse` data class and `authMe()` calling `GET /api/auth/me`.
+- `LoginScreen` and `MigrationScreen`: call `authMe` with the fresh session token after login and store the display name.
+- `InviteRedemptionScreen`: display name is already in scope (user typed it at registration) — stored directly.
+- `BurgerPanel`: new `displayName: String = ""` parameter; renders "Hi, [name]" above the Settings row when non-empty.
+- `AppNavigation`: passes `store.getDisplayName()` to `BurgerPanel`.
+
+No server changes — `GET /api/auth/me` already returned `display_name` since M8.
+
+---
+
 ## Session — 11 May 2026 — M9 deploy, test user cleanup, partial test plan
 
 **M9 deployed to production.** Server revision `heirlooms-server-00042-qmx`. V23 migration ran cleanly:

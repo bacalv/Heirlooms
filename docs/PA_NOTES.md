@@ -24,10 +24,9 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.45.8 (12 May 2026) — M9 bug fix iteration 2: EXIF orientation on Android
-  (thumbnail generation + full-image display + auto-stage to DB), rotation included in share
-  payload, web sharing key loaded on all auto-unlock paths (IDB pairing + login device key).
-  First human tester (Wighty) onboarded.
+- Current version: v0.45.9 (12 May 2026) — "Hi, [name]" greeting in web nav bar (desktop) and
+  Android burger panel. Display name fetched from `GET /api/auth/me` after login; stored in
+  localStorage (web) and SharedPreferences (Android). No server changes.
 - Next milestone: M10 (shared plots) — to be briefed.
   v0.36.0 = Preview clips, 1 MiB chunks, parallel prefetch, download button (server + web + Android).
   v0.35.0 = Web encrypted video playback + MSE streaming (web only).

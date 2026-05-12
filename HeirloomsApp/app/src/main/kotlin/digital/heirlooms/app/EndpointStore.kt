@@ -52,6 +52,9 @@ class EndpointStore(private val store: PreferenceStore) {
     fun getUsername(): String = store.getString(KEY_USERNAME, "")
     fun setUsername(username: String) = store.putString(KEY_USERNAME, username.trim())
 
+    fun getDisplayName(): String = store.getString(KEY_DISPLAY_NAME, "")
+    fun setDisplayName(name: String) = store.putString(KEY_DISPLAY_NAME, name.trim())
+
     fun getAuthSalt(): String = store.getString(KEY_AUTH_SALT, "")
     fun setAuthSalt(salt: String) = store.putString(KEY_AUTH_SALT, salt)
 
@@ -76,6 +79,7 @@ class EndpointStore(private val store: PreferenceStore) {
         const val KEY_API_KEY = "api_key"          // retained for migration detection
         private const val KEY_SESSION_TOKEN = "session_token"
         private const val KEY_USERNAME = "username"
+        private const val KEY_DISPLAY_NAME = "display_name"
         private const val KEY_AUTH_SALT = "auth_salt"
         private const val KEY_WIFI_ONLY = "wifi_only"
         private const val KEY_WELCOMED = "welcomed"

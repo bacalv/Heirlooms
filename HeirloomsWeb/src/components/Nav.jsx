@@ -21,7 +21,7 @@ const navLinkClass = ({ isActive }) =>
   }`
 
 export function Nav() {
-  const { onSignOut } = useAuth()
+  const { onSignOut, displayName } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
@@ -41,6 +41,9 @@ export function Nav() {
           </nav>
 
           <div className="hidden sm:flex items-center gap-6">
+            {displayName && (
+              <span className="text-sm text-text-muted font-sans">Hi, {displayName}</span>
+            )}
             <NavLink to="/access" className={navLinkClass}>Access</NavLink>
             <button
               onClick={onSignOut}

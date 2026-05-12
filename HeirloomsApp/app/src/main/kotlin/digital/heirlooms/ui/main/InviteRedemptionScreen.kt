@@ -121,6 +121,7 @@ fun InviteRedemptionScreen(onRegistered: (sessionToken: String) -> Unit) {
                 store.setSessionToken(r.sessionToken)
                 store.setUsername(u)
                 store.setAuthSalt(authSaltB64url)
+                store.setDisplayName(displayName.trim())
                 onRegistered(r.sessionToken)
             } catch (e: Exception) {
                 error = when {

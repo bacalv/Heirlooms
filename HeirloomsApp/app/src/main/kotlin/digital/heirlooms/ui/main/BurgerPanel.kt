@@ -42,6 +42,7 @@ fun BurgerPanel(
     onDiagnosticsTap: () -> Unit = {},
     onDevicesAccessTap: () -> Unit = {},
     onFriendsTap: () -> Unit = {},
+    displayName: String = "",
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -49,6 +50,14 @@ fun BurgerPanel(
         containerColor = Parchment,
     ) {
         Column(Modifier.padding(bottom = 24.dp)) {
+            if (displayName.isNotEmpty()) {
+                Text(
+                    "Hi, $displayName",
+                    style = HeirloomsSerifItalic.copy(fontSize = 16.sp, color = Forest),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                )
+                HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Forest15)
+            }
             BurgerRow(label = "Settings", onClick = { onDismiss(); onSettingsTap() })
             HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Forest15)
             BurgerRow(label = "Friends", onClick = { onDismiss(); onFriendsTap() })

@@ -68,6 +68,15 @@ export default function App() {
           localStorage.removeItem(LS_TOKEN)
           return
         }
+        if (r.ok) {
+          try {
+            const data = await r.json()
+            if (data?.display_name) {
+              setDisplayNameState(data.display_name)
+              localStorage.setItem(LS_DISPLAY_NAME, data.display_name)
+            }
+          } catch { /* ignore */ }
+        }
         const material = await loadPairingMaterial()
         if (!material) return
         const masterKey = await unwrapMasterKeyForDevice(material.wrappedMasterKey, material.privateKey)
@@ -104,6 +113,12 @@ export default function App() {
       unlock(masterKey)
       loadSharingKey(token, masterKey).then(() => setVaultUnlocked(true))
     }
+    authMe(token).then(r => r.ok ? r.json() : null).then(data => {
+      if (data?.display_name) {
+        setDisplayNameState(data.display_name)
+        localStorage.setItem(LS_DISPLAY_NAME, data.display_name)
+      }
+    }).catch(() => {})
   }
 
   async function handleSignOut() {
