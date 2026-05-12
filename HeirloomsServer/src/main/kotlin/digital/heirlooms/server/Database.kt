@@ -1250,6 +1250,10 @@ class Database(private val dataSource: DataSource) {
                     val fragment = CriteriaEvaluator.evaluate(criteriaJson, userId, conn)
                     conditions += fragment.sql
                     setters += fragment.setters
+                } else {
+                    // Collection plot: only return items explicitly added via plot_items
+                    conditions += "id IN (SELECT upload_id FROM plot_items WHERE plot_id = ?)"
+                    setters += listOf { stmt, idx -> stmt.setObject(idx, plotId); idx + 1 }
                 }
             }
 
