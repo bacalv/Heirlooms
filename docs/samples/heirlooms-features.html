@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Heirlooms — Features &amp; Technologies</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --sand:   #f5f4f0;
+      --paper:  #ffffff;
+      --ink:    #2c2a25;
+      --muted:  #6b6860;
+      --border: #ddd9d0;
+
+      --green:  #3a6b3a;
+      --blue:   #2d4f8a;
+      --purple: #6b3a6b;
+      --amber:  #8a6a2d;
+      --slate:  #3a4a5a;
+      --red:    #8a2d2d;
+
+      --green-bg:  #eaf2ea;
+      --blue-bg:   #e8edf8;
+      --purple-bg: #f0e8f0;
+      --amber-bg:  #f5eee3;
+      --slate-bg:  #e8edf2;
+      --red-bg:    #f5e8e8;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--sand);
+      color: var(--ink);
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ── SIDEBAR ───────────────────────────── */
+    aside {
+      width: 230px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      background: var(--ink);
+      color: #d8d5ce;
+      padding: 28px 0 48px;
+      font-size: 0.78rem;
+    }
+
+    aside .logo     { font-size: 1rem; font-weight: 700; color: #fff; padding: 0 22px 4px; letter-spacing: -0.01em; }
+    aside .logo-sub { font-size: 0.7rem; color: #777470; padding: 0 22px 22px; }
+
+    aside hr { border: none; border-top: 1px solid #3a3830; margin: 4px 22px 14px; }
+
+    aside .group-label {
+      font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: #555250; padding: 0 22px 6px;
+    }
+
+    aside a {
+      display: flex; align-items: center; gap: 8px;
+      padding: 5px 22px; color: #b8b5ae; text-decoration: none;
+      transition: background 0.1s, color 0.1s; line-height: 1.3;
+    }
+    aside a:hover { background: #3a3830; color: #fff; }
+    aside a .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── MAIN ──────────────────────────────── */
+    main { flex: 1; padding: 44px 44px 96px; max-width: 960px; }
+
+    h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 4px; }
+    .page-sub { font-size: 0.86rem; color: var(--muted); margin-bottom: 44px; }
+
+    /* Section */
+    .sec { scroll-margin-top: 28px; margin-bottom: 52px; }
+
+    .sec-header {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 18px; padding-bottom: 10px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .sec-pill {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.07em;
+      text-transform: uppercase; padding: 3px 10px; border-radius: 20px;
+    }
+
+    .sec-header h2 { font-size: 1.05rem; font-weight: 700; }
+
+    /* Feature grid */
+    .feat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 12px;
+    }
+
+    .feat {
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 18px 17px;
+    }
+
+    .feat-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+    .feat-name { font-weight: 700; font-size: 0.85rem; line-height: 1.3; }
+
+    .badge {
+      font-size: 0.62rem; font-weight: 700; letter-spacing: 0.05em;
+      text-transform: uppercase; padding: 2px 7px; border-radius: 4px;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .badge-shipped  { background: var(--green-bg);  color: var(--green);  }
+    .badge-planned  { background: var(--amber-bg);  color: var(--amber);  }
+    .badge-partial  { background: var(--blue-bg);   color: var(--blue);   }
+
+    .feat p { font-size: 0.78rem; color: var(--muted); line-height: 1.5; }
+
+    /* Platform tags on features */
+    .plat-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .plat {
+      font-size: 0.65rem; font-weight: 600; letter-spacing: 0.04em;
+      padding: 1px 7px; border-radius: 10px; border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .plat-android { background: #e8f5e8; color: #2a6a2a; border-color: #b8d8b8; }
+    .plat-web     { background: #e8edf8; color: #2a3f8a; border-color: #b8c8e8; }
+    .plat-server  { background: #f0e8f0; color: #6a3a6a; border-color: #d0b8d0; }
+    .plat-all     { background: #f0ede8; color: #5a5040; border-color: #d0c8c0; }
+
+    /* Tech stack section */
+    .tech-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 14px;
+    }
+
+    .tech-card {
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .tech-card-header {
+      padding: 13px 18px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tech-list { list-style: none; padding: 10px 0; }
+
+    .tech-list li {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 12px; padding: 5px 18px; font-size: 0.8rem;
+    }
+
+    .tech-list li:hover { background: #fafaf8; }
+
+    .tech-name { font-weight: 600; color: var(--ink); }
+    .tech-role { font-size: 0.73rem; color: var(--muted); text-align: right; }
+
+    /* Data model table */
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%; border-collapse: collapse;
+      font-size: 0.79rem; background: var(--paper);
+      border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+    }
+    th {
+      background: #f0ede8; text-align: left; padding: 9px 14px;
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.07em;
+      text-transform: uppercase; color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    td { padding: 8px 14px; border-bottom: 1px solid #f0ede8; line-height: 1.45; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafaf8; }
+    td code { font-size: 0.75rem; background: #f0ede8; padding: 1px 5px; border-radius: 3px; }
+
+    /* API summary */
+    .api-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .api-group {
+      background: var(--paper); border: 1px solid var(--border);
+      border-radius: 8px; overflow: hidden;
+    }
+
+    .api-group-header {
+      padding: 10px 16px; font-size: 0.72rem; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .api-route {
+      display: flex; align-items: baseline; gap: 10px;
+      padding: 6px 16px; font-size: 0.77rem;
+      border-bottom: 1px solid #f5f3ee;
+    }
+    .api-route:last-child { border-bottom: none; }
+
+    .method {
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 0.04em;
+      width: 36px; flex-shrink: 0; text-align: center;
+      padding: 2px 0; border-radius: 3px;
+    }
+    .GET    { background: var(--green-bg);  color: var(--green);  }
+    .POST   { background: var(--blue-bg);   color: var(--blue);   }
+    .PATCH  { background: var(--amber-bg);  color: var(--amber);  }
+    .DELETE { background: var(--red-bg);    color: var(--red);    }
+
+    .api-path { font-family: monospace; font-size: 0.74rem; color: var(--ink); }
+    .api-desc { font-size: 0.72rem; color: var(--muted); margin-left: auto; text-align: right; }
+
+    /* Crypto summary */
+    .crypto-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+
+    .crypto-card {
+      background: var(--paper); border: 1px solid var(--border);
+      border-radius: 8px; padding: 16px 18px;
+    }
+    .crypto-label { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+    .crypto-alg   { font-size: 0.88rem; font-weight: 700; margin-bottom: 6px; font-family: monospace; }
+    .crypto-card p { font-size: 0.77rem; color: var(--muted); line-height: 1.5; }
+
+    footer {
+      font-size: 0.74rem; color: #aaa89f; margin-top: 48px;
+      padding-top: 20px; border-bottom: 1px solid var(--border);
+    }
+
+    @media (max-width: 720px) {
+      aside { display: none; }
+      main  { padding: 24px 20px 64px; }
+      .api-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════ SIDEBAR -->
+<aside>
+  <div class="logo">Heirlooms</div>
+  <div class="logo-sub">Features &amp; Technologies</div>
+  <hr/>
+  <div class="group-label">Features</div>
+  <a href="#vault"><span class="dot" style="background:#3a6b3a"></span>Vault &amp; Encryption</a>
+  <a href="#upload"><span class="dot" style="background:#3a6b3a"></span>Upload</a>
+  <a href="#garden"><span class="dot" style="background:#2d4f8a"></span>Garden</a>
+  <a href="#explore"><span class="dot" style="background:#2d4f8a"></span>Explore</a>
+  <a href="#capsules"><span class="dot" style="background:#8a6a2d"></span>Capsules</a>
+  <a href="#social"><span class="dot" style="background:#6b3a6b"></span>Friends &amp; Sharing</a>
+  <a href="#auth"><span class="dot" style="background:#3a4a5a"></span>Authentication</a>
+  <a href="#devices"><span class="dot" style="background:#3a4a5a"></span>Devices &amp; Pairing</a>
+  <a href="#recovery"><span class="dot" style="background:#3a4a5a"></span>Recovery</a>
+  <a href="#organisation"><span class="dot" style="background:#5a5040"></span>Organisation</a>
+  <a href="#background"><span class="dot" style="background:#5a5040"></span>Background Services</a>
+  <hr style="margin-top:10px"/>
+  <div class="group-label">Technical Reference</div>
+  <a href="#api">API Endpoints</a>
+  <a href="#schema">Database Schema</a>
+  <a href="#crypto">Cryptographic Primitives</a>
+  <a href="#tech">Technology Stack</a>
+</aside>
+
+<!-- ══════════════════════════════════════ MAIN -->
+<main>
+  <h1>Features &amp; Technologies</h1>
+  <p class="page-sub">Heirlooms · v0.45.5 · 12 May 2026 &nbsp;·&nbsp; Milestones 0–9 shipped</p>
+
+  <!-- ── VAULT & ENCRYPTION ─────────── -->
+  <div class="sec" id="vault">
+    <div class="sec-header">
+      <span class="sec-pill" style="background:var(--green-bg);color:var(--green)">Core</span>
+      <h2>Vault &amp; Encryption</h2>
+    </div>
+    <div class="feat-grid">
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">End-to-end encryption</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Every photo and video is encrypted on-device before upload. The server stores only ciphertext. Staff with full database and bucket access see only encrypted bytes.</p>
+        <div class="plat-row"><span class="plat plat-all">All platforms</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Per-file data encryption keys (DEK)</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Each upload gets a fresh 32-byte random DEK. Compromise of one file's key affects only that file. DEKs are wrapped under the master key before leaving the device.</p>
+        <div class="plat-row"><span class="plat plat-all">All platforms</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">AES-256-GCM content encryption</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Content bytes, thumbnail bytes, and EXIF metadata are each encrypted separately under the file's DEK. Fresh 12-byte random nonce per encryption operation.</p>
+        <div class="plat-row"><span class="plat plat-all">All platforms</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Versioned envelope format</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>All encrypted blobs use a single binary format: version byte · algorithm ID · nonce · ciphertext · auth tag. Unknown algorithm IDs fail loudly. Enables crypto agility without format breaks.</p>
+        <div class="plat-row"><span class="plat plat-all">All platforms</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Encrypted EXIF metadata</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>GPS coordinates, camera make/model, lens model, ISO, aperture, and focal length are stored encrypted under the file's DEK. The server receives only <code>taken_at</code> in plaintext (needed for sort/filter).</p>
+        <div class="plat-row"><span class="plat plat-server">Server</span><span class="plat plat-android">Android</span><span class="plat plat-web">Web</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Encrypted thumbnails</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Thumbnail bytes are encrypted under the same DEK as the content. Displayed only after client-side decryption. Server never holds a plaintext thumbnail.</p>
+        <div class="plat-row"><span class="plat plat-all">All platforms</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Server-side envelope validation (no decryption)</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>On upload confirm, the server checks envelope version, algorithm ID recognisability, and minimum byte lengths. It never inspects plaintext content at any point.</p>
+        <div class="plat-row"><span class="plat plat-server">Server</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">DEK rotation</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Per-file key rotation via <code>PATCH /api/content/uploads/{id}/rotation</code>. Old and new envelopes coexist during migration; rotation is incremental and file-by-file.</p>
+        <div class="plat-row"><span class="plat plat-server">Server</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── UPLOAD ─────────── -->
+  <div class="sec" id="upload">
+    <div class="sec-header">
+      <span class="sec-pill" style="background:var(--green-bg);color:var(--green)">Core</span>
+      <h2>Upload</h2>
+    </div>
+    <div class="feat-grid">
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Android share sheet integration</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>"My Heirlooms" appears in the Android share sheet for any photo or video. Works from any app that can share media (gallery, camera, files).</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">In-app camera capture</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>+ Photo and + Video buttons in the Garden. Fire OS compatibility: uses plain <code>ACTION_VIDEO_CAPTURE</code> intent (not <code>CaptureVideo</code> contract which requires <code>EXTRA_OUTPUT</code>).</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Direct-to-GCS upload (presigned URLs)</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Encrypted bytes travel from the device directly to Google Cloud Storage via presigned PUT URLs. The server is never in the media data path.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span><span class="plat plat-server">Server</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">WorkManager background jobs</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>One WorkManager job per file. Jobs survive app backgrounding and device restart. Automatic retry on connectivity failure. Byte-level progress reported to the Upload Progress screen.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">OOM-safe upload worker</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Preview clip generation and the upload worker catch <code>Throwable</code> (not just <code>Exception</code>). OutOfMemoryError on low-RAM devices is handled gracefully — upload still completes without the preview clip.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Encrypted video preview clips</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Short preview clips generated during upload; encrypted and stored alongside the full video. Best-effort — suppressed gracefully on low-memory devices.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">EXIF extraction on confirm</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Server extracts EXIF from the uploaded blob after the client calls confirm. Sensitive fields are returned for the client to re-encrypt; <code>taken_at</code> and non-sensitive fields stored plaintext.</p>
+        <div class="plat-row"><span class="plat plat-server">Server</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── GARDEN ─────────── -->
+  <div class="sec" id="garden">
+    <div class="sec-header">
+      <span class="sec-pill" style="background:var(--blue-bg);color:var(--blue)">Browsing</span>
+      <h2>Garden (Work Surface)</h2>
+    </div>
+    <div class="feat-grid">
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Just Arrived system plot</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Auto-populated with recently uploaded items (≤ 30 days unviewed). Cannot be renamed or deleted. Always shown first. Polls every 30 seconds for new arrivals.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span><span class="plat plat-web">Web</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Olive-branch arrival animation</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Branded animation plays when a new item appears in Just Arrived. Distinct animation for items that "didn't take" (failed thumbnail load).</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span><span class="plat plat-web">Web</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">User-defined plot rows</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Named collections displayed as horizontal scrolling rows beneath Just Arrived. 4-column thumbnail grid per row. Plots are drag-to-reorder on web; inline create/edit on Android.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span><span class="plat plat-web">Web</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Plot management (Android)</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Inline "+ Add plot" row at the bottom of the Garden scroll. Pencil edit icon on each plot header opens rename / delete sheet. Confirmation required before delete.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Plot management (Web)</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Gear menu per plot for rename and delete. Drag-and-drop reorder. Inline "Add plot" form. Batch reorder sent via <code>PATCH /api/plots</code>.</p>
+        <div class="plat-row"><span class="plat plat-web">Web</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Shared item indicator</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Person icon shown on the top-right of thumbnails for items received from a friend. Share icon shown on the bottom-right of owned, encrypted items eligible for sharing.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── EXPLORE ─────────── -->
+  <div class="sec" id="explore">
+    <div class="sec-header">
+      <span class="sec-pill" style="background:var(--blue-bg);color:var(--blue)">Browsing</span>
+      <h2>Explore (Leisure Surface)</h2>
+    </div>
+    <div class="feat-grid">
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Paginated grid view</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>4-column thumbnail grid; cursor-based pagination loads more as user scrolls. Distinct from Garden — Explore is for visiting memories, not processing them.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span><span class="plat plat-web">Web</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Tag, type, and date filtering</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Filter by one or more tags, by media type (photo/video), or by date range. Filter chrome remains visible while browsing; active filters shown as chips.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span><span class="plat plat-web">Web</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Sort options</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Sort by newest first, oldest first, or recently viewed. The "recently viewed" sort is powered by per-view <code>last_viewed_at</code> timestamps recorded server-side.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span><span class="plat plat-web">Web</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">View tracking</div><span class="badge badge-shipped">Shipped</span></div>
+        <p><code>POST /api/content/uploads/{id}/view</code> records <code>last_viewed_at</code> per user per item. Enables "recently viewed" sort without exposing view counts across users.</p>
+        <div class="plat-row"><span class="plat plat-server">Server</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── CAPSULES ─────────── -->
+  <div class="sec" id="capsules">
+    <div class="sec-header">
+      <span class="sec-pill" style="background:var(--amber-bg);color:var(--amber)">Capsules</span>
+      <h2>Time Capsules</h2>
+    </div>
+    <div class="feat-grid">
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Capsule creation</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Create a named capsule with a recipient (free text), unlock date (must be future), optional message, and one or more vault photos. Created in Open state — fully editable.</p>
+        <div class="plat-row"><span class="plat plat-web">Web</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Capsule state machine</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Four states: <strong>Open</strong> (editable) → <strong>Sealed</strong> (frozen) → <strong>Delivered</strong>. Also <strong>Cancelled</strong> from Open or Sealed. Invalid transitions rejected by the server.</p>
+        <div class="plat-row"><span class="plat plat-server">Server</span><span class="plat plat-web">Web</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Message versioning</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Each edit to a capsule message creates a new version row. The server preserves the full edit history; clients display the current version.</p>
+        <div class="plat-row"><span class="plat plat-server">Server</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Sealing animation</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Wax-seal animation plays when the user seals a capsule. Visual state indicator (open / sealed / delivered) on the capsule list and detail views.</p>
+        <div class="plat-row"><span class="plat plat-web">Web</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Navigation guard</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Unsaved changes in the capsule form trigger a confirmation prompt before discarding. Prevents accidental loss of draft message or photo selection.</p>
+        <div class="plat-row"><span class="plat plat-web">Web</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">"In N capsules" on photo detail</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Photo detail view shows a count of active capsule memberships. Prevents composting items that are in a capsule (server enforces this as a precondition).</p>
+        <div class="plat-row"><span class="plat plat-web">Web</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Cryptographic sealing (tlock + Shamir)</div><span class="badge badge-planned">Planned M9+</span></div>
+        <p>Sealed will become a cryptographic state: per-capsule key wrapped to recipient's pubkey + tlock-encrypted against the drand round for the unlock date. Author cannot decrypt after sealing.</p>
+        <div class="plat-row"><span class="plat plat-all">All platforms</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Milestone delivery (scheduled send)</div><span class="badge badge-planned">Planned M10</span></div>
+        <p>Delivery of a capsule on its unlock date via in-app notification and email. The feature that makes Heirlooms more than cloud storage.</p>
+        <div class="plat-row"><span class="plat plat-all">All platforms</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Posthumous delivery (executor-mediated)</div><span class="badge badge-planned">Planned M11</span></div>
+        <p>Capsules conditioned on the user's death, unlocked by a quorum of nominated executors via Shamir's Secret Sharing. Heirlooms never holds enough key material to decrypt.</p>
+        <div class="plat-row"><span class="plat plat-all">All platforms</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── SOCIAL ─────────── -->
+  <div class="sec" id="social">
+    <div class="sec-header">
+      <span class="sec-pill" style="background:var(--purple-bg);color:var(--purple)">Social</span>
+      <h2>Friends &amp; Sharing</h2>
+    </div>
+    <div class="feat-grid">
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Invite-based friendship</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Friendships are created automatically when a new user redeems an invite. Bidirectional. Backfilled from existing redeemed invites at M9 deploy.</p>
+        <div class="plat-row"><span class="plat plat-server">Server</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Friends list screen</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Burger → Friends shows all connected friends with their display name and username.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Item sharing (DEK re-wrap)</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Share a photo or video to a friend. The sender re-wraps the DEK to the recipient's sharing pubkey locally. GCS blob is shared, not copied. Server verifies friendship at both the key-fetch and share-call steps.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span><span class="plat plat-server">Server</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Account sharing keypair</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Each user has a P-256 keypair used as the target for DEK re-wrapping during sharing. Private key is wrapped under the master key and stored server-side. Lazily initialised on first vault unlock post-M9.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span><span class="plat plat-server">Server</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Shared item attribution</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>"Shared by [display name]" shown in photo detail for received items. Person-icon indicator on thumbnails. Per-user independent rotation and tag state.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Compost GCS guard</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Background cleanup skips GCS blob deletion when any live (non-composted) shared copy references the same storage key. Prevents the sender's compost action from destroying the recipient's copy.</p>
+        <div class="plat-row"><span class="plat plat-server">Server</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── AUTH ─────────── -->
+  <div class="sec" id="auth">
+    <div class="sec-header">
+      <span class="sec-pill" style="background:var(--slate-bg);color:var(--slate)">Security</span>
+      <h2>Authentication</h2>
+    </div>
+    <div class="feat-grid">
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Argon2id passphrase KDF</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>64-byte output, 64 MiB memory, 3 iterations, 1 thread. First 32 bytes → auth_key; last 32 bytes → master_key_seed. One passphrase produces both auth credentials and key-encryption material.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span><span class="plat plat-web">Web</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Challenge/response login</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Client fetches auth_salt, derives auth_key locally, sends SHA-256(auth_key). The passphrase is never transmitted. The server stores only SHA-256(auth_key) as auth_verifier.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span><span class="plat plat-web">Web</span><span class="plat plat-server">Server</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Session tokens</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>32 random bytes per session. Only SHA-256(token) is stored in the database. Sessions expire 90 days from last_used_at and are refreshed on every authenticated request.</p>
+        <div class="plat-row"><span class="plat plat-server">Server</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Anti-enumeration fake salts</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>The challenge endpoint returns a deterministic fake salt for unknown usernames (HMAC-SHA256 of server secret + username, truncated to 16 bytes). An attacker cannot determine whether a username exists.</p>
+        <div class="plat-row"><span class="plat plat-server">Server</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Per-user data isolation</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>All DB queries for uploads, plots, capsules, and keys are scoped to the authenticated user's ID. Cross-user reads return 404 (not 403) to prevent probing. Verified by 23-test isolation suite.</p>
+        <div class="plat-row"><span class="plat plat-server">Server</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Invite-based registration</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>New users must have a valid invite token (48-hour expiry). Invite is atomically redeemed; tokens cannot be replayed. The invite sender and recipient become friends automatically.</p>
+        <div class="plat-row"><span class="plat plat-server">Server</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── DEVICES ─────────── -->
+  <div class="sec" id="devices">
+    <div class="sec-header">
+      <span class="sec-pill" style="background:var(--slate-bg);color:var(--slate)">Security</span>
+      <h2>Devices &amp; Pairing</h2>
+    </div>
+    <div class="feat-grid">
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">QR-based device pairing</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Android generates a QR code + 8-digit code. Browser scans or types the code, generates an ephemeral P-256 keypair, and receives the master key wrapped to its pubkey. Server is a blind relay throughout.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span><span class="plat plat-web">Web</span><span class="plat plat-server">Server</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Android Keystore device keypair</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Each Android device generates a P-256 keypair at registration. Private key is stored in Android Keystore and never exported. Used to wrap/unwrap the vault master key.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Non-extractable WebCrypto key</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>The browser's pairing private key is generated with <code>extractable: false</code>. It cannot be read by JavaScript — only used for the unwrap operation. Persisted to IndexedDB as a CryptoKey object.</p>
+        <div class="plat-row"><span class="plat plat-web">Web</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">IDB pairing persistence</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>After pairing, the browser persists the ephemeral keypair and wrapped master key to IndexedDB. On subsequent visits, auto-validates the session and auto-unlocks the vault without re-pairing.</p>
+        <div class="plat-row"><span class="plat plat-web">Web</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Invite QR generation (Android)</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Devices &amp; Access screen generates a QR code encoding the invite URL. Also provides an Android share-sheet option to send the invite link directly.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── RECOVERY ─────────── -->
+  <div class="sec" id="recovery">
+    <div class="sec-header">
+      <span class="sec-pill" style="background:var(--slate-bg);color:var(--slate)">Security</span>
+      <h2>Vault Recovery</h2>
+    </div>
+    <div class="feat-grid">
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Passphrase-wrapped server backup</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>At registration, the master key is wrapped under the Argon2id-derived master_key_seed and stored server-side. Enables web login recovery without a separate recovery phrase.</p>
+        <div class="plat-row"><span class="plat plat-server">Server</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">24-word recovery phrase</div><span class="badge badge-partial">Documented</span></div>
+        <p>Designed as the "I don't trust anyone" escape hatch. Generated and shown once at first-device setup with required acknowledgement. Implementation deferred post-M8.</p>
+        <div class="plat-row"><span class="plat plat-all">All platforms</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Social recovery via Shamir shares</div><span class="badge badge-planned">Planned M9+</span></div>
+        <p>Master key (or per-capsule key) split across nominated executors via Shamir's Secret Sharing. Threshold-of-N unlock replaces the recovery phrase as the recommended default when a connections graph exists.</p>
+        <div class="plat-row"><span class="plat plat-all">All platforms</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── ORGANISATION ─────────── -->
+  <div class="sec" id="organisation">
+    <div class="sec-header">
+      <span class="sec-pill" style="background:#eee;color:#5a5750">Management</span>
+      <h2>Organisation</h2>
+    </div>
+    <div class="feat-grid">
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Tags</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Free-text tags on uploads. Used for filtering in Explore and as a compost precondition guard. Tag validation enforced server-side (length, character set).</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span><span class="plat plat-web">Web</span><span class="plat plat-server">Server</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Compost (soft delete)</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Items with no tags and no active capsule memberships can be composted. Held for 90 days; restorable within the window. Permanently deleted by background cleanup. Not a trash can — a considered removal.</p>
+        <div class="plat-row"><span class="plat plat-android">Android</span><span class="plat plat-web">Web</span><span class="plat plat-server">Server</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Restore from compost</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Within the 90-day window, composted items can be restored via the Compost view. Restored item reappears in Just Arrived.</p>
+        <div class="plat-row"><span class="plat plat-web">Web</span><span class="plat plat-server">Server</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Context-aware photo detail navigation</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>The <code>?from=garden|explore|compost</code> parameter determines the negative-action button label and back destination. Negative-action buttons are visually separated from destructive actions.</p>
+        <div class="plat-row"><span class="plat plat-web">Web</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── BACKGROUND SERVICES ─────────── -->
+  <div class="sec" id="background">
+    <div class="sec-header">
+      <span class="sec-pill" style="background:#eee;color:#5a5750">Infrastructure</span>
+      <h2>Background Services</h2>
+    </div>
+    <div class="feat-grid">
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Pending blobs cleanup</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Scheduled job hard-deletes composted uploads after the 90-day window (GCS blob + DB row). Guards against deleting blobs with live shared references. Also purges expired sessions.</p>
+        <div class="plat-row"><span class="plat plat-server">Server</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">EXIF extraction service</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Extracts EXIF from confirmed uploads. Sensitive fields returned to the client for re-encryption; <code>taken_at</code> stored plaintext. Recovery job re-processes any uploads where extraction failed.</p>
+        <div class="plat-row"><span class="plat plat-server">Server</span></div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-top"><div class="feat-name">Diagnostic events</div><span class="badge badge-shipped">Shipped</span></div>
+        <p>Per-user scoped diagnostic event log. <code>POST /api/diag</code> records events; <code>GET /api/diag</code> returns only the authenticated user's events. Used for debugging upload and sync issues.</p>
+        <div class="plat-row"><span class="plat plat-server">Server</span></div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════ TECHNICAL REFERENCE -->
+
+  <!-- ── API ─────────── -->
+  <div class="sec" id="api">
+    <div class="sec-header">
+      <span class="sec-pill" style="background:#eee;color:#444">Reference</span>
+      <h2>API Endpoints</h2>
+    </div>
+    <div class="api-grid">
+
+      <div class="api-group">
+        <div class="api-group-header" style="background:var(--slate-bg);color:var(--slate)">Auth &nbsp;/api/auth/*</div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/challenge</span><span class="api-desc">Fetch auth salt</span></div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/login</span><span class="api-desc">Verify verifier, issue session</span></div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/logout</span><span class="api-desc">Delete calling session</span></div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/register</span><span class="api-desc">Redeem invite, create user</span></div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/setup-existing</span><span class="api-desc">Founding user passphrase setup</span></div>
+        <div class="api-route"><span class="method GET">GET</span><span class="api-path">/me</span><span class="api-desc">Validate session, return user</span></div>
+        <div class="api-route"><span class="method GET">GET</span><span class="api-path">/invites</span><span class="api-desc">Generate 48-hour invite token</span></div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/pairing/initiate</span><span class="api-desc">Android: get 8-digit code</span></div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/pairing/qr</span><span class="api-desc">Web: submit code + pubkey</span></div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/pairing/complete</span><span class="api-desc">Android: upload wrapped key</span></div>
+        <div class="api-route"><span class="method GET">GET</span><span class="api-path">/pairing/status</span><span class="api-desc">Web: poll for completion</span></div>
+      </div>
+
+      <div class="api-group">
+        <div class="api-group-header" style="background:var(--green-bg);color:var(--green)">Uploads &nbsp;/api/content/uploads/*</div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/create</span><span class="api-desc">Reserve upload, get presigned URLs</span></div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/{id}/confirm</span><span class="api-desc">Finalise, store wrapped DEK</span></div>
+        <div class="api-route"><span class="method GET">GET</span><span class="api-path">/</span><span class="api-desc">Paginated upload list</span></div>
+        <div class="api-route"><span class="method GET">GET</span><span class="api-path">/{id}</span><span class="api-desc">Single upload metadata</span></div>
+        <div class="api-route"><span class="method PATCH">PATCH</span><span class="api-path">/{id}/rotation</span><span class="api-desc">Update DEK rotation</span></div>
+        <div class="api-route"><span class="method PATCH">PATCH</span><span class="api-path">/{id}/tags</span><span class="api-desc">Set tags on upload</span></div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/{id}/view</span><span class="api-desc">Record last_viewed_at</span></div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/{id}/compost</span><span class="api-desc">Soft-delete upload</span></div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/{id}/restore</span><span class="api-desc">Restore composted upload</span></div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/{id}/share</span><span class="api-desc">Share to friend (re-wrap DEK)</span></div>
+        <div class="api-route"><span class="method GET">GET</span><span class="api-path">/composted</span><span class="api-desc">List composted uploads</span></div>
+        <div class="api-route"><span class="method GET">GET</span><span class="api-path">/tags</span><span class="api-desc">List all tags for user</span></div>
+      </div>
+
+      <div class="api-group">
+        <div class="api-group-header" style="background:var(--blue-bg);color:var(--blue)">Plots &nbsp;/api/plots/*</div>
+        <div class="api-route"><span class="method GET">GET</span><span class="api-path">/</span><span class="api-desc">List user's plots</span></div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/</span><span class="api-desc">Create plot</span></div>
+        <div class="api-route"><span class="method PATCH">PATCH</span><span class="api-path">/</span><span class="api-desc">Batch reorder plots</span></div>
+        <div class="api-route"><span class="method PATCH">PATCH</span><span class="api-path">/{id}</span><span class="api-desc">Rename plot</span></div>
+        <div class="api-route"><span class="method DELETE">DELETE</span><span class="api-path">/{id}</span><span class="api-desc">Delete plot</span></div>
+      </div>
+
+      <div class="api-group">
+        <div class="api-group-header" style="background:var(--amber-bg);color:var(--amber)">Capsules &nbsp;/api/capsules/*</div>
+        <div class="api-route"><span class="method GET">GET</span><span class="api-path">/</span><span class="api-desc">List capsules</span></div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/</span><span class="api-desc">Create capsule</span></div>
+        <div class="api-route"><span class="method GET">GET</span><span class="api-path">/{id}</span><span class="api-desc">Get capsule detail</span></div>
+        <div class="api-route"><span class="method PATCH">PATCH</span><span class="api-path">/{id}</span><span class="api-desc">Edit open capsule</span></div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/{id}/seal</span><span class="api-desc">Seal capsule (irreversible)</span></div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/{id}/cancel</span><span class="api-desc">Cancel capsule</span></div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/{id}/photos</span><span class="api-desc">Add photo to capsule</span></div>
+        <div class="api-route"><span class="method DELETE">DELETE</span><span class="api-path">/{id}/photos/{pid}</span><span class="api-desc">Remove photo from capsule</span></div>
+      </div>
+
+      <div class="api-group">
+        <div class="api-group-header" style="background:var(--purple-bg);color:var(--purple)">Keys &amp; Sharing &nbsp;/api/keys/*</div>
+        <div class="api-route"><span class="method GET">GET</span><span class="api-path">/device</span><span class="api-desc">List wrapped device keys</span></div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/device</span><span class="api-desc">Register device pubkey + wrapped key</span></div>
+        <div class="api-route"><span class="method GET">GET</span><span class="api-path">/recovery</span><span class="api-desc">Fetch passphrase-wrapped backup</span></div>
+        <div class="api-route"><span class="method PUT">PUT</span><span class="api-path">/sharing</span><span class="api-desc">Upload sharing pubkey + wrapped privkey</span></div>
+        <div class="api-route"><span class="method GET">GET</span><span class="api-path">/sharing/me</span><span class="api-desc">Get own sharing pubkey</span></div>
+        <div class="api-route"><span class="method GET">GET</span><span class="api-path">/sharing/{userId}</span><span class="api-desc">Get friend's sharing pubkey</span></div>
+      </div>
+
+      <div class="api-group">
+        <div class="api-group-header" style="background:var(--slate-bg);color:var(--slate)">Social &amp; Misc</div>
+        <div class="api-route"><span class="method GET">GET</span><span class="api-path">/api/friends</span><span class="api-desc">List friends</span></div>
+        <div class="api-route"><span class="method GET">GET</span><span class="api-path">/api/diag</span><span class="api-desc">List own diagnostic events</span></div>
+        <div class="api-route"><span class="method POST">POST</span><span class="api-path">/api/diag</span><span class="api-desc">Record diagnostic event</span></div>
+        <div class="api-route"><span class="method GET">GET</span><span class="api-path">/docs</span><span class="api-desc">Swagger UI</span></div>
+        <div class="api-route"><span class="method GET">GET</span><span class="api-path">/api/content/openapi.json</span><span class="api-desc">OpenAPI spec</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── SCHEMA ─────────── -->
+  <div class="sec" id="schema">
+    <div class="sec-header">
+      <span class="sec-pill" style="background:#eee;color:#444">Reference</span>
+      <h2>Database Schema (PostgreSQL)</h2>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Table</th>
+            <th>Purpose</th>
+            <th>Key columns</th>
+            <th>Added</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>users</code></td><td>One row per Heirlooms account</td><td>id · username · display_name · auth_salt · auth_verifier</td><td>V20 / M8</td></tr>
+          <tr><td><code>user_sessions</code></td><td>Active session tokens (SHA-256 hashed)</td><td>token_hash · user_id · last_used_at · expires_at</td><td>V20 / M8</td></tr>
+          <tr><td><code>invites</code></td><td>48-hour invite tokens</td><td>token · created_by · used_by · expires_at</td><td>V20 / M8</td></tr>
+          <tr><td><code>uploads</code></td><td>Every photo and video (metadata only; bytes in GCS)</td><td>id · user_id · gcs_key · content_type · taken_at · wrapped_dek · encrypted_metadata · shared_from_upload_id</td><td>V1 / M2</td></tr>
+          <tr><td><code>plots</code></td><td>Named user-defined groups shown in the Garden</td><td>id · user_id · name · display_order · is_system</td><td>V9 / M6</td></tr>
+          <tr><td><code>capsules</code></td><td>Time-locked collections</td><td>id · user_id · recipient · unlock_date · state · sealed_at</td><td>V12 / M5</td></tr>
+          <tr><td><code>capsule_memberships</code></td><td>Upload → capsule join table</td><td>capsule_id · upload_id</td><td>V12 / M5</td></tr>
+          <tr><td><code>capsule_message_versions</code></td><td>Full edit history of capsule messages</td><td>capsule_id · body · created_at</td><td>V12 / M5</td></tr>
+          <tr><td><code>wrapped_keys</code></td><td>Master key wrapped to each device's pubkey</td><td>user_id · device_id · device_pubkey · wrapped_master_key · wrap_format</td><td>V17 / M7</td></tr>
+          <tr><td><code>recovery_passphrase</code></td><td>Passphrase-wrapped master key backup (PK = user_id)</td><td>user_id · wrapped_key · salt · argon2_params</td><td>V17 / M7</td></tr>
+          <tr><td><code>account_sharing_keys</code></td><td>P-256 sharing keypair per user</td><td>user_id · sharing_pubkey · wrapped_sharing_privkey</td><td>V23 / M9</td></tr>
+          <tr><td><code>friendships</code></td><td>Bidirectional friend graph (one row, user_id_a &lt; user_id_b)</td><td>user_id_a · user_id_b · created_at</td><td>V23 / M9</td></tr>
+          <tr><td><code>pending_blobs</code></td><td>Uploads awaiting confirm or scheduled for deletion</td><td>upload_id · gcs_key · delete_after</td><td>V1 / M2</td></tr>
+          <tr><td><code>diagnostic_events</code></td><td>Per-user debug event log</td><td>user_id · event_type · payload · created_at</td><td>V1 / M2 (user_id added V22)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── CRYPTO ─────────── -->
+  <div class="sec" id="crypto">
+    <div class="sec-header">
+      <span class="sec-pill" style="background:#eee;color:#444">Reference</span>
+      <h2>Cryptographic Primitives</h2>
+    </div>
+    <div class="crypto-grid">
+
+      <div class="crypto-card">
+        <div class="crypto-label">Content &amp; thumbnail encryption</div>
+        <div class="crypto-alg">AES-256-GCM</div>
+        <p>Alg ID: <code>aes256gcm-v1</code>. 32-byte DEK, 12-byte random nonce, 16-byte auth tag. One DEK per file, one nonce per encryption op.</p>
+      </div>
+
+      <div class="crypto-card">
+        <div class="crypto-label">DEK wrap under master key</div>
+        <div class="crypto-alg">AES-256-GCM</div>
+        <p>Alg ID: <code>master-aes256gcm-v1</code>. Master key used directly as a 256-bit AES key. Same envelope format as content.</p>
+      </div>
+
+      <div class="crypto-card">
+        <div class="crypto-label">Master key wrap to device / sharing pubkey</div>
+        <div class="crypto-alg">P-256 ECDH-HKDF-AES-256-GCM</div>
+        <p>Alg ID: <code>p256-ecdh-hkdf-aes256gcm-v1</code>. Ephemeral P-256 keypair per wrap. HKDF-SHA256 as KDF. Used for device pairing and item sharing.</p>
+      </div>
+
+      <div class="crypto-card">
+        <div class="crypto-label">Master key wrap under passphrase</div>
+        <div class="crypto-alg">Argon2id-AES-256-GCM</div>
+        <p>Alg ID: <code>argon2id-aes256gcm-v1</code>. 64 MiB · 3 iter · 1 thread. 16-byte random salt. Parameters stored alongside blob. Used for passphrase recovery backup.</p>
+      </div>
+
+      <div class="crypto-card">
+        <div class="crypto-label">Auth key derivation</div>
+        <div class="crypto-alg">Argon2id (64-byte)</div>
+        <p>Same params as above. First 32 bytes = auth_key (hashed before sending). Last 32 bytes = master_key_seed (used only locally for recovery). One passphrase, two keys.</p>
+      </div>
+
+      <div class="crypto-card">
+        <div class="crypto-label">Auth verifier storage</div>
+        <div class="crypto-alg">SHA-256</div>
+        <p>Server stores SHA-256(auth_key), not the auth_key itself. Login sends SHA-256(auth_key); server compares to stored verifier.</p>
+      </div>
+
+      <div class="crypto-card">
+        <div class="crypto-label">Session token storage</div>
+        <div class="crypto-alg">SHA-256</div>
+        <p>32 random bytes issued to client. Only SHA-256(token) stored in DB. Leak of DB does not expose valid session tokens.</p>
+      </div>
+
+      <div class="crypto-card">
+        <div class="crypto-label">Anti-enumeration fake salt</div>
+        <div class="crypto-alg">HMAC-SHA-256</div>
+        <p>Unknown usernames receive HMAC-SHA256(server_secret, username) truncated to 16 bytes as a deterministic fake salt. Indistinguishable from real salts to an attacker.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── TECH STACK ─────────── -->
+  <div class="sec" id="tech">
+    <div class="sec-header">
+      <span class="sec-pill" style="background:#eee;color:#444">Reference</span>
+      <h2>Technology Stack</h2>
+    </div>
+    <div class="tech-grid">
+
+      <div class="tech-card">
+        <div class="tech-card-header" style="background:var(--purple-bg);color:var(--purple)">🖥 Server (HeirloomsServer)</div>
+        <ul class="tech-list">
+          <li><span class="tech-name">Kotlin</span><span class="tech-role">Language</span></li>
+          <li><span class="tech-name">http4k</span><span class="tech-role">HTTP server &amp; routing</span></li>
+          <li><span class="tech-name">http4k-contract</span><span class="tech-role">OpenAPI contract routes</span></li>
+          <li><span class="tech-name">PostgreSQL</span><span class="tech-role">Primary database (via JDBC)</span></li>
+          <li><span class="tech-name">Flyway</span><span class="tech-role">Database migrations (V1–V23)</span></li>
+          <li><span class="tech-name">Google Cloud Storage SDK</span><span class="tech-role">Blob storage + presigned URLs</span></li>
+          <li><span class="tech-name">Testcontainers</span><span class="tech-role">Integration tests (real PostgreSQL)</span></li>
+          <li><span class="tech-name">JUnit 5</span><span class="tech-role">Test framework</span></li>
+          <li><span class="tech-name">BouncyCastle</span><span class="tech-role">Crypto reference (test-only)</span></li>
+          <li><span class="tech-name">Shadow JAR</span><span class="tech-role">Fat JAR for Docker packaging</span></li>
+          <li><span class="tech-name">Docker</span><span class="tech-role">Container image (linux/amd64)</span></li>
+          <li><span class="tech-name">Swagger UI (webjar)</span><span class="tech-role">API docs at /docs</span></li>
+        </ul>
+      </div>
+
+      <div class="tech-card">
+        <div class="tech-card-header" style="background:var(--green-bg);color:var(--green)">📱 Android (HeirloomsApp)</div>
+        <ul class="tech-list">
+          <li><span class="tech-name">Kotlin</span><span class="tech-role">Language</span></li>
+          <li><span class="tech-name">Jetpack Compose</span><span class="tech-role">Declarative UI</span></li>
+          <li><span class="tech-name">WorkManager</span><span class="tech-role">Background upload jobs</span></li>
+          <li><span class="tech-name">Android Keystore</span><span class="tech-role">Device private key storage</span></li>
+          <li><span class="tech-name">EncryptedSharedPreferences</span><span class="tech-role">Session token + credentials</span></li>
+          <li><span class="tech-name">Argon2id (Android crypto)</span><span class="tech-role">Passphrase KDF</span></li>
+          <li><span class="tech-name">ZXing (zxing-android-embedded)</span><span class="tech-role">QR code generation + scanning</span></li>
+          <li><span class="tech-name">OkHttp</span><span class="tech-role">HTTP client</span></li>
+          <li><span class="tech-name">Coil</span><span class="tech-role">Async image loading</span></li>
+          <li><span class="tech-name">ViewModel + StateFlow</span><span class="tech-role">UI state management</span></li>
+          <li><span class="tech-name">SavedStateHandle</span><span class="tech-role">Process-death state restoration</span></li>
+          <li><span class="tech-name">Navigation Compose</span><span class="tech-role">In-app routing</span></li>
+          <li><span class="tech-name">JUnit 4 + MockWebServer</span><span class="tech-role">Unit + integration tests</span></li>
+        </ul>
+      </div>
+
+      <div class="tech-card">
+        <div class="tech-card-header" style="background:var(--blue-bg);color:var(--blue)">🌐 Web (HeirloomsWeb)</div>
+        <ul class="tech-list">
+          <li><span class="tech-name">React</span><span class="tech-role">UI framework</span></li>
+          <li><span class="tech-name">Vite</span><span class="tech-role">Build tool + dev server</span></li>
+          <li><span class="tech-name">JavaScript (JSX)</span><span class="tech-role">Language</span></li>
+          <li><span class="tech-name">WebCrypto API</span><span class="tech-role">All cryptography (browser-native)</span></li>
+          <li><span class="tech-name">IndexedDB</span><span class="tech-role">Pairing keypair + wrapped key persistence</span></li>
+          <li><span class="tech-name">mp4box (mp4box.js)</span><span class="tech-role">MP4 parsing for MSE streaming</span></li>
+          <li><span class="tech-name">Media Source Extensions</span><span class="tech-role">Chunk-at-a-time video streaming</span></li>
+          <li><span class="tech-name">Vitest</span><span class="tech-role">Unit + component tests</span></li>
+          <li><span class="tech-name">React Testing Library</span><span class="tech-role">Component testing</span></li>
+          <li><span class="tech-name">React Router</span><span class="tech-role">Client-side routing</span></li>
+        </ul>
+      </div>
+
+      <div class="tech-card">
+        <div class="tech-card-header" style="background:var(--amber-bg);color:var(--amber)">☁️ Infrastructure (GCP)</div>
+        <ul class="tech-list">
+          <li><span class="tech-name">Google Cloud Run</span><span class="tech-role">Serverless container hosting</span></li>
+          <li><span class="tech-name">Google Cloud SQL</span><span class="tech-role">Managed PostgreSQL</span></li>
+          <li><span class="tech-name">Google Cloud Storage</span><span class="tech-role">Encrypted blob storage</span></li>
+          <li><span class="tech-name">Cloud SQL Auth Proxy</span><span class="tech-role">Secure local DB access</span></li>
+          <li><span class="tech-name">Application Default Credentials</span><span class="tech-role">GCP auth for local dev</span></li>
+          <li><span class="tech-name">Docker (linux/amd64)</span><span class="tech-role">Container image format</span></li>
+          <li><span class="tech-name">Flyway</span><span class="tech-role">Schema migration at startup</span></li>
+        </ul>
+      </div>
+
+      <div class="tech-card">
+        <div class="tech-card-header" style="background:#eee;color:#444">🛠 Development &amp; Tooling</div>
+        <ul class="tech-list">
+          <li><span class="tech-name">IntelliJ IDEA</span><span class="tech-role">IDE (Kotlin + Android)</span></li>
+          <li><span class="tech-name">Gradle</span><span class="tech-role">Build system (Kotlin + Android)</span></li>
+          <li><span class="tech-name">MinIO</span><span class="tech-role">S3-compatible local object storage</span></li>
+          <li><span class="tech-name">psql + Cloud SQL Proxy</span><span class="tech-role">Direct DB access for admin tasks</span></li>
+          <li><span class="tech-name">ADB</span><span class="tech-role">Android APK sideloading</span></li>
+          <li><span class="tech-name">Claude Code (claude-sonnet-4-6)</span><span class="tech-role">AI pair programmer</span></li>
+          <li><span class="tech-name">Git</span><span class="tech-role">Version control</span></li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <footer>
+    Heirlooms · heirlooms.digital · Feature &amp; Technology Reference v1.0 · 12 May 2026<br/>
+    Milestones 0–9 shipped. M10 (milestone delivery) and M11 (posthumous delivery) are on the active roadmap.
+  </footer>
+
+</main>
+</body>
+</html>

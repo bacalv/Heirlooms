@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Heirlooms — Use Cases &amp; User Journeys</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --sand:    #f5f4f0;
+      --paper:   #ffffff;
+      --ink:     #2c2a25;
+      --muted:   #6b6860;
+      --border:  #ddd9d0;
+      --accent-onboard:  #3a6b3a;
+      --accent-daily:    #2d4f8a;
+      --accent-social:   #7a3a6b;
+      --accent-manage:   #7a5a2d;
+      --bg-onboard:  #eaf2ea;
+      --bg-daily:    #e8edf8;
+      --bg-social:   #f2e8f0;
+      --bg-manage:   #f5eee3;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--sand);
+      color: var(--ink);
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ── SIDEBAR ───────────────────────────── */
+    aside {
+      width: 240px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      background: var(--ink);
+      color: #d8d5ce;
+      padding: 32px 0 48px;
+    }
+
+    aside .logo {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
+      padding: 0 24px 8px;
+      letter-spacing: -0.01em;
+    }
+
+    aside .logo-sub {
+      font-size: 0.72rem;
+      color: #888580;
+      padding: 0 24px 28px;
+    }
+
+    aside hr {
+      border: none;
+      border-top: 1px solid #3a3830;
+      margin: 0 24px 20px;
+    }
+
+    aside .nav-group-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #666360;
+      padding: 0 24px 8px;
+    }
+
+    aside a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 24px;
+      font-size: 0.8rem;
+      color: #c8c5be;
+      text-decoration: none;
+      transition: background 0.12s, color 0.12s;
+      line-height: 1.3;
+    }
+
+    aside a:hover {
+      background: #3a3830;
+      color: #fff;
+    }
+
+    aside a .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ── MAIN ──────────────────────────────── */
+    main {
+      flex: 1;
+      padding: 48px 48px 96px;
+      max-width: 900px;
+    }
+
+    .page-title {
+      font-size: 1.8rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 6px;
+    }
+
+    .page-sub {
+      font-size: 0.88rem;
+      color: var(--muted);
+      margin-bottom: 40px;
+    }
+
+    /* Actor map */
+    .actor-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 14px;
+      margin-bottom: 52px;
+    }
+
+    .actor-card {
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 20px;
+    }
+
+    .actor-card .actor-name {
+      font-weight: 700;
+      font-size: 0.88rem;
+      margin-bottom: 6px;
+    }
+
+    .actor-card p {
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* Section header */
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 52px 0 20px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--border);
+      scroll-margin-top: 32px;
+    }
+
+    .section-header .section-pill {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+
+    .section-header h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    /* Use-case card */
+    .uc-card {
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 24px;
+      overflow: hidden;
+      scroll-margin-top: 32px;
+    }
+
+    .uc-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 20px 24px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .uc-id {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+      padding-top: 2px;
+      flex-shrink: 0;
+    }
+
+    .uc-title {
+      font-size: 1rem;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 4px;
+    }
+
+    .uc-goal {
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .uc-body {
+      padding: 20px 24px 24px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px 32px;
+    }
+
+    @media (max-width: 700px) {
+      .uc-body { grid-template-columns: 1fr; }
+      aside { display: none; }
+      main { padding: 24px 20px 64px; }
+    }
+
+    .uc-section-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    /* Full-width field */
+    .uc-full { grid-column: 1 / -1; }
+
+    /* Steps */
+    .steps {
+      list-style: none;
+      counter-reset: step;
+    }
+
+    .steps li {
+      counter-increment: step;
+      display: flex;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 0.82rem;
+      line-height: 1.5;
+    }
+
+    .steps li::before {
+      content: counter(step);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--ink);
+      color: #fff;
+      font-size: 0.65rem;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    /* Alt flows */
+    .alt-flows {
+      list-style: none;
+    }
+
+    .alt-flows li {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 7px;
+      font-size: 0.8rem;
+      line-height: 1.45;
+    }
+
+    .alt-flows li::before {
+      content: "↳";
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    /* Tags */
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .tag {
+      font-size: 0.72rem;
+      padding: 2px 9px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    /* Journey strip (horizontal steps) */
+    .journey {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0;
+      margin-top: 4px;
+    }
+
+    .journey-step {
+      display: flex;
+      align-items: stretch;
+      flex: 1;
+      min-width: 130px;
+    }
+
+    .journey-step .step-content {
+      flex: 1;
+      padding: 12px 14px;
+      background: var(--sand);
+      border: 1px solid var(--border);
+      border-right: none;
+      font-size: 0.76rem;
+      line-height: 1.4;
+    }
+
+    .journey-step:last-child .step-content {
+      border-right: 1px solid var(--border);
+    }
+
+    .journey-step:first-child .step-content { border-radius: 6px 0 0 6px; }
+    .journey-step:last-child  .step-content { border-radius: 0 6px 6px 0; }
+
+    .journey-step .step-content .step-n {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    /* Postconditions */
+    .postconditions {
+      background: #f8faf8;
+      border: 1px solid #d0ddd0;
+      border-radius: 6px;
+      padding: 12px 16px;
+    }
+
+    .postconditions li {
+      font-size: 0.8rem;
+      line-height: 1.5;
+      color: #2a4a2a;
+      margin-bottom: 4px;
+      list-style: none;
+      display: flex;
+      gap: 8px;
+    }
+
+    .postconditions li::before { content: "✓"; color: #3a6b3a; font-weight: 700; }
+
+    /* Preconditions */
+    .preconditions li {
+      font-size: 0.8rem;
+      line-height: 1.5;
+      margin-bottom: 4px;
+      list-style: none;
+      display: flex;
+      gap: 8px;
+      color: var(--muted);
+    }
+
+    .preconditions li::before { content: "•"; color: var(--muted); font-weight: 700; }
+
+    footer {
+      font-size: 0.75rem;
+      color: #aaa89f;
+      margin-top: 48px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ SIDEBAR -->
+<aside>
+  <div class="logo">Heirlooms</div>
+  <div class="logo-sub">Use Cases &amp; User Journeys</div>
+  <hr />
+
+  <div class="nav-group-label">Onboarding</div>
+  <a href="#uc01"><span class="dot" style="background:#3a6b3a"></span>UC-01 · Create Account</a>
+  <a href="#uc02"><span class="dot" style="background:#3a6b3a"></span>UC-02 · Pair Web Browser</a>
+  <a href="#uc03"><span class="dot" style="background:#3a6b3a"></span>UC-03 · Recover Vault Access</a>
+
+  <hr style="margin-top:16px"/>
+  <div class="nav-group-label">Daily Use</div>
+  <a href="#uc04"><span class="dot" style="background:#2d4f8a"></span>UC-04 · Upload Photo or Video</a>
+  <a href="#uc05"><span class="dot" style="background:#2d4f8a"></span>UC-05 · Browse the Garden</a>
+  <a href="#uc06"><span class="dot" style="background:#2d4f8a"></span>UC-06 · Explore the Vault</a>
+  <a href="#uc07"><span class="dot" style="background:#2d4f8a"></span>UC-07 · View a Photo or Video</a>
+
+  <hr style="margin-top:16px"/>
+  <div class="nav-group-label">Social</div>
+  <a href="#uc08"><span class="dot" style="background:#7a3a6b"></span>UC-08 · Share an Item</a>
+  <a href="#uc09"><span class="dot" style="background:#7a3a6b"></span>UC-09 · Receive a Shared Item</a>
+
+  <hr style="margin-top:16px"/>
+  <div class="nav-group-label">Capsules</div>
+  <a href="#uc10"><span class="dot" style="background:#7a5a2d"></span>UC-10 · Create a Capsule</a>
+  <a href="#uc11"><span class="dot" style="background:#7a5a2d"></span>UC-11 · Seal a Capsule</a>
+
+  <hr style="margin-top:16px"/>
+  <div class="nav-group-label">Management</div>
+  <a href="#uc12"><span class="dot" style="background:#5a5750"></span>UC-12 · Organise into Plots</a>
+  <a href="#uc13"><span class="dot" style="background:#5a5750"></span>UC-13 · Compost an Item</a>
+</aside>
+
+<!-- ═══════════════════════════════════════════════════════ MAIN -->
+<main>
+
+  <h1 class="page-title">Use Cases &amp; User Journeys</h1>
+  <p class="page-sub">Heirlooms · v0.45.5 · 12 May 2026</p>
+
+  <!-- ACTORS -->
+  <div class="uc-section-label">Actors</div>
+  <div class="actor-grid">
+    <div class="actor-card">
+      <div class="actor-name">👤 Vault Owner</div>
+      <p>The person whose memories live in the vault. Operates the Android app as primary device. May also access via a paired web browser.</p>
+    </div>
+    <div class="actor-card">
+      <div class="actor-name">👥 Friend / Recipient</div>
+      <p>Someone with their own Heirlooms account, connected via the invite-and-friendship system. Can receive shared items.</p>
+    </div>
+    <div class="actor-card">
+      <div class="actor-name">🖥 Server</div>
+      <p>Stores encrypted blobs and wrapped keys. Enforces auth, friendship rules, and upload state transitions. Never decrypts content.</p>
+    </div>
+    <div class="actor-card">
+      <div class="actor-name">📦 GCS (Storage)</div>
+      <p>Stores the raw encrypted bytes of every photo and video. Accessed directly by clients via presigned URLs — the server is not in the media path.</p>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════ ONBOARDING ══════════════════════════════ -->
+  <div class="section-header" id="section-onboarding">
+    <span class="section-pill" style="background:var(--bg-onboard);color:var(--accent-onboard)">Onboarding</span>
+    <h2>Getting started</h2>
+  </div>
+
+  <!-- UC-01 -->
+  <div class="uc-card" id="uc01">
+    <div class="uc-header">
+      <div class="uc-id">UC-01</div>
+      <div>
+        <div class="uc-title">Create Account</div>
+        <div class="uc-goal">A new user joins Heirlooms via an invite link and sets up their encrypted vault on their Android device.</div>
+      </div>
+    </div>
+    <div class="uc-body">
+
+      <div>
+        <div class="uc-section-label">Actors</div>
+        <div class="tag-row"><span class="tag">Vault Owner</span><span class="tag">Friend (invite sender)</span><span class="tag">Server</span></div>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Preconditions</div>
+        <ul class="preconditions">
+          <li>Invite sender has an Heirlooms account and has generated an invite link</li>
+          <li>Invite link is less than 48 hours old</li>
+          <li>New user has the Android app installed (sideloaded APK)</li>
+        </ul>
+      </div>
+
+      <div class="uc-full">
+        <div class="uc-section-label">User Journey</div>
+        <div class="journey">
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 1</div>Receive invite link via message or email</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 2</div>Open the Android app; see the invite code entry screen</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 3</div>Enter a username, display name, and passphrase (×2 to confirm)</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 4</div>App generates device keypair + master key locally; registers with server</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 5</div>Land on Welcome screen, then Garden ("A garden begins with a single seed")</div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Main Flow (steps)</div>
+        <ol class="steps">
+          <li>User taps invite URL; app opens to <strong>InviteRedemptionScreen</strong></li>
+          <li>User enters invite code, username, display name, passphrase, confirm passphrase</li>
+          <li>App derives <strong>auth_key</strong> and <strong>master_key_seed</strong> from passphrase via Argon2id (64 MiB, 3 iterations)</li>
+          <li>App generates P-256 device keypair; wraps master key to device pubkey</li>
+          <li>App wraps master key under passphrase as recovery backup</li>
+          <li>App calls <code>POST /api/auth/register</code> with invite token, auth verifier, wrapped keys</li>
+          <li>Server redeems invite, creates user + friendship, issues session token</li>
+          <li>App stores session token in EncryptedSharedPreferences; device privkey in Android Keystore</li>
+        </ol>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Alternative Flows</div>
+        <ul class="alt-flows">
+          <li><strong>Invite expired (410):</strong> Screen shows inline error; user must request a new invite</li>
+          <li><strong>Username taken (409):</strong> Screen shows inline error; user picks a different username</li>
+          <li><strong>Keyboard covers submit button (landscape):</strong> Column is scrollable with IME padding; button always reachable</li>
+        </ul>
+      </div>
+
+      <div class="uc-full">
+        <div class="uc-section-label">Postconditions</div>
+        <ul class="postconditions">
+          <li>User account and session exist in the server database</li>
+          <li>Master key wrapped to device pubkey stored server-side; recovery backup stored server-side</li>
+          <li>Bidirectional friendship created between new user and invite sender</li>
+          <li>System plot "Just Arrived" created for the new user</li>
+          <li>User can upload photos and videos immediately</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- UC-02 -->
+  <div class="uc-card" id="uc02">
+    <div class="uc-header">
+      <div class="uc-id">UC-02</div>
+      <div>
+        <div class="uc-title">Pair a Web Browser</div>
+        <div class="uc-goal">The vault owner gains read access to their vault from a desktop web browser without entering their passphrase.</div>
+      </div>
+    </div>
+    <div class="uc-body">
+
+      <div>
+        <div class="uc-section-label">Actors</div>
+        <div class="tag-row"><span class="tag">Vault Owner (Android)</span><span class="tag">Vault Owner (Browser)</span><span class="tag">Server (relay only)</span></div>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Preconditions</div>
+        <ul class="preconditions">
+          <li>User has an active Android session</li>
+          <li>Browser is open at heirlooms.digital/pair or via login page link</li>
+        </ul>
+      </div>
+
+      <div class="uc-full">
+        <div class="uc-section-label">User Journey</div>
+        <div class="journey">
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 1</div>On Android: Burger → Devices &amp; Access → "Show pairing code"</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 2</div>On browser: visit /pair, enter the 8-digit code</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 3</div>Browser displays QR code; Android scans it</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 4</div>Android wraps master key to browser's ephemeral pubkey, sends to server</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 5</div>Browser polls, receives wrapped key, unwraps — vault is open</div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Main Flow (steps)</div>
+        <ol class="steps">
+          <li>Android calls <code>POST /api/auth/pairing/initiate</code>; receives 8-digit code</li>
+          <li>Browser generates ephemeral P-256 keypair (non-extractable WebCrypto)</li>
+          <li>Browser calls <code>POST /api/auth/pairing/qr</code> with code + pubkey; receives session_id</li>
+          <li>Browser displays QR encoding <code>{session_id, code}</code></li>
+          <li>Android scans QR; unwraps own master key from Android Keystore</li>
+          <li>Android re-wraps master key to browser's pubkey; calls <code>POST /api/auth/pairing/complete</code></li>
+          <li>Browser polls <code>GET /api/auth/pairing/status</code> every second</li>
+          <li>Browser receives session token + wrapped master key; unwraps with ephemeral privkey</li>
+          <li>Browser persists keypair + wrapped key to IndexedDB; vault unlocked</li>
+        </ol>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Alternative Flows</div>
+        <ul class="alt-flows">
+          <li><strong>Subsequent browser visits:</strong> Browser calls <code>GET /api/auth/me</code> on load; if valid, reads IDB material and auto-unlocks — no re-pairing needed</li>
+          <li><strong>Session expired (401):</strong> IDB is cleared; user is redirected to login page</li>
+          <li><strong>Login page path:</strong> User enters passphrase → Argon2id → <code>POST /api/auth/login</code> → vault unlocked via passphrase recovery key</li>
+        </ul>
+      </div>
+
+      <div class="uc-full">
+        <div class="uc-section-label">Postconditions</div>
+        <ul class="postconditions">
+          <li>Web session created; session token stored in browser localStorage</li>
+          <li>Master key material persisted to IndexedDB (survives tab close)</li>
+          <li>Browser can decrypt and display all vault content without further user input</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- UC-03 -->
+  <div class="uc-card" id="uc03">
+    <div class="uc-header">
+      <div class="uc-id">UC-03</div>
+      <div>
+        <div class="uc-title">Recover Vault Access</div>
+        <div class="uc-goal">The vault owner regains access to their vault after losing their device, using their passphrase.</div>
+      </div>
+    </div>
+    <div class="uc-body">
+
+      <div>
+        <div class="uc-section-label">Actors</div>
+        <div class="tag-row"><span class="tag">Vault Owner</span><span class="tag">Server</span></div>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Preconditions</div>
+        <ul class="preconditions">
+          <li>User has a valid passphrase (set at registration)</li>
+          <li>User knows their username</li>
+          <li>Passphrase recovery blob was stored at registration</li>
+        </ul>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Main Flow (steps)</div>
+        <ol class="steps">
+          <li>User opens web app and navigates to login</li>
+          <li>User enters username; browser calls <code>POST /api/auth/challenge</code> to retrieve auth_salt</li>
+          <li>Browser derives auth_key + master_key_seed from passphrase + salt (Argon2id)</li>
+          <li>Browser calls <code>POST /api/auth/login</code> with SHA-256(auth_key)</li>
+          <li>Server verifies against stored auth_verifier; issues session token</li>
+          <li>Browser calls <code>GET /api/keys/recovery</code> to fetch passphrase-wrapped master key blob</li>
+          <li>Browser decrypts blob using master_key_seed → master key recovered</li>
+          <li>Vault is accessible; user can then pair a new Android device</li>
+        </ol>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Alternative Flows</div>
+        <ul class="alt-flows">
+          <li><strong>Unknown username:</strong> Server returns a deterministic fake salt — no enumeration possible; login will fail at the verifier step</li>
+          <li><strong>Wrong passphrase:</strong> auth_verifier mismatch → 401; no hint given as to which field is wrong</li>
+          <li><strong>Founding user migration (M8 deploy):</strong> One-time <code>POST /api/auth/setup-existing</code> path for users upgrading from the legacy API-key model</li>
+        </ul>
+      </div>
+
+      <div class="uc-full">
+        <div class="uc-section-label">Postconditions</div>
+        <ul class="postconditions">
+          <li>Active session established; vault accessible in browser</li>
+          <li>User can initiate a new device pairing from the web to re-establish Android access</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════ DAILY USE ════════════════════════════════ -->
+  <div class="section-header" id="section-daily">
+    <span class="section-pill" style="background:var(--bg-daily);color:var(--accent-daily)">Daily Use</span>
+    <h2>Everyday workflows</h2>
+  </div>
+
+  <!-- UC-04 -->
+  <div class="uc-card" id="uc04">
+    <div class="uc-header">
+      <div class="uc-id">UC-04</div>
+      <div>
+        <div class="uc-title">Upload a Photo or Video</div>
+        <div class="uc-goal">The vault owner saves a photo or video into their encrypted vault from their Android device.</div>
+      </div>
+    </div>
+    <div class="uc-body">
+
+      <div>
+        <div class="uc-section-label">Actors</div>
+        <div class="tag-row"><span class="tag">Vault Owner (Android)</span><span class="tag">Server</span><span class="tag">GCS</span></div>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Preconditions</div>
+        <ul class="preconditions">
+          <li>User has an active Android session with vault unlocked</li>
+          <li>Photo or video is available in the device gallery or camera</li>
+        </ul>
+      </div>
+
+      <div class="uc-full">
+        <div class="uc-section-label">User Journey</div>
+        <div class="journey">
+          <div class="journey-step"><div class="step-content"><div class="step-n">ENTRY A</div>Share sheet: long-press photo in gallery → "My Heirlooms"</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">ENTRY B</div>In Garden: tap + Photo or + Video button</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 1</div>App encrypts content, thumbnail, and EXIF locally</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 2</div>Encrypted bytes uploaded directly to GCS via presigned URL</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 3</div>Confirm sent to server; item appears in Just Arrived</div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Main Flow (steps)</div>
+        <ol class="steps">
+          <li>App calls <code>POST /api/content/uploads/create</code>; receives upload_id + two presigned PUT URLs</li>
+          <li>App generates a fresh 32-byte DEK; encrypts content + thumbnail + EXIF metadata (AES-256-GCM)</li>
+          <li>App wraps DEK under master key</li>
+          <li>WorkManager job uploads encrypted content blob to GCS (presigned PUT)</li>
+          <li>WorkManager job uploads encrypted thumbnail blob to GCS (presigned PUT)</li>
+          <li>App calls <code>POST /api/content/uploads/{id}/confirm</code> with wrapped DEK + encrypted metadata</li>
+          <li>Upload Progress screen shows byte-level progress; "Go to Garden" button appears on completion</li>
+          <li>Item lands in "Just Arrived" plot with olive-branch arrival animation</li>
+        </ol>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Alternative Flows</div>
+        <ul class="alt-flows">
+          <li><strong>Multiple files:</strong> One WorkManager job per file; all run concurrently; progress shown per-file</li>
+          <li><strong>Upload interrupted:</strong> WorkManager retries automatically on next connectivity</li>
+          <li><strong>Out of memory during preview clip (large video on low-RAM device):</strong> OOM caught as <code>Throwable</code>; upload still completes without preview clip</li>
+          <li><strong>Camera permission not granted (Fire OS):</strong> App requests CAMERA permission at launch-time before opening camera intent</li>
+          <li><strong>Fire OS video capture:</strong> Uses plain <code>ACTION_VIDEO_CAPTURE</code> intent (no <code>EXTRA_OUTPUT</code>) due to Fire OS incompatibility with pre-created URIs</li>
+        </ul>
+      </div>
+
+      <div class="uc-full">
+        <div class="uc-section-label">Postconditions</div>
+        <ul class="postconditions">
+          <li>Encrypted content and thumbnail stored in GCS; server holds only wrapped DEK and encrypted metadata</li>
+          <li>Item visible in the user's Just Arrived plot and browsable in Explore</li>
+          <li>Server never held plaintext bytes at any point in the flow</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- UC-05 -->
+  <div class="uc-card" id="uc05">
+    <div class="uc-header">
+      <div class="uc-id">UC-05</div>
+      <div>
+        <div class="uc-title">Browse the Garden</div>
+        <div class="uc-goal">The vault owner reviews and organises recently arrived items and their plot collections.</div>
+      </div>
+    </div>
+    <div class="uc-body">
+
+      <div>
+        <div class="uc-section-label">Actors</div>
+        <div class="tag-row"><span class="tag">Vault Owner</span></div>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Preconditions</div>
+        <ul class="preconditions">
+          <li>User is logged in with vault unlocked (Android or Web)</li>
+          <li>At least one upload exists</li>
+        </ul>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Main Flow (steps)</div>
+        <ol class="steps">
+          <li>User opens Garden tab — sees "Just Arrived" plot at top, then user-defined plots below</li>
+          <li>Just Arrived polls every 30 seconds; new items slide in with olive-branch animation</li>
+          <li>User horizontally scrolls each plot row (4-column thumbnail grid, LazyRow)</li>
+          <li>User taps a thumbnail to open Photo Detail</li>
+          <li>User taps a plot header pencil icon to rename or delete the plot</li>
+          <li>User taps "+ Add plot" at the bottom of the garden scroll to create a new plot</li>
+          <li>User long-presses a plot header for drag-to-reorder</li>
+        </ol>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Alternative Flows</div>
+        <ul class="alt-flows">
+          <li><strong>Empty garden:</strong> "A garden begins with a single seed" empty-state illustration</li>
+          <li><strong>Received shared item:</strong> Appears in Just Arrived with a person-icon indicator on the thumbnail</li>
+          <li><strong>Thumbnail not yet available:</strong> Olive branch icon shown (not a spinner) during load and on failure</li>
+        </ul>
+      </div>
+
+      <div class="uc-full">
+        <div class="uc-section-label">Postconditions</div>
+        <ul class="postconditions">
+          <li>User has reviewed new arrivals; items are visible in their appropriate plots</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- UC-06 -->
+  <div class="uc-card" id="uc06">
+    <div class="uc-header">
+      <div class="uc-id">UC-06</div>
+      <div>
+        <div class="uc-title">Explore the Vault</div>
+        <div class="uc-goal">The vault owner browses their full collection with filtering and sorting — a leisure surface distinct from the work surface of the Garden.</div>
+      </div>
+    </div>
+    <div class="uc-body">
+
+      <div>
+        <div class="uc-section-label">Actors</div>
+        <div class="tag-row"><span class="tag">Vault Owner</span></div>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Main Flow (steps)</div>
+        <ol class="steps">
+          <li>User opens Explore tab — sees a 4-column paginated grid of all uploads, newest first</li>
+          <li>User opens filter sheet to filter by tag, media type, or date range</li>
+          <li>User changes sort order (newest first, oldest first, recently viewed)</li>
+          <li>Grid loads more items as user scrolls (cursor-based pagination)</li>
+          <li>User taps a thumbnail to open Photo Detail in Explore flavour (negative-action button is "Back to Explore")</li>
+          <li>Server records a <code>last_viewed_at</code> timestamp per view for the "recently viewed" sort</li>
+        </ol>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Alternative Flows</div>
+        <ul class="alt-flows">
+          <li><strong>No results for filter:</strong> Empty state shown; filter chrome remains visible</li>
+          <li><strong>Composted items:</strong> Not shown in Explore; accessible only via the Compost view</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- UC-07 -->
+  <div class="uc-card" id="uc07">
+    <div class="uc-header">
+      <div class="uc-id">UC-07</div>
+      <div>
+        <div class="uc-title">View a Photo or Video</div>
+        <div class="uc-goal">The vault owner opens and views a specific encrypted item in full detail.</div>
+      </div>
+    </div>
+    <div class="uc-body">
+
+      <div>
+        <div class="uc-section-label">Actors</div>
+        <div class="tag-row"><span class="tag">Vault Owner</span><span class="tag">GCS</span></div>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Main Flow (steps)</div>
+        <ol class="steps">
+          <li>User taps a thumbnail from Garden, Explore, or Capsule</li>
+          <li>App fetches presigned GET URL for the encrypted content blob from GCS</li>
+          <li>App unwraps DEK using master key (or sharing privkey for received items)</li>
+          <li>App decrypts content bytes using DEK (AES-256-GCM)</li>
+          <li>Photo is displayed full-screen; video begins streaming</li>
+          <li>Detail view shows: taken_at, tags, "in N capsules" count, rotation, "Shared by [name]" if applicable</li>
+          <li>User can add/edit tags, rotate, add to capsule, share (if owned + encrypted), or compost from this screen</li>
+        </ol>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Alternative Flows</div>
+        <ul class="alt-flows">
+          <li><strong>Large video on web:</strong> MSE streaming — video is fetched and decrypted chunk by chunk using mp4box; playback begins before the full file is downloaded</li>
+          <li><strong>Received (shared) item:</strong> DEK unwrapped using sharing_privkey (p256-ecdh-hkdf-aes256gcm-v1 format detected automatically); "Shared by [Name]" shown</li>
+          <li><strong>?from= parameter:</strong> Determines the negative-action button label and destination (Garden / Explore / Compost)</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════ SOCIAL ═══════════════════════════════════ -->
+  <div class="section-header" id="section-social">
+    <span class="section-pill" style="background:var(--bg-social);color:var(--accent-social)">Social</span>
+    <h2>Friends &amp; sharing</h2>
+  </div>
+
+  <!-- UC-08 -->
+  <div class="uc-card" id="uc08">
+    <div class="uc-header">
+      <div class="uc-id">UC-08</div>
+      <div>
+        <div class="uc-title">Share an Item with a Friend</div>
+        <div class="uc-goal">The vault owner sends an encrypted photo or video to a friend. The GCS blob is not copied — only the key wrapping changes.</div>
+      </div>
+    </div>
+    <div class="uc-body">
+
+      <div>
+        <div class="uc-section-label">Actors</div>
+        <div class="tag-row"><span class="tag">Vault Owner (Sender)</span><span class="tag">Friend (Recipient)</span><span class="tag">Server</span></div>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Preconditions</div>
+        <ul class="preconditions">
+          <li>Sender owns the item (not a received share) and it is encrypted</li>
+          <li>Sender and recipient are connected as friends (via invite redemption)</li>
+          <li>Recipient has completed their sharing keypair setup (lazy init on first vault unlock post-M9)</li>
+        </ul>
+      </div>
+
+      <div class="uc-full">
+        <div class="uc-section-label">User Journey</div>
+        <div class="journey">
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 1</div>Tap share icon (bottom-right) on an owned encrypted thumbnail</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 2</div>Friend picker sheet opens; select recipient</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 3</div>App fetches recipient's sharing pubkey; re-wraps DEK locally</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 4</div>Server creates recipient upload record (same GCS blob)</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 5</div>Item lands in recipient's Just Arrived</div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Main Flow (steps)</div>
+        <ol class="steps">
+          <li>User taps share icon (visible only on encrypted + owned items)</li>
+          <li>App fetches friend list; user selects a friend</li>
+          <li>App calls <code>GET /api/keys/sharing/{recipientUserId}</code> — server checks friendship</li>
+          <li>App fetches upload metadata to get <code>wrapped_dek</code></li>
+          <li>App unwraps DEK using own master key; re-wraps to recipient's P-256 sharing pubkey (ECDH-HKDF-AES-GCM)</li>
+          <li>App calls <code>POST /api/content/uploads/{id}/share</code> with wrapped DEKs for recipient</li>
+          <li>Server verifies ownership + friendship (second check); creates recipient upload row</li>
+        </ol>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Alternative Flows</div>
+        <ul class="alt-flows">
+          <li><strong>No friends yet:</strong> Friend picker shows empty state; share icon is still visible for when friends are added</li>
+          <li><strong>Item already shared with this recipient:</strong> Server will create a second record (re-sharing is allowed)</li>
+        </ul>
+      </div>
+
+      <div class="uc-full">
+        <div class="uc-section-label">Postconditions</div>
+        <ul class="postconditions">
+          <li>Recipient has a new upload record with their own wrapped DEK; GCS blob is shared, not copied</li>
+          <li>Recipient's copy has independent rotation and tag state</li>
+          <li>GCS blob cannot be deleted by the sender's compost action while the recipient's copy is live</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- UC-09 -->
+  <div class="uc-card" id="uc09">
+    <div class="uc-header">
+      <div class="uc-id">UC-09</div>
+      <div>
+        <div class="uc-title">Receive a Shared Item</div>
+        <div class="uc-goal">A friend's photo appears in the recipient's vault, decryptable only with the recipient's sharing private key.</div>
+      </div>
+    </div>
+    <div class="uc-body">
+
+      <div>
+        <div class="uc-section-label">Actors</div>
+        <div class="tag-row"><span class="tag">Friend (Recipient)</span><span class="tag">Server</span><span class="tag">GCS</span></div>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Main Flow (steps)</div>
+        <ol class="steps">
+          <li>Garden's 30-second Just Arrived poll returns the new shared item</li>
+          <li>Item has <code>thumbnail_dek_format = "p256-ecdh-hkdf-aes256gcm-v1"</code></li>
+          <li>App detects non-standard format; fetches sharing_privkey (wrapped under master key) from server</li>
+          <li>App unwraps sharing_privkey; uses it to unwrap the thumbnail DEK via ECDH-HKDF-AES-GCM</li>
+          <li>Thumbnail decrypted and displayed with person-icon indicator</li>
+          <li>Full item view shows "Shared by [Sender's display name]"</li>
+          <li>Recipient can add tags, rotate, and manage the item independently</li>
+        </ol>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Alternative Flows</div>
+        <ul class="alt-flows">
+          <li><strong>Arrival animation:</strong> Olive-branch arrival animation plays when item first appears in Just Arrived</li>
+          <li><strong>Recipient composting their copy:</strong> Compost guard checks for other live references before deleting the GCS blob</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════ CAPSULES ══════════════════════════════════ -->
+  <div class="section-header" id="section-capsules">
+    <span class="section-pill" style="background:var(--bg-manage);color:var(--accent-manage)">Capsules</span>
+    <h2>Time-locked memories</h2>
+  </div>
+
+  <!-- UC-10 -->
+  <div class="uc-card" id="uc10">
+    <div class="uc-header">
+      <div class="uc-id">UC-10</div>
+      <div>
+        <div class="uc-title">Create a Time Capsule</div>
+        <div class="uc-goal">The vault owner plants a collection of photos and a message to be delivered at a future date.</div>
+      </div>
+    </div>
+    <div class="uc-body">
+
+      <div>
+        <div class="uc-section-label">Actors</div>
+        <div class="tag-row"><span class="tag">Vault Owner</span><span class="tag">Server</span></div>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Preconditions</div>
+        <ul class="preconditions">
+          <li>User is logged in; vault is unlocked</li>
+          <li>At least one upload exists to add to the capsule (optional for draft)</li>
+        </ul>
+      </div>
+
+      <div class="uc-full">
+        <div class="uc-section-label">User Journey</div>
+        <div class="journey">
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 1</div>Capsules tab → Create capsule</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 2</div>Enter recipient name (free-text), unlock date, optional message</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 3</div>Add photos from the vault via photo picker modal</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 4</div>Submit — capsule created in Open state</div></div>
+          <div class="journey-step"><div class="step-content"><div class="step-n">STEP 5</div>Continue editing until ready to seal</div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Main Flow (steps)</div>
+        <ol class="steps">
+          <li>User navigates to Capsules tab; taps Create</li>
+          <li>User enters: recipient (free text), unlock date (must be future), message (optional)</li>
+          <li>User opens photo picker modal; selects photos from their vault</li>
+          <li>App calls <code>POST /api/capsules</code>; server creates capsule in <strong>Open</strong> state</li>
+          <li>App calls <code>POST /api/capsules/{id}/photos</code> to add selected photos</li>
+          <li>Capsule appears in list with visual "open" state indicator (wax seal open)</li>
+          <li>User may return to edit recipient, message, photos, or unlock date while capsule is Open</li>
+        </ol>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Capsule States</div>
+        <div class="tag-row">
+          <span class="tag" style="background:#eaf2ea;color:#2d6a2d;border-color:#c0d8c0">● Open — editable</span>
+          <span class="tag" style="background:#e8edf8;color:#2d3f8a;border-color:#b0c0e0">● Sealed — locked</span>
+          <span class="tag" style="background:#f5eee3;color:#7a5a2d;border-color:#d8c0a0">● Delivered</span>
+          <span class="tag" style="background:#f5e8e8;color:#8a2d2d;border-color:#d8b0b0">● Cancelled</span>
+        </div>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Alternative Flows</div>
+        <ul class="alt-flows">
+          <li><strong>Unlock date in the past:</strong> Validation error shown; submission blocked</li>
+          <li><strong>No recipient entered:</strong> Validation error shown; submission blocked</li>
+          <li><strong>Cancel capsule:</strong> Capsule transitions to Cancelled; photos are unlinked but not deleted from vault</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- UC-11 -->
+  <div class="uc-card" id="uc11">
+    <div class="uc-header">
+      <div class="uc-id">UC-11</div>
+      <div>
+        <div class="uc-title">Seal a Capsule</div>
+        <div class="uc-goal">The vault owner freezes a capsule's contents. After sealing, neither the author nor Heirlooms can change what is inside.</div>
+      </div>
+    </div>
+    <div class="uc-body">
+
+      <div>
+        <div class="uc-section-label">Actors</div>
+        <div class="tag-row"><span class="tag">Vault Owner</span><span class="tag">Server</span></div>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Preconditions</div>
+        <ul class="preconditions">
+          <li>Capsule is in Open state</li>
+          <li>User has reviewed the contents and is ready to commit</li>
+        </ul>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Main Flow (steps)</div>
+        <ol class="steps">
+          <li>User opens a capsule in Open state; taps "Seal capsule"</li>
+          <li>Sealing animation plays (wax seal closing)</li>
+          <li>User confirms via a confirmation dialog (sealing cannot be undone)</li>
+          <li>App calls <code>POST /api/capsules/{id}/seal</code></li>
+          <li>Server validates state transition (Open → Sealed only); updates state</li>
+          <li>Capsule now shows Sealed indicator; edit controls are hidden</li>
+        </ol>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Alternative Flows</div>
+        <ul class="alt-flows">
+          <li><strong>Already sealed:</strong> Server rejects the transition with 409; client shows error</li>
+          <li><strong>Navigation guard:</strong> If user navigates away mid-form with unsaved changes, a confirmation prompt is shown before discarding</li>
+          <li><strong>Future — cryptographic sealing (M9+):</strong> Sealed will become a cryptographic state where even the author cannot decrypt; current sealing is a database-flag state only</li>
+        </ul>
+      </div>
+
+      <div class="uc-full">
+        <div class="uc-section-label">Postconditions</div>
+        <ul class="postconditions">
+          <li>Capsule state is Sealed; contents are frozen at this version</li>
+          <li>A new message version is recorded with a sealed_at timestamp</li>
+          <li>Capsule cannot be edited or unsealed by any party</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════ MANAGEMENT ═══════════════════════════════ -->
+  <div class="section-header" id="section-management">
+    <span class="section-pill" style="background:#eee;color:#5a5750">Management</span>
+    <h2>Organisation &amp; curation</h2>
+  </div>
+
+  <!-- UC-12 -->
+  <div class="uc-card" id="uc12">
+    <div class="uc-header">
+      <div class="uc-id">UC-12</div>
+      <div>
+        <div class="uc-title">Organise Items into Plots</div>
+        <div class="uc-goal">The vault owner groups photos and videos into named plots for the Garden work surface.</div>
+      </div>
+    </div>
+    <div class="uc-body">
+
+      <div>
+        <div class="uc-section-label">Actors</div>
+        <div class="tag-row"><span class="tag">Vault Owner</span><span class="tag">Server</span></div>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Main Flow (steps)</div>
+        <ol class="steps">
+          <li>User scrolls to the bottom of the Garden; taps "+ Add plot"</li>
+          <li>PlotCreateSheet opens; user enters a plot name</li>
+          <li>App calls <code>POST /api/plots</code>; new plot appears at the bottom of the Garden</li>
+          <li>User tags individual items from Photo Detail to associate them with the plot</li>
+          <li>User taps the pencil icon on a plot header to rename or delete the plot</li>
+          <li>User long-presses a plot row handle and drags to reorder</li>
+          <li>App calls <code>PATCH /api/plots</code> with new display order</li>
+        </ol>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Alternative Flows</div>
+        <ul class="alt-flows">
+          <li><strong>Delete plot:</strong> Confirmation dialog shown; plot deleted; items remain in vault (unassigned from that plot)</li>
+          <li><strong>System plot (Just Arrived):</strong> Cannot be renamed, deleted, or reordered — always shown first</li>
+          <li><strong>Web drag-and-drop reorder:</strong> Handled via DnD in the web Garden; same <code>PATCH /api/plots</code> endpoint</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- UC-13 -->
+  <div class="uc-card" id="uc13">
+    <div class="uc-header">
+      <div class="uc-id">UC-13</div>
+      <div>
+        <div class="uc-title">Compost an Item</div>
+        <div class="uc-goal">The vault owner soft-deletes a photo or video. It is held for 90 days before permanent removal — composting is considered, not casual.</div>
+      </div>
+    </div>
+    <div class="uc-body">
+
+      <div>
+        <div class="uc-section-label">Actors</div>
+        <div class="tag-row"><span class="tag">Vault Owner</span><span class="tag">Server</span></div>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Preconditions</div>
+        <ul class="preconditions">
+          <li>Item has no tags assigned</li>
+          <li>Item is not a member of any active (non-cancelled) capsule</li>
+        </ul>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Main Flow (steps)</div>
+        <ol class="steps">
+          <li>User opens Photo Detail; taps "Compost" (negative-action button)</li>
+          <li>Confirmation dialog explains the 90-day window</li>
+          <li>App calls <code>POST /api/content/uploads/{id}/compost</code></li>
+          <li>Server checks: no tags, no active capsule memberships</li>
+          <li>Item moves to Compost view; disappears from Garden and Explore</li>
+          <li>User can restore the item within 90 days via the Compost view</li>
+          <li>After 90 days: background cleanup service permanently deletes DB row and GCS blob</li>
+        </ol>
+      </div>
+
+      <div>
+        <div class="uc-section-label">Alternative Flows</div>
+        <ul class="alt-flows">
+          <li><strong>Item has tags:</strong> Server returns 409; user must remove tags before composting</li>
+          <li><strong>Item is in an active capsule:</strong> Server returns 409; user must remove from capsule first</li>
+          <li><strong>Item has live shared copies:</strong> GCS blob deletion is skipped by the cleanup service; only the sender's DB row is deleted</li>
+          <li><strong>Restore:</strong> User opens Compost view; taps Restore; item returns to Garden in Just Arrived</li>
+        </ul>
+      </div>
+
+      <div class="uc-full">
+        <div class="uc-section-label">Postconditions</div>
+        <ul class="postconditions">
+          <li>Item is hidden from all browsing surfaces but recoverable for 90 days</li>
+          <li>After 90 days: DB row and GCS blob permanently deleted (GCS deletion guarded against live shared references)</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <footer>
+    Heirlooms · heirlooms.digital · Use Cases v1.0 · 12 May 2026<br />
+    This document describes the application at v0.45.5. Capsule cryptographic sealing (M9+) and milestone delivery (M10) are not yet implemented.
+  </footer>
+
+</main>
+
+</body>
+</html>

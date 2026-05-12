@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Heirlooms — Architecture &amp; Security Diagrams</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: #f5f4f0;
+      color: #2c2a25;
+      padding: 48px 24px 96px;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      font-size: 0.9rem;
+      color: #6b6860;
+      margin-bottom: 48px;
+    }
+
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 52px;
+    }
+
+    nav a {
+      font-size: 0.8rem;
+      padding: 6px 14px;
+      border-radius: 20px;
+      background: #fff;
+      border: 1px solid #d8d5ce;
+      color: #2c2a25;
+      text-decoration: none;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    nav a:hover {
+      background: #2c2a25;
+      color: #f5f4f0;
+      border-color: #2c2a25;
+    }
+
+    section {
+      background: #ffffff;
+      border: 1px solid #ddd9d0;
+      border-radius: 10px;
+      padding: 36px 40px 40px;
+      margin-bottom: 40px;
+      scroll-margin-top: 32px;
+    }
+
+    section h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    section .label {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 2px 9px;
+      border-radius: 4px;
+      margin-bottom: 14px;
+    }
+
+    .label-arch   { background: #e8f0e8; color: #2d6a2d; }
+    .label-sec    { background: #e8edf8; color: #2d3f8a; }
+
+    section .description {
+      font-size: 0.85rem;
+      color: #5a5750;
+      line-height: 1.6;
+      margin-bottom: 28px;
+      max-width: 680px;
+    }
+
+    .mermaid {
+      overflow-x: auto;
+      background: #fafaf8;
+      border: 1px solid #e8e4dc;
+      border-radius: 8px;
+      padding: 28px 24px;
+      min-height: 60px;
+    }
+
+    .callouts {
+      margin-top: 24px;
+      border-left: 3px solid #d8d5ce;
+      padding-left: 16px;
+    }
+
+    .callouts p {
+      font-size: 0.82rem;
+      color: #5a5750;
+      line-height: 1.6;
+      margin-bottom: 6px;
+    }
+
+    .callouts p strong { color: #2c2a25; }
+
+    footer {
+      text-align: center;
+      font-size: 0.78rem;
+      color: #9a9790;
+      margin-top: 24px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Heirlooms</h1>
+  <p class="subtitle">Architecture &amp; Security Mechanism Diagrams — v0.45.5</p>
+
+  <nav>
+    <a href="#arch">System Architecture</a>
+    <a href="#sec1">1 · Registration &amp; Key Ceremony</a>
+    <a href="#sec2">2 · Device Pairing</a>
+    <a href="#sec3">3 · Upload Encryption</a>
+    <a href="#sec4">4 · Item Sharing</a>
+  </nav>
+
+  <!-- ── ARCHITECTURE ─────────────────────────────────────────── -->
+  <section id="arch">
+    <span class="label label-arch">Architecture</span>
+    <h2>System Architecture</h2>
+    <p class="description">
+      Three clients — Android app, web app, and a public share viewer — communicate with a single
+      Kotlin/http4k server on Cloud Run. All media is stored as opaque encrypted blobs in GCS;
+      the server never decrypts content. Clients upload and download directly via presigned GCS URLs.
+    </p>
+    <div class="mermaid">
+graph TB
+    subgraph Clients
+        A["📱 Android App\nKotlin · Jetpack Compose\nWorkManager · Android Keystore"]
+        W["🌐 Web App\nReact · Vite\nWebCrypto API · IndexedDB"]
+        V["🔗 Web Share Viewer\nread-only · no login required"]
+    end
+
+    subgraph "Server — Cloud Run"
+        API["HeirloomsServer\nKotlin · http4k\nFlyway migrations · REST API"]
+    end
+
+    subgraph "GCP Storage"
+        DB[("PostgreSQL\nCloud SQL\n\nmetadata · sessions\nwrapped keys · capsules\nfriendships · plots")]
+        GCS[("Google Cloud Storage\n\nencrypted blobs only\nserver never decrypts")]
+    end
+
+    A -->|"HTTPS · session token\nSHA-256 hash stored"| API
+    W -->|"HTTPS · session token"| API
+    V -->|"HTTPS · share token"| API
+
+    A -->|"presigned PUT\ndirect encrypted upload\nserver not in data path"| GCS
+    W -->|"presigned GET\ndirect encrypted download"| GCS
+    V -->|"presigned GET"| GCS
+
+    API -->|"metadata reads/writes\nno plaintext content"| DB
+    API -->|"presigned URL generation\nblob existence checks"| GCS
+    </div>
+  </section>
+
+  <!-- ── SECURITY 1 ─────────────────────────────────────────────── -->
+  <section id="sec1">
+    <span class="label label-sec">Security Mechanism 1</span>
+    <h2>Registration &amp; Key Ceremony (First Device Setup)</h2>
+    <p class="description">
+      New users arrive via a 48-hour invite token. The app derives separate auth and master-key
+      material from the passphrase using Argon2id, generates a device keypair, and registers
+      with the server. The master key never leaves the device in plaintext — the server stores
+      only the wrapped (encrypted) copy.
+    </p>
+    <div class="mermaid">
+sequenceDiagram
+    actor User
+    participant App as Android App
+    participant S as Server
+    participant DB as PostgreSQL
+
+    S-->>User: Invite URL (48-hour token)
+    User->>App: Enter invite code + choose passphrase
+
+    rect rgb(232,240,232)
+        Note over App: Keypair & master key generation — all local
+        App->>App: Generate P-256 device keypair
+        App->>App: Generate 32-byte master key (SecureRandom)
+        App->>App: Wrap master key → device pubkey<br/>(ECDH-HKDF-AES-GCM · p256-ecdh-hkdf-aes256gcm-v1)
+    end
+
+    rect rgb(255,248,230)
+        Note over App: Passphrase KDF — all local
+        App->>App: Generate 16-byte auth_salt (SecureRandom)
+        App->>App: Argon2id(passphrase, salt) → 64 bytes<br/>64 MiB · 3 iterations · 1 thread
+        App->>App: auth_key        = output[0..31]
+        App->>App: master_key_seed = output[32..63]
+        App->>App: auth_verifier   = SHA-256(auth_key)
+        App->>App: Wrap master key → master_key_seed<br/>(passphrase recovery backup · argon2id-aes256gcm-v1)
+    end
+
+    App->>S: POST /api/auth/register<br/>{invite_token, username, display_name,<br/>auth_salt, auth_verifier,<br/>device_pubkey (SPKI), wrapped_master_key,<br/>wrapped_master_key_recovery}
+
+    S->>DB: Create user row
+    S->>DB: Create wrapped_keys row (device pubkey + wrapped master key)
+    S->>DB: Create recovery_passphrase row
+    S->>DB: Redeem invite token · create friendship if applicable
+    S->>DB: Create system plot (Just Arrived)
+    S-->>App: session_token (32 random bytes)
+
+    App->>App: Store device privkey in Android Keystore<br/>Store session_token in EncryptedSharedPreferences
+
+    Note over App: Master key is never persisted — re-derived or unwrapped on demand
+    </div>
+    <div class="callouts">
+      <p><strong>Argon2id split:</strong> The 64-byte KDF output is split so the same passphrase produces both an auth credential (auth_key → auth_verifier) and a key-encryption key (master_key_seed) — the server learns neither the passphrase nor the master key.</p>
+      <p><strong>auth_verifier:</strong> SHA-256(auth_key) is what the server stores. Even a full DB dump doesn't yield the passphrase or master key.</p>
+      <p><strong>Fake salts:</strong> For unknown usernames, the challenge endpoint returns a deterministic fake salt (HMAC-SHA256 of server secret + username) — preventing username enumeration via timing.</p>
+    </div>
+  </section>
+
+  <!-- ── SECURITY 2 ─────────────────────────────────────────────── -->
+  <section id="sec2">
+    <span class="label label-sec">Security Mechanism 2</span>
+    <h2>Device Pairing (Android → Web Browser)</h2>
+    <p class="description">
+      The server is a blind relay throughout pairing. The Android device wraps the master key
+      to the browser's ephemeral public key; the server stores the wrapped blob but never
+      holds the plaintext master key. The browser's private key is non-extractable from WebCrypto.
+    </p>
+    <div class="mermaid">
+sequenceDiagram
+    participant A as Android App
+    participant S as Server
+    participant W as Web Browser
+
+    A->>S: POST /api/auth/pairing/initiate
+    S-->>A: 8-digit numeric code + session_id
+
+    rect rgb(232,240,232)
+        Note over A: Android displays QR
+        A->>A: Encode {session_id, 8-digit-code} as QR (ZXing)
+    end
+
+    rect rgb(255,248,230)
+        Note over W: Browser generates ephemeral keypair
+        W->>W: P-256 keypair via WebCrypto API<br/>extractable: false (private key never leaves browser)
+        W->>S: POST /api/auth/pairing/qr<br/>{8-digit-code, web_pubkey (SPKI)}
+        S-->>W: {session_id}
+        W->>W: Begin polling for completion
+    end
+
+    A->>A: User scans QR → parse {session_id, web_pubkey}
+
+    rect rgb(232,240,255)
+        Note over A: Android re-wraps master key for the browser
+        A->>A: Unwrap master key ← device privkey (Android Keystore)
+        A->>A: Wrap master key → web_pubkey<br/>(ECDH-HKDF-AES-GCM · p256-ecdh-hkdf-aes256gcm-v1)
+    end
+
+    A->>S: POST /api/auth/pairing/complete<br/>{session_id, wrapped_master_key_for_web}
+    S->>S: Create web session<br/>Store wrapped key (server sees only ciphertext)
+
+    loop Poll every 1 second
+        W->>S: GET /api/auth/pairing/status
+    end
+    S-->>W: {session_token, wrapped_master_key}
+
+    rect rgb(255,248,230)
+        Note over W: Browser unwraps master key
+        W->>W: Unwrap master key ← ephemeral privkey
+        W->>W: Persist {keypair, wrapped_key} to IndexedDB<br/>(survives tab close · cleared on logout)
+    end
+
+    Note over W: Vault unlocked for this session
+    </div>
+    <div class="callouts">
+      <p><strong>Server as blind relay:</strong> The server stores <code>wrapped_master_key_for_web</code> but cannot decrypt it — it only has the web pubkey, not the privkey.</p>
+      <p><strong>Non-extractable WebCrypto key:</strong> The browser's private key cannot be read via JavaScript APIs, only used for the unwrap operation.</p>
+      <p><strong>IDB persistence:</strong> On subsequent visits the browser re-validates the session token via <code>GET /api/auth/me</code>, then loads the IDB material to auto-unlock without re-pairing.</p>
+    </div>
+  </section>
+
+  <!-- ── SECURITY 3 ─────────────────────────────────────────────── -->
+  <section id="sec3">
+    <span class="label label-sec">Security Mechanism 3</span>
+    <h2>Upload Encryption (Client-Side, Server-Blind)</h2>
+    <p class="description">
+      Every file gets a fresh random data encryption key (DEK). The DEK encrypts the content,
+      thumbnail, and EXIF metadata separately. Only the wrapped (encrypted) DEK reaches the server.
+      Media bytes travel from the client directly to GCS via presigned URLs — the server is never
+      in the data path.
+    </p>
+    <div class="mermaid">
+sequenceDiagram
+    participant A as Android App
+    participant S as Server
+    participant GCS as Cloud Storage
+
+    A->>S: POST /api/content/uploads/create<br/>{content_type, envelope_version}
+    S-->>A: {upload_id, presigned_PUT_url_content, presigned_PUT_url_thumb}
+
+    rect rgb(232,240,232)
+        Note over A: All encryption is local — no plaintext leaves the device
+        A->>A: Generate 32-byte DEK (SecureRandom)
+        A->>A: Encrypt content bytes under DEK (AES-256-GCM)<br/>Fresh 12-byte random nonce per operation<br/>Envelope: [0x01][alg_id_len][alg_id][nonce][ciphertext][auth_tag]
+        A->>A: Encrypt thumbnail bytes under DEK (same envelope format)
+        A->>A: Encrypt EXIF JSON under DEK<br/>(GPS coords, camera model — too sensitive for server)
+        A->>A: Wrap DEK under master key (master-aes256gcm-v1)
+    end
+
+    rect rgb(255,248,230)
+        Note over A,GCS: Direct upload via presigned URLs — server not in data path
+        A->>GCS: PUT encrypted content blob
+        A->>GCS: PUT encrypted thumbnail blob
+    end
+
+    A->>S: POST /api/content/uploads/{id}/confirm<br/>{wrapped_dek, wrap_format, encrypted_metadata,<br/>taken_at, content_hash, file_size, ...}
+
+    rect rgb(232,240,255)
+        Note over S: Server validates envelope structure only — never decrypts
+        S->>S: Check version byte = 0x01
+        S->>S: Check alg_id is a recognised string
+        S->>S: Check blob ≥ minimum byte length (31 symmetric · 96 asymmetric)
+        S->>S: Verify GCS objects exist via content_hash
+    end
+
+    S-->>A: 200 OK · upload visible in Garden
+    </div>
+    <div class="callouts">
+      <p><strong>Per-file DEK:</strong> Each upload has its own random key. Compromise of one file's DEK affects only that file.</p>
+      <p><strong>Nonce discipline:</strong> AES-GCM nonce reuse under the same key causes catastrophic plaintext disclosure. Each encryption operation generates a fresh 12-byte nonce stored inside the envelope.</p>
+      <p><strong>EXIF in the encrypted blob:</strong> GPS coordinates, camera make/model, and lens data live inside the DEK-encrypted metadata blob — the server sees a <code>taken_at</code> timestamp (needed for sort/filter) but nothing else identifiable.</p>
+      <p><strong>OOM guard (v0.43.0):</strong> Preview clip generation and the upload worker both catch <code>Throwable</code>, not <code>Exception</code> — <code>OutOfMemoryError</code> is an <code>Error</code> subclass and would otherwise silently crash the worker with no retry.</p>
+    </div>
+  </section>
+
+  <!-- ── SECURITY 4 ─────────────────────────────────────────────── -->
+  <section id="sec4">
+    <span class="label label-sec">Security Mechanism 4</span>
+    <h2>Item Sharing (DEK Re-wrap)</h2>
+    <p class="description">
+      Sharing never copies the GCS blob. Instead, the sender unwraps the item's DEK locally,
+      re-wraps it to the recipient's sharing public key, and the server creates a second
+      upload record pointing at the same storage object. The recipient uses their sharing
+      private key to decrypt. Friendship is verified server-side at both steps.
+    </p>
+    <div class="mermaid">
+sequenceDiagram
+    actor Sender
+    participant SA as Sender's App
+    participant S as Server
+    participant RA as Recipient's App
+    actor Recipient
+
+    Sender->>SA: Tap share icon on an owned encrypted item
+
+    SA->>S: GET /api/friends
+    S->>S: Verify caller is authenticated
+    S-->>SA: [{userId, displayName}, ...]
+    Sender->>SA: Select recipient from friend picker
+
+    SA->>S: GET /api/keys/sharing/{recipientUserId}
+    S->>S: Verify sender and recipient are friends
+    S-->>SA: recipient_sharing_pubkey (P-256 SPKI)
+
+    SA->>S: GET upload metadata (fetch wrapped_dek)
+    S-->>SA: {wrapped_dek, wrap_format, ...}
+
+    rect rgb(232,240,232)
+        Note over SA: DEK re-wrap — all local
+        SA->>SA: Unwrap DEK ← own master key (master-aes256gcm-v1)
+        SA->>SA: Wrap DEK → recipient_sharing_pubkey<br/>(ECDH-HKDF-AES-GCM · p256-ecdh-hkdf-aes256gcm-v1)
+        SA->>SA: Wrap thumbnail DEK → recipient_sharing_pubkey
+    end
+
+    SA->>S: POST /api/content/uploads/{id}/share<br/>{recipient_user_id,<br/>wrapped_dek_for_recipient,<br/>wrapped_thumbnail_dek_for_recipient}
+
+    rect rgb(232,240,255)
+        Note over S: Server creates recipient record — no new GCS object
+        S->>S: Verify sender owns the upload
+        S->>S: Verify friendship exists (second check)
+        S->>S: INSERT upload row for recipient<br/>(same gcs_key · recipient's wrapped DEKs<br/>shared_from_upload_id · shared_from_user_id)
+        S->>S: Compost guard: skip GCS blob deletion<br/>if any live shared copy references same storage key
+    end
+
+    RA->>S: GET /api/content/uploads (paginated poll)
+    S-->>RA: Shared item in results<br/>{thumbnail_dek_format: "p256-ecdh-hkdf-aes256gcm-v1"}
+
+    rect rgb(255,248,230)
+        Note over RA: Recipient detects non-standard dek_format
+        RA->>RA: Fetch own sharing_privkey<br/>(wrapped under master key · server-stored)
+        RA->>RA: Unwrap DEK ← sharing_privkey (ECDH-HKDF-AES-GCM)
+        RA->>RA: Decrypt thumbnail / content
+    end
+
+    Recipient->>RA: Item appears in Just Arrived<br/>Person-icon indicator on thumbnail<br/>"Shared by [Sender Name]" in detail view
+    </div>
+    <div class="callouts">
+      <p><strong>No blob copy:</strong> The same GCS object serves both sender and recipient. Storage cost is zero for the share; the compost guard ensures the blob isn't deleted while any live shared reference exists.</p>
+      <p><strong>Friend gate at two points:</strong> The server checks friendship when the sender fetches the recipient's pubkey, and again when the share call lands — a compromised client can't bypass it by calling endpoints directly.</p>
+      <p><strong>Per-user independence:</strong> The recipient's copy has its own rotation and tag state, independent of the sender's original.</p>
+      <p><strong>Sharing keypair lazy init:</strong> The sharing keypair is generated on first vault unlock after the M9 upgrade (<code>ensureSharingKey()</code>) and stored server-side wrapped under the master key.</p>
+    </div>
+  </section>
+
+  <footer>Heirlooms · heirlooms.digital · diagrams generated 12 May 2026</footer>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      sequence: {
+        actorMargin: 60,
+        messageMargin: 35,
+        boxTextMargin: 8,
+        noteMargin: 12,
+        mirrorActors: false,
+        wrap: true,
+        width: 180,
+      },
+      flowchart: {
+        curve: 'basis',
+        padding: 20,
+      },
+    });
+  </script>
+</body>
+</html>
