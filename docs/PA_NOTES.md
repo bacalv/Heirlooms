@@ -28,7 +28,11 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
   web photo detail page and garden thumbnails. `ShareModal` with friend picker, ECDH-HKDF DEK
   re-wrapping, "Shared by [name]" attribution on received items. Garden thumbnails now show full
   image (object-contain / ContentScale.Fit) instead of cropping. Android versionCode 52.
-- Next milestone: M10 (shared plots) — to be briefed.
+- Next milestone: M10 (shared plots) — brief at `docs/briefs/M10_brief.md`.
+  Four increments: E1 predicate/criteria system, E2 flows + staging, E3 shared plots + E2EE, E4 Android.
+  Key decisions: per-plot group key (AES-256-GCM, `plot-aes256gcm-v1`), member roles owner/member,
+  invite via friends list (primary) + invite link (fallback), staging flag on flow not plot,
+  staging decisions keyed (plot_id, upload_id). Public plots always require staging (deferred, enforced server-side).
   v0.36.0 = Preview clips, 1 MiB chunks, parallel prefetch, download button (server + web + Android).
   v0.35.0 = Web encrypted video playback + MSE streaming (web only).
   v0.34.0 = Web: streaming-format decrypt fix for large encrypted videos.

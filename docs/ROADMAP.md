@@ -284,15 +284,46 @@ probing attacker can't distinguish "doesn't exist" from "exists but isn't
 yours"). Two-user isolation tests across every endpoint are the milestone's
 non-negotiable correctness property.
 
-The users table includes device-pubkey columns from day one so M9's strong
-sealing doesn't have to migrate. The wrapped-keys table M7 introduced extends
-naturally to multiple users.
+The users table includes device-pubkey columns from day one so the sharing and
+sealing milestones don't have to migrate. The wrapped-keys table M7 introduced
+extends naturally to multiple users.
 
 After M8 ships, the first non-Bret human (a friend tester) is onboarded.
 M7's E2EE means the tester's data is end-to-end encrypted from first upload —
 there is no "we'll add encryption later" caveat.
 
-**Milestone 9 — Strong sealing + social recovery**
+**Milestone 9 — Friends, item sharing, Android plot management** *(shipped 11–12 May 2026 — v0.45.0–v0.46.2)*
+
+The social layer between multi-user infrastructure (M8) and shared galleries (M10).
+Each user has an account-level P-256 sharing keypair. Friendships form automatically
+on invite redemption. Individual item sharing: the sender re-wraps the item DEK under
+the recipient's sharing pubkey; the recipient gets a new upload record pointing to the
+same GCS blob, landing in Just Arrived. Received items show "Shared by [name]"
+attribution and are independently taggable and rotatable. Android plot management:
+create, rename, delete from the Garden. Web sharing: ShareModal with friend picker,
+DEK re-wrapping, and attribution. Garden thumbnails switched from crop to fit.
+First non-Bret human tester onboarded 12 May 2026.
+
+**Milestone 10 — Shared plots** *(current — briefed 12 May 2026)*
+
+Named collections visible to multiple users, built on a richer predicate/criteria
+system that replaces the tag-only plot model. The predicate system is the foundation:
+a boolean expression language (`tag`, `media_type`, `taken_after`, `has_location`,
+`is_received`, and more) composable with AND/OR/NOT, stored as JSONB on plots.
+Hidden plots (`show_in_garden = false`) serve as reusable predicate building blocks.
+
+Flows route items matching a criteria expression into any collection plot, with an
+optional staging review gate. Decisions (approve/reject) are scoped to the plot, not
+the flow — multiple flows feeding the same shared plot share one review surface.
+Public plots always require staging.
+
+Shared plots carry a per-plot E2EE group key (AES-256-GCM). The plot key is wrapped
+to each member's sharing pubkey individually; the server never sees it. Members:
+owner (add/remove items, invite, delete) and member (add items, invite). Invitation
+via friends list (primary) or 48-hour invite link (fallback). Plot key rotation on
+member removal is deferred. See `docs/briefs/M10_brief.md`.
+
+**Milestone 11 — Strong sealing + social recovery** *(was Milestone 9)*
 *Sealed* becomes a cryptographic state, not a database flag.
 
 Sealed capsules carry up to three independent unlock paths, each defending
@@ -337,11 +368,11 @@ prompt users to verify executors are still reachable. Honest copy at the
 moment of capsule sealing makes clear which guarantees apply to this specific
 capsule.
 
-**Milestone 10 — Milestone delivery**
+**Milestone 12 — Milestone delivery** *(was Milestone 10)*
 Scheduled delivery of a capsule on a specific date. The feature that makes
 Heirlooms more than cloud storage.
 
-Lands on the M9 foundation: recipient pubkey wrapping has happened at sealing,
+Lands on the M11 foundation: recipient pubkey wrapping has happened at sealing,
 tlock has held the gate cryptographically, executor shares are configured for
 capsules that need them. Delivery is the moment where Heirlooms's role — keep
 the ciphertext available, notify the recipient on the date — is exactly what
@@ -353,7 +384,7 @@ in-app delivery is the canonical surface. Print-on-delivery and other
 physical-world integrations are recorded as a second wave (see IDEAS.md,
 "Third-party delivery integrations").
 
-**Milestone 11 — Posthumous delivery**
+**Milestone 13 — Posthumous delivery** *(was Milestone 11)*
 Executor-mediated unlock for capsules whose release is conditioned on the
 user's death rather than on a date. The product's deepest promise — a video
 for a daughter on her 18th birthday, sealed by a parent who knows they may

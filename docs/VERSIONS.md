@@ -2,6 +2,17 @@
 
 ---
 
+## v0.46.0–v0.46.2 — Web sharing flow + thumbnail display fix (12 May 2026)
+
+Web (v0.46.0–v0.46.1) + Android (v0.46.2).
+
+- **Web sharing flow (v0.46.0–v0.46.1)** — Friends can now be shared with directly from the web, matching Android M9 behaviour. New `ShareModal` component: friend picker, fetches recipient sharing pubkey, unwraps sender DEK + thumbnail DEK with master key, re-wraps both under recipient's sharing pubkey using `p256-ecdh-hkdf-aes256gcm-v1`, POSTs to `POST /api/content/uploads/{id}/share`. Share button on `PhotoDetailPage` (owned encrypted items, not composted). Share icon on garden thumbnail hover (bottom-right corner) via `PlotThumbCard`. "Shared by [name]" attribution on received items — display name resolved from friends list by matching `sharedFromUserId`. Key fix: Android stores sharing pubkeys as X.509 SPKI DER (91 bytes); import must use `'spki'` format, not `'raw'`.
+- **Thumbnail display fix (v0.46.2)** — Garden thumbnails were cropping images at display time (thumbnail bytes are full-frame). Web: `object-cover` → `object-contain` in `PlotThumbCard`. Android: `ContentScale.Crop` → `ContentScale.Fit` as default in `HeirloomsImage`, `UploadThumbnail`, `EncryptedThumbnail`. Callers explicitly needing crop (CompostHeapScreen, IdleScreen) already passed `ContentScale.Crop` — unaffected.
+
+Android versionCode 51→52. Web revisions through `heirlooms-web-00063-pnw`.
+
+---
+
 ## v0.45.9 — "Hi, [name]" greeting (12 May 2026)
 
 Web + Android.
