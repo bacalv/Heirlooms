@@ -81,6 +81,32 @@ export async function pairingStatus(sessionId) {
 
 // ---- Keys API ---------------------------------------------------------------
 
+export async function getFriends(apiKey) {
+  const r = await apiFetch('/api/friends', apiKey)
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json() // { friends: [{id, username, displayName}] }
+}
+
+export async function getFriendSharingKey(apiKey, userId) {
+  const r = await apiFetch(`/api/keys/sharing/${encodeURIComponent(userId)}`, apiKey)
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json() // { pubkey: base64 }
+}
+
+export async function shareUpload(apiKey, uploadId, { toUserId, wrappedDekB64, wrappedThumbnailDekB64, dekFormat, rotation }) {
+  const body = { toUserId, wrappedDek: wrappedDekB64, dekFormat, rotation }
+  if (wrappedThumbnailDekB64) body.wrappedThumbnailDek = wrappedThumbnailDekB64
+  const r = await apiFetch(`/api/content/uploads/${uploadId}/share`, apiKey, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+  if (!r.ok) {
+    if (r.status === 409) throw new Error('already_shared')
+    throw new Error(`HTTP ${r.status}`)
+  }
+  return r.json()
+}
+
 export async function putPassphrase(apiKey, { wrappedMasterKeyB64, wrapFormat, argon2Params, saltB64 }) {
   const r = await apiFetch('/api/keys/passphrase', apiKey, {
     method: 'PUT',

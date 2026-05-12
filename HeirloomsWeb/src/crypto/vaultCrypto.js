@@ -211,6 +211,27 @@ export async function unwrapMasterKeyForDevice(envelope, devicePrivateKey) {
   return aesGcmDecrypt(kek, nonce, ciphertextWithTag)
 }
 
+// Wrap a DEK under a friend's sharing public key (raw 65-byte uncompressed P-256 point).
+// Produces an asymmetric envelope with dekFormat = ALG_P256_ECDH_HKDF_V1.
+export async function wrapDekForFriend(dek, friendPubkeyRawBytes) {
+  const ephemeral = await crypto.subtle.generateKey(
+    { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'],
+  )
+  const ephemeralPubkeyBytes = new Uint8Array(
+    await crypto.subtle.exportKey('raw', ephemeral.publicKey),
+  )
+  const recipientKey = await crypto.subtle.importKey(
+    'raw', friendPubkeyRawBytes, { name: 'ECDH', namedCurve: 'P-256' }, false, [],
+  )
+  const sharedSecret = new Uint8Array(
+    await crypto.subtle.deriveBits({ name: 'ECDH', public: recipientKey }, ephemeral.privateKey, 256),
+  )
+  const kek = await hkdf(sharedSecret, null, new TextEncoder().encode('heirlooms-v1'))
+  const nonce = generateNonce()
+  const ct = await aesGcmEncrypt(kek, nonce, dek)
+  return buildAsymmetricEnvelope(ALG_P256_ECDH_HKDF_V1, ephemeralPubkeyBytes, nonce, ct)
+}
+
 export async function importSharingPrivkey(pkcs8Bytes) {
   return crypto.subtle.importKey(
     'pkcs8', pkcs8Bytes, { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits'],
