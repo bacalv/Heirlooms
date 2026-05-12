@@ -2,6 +2,8 @@ package digital.heirlooms.app
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import androidx.exifinterface.media.ExifInterface
 import android.media.ThumbnailUtils
 import android.os.Build
 import android.util.Base64
@@ -825,7 +827,7 @@ class Uploader(
                 val scale = maxOf(opts.outWidth, opts.outHeight) / maxDim
                 opts.inJustDecodeBounds = false
                 opts.inSampleSize = maxOf(1, scale)
-                BitmapFactory.decodeFile(file.path, opts)
+                BitmapFactory.decodeFile(file.path, opts)?.applyExifRotation(file.path)
             }
             mimeType.startsWith("video/") -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -846,6 +848,23 @@ class Uploader(
         } else bmp
 
         return ByteArrayOutputStream().also { scaled.compress(Bitmap.CompressFormat.JPEG, 80, it) }.toByteArray()
+    }
+
+    // Rotate bitmap to match the EXIF Orientation tag so thumbnails display upright.
+    private fun Bitmap.applyExifRotation(filePath: String): Bitmap {
+        val degrees = try {
+            when (ExifInterface(filePath).getAttributeInt(
+                ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
+            )) {
+                ExifInterface.ORIENTATION_ROTATE_90  -> 90f
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+        } catch (_: Exception) { 0f }
+        if (degrees == 0f) return this
+        val m = Matrix().apply { postRotate(degrees) }
+        return Bitmap.createBitmap(this, 0, 0, width, height, m, true)
     }
 
     private fun makeFallbackThumbnail(): ByteArray {

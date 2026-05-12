@@ -3436,6 +3436,28 @@ Added `InviteRedemptionScreen` "Scan" button so new users can scan the invite QR
   save is still in flight when share fires, recipient gets old rotation. Fixed by blocking back
   navigation while save is in flight.
 
+**v0.45.6 — EXIF orientation fix (Android)**
+
+Prompt: Images uploaded from Android cameras have an EXIF Orientation tag embedded in the JPEG. Web
+browsers apply this automatically; Android's BitmapFactory ignores it, so images appeared sideways
+on Android while displaying correctly on web. Root cause confirmed via DB: shared copies were
+receiving rotation=0 because uploads were being shared before the user noticed and manually rotated
+to compensate — the manual rotation was being applied after the share, not before.
+
+Changes:
+- `app/build.gradle.kts`: added `androidx.exifinterface:exifinterface:1.3.7` dependency; bumped
+  versionCode 49→50, versionName to 0.45.6
+- `Uploader.kt`: `generateThumbnail()` now applies EXIF orientation to the image bitmap before
+  encoding to JPEG, so new thumbnails have correct pixel orientation from day one
+- `PhotoDetailViewModel.kt`: `loadEncryptedContent()` now reads EXIF orientation from the
+  decrypted image bytes and rotates the bitmap accordingly, so the full-image detail view
+  displays correctly on Android without requiring a manual rotation
+
+The `rotation` column remains as a manual-adjustment layer on top of EXIF rotation. Images that
+were previously manually rotated to compensate for the missing EXIF handling (e.g. rotation=90 set
+by the user on a photo whose EXIF already encodes 90°) will need to be reset to rotation=0 — they
+will otherwise double-rotate after this fix.
+
 ### Deployment
 Server `heirlooms-server-00003-gxp` (v0.45.2 dedup guard). Web `heirlooms-web-00008-qcc` (v0.45.5).
 APK v0.45.1–v0.45.4 installed on Bret's Samsung A02, wighty's TCL T517D, Sadaar's Fire OS tablet.

@@ -13,8 +13,8 @@ android {
         applicationId = "digital.heirlooms.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 49
-        versionName = "0.45.0"
+        versionCode = 50
+        versionName = "0.45.6"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -84,6 +84,9 @@ dependencies {
 
     // BouncyCastle — Argon2id for passphrase key derivation.
     implementation("org.bouncycastle:bcprov-jdk18on:1.79")
+
+    // EXIF orientation reading for correct image display on Android.
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
 
     // QR code generation (DevicesAccessScreen) + camera scanning (PairingScreen)
     implementation("com.google.zxing:core:3.5.3")
