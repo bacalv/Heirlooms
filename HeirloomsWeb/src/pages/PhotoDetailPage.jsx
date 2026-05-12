@@ -5,13 +5,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 const FULL_PLAYBACK_THRESHOLD_SECONDS = 120
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
-import { apiFetch, daysUntilPurge, formatCompactDate, formatUploadDate, capsuleTitle, API_URL, getFriends, getFriendSharingKey, shareUpload } from '../api'
+import { apiFetch, daysUntilPurge, formatCompactDate, formatUploadDate, capsuleTitle, API_URL, getFriends } from '../api'
 import { WaxSealOlive } from '../brand/WaxSealOlive'
 import { WorkingDots } from '../brand/WorkingDots'
 import { AddToCapsuleModal } from '../components/AddToCapsuleModal'
 import { Toast } from '../components/Toast'
 import { getMasterKey, getSharingPrivkey } from '../crypto/vaultSession'
-import { unwrapDekWithMasterKey, unwrapWithSharingKey, decryptSymmetric, decryptStreamingContent, fromB64, toB64, ALG_P256_ECDH_HKDF_V1, wrapDekForFriend } from '../crypto/vaultCrypto'
+import { unwrapDekWithMasterKey, unwrapWithSharingKey, decryptSymmetric, decryptStreamingContent, fromB64, ALG_P256_ECDH_HKDF_V1 } from '../crypto/vaultCrypto'
+import { ShareModal } from '../components/ShareModal'
 import { openEncryptedVideoStream } from '../crypto/encryptedVideoStream'
 
 async function unwrapDek(wrappedDek, dekFormat, masterKey) {
@@ -123,103 +124,6 @@ function ShareIcon() {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
         d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
     </svg>
-  )
-}
-
-function ShareModal({ upload, apiKey, onSuccess, onCancel }) {
-  const [friends, setFriends] = useState(null)
-  const [error, setError] = useState(null)
-  const [sharing, setSharing] = useState(null) // friend id currently being shared to
-
-  useEffect(() => {
-    getFriends(apiKey)
-      .then((data) => setFriends(data.friends ?? []))
-      .catch(() => setError('Could not load friends.'))
-  }, [apiKey])
-
-  async function handleShare(friend) {
-    setSharing(friend.id)
-    setError(null)
-    try {
-      const { pubkey: pubkeyB64 } = await getFriendSharingKey(apiKey, friend.id)
-      const friendPubkeyBytes = fromB64(pubkeyB64)
-
-      const masterKey = getMasterKey()
-
-      const rawDek = await unwrapDekWithMasterKey(fromB64(upload.wrappedDek), masterKey)
-      const wrappedDekBytes = await wrapDekForFriend(rawDek, friendPubkeyBytes)
-
-      let wrappedThumbnailDekB64 = null
-      if (upload.wrappedThumbnailDek) {
-        const rawThumbDek = await unwrapDekWithMasterKey(fromB64(upload.wrappedThumbnailDek), masterKey)
-        wrappedThumbnailDekB64 = toB64(await wrapDekForFriend(rawThumbDek, friendPubkeyBytes))
-      }
-
-      await shareUpload(apiKey, upload.id, {
-        toUserId: friend.id,
-        wrappedDekB64: toB64(wrappedDekBytes),
-        wrappedThumbnailDekB64,
-        dekFormat: ALG_P256_ECDH_HKDF_V1,
-        rotation: upload.rotation ?? 0,
-      })
-      onSuccess(`Shared with ${friend.displayName}`)
-    } catch (e) {
-      if (e.message === 'already_shared') {
-        setError(`Already shared with ${friend.displayName}.`)
-      } else {
-        setError('Sharing failed. Try again.')
-      }
-      setSharing(null)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCancel}>
-      <div className="bg-white rounded-card shadow-xl w-full max-w-sm p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-base font-medium text-forest">Share with a friend</h2>
-
-        {!friends && !error && (
-          <p className="text-sm text-text-muted">Loading…</p>
-        )}
-
-        {error && (
-          <p className="text-sm text-earth">{error}</p>
-        )}
-
-        {friends && friends.length === 0 && (
-          <p className="text-sm text-text-muted">You have no friends to share with yet.</p>
-        )}
-
-        {friends && friends.length > 0 && (
-          <ul className="space-y-1">
-            {friends.map((friend) => (
-              <li key={friend.id}>
-                <button
-                  onClick={() => handleShare(friend)}
-                  disabled={!!sharing}
-                  className="w-full text-left px-3 py-2 rounded hover:bg-forest-04 transition-colors disabled:opacity-50 flex items-center justify-between"
-                >
-                  <div>
-                    <span className="text-sm text-forest">{friend.displayName}</span>
-                    <span className="text-xs text-text-muted ml-1.5">@{friend.username}</span>
-                  </div>
-                  {sharing === friend.id && (
-                    <span className="text-xs text-text-muted">Sharing…</span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="pt-2 border-t border-forest-08">
-          <button onClick={onCancel} disabled={!!sharing}
-            className="text-sm text-text-muted hover:text-forest transition-colors disabled:opacity-40">
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
   )
 }
 

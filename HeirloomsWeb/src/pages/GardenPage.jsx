@@ -21,6 +21,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { useAuth } from '../AuthContext'
 import { API_URL, apiFetch, initiateEncryptedUpload, initiateResumableUpload, putBlob, putBlobWithProgress, confirmEncryptedUpload, fetchSettings } from '../api'
+import { ShareModal } from '../components/ShareModal'
 import { WorkingDots } from '../brand/WorkingDots'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { getMasterKey } from '../crypto/vaultSession'
@@ -34,12 +35,13 @@ const JUST_ARRIVED_SENTINEL = '__just_arrived__'
 
 // ---- Thumbnail card for horizontal plot row --------------------------------
 
-function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, onImagePreview, onCompostClick, isNew, onArrivalComplete }) {
+function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, onImagePreview, onCompostClick, onShareClick, isNew, onArrivalComplete }) {
   const navigate = useNavigate()
   const isImage = upload.mimeType?.startsWith('image/')
   const isVideo = upload.mimeType?.startsWith('video/')
   const isComposted = !!upload.compostedAt
   const isEncrypted = upload.storageClass === 'encrypted'
+  const canShare = isEncrypted && !upload.sharedFromUserId && !isComposted
 
   const saturate = isComposted ? { filter: 'saturate(0.4) opacity(0.7)' } : {}
 
@@ -151,6 +153,21 @@ function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, onIm
         </button>
       )}
 
+      {/* Share — bottom-right, appears on hover, owned encrypted items only */}
+      {canShare && onShareClick && (
+        <button
+          onClick={(e) => stop(e, () => onShareClick(upload))}
+          className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity bg-black/40 rounded p-0.5"
+          title="Share with a friend"
+          aria-label="Share with a friend"
+        >
+          <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+          </svg>
+        </button>
+      )}
+
       {/* Arrival animation overlay — shown for newly arrived items */}
       {isNew && (
         <div
@@ -166,7 +183,7 @@ function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, onIm
 
 // ---- Horizontal scrolling row of items for one plot ------------------------
 
-function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, onImagePreview, onCompostClick, refreshKey, excludeIds }) {
+function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, onImagePreview, onCompostClick, onShareClick, refreshKey, excludeIds }) {
   const [items, setItems] = useState([])
   const [nextCursor, setNextCursor] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -276,7 +293,7 @@ function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, onImagePreview, o
     <div ref={rowRef} className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
       {visibleItems.map((upload) => (
         <PlotThumbCard key={upload.id} upload={upload} apiKey={apiKey}
-          onTagClick={onTagClick} onVideoPlay={onVideoPlay} onImagePreview={onImagePreview} onCompostClick={onCompostClick} onRotate={handleRotateItem}
+          onTagClick={onTagClick} onVideoPlay={onVideoPlay} onImagePreview={onImagePreview} onCompostClick={onCompostClick} onShareClick={onShareClick} onRotate={handleRotateItem}
           isNew={newlyArrivedIds.has(upload.id)}
           onArrivalComplete={() => setNewlyArrivedIds((prev) => {
             const next = new Set(prev); next.delete(upload.id); return next
@@ -510,21 +527,21 @@ function QuickImageModal({ upload, apiKey, onClose }) {
 
 // ---- System (Just arrived) plot row — no DnD, no gear ----------------------
 
-function SystemPlotRow({ plot, apiKey, onTagClick, onVideoPlay, onImagePreview, onCompostClick, refreshKey, excludeIds }) {
+function SystemPlotRow({ plot, apiKey, onTagClick, onVideoPlay, onImagePreview, onCompostClick, onShareClick, refreshKey, excludeIds }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
         <h2 className="font-serif italic text-forest text-base">Just arrived</h2>
       </div>
       <PlotItemsRow plot={plot} apiKey={apiKey}
-        onTagClick={onTagClick} onVideoPlay={onVideoPlay} onImagePreview={onImagePreview} onCompostClick={onCompostClick} refreshKey={refreshKey} excludeIds={excludeIds} />
+        onTagClick={onTagClick} onVideoPlay={onVideoPlay} onImagePreview={onImagePreview} onCompostClick={onCompostClick} onShareClick={onShareClick} refreshKey={refreshKey} excludeIds={excludeIds} />
     </div>
   )
 }
 
 // ---- Sortable user plot row ------------------------------------------------
 
-function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMoveUp, onMoveDown, onTagClick, onVideoPlay, onImagePreview, onCompostClick, refreshKey, excludeIds }) {
+function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMoveUp, onMoveDown, onTagClick, onVideoPlay, onImagePreview, onCompostClick, onShareClick, refreshKey, excludeIds }) {
   const {
     attributes,
     listeners,
@@ -564,7 +581,7 @@ function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMo
         />
       </div>
       <PlotItemsRow plot={plot} apiKey={apiKey}
-        onTagClick={onTagClick} onVideoPlay={onVideoPlay} onImagePreview={onImagePreview} onCompostClick={onCompostClick} refreshKey={refreshKey} excludeIds={excludeIds} />
+        onTagClick={onTagClick} onVideoPlay={onVideoPlay} onImagePreview={onImagePreview} onCompostClick={onCompostClick} onShareClick={onShareClick} refreshKey={refreshKey} excludeIds={excludeIds} />
     </div>
   )
 }
@@ -893,6 +910,7 @@ export function GardenPage() {
   const [showCompostedMsg] = useState(() => !!location.state?.composted)
   const [plotSavedMsg] = useState(() => location.state?.plotSaved ?? null)
   const [quickTagUpload, setQuickTagUpload] = useState(null)
+  const [shareUploadItem, setShareUploadItem] = useState(null)
   const [videoUpload, setVideoUpload] = useState(null)
   const [previewUpload, setPreviewUpload] = useState(null)
   const [confirmCompost, setConfirmCompost] = useState(null)
@@ -1099,7 +1117,7 @@ export function GardenPage() {
       <div className="space-y-8">
         {systemPlot && (
           <SystemPlotRow plot={systemPlot} apiKey={apiKey}
-            onTagClick={setQuickTagUpload} onVideoPlay={setVideoUpload} onImagePreview={setPreviewUpload} onCompostClick={setConfirmCompost}
+            onTagClick={setQuickTagUpload} onVideoPlay={setVideoUpload} onImagePreview={setPreviewUpload} onCompostClick={setConfirmCompost} onShareClick={setShareUploadItem}
             refreshKey={plotRefreshKey} excludeIds={justArrivedExclude} />
         )}
 
@@ -1121,6 +1139,7 @@ export function GardenPage() {
                   onVideoPlay={setVideoUpload}
                   onImagePreview={setPreviewUpload}
                   onCompostClick={setConfirmCompost}
+                  onShareClick={setShareUploadItem}
                   refreshKey={plotRefreshKey}
                 />
               ))}
@@ -1163,6 +1182,15 @@ export function GardenPage() {
           apiKey={apiKey}
           onSave={handleQuickUpdateTags}
           onClose={() => setQuickTagUpload(null)}
+        />
+      )}
+
+      {shareUploadItem && (
+        <ShareModal
+          upload={shareUploadItem}
+          apiKey={apiKey}
+          onSuccess={() => setShareUploadItem(null)}
+          onCancel={() => setShareUploadItem(null)}
         />
       )}
 
