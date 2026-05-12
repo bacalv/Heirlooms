@@ -273,8 +273,8 @@ fun GardenScreen(
                         ) {
                             s.rows.forEachIndexed { index, row ->
                                 val rowKey = row.plot?.id ?: "__just_arrived__"
-                                val rowLabel = row.plot?.name ?: "Just arrived"
-                                val isJustArrived = row.plot == null
+                                val rowLabel = if (row.plot?.isSystemDefined == true) "Just arrived" else row.plot?.name ?: "Just arrived"
+                                val isJustArrived = row.plot?.isSystemDefined == true || row.plot == null
 
                                 PlotRowSection(
                                     label = rowLabel,
