@@ -14,10 +14,22 @@ import { CapsuleDetailPage } from './pages/capsules/CapsuleDetailPage'
 import { CapsuleCreatePage } from './pages/capsules/CapsuleCreatePage'
 import { CompostHeapPage } from './pages/CompostHeapPage'
 import { ExplorePage } from './pages/ExplorePage'
-import { lock, unlock } from './crypto/vaultSession'
-import { authLogout, authMe } from './api'
-import { unwrapMasterKeyForDevice } from './crypto/vaultCrypto'
+import { lock, unlock, setSharingPrivkey } from './crypto/vaultSession'
+import { authLogout, authMe, API_URL } from './api'
+import { unwrapMasterKeyForDevice, unwrapDekWithMasterKey, fromB64, importSharingPrivkey } from './crypto/vaultCrypto'
 import { loadPairingMaterial, clearPairingMaterial } from './crypto/webPairingStore'
+
+async function loadSharingKey(token, masterKey) {
+  try {
+    const r = await fetch(`${API_URL}/api/keys/sharing/me`, { headers: { 'X-Api-Key': token } })
+    if (!r.ok) return
+    const { wrappedPrivkey } = await r.json()
+    if (!wrappedPrivkey) return
+    const pkcs8Bytes = await unwrapDekWithMasterKey(fromB64(wrappedPrivkey), masterKey)
+    const cryptoKey = await importSharingPrivkey(pkcs8Bytes)
+    setSharingPrivkey(cryptoKey)
+  } catch { /* sharing key not yet set up — fine */ }
+}
 
 const LS_TOKEN        = 'heirlooms_session_token'
 const LS_USERNAME     = 'heirlooms_username'
@@ -60,6 +72,7 @@ export default function App() {
         if (!material) return
         const masterKey = await unwrapMasterKeyForDevice(material.wrappedMasterKey, material.privateKey)
         unlock(masterKey)
+        await loadSharingKey(token, masterKey)
         setVaultUnlocked(true)
       } catch {
         // Network error — don't force logout; let the user interact normally
@@ -88,8 +101,8 @@ export default function App() {
   function handleLogin(token, masterKey) {
     setSession(token)
     if (masterKey) {
-      import('./crypto/vaultSession').then(({ unlock }) => unlock(masterKey))
-      setVaultUnlocked(true)
+      unlock(masterKey)
+      loadSharingKey(token, masterKey).then(() => setVaultUnlocked(true))
     }
   }
 

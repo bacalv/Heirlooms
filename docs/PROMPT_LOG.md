@@ -3482,6 +3482,19 @@ rotation as currently displayed to the user.
 - `UploadHandler.handleShareUpload()`: reads optional `rotation` field from request body
 - `Database.createSharedUpload()`: accepts `rotationOverride: Int?`, uses it if present
 
+**v0.45.8 — Web: load sharing key on all auto-unlock paths**
+
+Prompt: shared images from Sadaar never loaded on the web — thumbnails showed the olive branch
+fallback and photo detail showed nothing. Root cause: `loadSharingKey` was only called inside
+`VaultUnlockPage.handleUnlock`. Two other unlock paths in `App.jsx` bypass `VaultUnlockPage`
+entirely and never loaded the sharing key:
+1. IDB auto-unlock on page refresh (stored pairing material).
+2. Login-time auto-unlock when `tryUnlockVaultAfterLogin` succeeds (stored device key in IDB).
+
+Fix: extracted `loadSharingKey` as a module-level function in `App.jsx` and call it in both
+paths, awaited before setting `vaultUnlocked(true)` so thumbnails start loading with the key
+already available.
+
 ### Deployment
-Server `heirlooms-server-00003-gxp` (v0.45.2 dedup guard). Web `heirlooms-web-00008-qcc` (v0.45.5).
-APK v0.45.1–v0.45.4 installed on Bret's Samsung A02, wighty's TCL T517D, Sadaar's Fire OS tablet.
+Server `heirlooms-server-00043-4ss` (v0.45.7). Web `heirlooms-web-00057-jcp` (v0.45.8).
+APK v0.45.6–v0.45.7 installed on Bret's Samsung A02. Sadaar's Fire OS tablet needs v0.45.6+ APK.
