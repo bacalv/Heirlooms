@@ -173,6 +173,7 @@ private suspend fun shareWithFriend(
             toUserId = friend.userId,
             wrappedDekB64 = reWrappedDekB64,
             wrappedThumbnailDekB64 = reWrappedThumbDekB64,
+            rotation = upload.rotation,
         )
         null
     } catch (e: Exception) {

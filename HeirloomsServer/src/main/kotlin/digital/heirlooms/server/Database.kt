@@ -589,6 +589,7 @@ class Database(private val dataSource: DataSource) {
         wrappedDek: ByteArray,
         wrappedThumbnailDek: ByteArray?,
         dekFormat: String,
+        rotationOverride: Int? = null,
     ): UploadRecord {
         val newId = UUID.randomUUID()
         dataSource.connection.use { conn: Connection ->
@@ -623,7 +624,7 @@ class Database(private val dataSource: DataSource) {
                 stmt.setObject(19, fromRecord.id)
                 stmt.setObject(20, fromUserId)
                 stmt.setObject(21, toUserId)
-                stmt.setInt(22, fromRecord.rotation)
+                stmt.setInt(22, rotationOverride ?: fromRecord.rotation)
                 stmt.executeUpdate()
             }
         }
@@ -633,7 +634,7 @@ class Database(private val dataSource: DataSource) {
             wrappedThumbnailDek = wrappedThumbnailDek,
             dekFormat = dekFormat,
             thumbnailDekFormat = if (wrappedThumbnailDek != null) dekFormat else null,
-            rotation = fromRecord.rotation,
+            rotation = rotationOverride ?: fromRecord.rotation,
             tags = emptyList(),
             sharedFromUploadId = fromRecord.id,
             sharedFromUserId = fromUserId,

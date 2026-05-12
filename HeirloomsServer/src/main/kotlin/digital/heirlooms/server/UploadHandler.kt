@@ -564,7 +564,8 @@ private fun handleShareUpload(uploadId: UUID, request: Request, database: Databa
             ?: return Response(BAD_REQUEST).body("wrappedDek is not valid Base64")
         val wrappedThumbnailDek = if (!wrappedThumbnailDekB64.isNullOrBlank())
             runCatching { dec.decode(wrappedThumbnailDekB64) }.getOrNull() else null
-        val shared = database.createSharedUpload(record, requesterId, toUserId, wrappedDek, wrappedThumbnailDek, dekFormat)
+        val rotationOverride = node?.get("rotation")?.asInt()
+        val shared = database.createSharedUpload(record, requesterId, toUserId, wrappedDek, wrappedThumbnailDek, dekFormat, rotationOverride)
         Response(CREATED).header("Content-Type", "application/json").body(shared.toJson())
     } catch (e: Exception) {
         Response(INTERNAL_SERVER_ERROR).body("shareUpload failed: ${e.message}")

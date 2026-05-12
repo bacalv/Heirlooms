@@ -3468,6 +3468,20 @@ source of truth, populated from EXIF on first open for images that haven't been 
 Images previously hand-rotated to compensate for missing EXIF (rotation=90 on a photo whose EXIF
 also encodes 90°) will double-rotate and need to be reset to rotation=0.
 
+**v0.45.7 — Rotation included in share payload**
+
+Prompt: when Bret rotated a received share and re-shared it, Sadaar received rotation=0. Root
+cause: the server reads rotation from DB at share time, but the client's rotation save may not yet
+be committed (race between the EXIF auto-stage save and the share API call). Fix: include
+`upload.rotation` from the client in the share payload; the server uses this value as an override
+rather than solely relying on the DB read. This closes the race: the client always knows the
+rotation as currently displayed to the user.
+
+- `HeirloomsApi.shareUpload()`: added `rotation: Int = 0` parameter, included in JSON body
+- `ShareSheet.shareWithFriend()`: passes `upload.rotation` to `shareUpload()`
+- `UploadHandler.handleShareUpload()`: reads optional `rotation` field from request body
+- `Database.createSharedUpload()`: accepts `rotationOverride: Int?`, uses it if present
+
 ### Deployment
 Server `heirlooms-server-00003-gxp` (v0.45.2 dedup guard). Web `heirlooms-web-00008-qcc` (v0.45.5).
 APK v0.45.1–v0.45.4 installed on Bret's Samsung A02, wighty's TCL T517D, Sadaar's Fire OS tablet.

@@ -238,9 +238,10 @@ class HeirloomsApi(
         toUserId: String,
         wrappedDekB64: String,
         wrappedThumbnailDekB64: String?,
+        rotation: Int = 0,
     ) {
         val thumbJson = if (wrappedThumbnailDekB64 != null) ""","wrappedThumbnailDek":"$wrappedThumbnailDekB64"""" else ""
-        val body = """{"toUserId":"$toUserId","wrappedDek":"$wrappedDekB64","dekFormat":"${VaultCrypto.ALG_P256_ECDH_HKDF_V1}"$thumbJson}"""
+        val body = """{"toUserId":"$toUserId","wrappedDek":"$wrappedDekB64","dekFormat":"${VaultCrypto.ALG_P256_ECDH_HKDF_V1}","rotation":$rotation$thumbJson}"""
         post("/api/content/uploads/$uploadId/share", body)
     }
 
