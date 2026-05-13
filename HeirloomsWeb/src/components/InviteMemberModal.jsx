@@ -154,7 +154,9 @@ function PendingTab({ plotId, apiKey, onDone }) {
   return (
     <div className="space-y-3">
       {pending.length === 0 ? (
-        <p className="text-text-muted text-sm text-center py-4">No pending joins.</p>
+        <p className="text-text-muted text-sm text-center py-4">
+          No pending joins. Friends added directly via the Friends tab don't appear here — this tab is only for people who redeemed an invite link.
+        </p>
       ) : (
         <div className="space-y-1 max-h-48 overflow-y-auto">
           {pending.map((inv) => (
@@ -230,9 +232,10 @@ export function InviteMemberModal({ plotId, apiKey, onClose, onMemberAdded }) {
 
   return (
     <BrandModal onClose={onClose} width="max-w-sm">
+      <div className="p-6">
       <h2 className="font-serif italic text-forest text-lg mb-4">Invite a member</h2>
 
-      <div className="flex border-b border-forest-08 mb-4">
+      <div className="flex border-b border-forest-08 mb-4 -mx-6 px-6">
         {[['friends', 'Friends'], ['link', 'Invite link'], ['pending', 'Pending']].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             className={`px-4 py-2 text-sm font-sans transition-colors ${
@@ -252,6 +255,7 @@ export function InviteMemberModal({ plotId, apiKey, onClose, onMemberAdded }) {
       {tab === 'pending' && (
         <PendingTab plotId={plotId} apiKey={apiKey} onDone={() => onMemberAdded?.()} />
       )}
+      </div>
     </BrandModal>
   )
 }
