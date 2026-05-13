@@ -1,5 +1,7 @@
 package digital.heirlooms.ui.social
 
+import android.content.Context
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -8,11 +10,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -29,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import digital.heirlooms.api.HeirloomsApi
 import digital.heirlooms.api.Upload
 import digital.heirlooms.crypto.VaultCrypto
@@ -41,6 +46,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.util.Base64
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +61,7 @@ fun ShareSheet(
 
     var friends by remember { mutableStateOf<List<HeirloomsApi.Friend>?>(null) }
     var sharing by remember { mutableStateOf(false) }
+    var preparingExternalShare by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         try { friends = api.getFriends() } catch (_: Exception) { friends = emptyList() }
@@ -114,6 +121,48 @@ fun ShareSheet(
                     }
                 }
             }
+
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = Forest.copy(alpha = 0.15f))
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Another app", style = MaterialTheme.typography.bodyLarge, color = Forest)
+                    Text("WhatsApp, Messages, email…", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                }
+                if (preparingExternalShare) {
+                    CircularProgressIndicator(color = Forest, modifier = Modifier.size(24.dp))
+                } else {
+                    TextButton(
+                        onClick = {
+                            preparingExternalShare = true
+                            scope.launch {
+                                val uri = prepareFileForSharing(api, upload, context)
+                                withContext(Dispatchers.Main) {
+                                    preparingExternalShare = false
+                                    if (uri != null) {
+                                        val intent = Intent(Intent.ACTION_SEND).apply {
+                                            type = upload.mimeType
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(Intent.createChooser(intent, null))
+                                        onDismiss()
+                                    } else {
+                                        Toast.makeText(context, "Couldn't prepare file. Try again.", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        },
+                    ) {
+                        Text("Share", color = Forest)
+                    }
+                }
+            }
         }
     }
 }
@@ -133,6 +182,42 @@ private fun FriendPickerRow(friend: HeirloomsApi.Friend, onClick: () -> Unit) {
         TextButton(onClick = onClick) {
             Text("Share", color = Forest)
         }
+    }
+}
+
+private suspend fun prepareFileForSharing(
+    api: HeirloomsApi,
+    upload: Upload,
+    context: Context,
+): android.net.Uri? = withContext(Dispatchers.IO) {
+    try {
+        val ext = upload.mimeType.substringAfterLast('/').substringBefore(';').ifEmpty { "bin" }
+        val shareDir = File(context.cacheDir, "share").also { it.mkdirs() }
+        val outFile = File(shareDir, "${upload.id}.$ext")
+
+        if (upload.isEncrypted) {
+            val masterKey = VaultSession.masterKey
+            val wrappedDek = upload.wrappedDek ?: return@withContext null
+            val dek = if (upload.dekFormat == VaultCrypto.ALG_P256_ECDH_HKDF_V1) {
+                val privkey = VaultSession.sharingPrivkey ?: return@withContext null
+                VaultCrypto.unwrapWithSharingKey(wrappedDek, privkey)
+            } else {
+                VaultCrypto.unwrapDekWithMasterKey(wrappedDek, masterKey)
+            }
+            val encryptedBytes = api.fetchBytes(api.fileUrl(upload.id))
+            val plainBytes = if (encryptedBytes.isNotEmpty() && (encryptedBytes[0].toInt() and 0xFF) == 1) {
+                VaultCrypto.decryptSymmetric(encryptedBytes, dek)
+            } else {
+                VaultCrypto.decryptStreamingContent(encryptedBytes, dek, upload.plainChunkSize ?: (4 * 1024 * 1024 - 28))
+            }
+            outFile.writeBytes(plainBytes)
+        } else {
+            outFile.writeBytes(api.fetchBytes(api.fileUrl(upload.id)))
+        }
+
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", outFile)
+    } catch (_: Exception) {
+        null
     }
 }
 

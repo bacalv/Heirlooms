@@ -2,8 +2,13 @@
 
 package digital.heirlooms.ui.garden
 
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.core.content.FileProvider
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -76,6 +81,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import digital.heirlooms.api.CapsuleRef
 import digital.heirlooms.api.CapsuleSummary
@@ -96,8 +102,11 @@ import digital.heirlooms.ui.theme.Forest25
 import digital.heirlooms.ui.theme.HeirloomsSerifItalic
 import digital.heirlooms.ui.theme.Parchment
 import digital.heirlooms.ui.theme.TextMuted
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import java.io.File
 
 @Composable
 fun PhotoDetailScreen(
@@ -125,6 +134,34 @@ fun PhotoDetailScreen(
     LaunchedEffect(uploadId) {
         vm.load(api, uploadId, context, videoThreshold)
         vm.trackView(api, uploadId)
+    }
+
+    var preparingShare by remember { mutableStateOf(false) }
+
+    fun handleShareToApp(upload: digital.heirlooms.api.Upload) {
+        // Large encrypted video playing via streaming has no full plaintext in memory.
+        if (upload.isEncrypted && contentDek != null && decryptedBitmap == null && decryptedVideoUri == null) {
+            Toast.makeText(context, "Download the video first, then share from your Downloads folder.", Toast.LENGTH_LONG).show()
+            return
+        }
+        preparingShare = true
+        scope.launch {
+            val uri = shareToApp(context, upload, api, decryptedBitmap, decryptedVideoUri)
+            withContext(Dispatchers.Main) {
+                preparingShare = false
+                if (uri != null) {
+                    val mimeType = if (decryptedBitmap != null) "image/jpeg" else upload.mimeType
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = mimeType
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(Intent.createChooser(intent, null))
+                } else {
+                    Toast.makeText(context, "Couldn't prepare file. Try again.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     var rotateInFlight by remember { mutableStateOf(false) }
@@ -181,6 +218,16 @@ fun PhotoDetailScreen(
                                     onClick = {
                                         showMenu = false
                                         vm.downloadFullFile(api, upload, context)
+                                    },
+                                )
+                            }
+                            if (upload != null && !upload.isShared) {
+                                DropdownMenuItem(
+                                    text = { Text(if (preparingShare) "Preparing…" else "Share to another app") },
+                                    enabled = !preparingShare,
+                                    onClick = {
+                                        showMenu = false
+                                        handleShareToApp(upload)
                                     },
                                 )
                             }
@@ -272,6 +319,8 @@ fun PhotoDetailScreen(
                         decryptedVideoUri = decryptedVideoUri,
                         contentDek = contentDek,
                         onDownload = { vm.downloadFullFile(api, u, context) },
+                        onShareToApp = if (!u.isShared) { -> handleShareToApp(u) } else null,
+                        isPreparingShare = preparingShare,
                         onCompost = {
                             scope.launch {
                                 try { api.compostUpload(uploadId); onBack() } catch (_: Exception) {}
@@ -518,6 +567,8 @@ internal fun GardenFlavour(
     decryptedVideoUri: Uri? = null,
     contentDek: ByteArray? = null,
     onDownload: (() -> Unit)? = null,
+    onShareToApp: (() -> Unit)? = null,
+    isPreparingShare: Boolean = false,
 ) {
     var showAddToCapsule by remember { mutableStateOf(false) }
     var showCompostConfirm by remember { mutableStateOf(false) }
@@ -592,6 +643,28 @@ internal fun GardenFlavour(
                 border = BorderStroke(1.dp, Forest),
             ) {
                 Text("Add this to a capsule", color = Forest)
+            }
+
+            if (onShareToApp != null) {
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = Forest15)
+                Spacer(Modifier.height(16.dp))
+                OutlinedButton(
+                    onClick = onShareToApp,
+                    enabled = !isPreparingShare,
+                    modifier = Modifier.fillMaxWidth(),
+                    border = BorderStroke(1.dp, Forest),
+                ) {
+                    if (isPreparingShare) {
+                        CircularProgressIndicator(
+                            color = Forest,
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Text("Share to another app", color = Forest)
+                    }
+                }
             }
 
             Spacer(Modifier.height(16.dp))
@@ -767,6 +840,34 @@ private fun CompostFlavour(
             ) { Text("Restore") }
             Spacer(Modifier.height(32.dp))
         }
+    }
+}
+
+private suspend fun shareToApp(
+    context: Context,
+    upload: digital.heirlooms.api.Upload,
+    api: digital.heirlooms.api.HeirloomsApi,
+    decryptedBitmap: ImageBitmap?,
+    decryptedVideoUri: Uri?,
+): Uri? = withContext(Dispatchers.IO) {
+    try {
+        val shareDir = File(context.cacheDir, "share").also { it.mkdirs() }
+        when {
+            decryptedBitmap != null -> {
+                val outFile = File(shareDir, "${upload.id}.jpg")
+                val bmp = decryptedBitmap.asAndroidBitmap()
+                outFile.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", outFile)
+            }
+            decryptedVideoUri != null -> {
+                // File is already in cacheDir/vault_temp/ — wrap in FileProvider URI.
+                val existingFile = File(decryptedVideoUri.path ?: return@withContext null)
+                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", existingFile)
+            }
+            else -> null
+        }
+    } catch (_: Exception) {
+        null
     }
 }
 
