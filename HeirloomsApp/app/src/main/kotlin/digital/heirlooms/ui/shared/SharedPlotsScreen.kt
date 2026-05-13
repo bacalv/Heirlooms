@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PeopleAlt
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -63,6 +65,7 @@ private fun NamePromptDialog(
     title: String,
     subtitle: String? = null,
     initialName: String = "",
+    fieldLabel: String = "Your name for this plot",
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -79,7 +82,7 @@ private fun NamePromptDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Your name for this plot") },
+                    label = { Text(fieldLabel) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -405,6 +408,16 @@ fun SharedPlotsScreen() {
     val transferMembers by vm.transferMembers.collectAsStateWithLifecycle()
     var transferPlotId by remember { mutableStateOf<String?>(null) }
     var refreshing by remember { mutableStateOf(false) }
+    var showCreateDialog by remember { mutableStateOf(false) }
+
+    if (showCreateDialog) {
+        NamePromptDialog(
+            title = "New shared plot",
+            fieldLabel = "Plot name",
+            onConfirm = { name -> showCreateDialog = false; vm.createSharedPlot(api, name) },
+            onDismiss = { showCreateDialog = false },
+        )
+    }
 
     LaunchedEffect(Unit) {
         if (state is SharedPlotsLoadState.Loading) vm.load(api) else vm.refresh(api)
@@ -444,6 +457,15 @@ fun SharedPlotsScreen() {
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Parchment),
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showCreateDialog = true },
+                containerColor = Forest,
+                contentColor = Parchment,
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "New shared plot")
+            }
         },
     ) { innerPadding ->
         PullToRefreshBox(

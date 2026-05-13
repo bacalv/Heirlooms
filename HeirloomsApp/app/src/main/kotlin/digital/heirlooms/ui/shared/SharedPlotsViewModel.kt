@@ -1,10 +1,13 @@
 package digital.heirlooms.ui.shared
 
+import android.util.Base64
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import digital.heirlooms.api.HeirloomsApi
 import digital.heirlooms.api.PlotMember
 import digital.heirlooms.api.SharedMembership
+import digital.heirlooms.crypto.VaultCrypto
+import digital.heirlooms.crypto.VaultSession
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,6 +47,25 @@ class SharedPlotsViewModel : ViewModel() {
             try {
                 val memberships = api.listSharedMemberships()
                 _state.value = SharedPlotsLoadState.Ready(memberships)
+            } catch (_: Exception) { }
+        }
+    }
+
+    fun createSharedPlot(api: HeirloomsApi, name: String) {
+        viewModelScope.launch {
+            try {
+                val sharingKey = api.getSharingKeyMe() ?: error("No sharing key set up")
+                val plotKeyBytes = VaultCrypto.generatePlotKey()
+                val wrapped = VaultCrypto.wrapPlotKeyForMember(plotKeyBytes, sharingKey.pubkey)
+                val wrappedB64 = Base64.encodeToString(wrapped, Base64.NO_WRAP)
+                val plot = api.createPlot(
+                    name = name,
+                    visibility = "shared",
+                    wrappedPlotKey = wrappedB64,
+                    plotKeyFormat = VaultCrypto.ALG_P256_ECDH_HKDF_V1,
+                )
+                VaultSession.setPlotKey(plot.id, plotKeyBytes)
+                refresh(api)
             } catch (_: Exception) { }
         }
     }
