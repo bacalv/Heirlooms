@@ -49,6 +49,7 @@ data class Plot(
     val visibility: String,         // "private", "shared", "public"
     val sortOrder: Int,
     val isSystemDefined: Boolean,
+    val isOwner: Boolean = true,    // false when user is a member but not the owner
 )
 
 val Plot.isCollection: Boolean get() = criteria == null

@@ -314,7 +314,10 @@ fun GardenScreen(
                                         row.plot?.let { vm.renamePlot(api, it, newName) }
                                     },
                                     onDeletePlot = {
-                                        row.plot?.let { vm.deletePlot(api, it.id) }
+                                        row.plot?.let {
+                                            if (it.visibility == "shared" && !it.isOwner) vm.leavePlot(api, it.id)
+                                            else vm.deletePlot(api, it.id)
+                                        }
                                     },
                                     emptyLabel = if (isJustArrived) "Nothing waiting." else "No items match this plot's tags.",
                                 )
@@ -453,6 +456,7 @@ private fun PlotRowSection(
             onDismiss = { showEditPlot = false },
             onSave = { name -> showEditPlot = false; onRenamePlot(name) },
             onDelete = { showEditPlot = false; onDeletePlot() },
+            onLeave = { showEditPlot = false; onDeletePlot() },
         )
     }
 

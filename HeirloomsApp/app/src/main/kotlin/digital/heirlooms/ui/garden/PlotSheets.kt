@@ -77,19 +77,29 @@ fun PlotEditSheet(
     onDismiss: () -> Unit,
     onSave: (name: String) -> Unit,
     onDelete: () -> Unit,
+    onLeave: () -> Unit = {},
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val isMember = plot.visibility == "shared" && !plot.isOwner
     var name by remember { mutableStateOf(plot.name) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete plot?") },
-            text = { Text("\"${plot.name}\" will be removed. Items in this plot won't be deleted.") },
+            title = { Text(if (isMember) "Leave plot?" else "Delete plot?") },
+            text = {
+                Text(
+                    if (isMember) "You'll be removed from \"${plot.name}\". The plot and its items will remain for other members."
+                    else "\"${plot.name}\" will be removed. Items in this plot won't be deleted."
+                )
+            },
             confirmButton = {
-                TextButton(onClick = { showDeleteConfirm = false; onDelete() }) {
-                    Text("Delete", color = androidx.compose.ui.graphics.Color.Red)
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    if (isMember) onLeave() else onDelete()
+                }) {
+                    Text(if (isMember) "Leave" else "Delete", color = androidx.compose.ui.graphics.Color.Red)
                 }
             },
             dismissButton = {
@@ -122,7 +132,7 @@ fun PlotEditSheet(
             Spacer(Modifier.height(4.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 TextButton(onClick = { showDeleteConfirm = true }) {
-                    Text("Delete plot", color = androidx.compose.ui.graphics.Color.Red)
+                    Text(if (isMember) "Leave plot" else "Delete plot", color = androidx.compose.ui.graphics.Color.Red)
                 }
                 Row {
                     TextButton(onClick = onDismiss) { Text("Cancel", color = TextMuted) }

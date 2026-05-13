@@ -39,10 +39,11 @@ private fun listPlotsRoute(database: Database): ContractRoute =
         summary = "List plots"
         description = "Returns all plots for the current user ordered by sort_order."
     } bindContract GET to { request: Request ->
-        val plots = database.listPlots(request.authUserId())
+        val userId = request.authUserId()
+        val plots = database.listPlots(userId)
         val json = buildString {
             append("[")
-            plots.forEachIndexed { i, p -> if (i > 0) append(","); append(p.toJson()) }
+            plots.forEachIndexed { i, p -> if (i > 0) append(","); append(p.toJson(userId)) }
             append("]")
         }
         Response(OK).header("Content-Type", "application/json").body(json)
@@ -222,12 +223,13 @@ private fun validateAndSerializeCriteria(
     }
 }
 
-internal fun PlotRecord.toJson(): String {
+internal fun PlotRecord.toJson(authUserId: UUID? = null): String {
     val factory = JsonNodeFactory.instance
     val node = factory.objectNode()
     node.put("id", id.toString())
     if (ownerUserId != null) node.put("owner_user_id", ownerUserId.toString())
     else node.putNull("owner_user_id")
+    if (authUserId != null) node.put("is_owner", ownerUserId == authUserId)
     node.put("name", name)
     node.put("sort_order", sortOrder)
     node.put("is_system_defined", isSystemDefined)

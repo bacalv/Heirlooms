@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import org.http4k.contract.ContractRoute
 import org.http4k.contract.div
 import org.http4k.contract.meta
+import org.http4k.core.Method.DELETE
 import org.http4k.core.Method.GET
 import org.http4k.core.Method.POST
 import org.http4k.core.Request
@@ -27,6 +28,7 @@ fun sharedPlotRoutes(database: Database): List<ContractRoute> = listOf(
     getPlotKeyRoute(database),
     listMembersRoute(database),
     addMemberRoute(database),
+    leavePlotRoute(database),
     createInviteRoute(database),
     joinInfoRoute(database),
     joinRoute(database),
@@ -214,4 +216,21 @@ private fun handleConfirmInvite(plotId: UUID, inviteId: UUID, request: Request, 
         Response(NO_CONTENT)
     else
         Response(NOT_FOUND)
+}
+
+// ---- Leave plot (member removes themselves) ---------------------------------
+
+private fun leavePlotRoute(database: Database): ContractRoute {
+    val id = Path.uuid().of("id")
+    return "/plots" / id / "members" / "me" meta {
+        summary = "Leave a shared plot (member only; owner must delete instead)"
+    } bindContract DELETE to { plotId: UUID, _s1: String, _s2: String ->
+        { request: Request ->
+            when (database.leavePlot(plotId, request.authUserId())) {
+                Database.LeavePlotResult.Success  -> Response(NO_CONTENT)
+                Database.LeavePlotResult.IsOwner  -> Response(FORBIDDEN).body("Plot owner cannot leave — delete the plot instead")
+                Database.LeavePlotResult.NotFound -> Response(NOT_FOUND)
+            }
+        }
+    }
 }

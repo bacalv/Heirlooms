@@ -195,6 +195,19 @@ class HeirloomsApi(
         }
     }
 
+    suspend fun leavePlot(id: String) {
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url("$baseUrl/api/plots/$id/members/me")
+                .withAuth()
+                .delete()
+                .build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+            }
+        }
+    }
+
     // ── Plot key + members ───────────────────────────────────────────────────
 
     suspend fun getPlotKey(plotId: String): Pair<String, String> {
@@ -760,6 +773,7 @@ class HeirloomsApi(
         visibility = optString("visibility", "private"),
         sortOrder = optInt("sort_order", 0),
         isSystemDefined = optBoolean("is_system_defined", false),
+        isOwner = optBoolean("is_owner", true),
     )
 
     private fun JSONObject.toFlow() = Flow(

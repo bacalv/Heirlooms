@@ -1653,6 +1653,26 @@ class Database(private val dataSource: DataSource) {
         object SystemDefined : PlotDeleteResult()
     }
 
+    sealed class LeavePlotResult {
+        object Success : LeavePlotResult()
+        object NotFound : LeavePlotResult()
+        object IsOwner : LeavePlotResult()
+    }
+
+    fun leavePlot(plotId: UUID, userId: UUID): LeavePlotResult {
+        val plot = getPlotById(plotId) ?: return LeavePlotResult.NotFound
+        if (plot.ownerUserId == userId) return LeavePlotResult.IsOwner
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "DELETE FROM plot_members WHERE plot_id = ? AND user_id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, plotId)
+                stmt.setObject(2, userId)
+                return if (stmt.executeUpdate() > 0) LeavePlotResult.Success else LeavePlotResult.NotFound
+            }
+        }
+    }
+
     fun deletePlot(id: UUID, userId: UUID = FOUNDING_USER_ID): PlotDeleteResult {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement("SELECT is_system_defined FROM plots WHERE id = ? AND owner_user_id = ?").use { stmt ->

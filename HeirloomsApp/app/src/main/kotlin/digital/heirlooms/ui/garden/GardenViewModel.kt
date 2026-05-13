@@ -318,6 +318,18 @@ class GardenViewModel(
         }
     }
 
+    fun leavePlot(api: HeirloomsApi, plotId: String) {
+        val current = _state.value as? GardenLoadState.Ready ?: return
+        _state.value = GardenLoadState.Ready(current.rows.filter { it.plot?.id != plotId })
+        viewModelScope.launch {
+            try {
+                api.leavePlot(plotId)
+            } catch (_: Exception) {
+                _state.value = GardenLoadState.Ready(current.rows)
+            }
+        }
+    }
+
     // ---- Cached friends list (loaded lazily for display name resolution) ---
 
     private val _friends = MutableStateFlow<List<HeirloomsApi.Friend>>(emptyList())

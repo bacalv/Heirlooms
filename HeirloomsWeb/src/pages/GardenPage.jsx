@@ -372,7 +372,9 @@ function PlotGearMenu({ plot, isFirst, isLast, onEdit, onDelete, onMoveUp, onMov
             onClick={() => { setOpen(false); onMoveDown() }}>Move down</button>
           <div className="border-t border-forest-08 my-1" />
           <button className="w-full text-left px-3 py-1.5 hover:bg-earth-10 text-earth"
-            onClick={() => { setOpen(false); onDelete() }}>Delete</button>
+            onClick={() => { setOpen(false); onDelete() }}>
+            {plot.visibility === 'shared' && plot.is_owner === false ? 'Leave' : 'Delete'}
+          </button>
         </div>
       )}
     </div>
@@ -1133,13 +1135,15 @@ export function GardenPage() {
   }
 
   async function handleDeletePlot(plot) {
+    const isMember = plot.visibility === 'shared' && plot.is_owner === false
+    const url = isMember ? `/api/plots/${plot.id}/members/me` : `/api/plots/${plot.id}`
     try {
-      const r = await apiFetch(`/api/plots/${plot.id}`, apiKey, { method: 'DELETE' })
+      const r = await apiFetch(url, apiKey, { method: 'DELETE' })
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
       setPlots((prev) => prev.filter((p) => p.id !== plot.id))
       setConfirmDelete(null)
     } catch (e) {
-      alert(`Couldn't delete plot: ${e.message}`)
+      alert(isMember ? `Couldn't leave plot: ${e.message}` : `Couldn't delete plot: ${e.message}`)
     }
   }
 
@@ -1259,17 +1263,22 @@ export function GardenPage() {
         </Link>
       </div>
 
-      {confirmDelete && (
-        <ConfirmDialog
-          title="Delete plot?"
-          body={`"${confirmDelete.name}" will be removed. Your photos are not affected.`}
-          primaryLabel="Delete"
-          primaryClass="bg-earth text-parchment"
-          cancelLabel="Keep it"
-          onConfirm={() => handleDeletePlot(confirmDelete)}
-          onCancel={() => setConfirmDelete(null)}
-        />
-      )}
+      {confirmDelete && (() => {
+        const isMember = confirmDelete.visibility === 'shared' && confirmDelete.is_owner === false
+        return (
+          <ConfirmDialog
+            title={isMember ? 'Leave plot?' : 'Delete plot?'}
+            body={isMember
+              ? `You'll be removed from "${confirmDelete.name}". The plot and its items remain for other members.`
+              : `"${confirmDelete.name}" will be removed. Your photos are not affected.`}
+            primaryLabel={isMember ? 'Leave' : 'Delete'}
+            primaryClass="bg-earth text-parchment"
+            cancelLabel="Cancel"
+            onConfirm={() => handleDeletePlot(confirmDelete)}
+            onCancel={() => setConfirmDelete(null)}
+          />
+        )
+      })()}
 
       {quickTagUpload && (
         <QuickTagModal
