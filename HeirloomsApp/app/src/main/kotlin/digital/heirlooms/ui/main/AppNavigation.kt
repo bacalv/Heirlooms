@@ -88,9 +88,9 @@ internal object Routes {
     const val PAIRING = "pairing"
     const val UPLOAD_PROGRESS = "upload_progress/{sessionTag}"
     const val FLOWS = "flows"
-    const val STAGING = "staging/{flowId}/{plotId}"
+    const val STAGING = "staging/{flowId}/{plotId}/{isSharedPlot}"
     fun uploadProgress(sessionTag: String) = "upload_progress/$sessionTag"
-    fun staging(flowId: String, plotId: String) = "staging/$flowId/$plotId"
+    fun staging(flowId: String, plotId: String, isSharedPlot: Boolean) = "staging/$flowId/$plotId/$isSharedPlot"
 
     fun photoDetail(uploadId: String, from: String = "garden") = "photo/$uploadId?from=$from"
     fun capsuleDetail(capsuleId: String) = "capsules/$capsuleId"
@@ -371,7 +371,7 @@ private fun AppNavHost(navController: NavController, apiKey: String, onApiKeyRes
         composable(Routes.FLOWS) {
             digital.heirlooms.ui.flows.FlowsScreen(
                 onBack = { navController.popBackStack() },
-                onStagingTap = { flowId, plotId -> navController.navigate(Routes.staging(flowId, plotId)) },
+                onStagingTap = { flowId, plotId, isSharedPlot -> navController.navigate(Routes.staging(flowId, plotId, isSharedPlot)) },
             )
         }
         composable(
@@ -383,9 +383,11 @@ private fun AppNavHost(navController: NavController, apiKey: String, onApiKeyRes
         ) { backStack ->
             val flowId = backStack.arguments?.getString("flowId") ?: return@composable
             val plotId = backStack.arguments?.getString("plotId") ?: return@composable
+            val isSharedPlot = backStack.arguments?.getString("isSharedPlot")?.toBooleanStrictOrNull() ?: false
             digital.heirlooms.ui.flows.StagingScreen(
                 flowId = flowId,
                 plotId = plotId,
+                isSharedPlot = isSharedPlot,
                 onBack = { navController.popBackStack() },
             )
         }

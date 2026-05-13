@@ -55,7 +55,7 @@ import digital.heirlooms.ui.theme.TextMuted
 @Composable
 fun FlowsScreen(
     onBack: () -> Unit,
-    onStagingTap: (flowId: String, plotId: String) -> Unit,
+    onStagingTap: (flowId: String, plotId: String, isSharedPlot: Boolean) -> Unit,
     vm: FlowsViewModel = viewModel(),
 ) {
     val api = LocalHeirloomsApi.current
@@ -109,7 +109,7 @@ fun FlowsScreen(
                                 FlowCard(
                                     flowWithCount = fwc,
                                     targetPlot = s.plots.find { it.id == fwc.flow.targetPlotId },
-                                    onStagingTap = { onStagingTap(fwc.flow.id, fwc.flow.targetPlotId) },
+                                    onStagingTap = { onStagingTap(fwc.flow.id, fwc.flow.targetPlotId, s.plots.find { it.id == fwc.flow.targetPlotId }?.visibility == "shared") },
                                     onDelete = { vm.deleteFlow(api, fwc.flow.id) },
                                 )
                             }

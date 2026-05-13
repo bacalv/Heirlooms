@@ -54,6 +54,7 @@ import digital.heirlooms.ui.theme.TextMuted
 fun StagingScreen(
     flowId: String,
     plotId: String,
+    isSharedPlot: Boolean = false,
     onBack: () -> Unit,
     vm: StagingViewModel = viewModel(),
 ) {
@@ -97,7 +98,7 @@ fun StagingScreen(
                     items(state.pending, key = { "p_${it.id}" }) { upload ->
                         StagingTile(
                             upload = upload,
-                            onApprove = { vm.approve(api, flowId, plotId, upload.id) },
+                            onApprove = { vm.approve(api, flowId, plotId, upload.id, upload, isSharedPlot) },
                             onReject = { vm.reject(api, flowId, plotId, upload.id) },
                         )
                     }
