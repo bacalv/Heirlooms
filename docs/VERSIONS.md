@@ -2,6 +2,23 @@
 
 ---
 
+## v0.50.4 — Client-side dedup for encrypted uploads (13 May 2026)
+
+- **Server:** new `GET /api/content/uploads/hash/{hash}` endpoint — returns 200 if a
+  non-composted upload with that SHA-256 plaintext hex digest exists for the user, 404
+  otherwise. Backed by `Database.existsByContentHash`.
+- **Android:** `uploadEncryptedViaSigned` computes `sha256Hex(file)` and hits the check
+  endpoint before allocating any GCS slots. Returns new `UploadResult.Duplicate` on a
+  hit; `UploadWorker` shows "Already in your garden" notification. `contentHash` now
+  included in confirm body so future checks can match.
+- **Web:** `sha256HexFile` streams the file in 2 MiB chunks via `@noble/hashes/sha256`.
+  `encryptAndUpload` checks before initiating; shows "Already in your garden" status on
+  duplicate without refreshing the grid. `contentHash` included in confirm body.
+- Only uploads made with the new code have a stored hash; pre-existing uploads have
+  `content_hash = NULL` and are not affected.
+
+---
+
 ## v0.50.3 — Android share improvements (13 May 2026)
 
 - **Detail screen:** "Share with a friend" button added to both `GardenFlavour` and
