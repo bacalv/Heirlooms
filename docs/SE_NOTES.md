@@ -222,6 +222,14 @@ Three Gradle subprojects under `/Users/bac/IdeaProjects/Heirlooms/`:
   function instead (non-local return does not compile from the inner lambda). Both patterns
   are now in use — see `listUploadsHandler` vs `handleUpdatePlot` in `PlotHandler.kt`.
 
+- **Jackson `NullNode.asText()` returns `"null"`, not `null` (v0.50.2):**
+  When reading optional JSON fields with `node?.get("field")?.asText()`, a JSON `null` value
+  produces a `NullNode` whose `asText()` returns the 4-character string `"null"`. This passes
+  `.isNotBlank()` and can silently produce a valid (but wrong) Base64 decode (e.g. `"null"` →
+  3 bytes). Pattern: always add `.takeIf { !it.isNull }` before `.asText()` for nullable fields.
+  On the client side, use `undefined` (not `null`) for absent optional fields — `JSON.stringify`
+  omits `undefined` keys entirely, so the server never sees a JSON `null` for them.
+
 - **mp4box v2 (npm `mp4box ^2.3.0`) pitfalls (v0.35.0):**
   - No `default` export — import as `const MP4Box = await import('mp4box')`, then `MP4Box.createFile()`.
   - `initializeSegmentation()` returns `{ tracks, buffer }` (one combined init segment), NOT an iterable array.

@@ -24,7 +24,7 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.50.0 (12 May 2026) — M10 E4: Android adoption. M10 milestone complete.
+- Current version: v0.50.2 (13 May 2026) — web image upload fix (Jackson NullNode bug).
   All four increments shipped: E1 predicate/criteria, E2 flows+staging, E3 shared plots E2EE,
   E4 Android (VaultCrypto plot key helpers, FlowsScreen, StagingScreen, plot key caching).
 - Active milestone: none — M10 complete. M11 TBD (strong sealing + social recovery).
@@ -561,7 +561,7 @@ with manual env vars achieves the same result.
 | Artifact Registry | heirlooms (europe-west2) |
 | HeirloomsServer image | europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server |
 | HeirloomsWeb image | europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-web |
-| HeirloomsServer Cloud Run URL | https://heirlooms-server-340655233963.us-central1.run.app (revision heirlooms-server-00043-4ss, 2Gi) |
+| HeirloomsServer Cloud Run URL | https://heirlooms-server-340655233963.us-central1.run.app (revision heirlooms-server-00053-989, 2Gi) |
 | HeirloomsWeb Cloud Run URL | https://heirlooms-web-340655233963.us-central1.run.app (revision heirlooms-web-00057-jcp) |
 | Target domain (web) | https://heirlooms.digital (live) |
 | Target domain (server) | https://api.heirlooms.digital (live) |

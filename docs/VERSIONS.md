@@ -2,6 +2,18 @@
 
 ---
 
+## v0.50.2 — Web image upload fix (13 May 2026)
+
+- **Server:** `confirmEncryptedUpload` — added `.takeIf { !it.isNull }` before `.asText()`
+  for all eight optional nullable fields. Fixes Jackson `NullNode.asText()` returning the
+  string `"null"`, which caused a spurious 400 when the client sent JSON `null` for absent
+  preview DEK fields.
+- **Web:** `GardenPage.jsx` — send `undefined` (omitted by `JSON.stringify`) instead of
+  `null` for the three optional preview fields when no preview was generated.
+- Bug introduced in v0.36.0 (preview clips); web image uploads have silently failed since then.
+
+---
+
 ## v0.50.0 — M10 E4: Android adoption (12 May 2026)
 
 Android-only. Brings M10 features to the Android app.

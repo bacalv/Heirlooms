@@ -2,6 +2,37 @@
 
 ---
 
+## Session — 13 May 2026 — Web image upload fix (v0.50.2)
+
+**Bug:** Uploading an image via the Garden "Plant" button failed with HTTP 400 on
+`POST /api/content/uploads/confirm`. Server error: `wrappedPreviewDek envelope invalid:
+blob too short: 3 bytes, minimum 31`.
+
+**Root cause:** Jackson's `NullNode.asText()` returns the 4-character string `"null"`,
+not Java `null`. For images (non-large, non-video), the web sends `wrappedPreviewDek: null`
+in the JSON body. The server read that as the string `"null"`, which passes `.isNotBlank()`,
+then `Base64.getDecoder().decode("null")` silently succeeds (3 bytes), and envelope
+validation correctly rejects those 3 bytes as too short. Bug introduced in v0.36.0
+(preview clips) — web image uploads have never worked since then.
+
+**Server fix (`UploadHandler.kt`):** Added `.takeIf { !it.isNull }` before `.asText()` for
+all eight optional nullable fields in `confirmEncryptedUpload` (`encryptedMetadata`,
+`encryptedMetadataFormat`, `thumbnailStorageKey`, `wrappedThumbnailDek`, `thumbnailDekFormat`,
+`previewStorageKey`, `wrappedPreviewDek`, `previewDekFormat`).
+
+**Web fix (`GardenPage.jsx`):** Changed the three optional preview fields
+(`previewStorageKey`, `wrappedPreviewDekB64`, `previewDekFormat`) from `null` to `undefined`
+when no preview was generated. `JSON.stringify` omits `undefined` values, so those fields are
+absent from the confirm body rather than present as JSON `null`.
+
+**Also committed:** Minor `ExplorePage.jsx` UI tweaks (new-plot hint hidden when filters are
+active; save-as-plot bar shown when in new-plot mode).
+
+**Deployment:** Server `heirlooms-server-00053-989` (v0.50.2). Web not redeployed
+(web fix is live in local dev; deploy separately if needed).
+
+---
+
 ## Session — 12 May 2026 — M10 E4: Android adoption (v0.50.0)
 
 Android-only. Completes the M10 milestone.
