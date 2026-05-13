@@ -193,6 +193,11 @@ data class PlotRecord(
     val criteria: String?,
     val showInGarden: Boolean,
     val visibility: String,
+    val plotStatus: String = "open",
+    val tombstonedAt: Instant? = null,
+    val tombstonedBy: UUID? = null,
+    val createdBy: UUID? = null,
+    val localName: String? = null,
 )
 
 // ---- Flow domain model -----------------------------------------------
@@ -235,6 +240,24 @@ data class PlotMemberRecord(
     val wrappedPlotKey: ByteArray?,
     val plotKeyFormat: String?,
     val joinedAt: Instant,
+    val status: String = "joined",
+    val localName: String? = null,
+    val leftAt: Instant? = null,
+)
+
+data class SharedMembershipRecord(
+    val plotId: UUID,
+    val plotName: String,
+    val ownerUserId: UUID?,
+    val ownerDisplayName: String?,
+    val role: String,
+    val status: String,
+    val localName: String?,
+    val joinedAt: Instant,
+    val leftAt: Instant?,
+    val plotStatus: String,
+    val tombstonedAt: Instant?,
+    val tombstonedBy: UUID?,
 )
 
 data class PlotInviteRecord(
@@ -1507,13 +1530,18 @@ class Database(private val dataSource: DataSource) {
     fun listPlots(userId: UUID = FOUNDING_USER_ID): List<PlotRecord> {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
-                """SELECT DISTINCT p.id, p.owner_user_id, p.name, p.sort_order, p.is_system_defined,
-                          p.created_at, p.updated_at, p.criteria, p.show_in_garden, p.visibility
+                """SELECT p.id, p.owner_user_id, p.name, p.sort_order, p.is_system_defined,
+                          p.created_at, p.updated_at, p.criteria, p.show_in_garden, p.visibility,
+                          p.plot_status, p.tombstoned_at, p.tombstoned_by, p.created_by,
+                          pm_me.local_name
                    FROM plots p
-                   WHERE p.owner_user_id = ?
-                      OR (p.visibility IN ('shared', 'public') AND EXISTS (
-                          SELECT 1 FROM plot_members pm WHERE pm.plot_id = p.id AND pm.user_id = ?
-                      ))
+                   LEFT JOIN plot_members pm_me
+                          ON pm_me.plot_id = p.id AND pm_me.user_id = ? AND pm_me.status = 'joined'
+                   WHERE (
+                       (p.owner_user_id = ? AND p.visibility NOT IN ('shared', 'public'))
+                       OR (p.visibility IN ('shared', 'public') AND pm_me.user_id IS NOT NULL)
+                   )
+                   AND p.tombstoned_at IS NULL
                    ORDER BY p.sort_order ASC, p.created_at ASC"""
             ).use { stmt ->
                 stmt.setObject(1, userId)
@@ -1521,7 +1549,7 @@ class Database(private val dataSource: DataSource) {
                 val rs = stmt.executeQuery()
                 val results = mutableListOf<PlotRecord>()
                 while (rs.next()) {
-                    results.add(rs.toPlotRecord())
+                    results.add(rs.toPlotRecord().copy(localName = rs.getString("local_name")))
                 }
                 return results
             }
@@ -1537,7 +1565,8 @@ class Database(private val dataSource: DataSource) {
     private fun getPlotByIdConn(conn: Connection, id: UUID): PlotRecord? =
         conn.prepareStatement(
             """SELECT id, owner_user_id, name, sort_order, is_system_defined,
-                      created_at, updated_at, criteria, show_in_garden, visibility
+                      created_at, updated_at, criteria, show_in_garden, visibility,
+                      plot_status, tombstoned_at, tombstoned_by, created_by
                FROM plots WHERE id = ?"""
         ).use { stmt ->
             stmt.setObject(1, id)
@@ -1556,6 +1585,10 @@ class Database(private val dataSource: DataSource) {
         criteria = getString("criteria"),
         showInGarden = getBoolean("show_in_garden"),
         visibility = getString("visibility"),
+        plotStatus = getString("plot_status") ?: "open",
+        tombstonedAt = getTimestamp("tombstoned_at")?.toInstant(),
+        tombstonedBy = getObject("tombstoned_by", UUID::class.java),
+        createdBy = getObject("created_by", UUID::class.java),
     )
 
     fun createPlot(
@@ -1571,8 +1604,9 @@ class Database(private val dataSource: DataSource) {
         val now = Instant.now()
         withTransaction { conn ->
             conn.prepareStatement(
-                """INSERT INTO plots (id, owner_user_id, name, criteria, show_in_garden, visibility, created_at, updated_at)
-                   VALUES (?, ?, ?, ?::jsonb, ?, ?, ?, ?)"""
+                """INSERT INTO plots (id, owner_user_id, name, criteria, show_in_garden, visibility,
+                                     created_by, created_at, updated_at)
+                   VALUES (?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?)"""
             ).use { stmt ->
                 stmt.setObject(1, id)
                 stmt.setObject(2, userId)
@@ -1580,15 +1614,16 @@ class Database(private val dataSource: DataSource) {
                 stmt.setString(4, criteria)
                 stmt.setBoolean(5, showInGarden)
                 stmt.setString(6, visibility)
-                stmt.setTimestamp(7, Timestamp.from(now))
+                stmt.setObject(7, userId)
                 stmt.setTimestamp(8, Timestamp.from(now))
+                stmt.setTimestamp(9, Timestamp.from(now))
                 stmt.executeUpdate()
             }
             if (visibility == "shared" && wrappedPlotKeyB64 != null && plotKeyFormat != null) {
                 val keyBytes = java.util.Base64.getDecoder().decode(wrappedPlotKeyB64)
                 conn.prepareStatement(
-                    """INSERT INTO plot_members (plot_id, user_id, role, wrapped_plot_key, plot_key_format)
-                       VALUES (?, ?, 'owner', ?, ?)"""
+                    """INSERT INTO plot_members (plot_id, user_id, role, wrapped_plot_key, plot_key_format, status)
+                       VALUES (?, ?, 'owner', ?, ?, 'joined')"""
                 ).use { stmt ->
                     stmt.setObject(1, id)
                     stmt.setObject(2, userId)
@@ -1656,21 +1691,54 @@ class Database(private val dataSource: DataSource) {
     sealed class LeavePlotResult {
         object Success : LeavePlotResult()
         object NotFound : LeavePlotResult()
-        object IsOwner : LeavePlotResult()
+        object MustTransferFirst : LeavePlotResult()
     }
 
     fun leavePlot(plotId: UUID, userId: UUID): LeavePlotResult {
-        val plot = getPlotById(plotId) ?: return LeavePlotResult.NotFound
-        if (plot.ownerUserId == userId) return LeavePlotResult.IsOwner
-        dataSource.connection.use { conn ->
+        withTransaction { conn ->
+            val role = conn.prepareStatement(
+                "SELECT role FROM plot_members WHERE plot_id = ? AND user_id = ? AND status = 'joined'"
+            ).use { stmt ->
+                stmt.setObject(1, plotId); stmt.setObject(2, userId)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return LeavePlotResult.NotFound
+                rs.getString("role")
+            }
+
+            if (role == "owner") {
+                val otherJoined = conn.prepareStatement(
+                    "SELECT COUNT(*) FROM plot_members WHERE plot_id = ? AND user_id != ? AND status = 'joined'"
+                ).use { stmt ->
+                    stmt.setObject(1, plotId); stmt.setObject(2, userId)
+                    val rs = stmt.executeQuery(); rs.next(); rs.getInt(1)
+                }
+                if (otherJoined > 0) return LeavePlotResult.MustTransferFirst
+            }
+
             conn.prepareStatement(
-                "DELETE FROM plot_members WHERE plot_id = ? AND user_id = ?"
+                "UPDATE plot_members SET status = 'left', left_at = NOW() WHERE plot_id = ? AND user_id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, plotId); stmt.setObject(2, userId)
+                stmt.executeUpdate()
+            }
+
+            val remainingJoined = conn.prepareStatement(
+                "SELECT COUNT(*) FROM plot_members WHERE plot_id = ? AND status = 'joined'"
             ).use { stmt ->
                 stmt.setObject(1, plotId)
-                stmt.setObject(2, userId)
-                return if (stmt.executeUpdate() > 0) LeavePlotResult.Success else LeavePlotResult.NotFound
+                val rs = stmt.executeQuery(); rs.next(); rs.getInt(1)
+            }
+
+            if (remainingJoined == 0) {
+                conn.prepareStatement(
+                    "UPDATE plots SET tombstoned_at = NOW(), tombstoned_by = ? WHERE id = ?"
+                ).use { stmt ->
+                    stmt.setObject(1, userId); stmt.setObject(2, plotId)
+                    stmt.executeUpdate()
+                }
             }
         }
+        return LeavePlotResult.Success
     }
 
     fun deletePlot(id: UUID, userId: UUID = FOUNDING_USER_ID): PlotDeleteResult {
@@ -1747,7 +1815,7 @@ class Database(private val dataSource: DataSource) {
 
     private fun isMemberConn(conn: Connection, plotId: UUID, userId: UUID): Boolean =
         conn.prepareStatement(
-            "SELECT 1 FROM plot_members WHERE plot_id = ? AND user_id = ?"
+            "SELECT 1 FROM plot_members WHERE plot_id = ? AND user_id = ? AND status = 'joined'"
         ).use { stmt ->
             stmt.setObject(1, plotId); stmt.setObject(2, userId)
             stmt.executeQuery().next()
@@ -1988,6 +2056,7 @@ class Database(private val dataSource: DataSource) {
         object NotFound : ApproveResult()
         object AlreadyApproved : ApproveResult()
         object PlotNotOwned : ApproveResult()
+        object PlotClosed : ApproveResult()
     }
 
     fun approveStagingItem(
@@ -2004,6 +2073,7 @@ class Database(private val dataSource: DataSource) {
         val isOwner = plot.ownerUserId == userId
         val isMember = plot.visibility == "shared" && isMember(plotId, userId)
         if (!isOwner && !isMember) return ApproveResult.PlotNotOwned
+        if (plot.plotStatus == "closed") return ApproveResult.PlotClosed
 
         withTransaction { conn ->
             val exists = conn.prepareStatement(
@@ -2115,8 +2185,7 @@ class Database(private val dataSource: DataSource) {
 
     fun getPlotItems(plotId: UUID, userId: UUID = FOUNDING_USER_ID): List<PlotItemWithUpload> {
         dataSource.connection.use { conn ->
-            val plot = getPlotByIdForUser(conn, plotId, userId) ?: return emptyList()
-            val isShared = plot.visibility == "shared"
+            getPlotByIdForUser(conn, plotId, userId) ?: return emptyList()
             conn.prepareStatement(
                 """SELECT u.id, u.storage_key, u.mime_type, u.file_size, u.uploaded_at, u.content_hash,
                           u.thumbnail_key, u.taken_at, u.latitude, u.longitude, u.altitude,
@@ -2157,6 +2226,7 @@ class Database(private val dataSource: DataSource) {
         object AlreadyPresent : AddItemResult()
         object PlotNotOwned : AddItemResult()
         object UploadNotOwned : AddItemResult()
+        object PlotClosed : AddItemResult()
         data class Error(val message: String) : AddItemResult()
     }
 
@@ -2173,6 +2243,8 @@ class Database(private val dataSource: DataSource) {
         val isOwner = plot.ownerUserId == userId
         val isMember = plot.visibility == "shared" && isMember(plotId, userId)
         if (!isOwner && !isMember) return AddItemResult.PlotNotOwned
+        if (plot.tombstonedAt != null) return AddItemResult.PlotNotOwned
+        if (plot.plotStatus == "closed") return AddItemResult.PlotClosed
         if (plot.criteria != null) return AddItemResult.Error("Plot is a query plot, not a collection plot")
         if (!uploadExists(uploadId, userId)) return AddItemResult.UploadNotOwned
 
@@ -2255,10 +2327,11 @@ class Database(private val dataSource: DataSource) {
             if (!isMemberConn(conn, plotId, userId)) return null
             conn.prepareStatement(
                 """SELECT pm.plot_id, pm.user_id, u.display_name, u.username,
-                          pm.role, pm.wrapped_plot_key, pm.plot_key_format, pm.joined_at
+                          pm.role, pm.wrapped_plot_key, pm.plot_key_format, pm.joined_at,
+                          pm.status, pm.local_name, pm.left_at
                    FROM plot_members pm
                    JOIN users u ON u.id = pm.user_id
-                   WHERE pm.plot_id = ?
+                   WHERE pm.plot_id = ? AND pm.status IN ('joined', 'invited')
                    ORDER BY pm.joined_at ASC"""
             ).use { stmt ->
                 stmt.setObject(1, plotId)
@@ -2273,6 +2346,9 @@ class Database(private val dataSource: DataSource) {
                     wrappedPlotKey = rs.getBytes("wrapped_plot_key"),
                     plotKeyFormat  = rs.getString("plot_key_format"),
                     joinedAt    = rs.getTimestamp("joined_at").toInstant(),
+                    status      = rs.getString("status"),
+                    localName   = rs.getString("local_name"),
+                    leftAt      = rs.getTimestamp("left_at")?.toInstant(),
                 ))
                 return results
             }
@@ -2306,15 +2382,35 @@ class Database(private val dataSource: DataSource) {
             }
             if (!areFriends) return AddMemberResult.NotFriends
 
-            if (isMemberConn(conn, plotId, newUserId)) return AddMemberResult.AlreadyMember
-
-            conn.prepareStatement(
-                """INSERT INTO plot_members (plot_id, user_id, role, wrapped_plot_key, plot_key_format)
-                   VALUES (?, ?, 'member', ?, ?)"""
+            val existingStatus = conn.prepareStatement(
+                "SELECT status FROM plot_members WHERE plot_id = ? AND user_id = ?"
             ).use { stmt ->
                 stmt.setObject(1, plotId); stmt.setObject(2, newUserId)
-                stmt.setBytes(3, wrappedPlotKey); stmt.setString(4, plotKeyFormat)
-                stmt.executeUpdate()
+                val rs = stmt.executeQuery()
+                if (!rs.next()) null else rs.getString("status")
+            }
+            if (existingStatus == "joined" || existingStatus == "invited") return AddMemberResult.AlreadyMember
+
+            if (existingStatus == null) {
+                conn.prepareStatement(
+                    """INSERT INTO plot_members (plot_id, user_id, role, wrapped_plot_key, plot_key_format, status)
+                       VALUES (?, ?, 'member', ?, ?, 'invited')"""
+                ).use { stmt ->
+                    stmt.setObject(1, plotId); stmt.setObject(2, newUserId)
+                    stmt.setBytes(3, wrappedPlotKey); stmt.setString(4, plotKeyFormat)
+                    stmt.executeUpdate()
+                }
+            } else {
+                // status = 'left' — re-invite
+                conn.prepareStatement(
+                    """UPDATE plot_members SET status = 'invited', wrapped_plot_key = ?,
+                       plot_key_format = ?, left_at = NULL
+                       WHERE plot_id = ? AND user_id = ?"""
+                ).use { stmt ->
+                    stmt.setBytes(1, wrappedPlotKey); stmt.setString(2, plotKeyFormat)
+                    stmt.setObject(3, plotId); stmt.setObject(4, newUserId)
+                    stmt.executeUpdate()
+                }
             }
         }
         return AddMemberResult.Success
@@ -2381,7 +2477,14 @@ class Database(private val dataSource: DataSource) {
     fun redeemInvite(token: String, recipientUserId: UUID, recipientPubkey: String): RedeemInviteResult {
         dataSource.connection.use { conn ->
             val info = getInviteInfo(token) ?: return RedeemInviteResult.Invalid
-            if (isMemberConn(conn, info.plotId, recipientUserId)) return RedeemInviteResult.AlreadyMember
+            val existingStatus = conn.prepareStatement(
+                "SELECT status FROM plot_members WHERE plot_id = ? AND user_id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, info.plotId); stmt.setObject(2, recipientUserId)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) null else rs.getString("status")
+            }
+            if (existingStatus == "joined" || existingStatus == "invited") return RedeemInviteResult.AlreadyMember
 
             val inviteId = conn.prepareStatement(
                 """UPDATE plot_invites SET recipient_user_id = ?, recipient_pubkey = ?
@@ -2443,8 +2546,12 @@ class Database(private val dataSource: DataSource) {
                 rs.getObject("recipient_user_id", UUID::class.java)
             }
             conn.prepareStatement(
-                """INSERT INTO plot_members (plot_id, user_id, role, wrapped_plot_key, plot_key_format)
-                   VALUES (?, ?, 'member', ?, ?) ON CONFLICT DO NOTHING"""
+                """INSERT INTO plot_members (plot_id, user_id, role, wrapped_plot_key, plot_key_format, status)
+                   VALUES (?, ?, 'member', ?, ?, 'invited')
+                   ON CONFLICT (plot_id, user_id) DO UPDATE
+                   SET status = 'invited', wrapped_plot_key = EXCLUDED.wrapped_plot_key,
+                       plot_key_format = EXCLUDED.plot_key_format, left_at = NULL
+                   WHERE plot_members.status != 'joined'"""
             ).use { stmt ->
                 stmt.setObject(1, plotId); stmt.setObject(2, row)
                 stmt.setBytes(3, wrappedPlotKey); stmt.setString(4, plotKeyFormat)
@@ -2458,6 +2565,238 @@ class Database(private val dataSource: DataSource) {
             }
         }
         return true
+    }
+
+    // ---- Shared plot membership lifecycle ------------------------------------
+
+    fun listSharedMemberships(userId: UUID): List<SharedMembershipRecord> {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """SELECT pm.plot_id, p.name AS plot_name, p.owner_user_id,
+                          u_owner.display_name AS owner_display_name,
+                          pm.role, pm.status, pm.local_name, pm.joined_at, pm.left_at,
+                          p.plot_status, p.tombstoned_at, p.tombstoned_by
+                   FROM plot_members pm
+                   JOIN plots p ON p.id = pm.plot_id
+                   LEFT JOIN users u_owner ON u_owner.id = p.owner_user_id
+                   WHERE pm.user_id = ?
+                   ORDER BY pm.joined_at ASC"""
+            ).use { stmt ->
+                stmt.setObject(1, userId)
+                val rs = stmt.executeQuery()
+                val results = mutableListOf<SharedMembershipRecord>()
+                while (rs.next()) results.add(SharedMembershipRecord(
+                    plotId           = rs.getObject("plot_id", UUID::class.java),
+                    plotName         = rs.getString("plot_name"),
+                    ownerUserId      = rs.getObject("owner_user_id", UUID::class.java),
+                    ownerDisplayName = rs.getString("owner_display_name"),
+                    role             = rs.getString("role"),
+                    status           = rs.getString("status"),
+                    localName        = rs.getString("local_name"),
+                    joinedAt         = rs.getTimestamp("joined_at").toInstant(),
+                    leftAt           = rs.getTimestamp("left_at")?.toInstant(),
+                    plotStatus       = rs.getString("plot_status") ?: "open",
+                    tombstonedAt     = rs.getTimestamp("tombstoned_at")?.toInstant(),
+                    tombstonedBy     = rs.getObject("tombstoned_by", UUID::class.java),
+                ))
+                return results
+            }
+        }
+    }
+
+    sealed class AcceptInviteResult {
+        object Success : AcceptInviteResult()
+        object NotInvited : AcceptInviteResult()
+        object AlreadyJoined : AcceptInviteResult()
+    }
+
+    fun acceptInvite(plotId: UUID, userId: UUID, localName: String): AcceptInviteResult {
+        dataSource.connection.use { conn ->
+            val status = conn.prepareStatement(
+                "SELECT status FROM plot_members WHERE plot_id = ? AND user_id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, plotId); stmt.setObject(2, userId)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return AcceptInviteResult.NotInvited
+                rs.getString("status")
+            }
+            if (status == "joined") return AcceptInviteResult.AlreadyJoined
+            if (status != "invited") return AcceptInviteResult.NotInvited
+            conn.prepareStatement(
+                "UPDATE plot_members SET status = 'joined', local_name = ? WHERE plot_id = ? AND user_id = ?"
+            ).use { stmt ->
+                stmt.setString(1, localName.trim().takeIf { it.isNotBlank() })
+                stmt.setObject(2, plotId); stmt.setObject(3, userId)
+                stmt.executeUpdate()
+            }
+        }
+        return AcceptInviteResult.Success
+    }
+
+    sealed class RejoinResult {
+        object Success : RejoinResult()
+        object NotLeft : RejoinResult()
+        object PlotTombstoned : RejoinResult()
+    }
+
+    fun rejoinPlot(plotId: UUID, userId: UUID, localName: String?): RejoinResult {
+        dataSource.connection.use { conn ->
+            val row = conn.prepareStatement(
+                """SELECT pm.status, pm.local_name, p.tombstoned_at
+                   FROM plot_members pm
+                   JOIN plots p ON p.id = pm.plot_id
+                   WHERE pm.plot_id = ? AND pm.user_id = ?"""
+            ).use { stmt ->
+                stmt.setObject(1, plotId); stmt.setObject(2, userId)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return RejoinResult.NotLeft
+                Triple(rs.getString("status"), rs.getString("local_name"), rs.getTimestamp("tombstoned_at"))
+            }
+            if (row.first != "left") return RejoinResult.NotLeft
+            if (row.third != null) return RejoinResult.PlotTombstoned
+
+            val resolvedName = localName?.trim()?.takeIf { it.isNotBlank() } ?: row.second
+            conn.prepareStatement(
+                "UPDATE plot_members SET status = 'joined', left_at = NULL, local_name = ? WHERE plot_id = ? AND user_id = ?"
+            ).use { stmt ->
+                stmt.setString(1, resolvedName)
+                stmt.setObject(2, plotId); stmt.setObject(3, userId)
+                stmt.executeUpdate()
+            }
+        }
+        return RejoinResult.Success
+    }
+
+    sealed class RestorePlotResult {
+        object Success : RestorePlotResult()
+        object NotTombstoned : RestorePlotResult()
+        object NotAuthorized : RestorePlotResult()
+        object WindowExpired : RestorePlotResult()
+    }
+
+    fun restorePlot(plotId: UUID, userId: UUID): RestorePlotResult {
+        withTransaction { conn ->
+            val row = conn.prepareStatement(
+                "SELECT tombstoned_at, tombstoned_by FROM plots WHERE id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, plotId)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return RestorePlotResult.NotTombstoned
+                Pair(rs.getTimestamp("tombstoned_at")?.toInstant(), rs.getObject("tombstoned_by", UUID::class.java))
+            }
+            val (tombstonedAt, tombstonedBy) = row
+            if (tombstonedAt == null) return RestorePlotResult.NotTombstoned
+            if (tombstonedBy != userId) return RestorePlotResult.NotAuthorized
+            if (tombstonedAt.isBefore(Instant.now().minus(90, java.time.temporal.ChronoUnit.DAYS)))
+                return RestorePlotResult.WindowExpired
+
+            conn.prepareStatement(
+                "UPDATE plots SET tombstoned_at = NULL, tombstoned_by = NULL WHERE id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, plotId); stmt.executeUpdate()
+            }
+            conn.prepareStatement(
+                "UPDATE plot_members SET status = 'joined', left_at = NULL WHERE plot_id = ? AND user_id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, plotId); stmt.setObject(2, userId); stmt.executeUpdate()
+            }
+        }
+        return RestorePlotResult.Success
+    }
+
+    sealed class TransferOwnershipResult {
+        object Success : TransferOwnershipResult()
+        object NotOwner : TransferOwnershipResult()
+        object TargetNotMember : TransferOwnershipResult()
+        object NotFound : TransferOwnershipResult()
+    }
+
+    fun transferOwnership(plotId: UUID, newOwnerId: UUID, currentOwnerId: UUID): TransferOwnershipResult {
+        withTransaction { conn ->
+            val ownerUserId = conn.prepareStatement(
+                "SELECT owner_user_id FROM plots WHERE id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, plotId)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return TransferOwnershipResult.NotFound
+                rs.getObject("owner_user_id", UUID::class.java)
+            }
+            if (ownerUserId != currentOwnerId) return TransferOwnershipResult.NotOwner
+
+            val targetIsJoined = conn.prepareStatement(
+                "SELECT 1 FROM plot_members WHERE plot_id = ? AND user_id = ? AND status = 'joined'"
+            ).use { stmt ->
+                stmt.setObject(1, plotId); stmt.setObject(2, newOwnerId)
+                stmt.executeQuery().next()
+            }
+            if (!targetIsJoined) return TransferOwnershipResult.TargetNotMember
+
+            conn.prepareStatement(
+                "UPDATE plot_members SET role = 'member' WHERE plot_id = ? AND user_id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, plotId); stmt.setObject(2, currentOwnerId); stmt.executeUpdate()
+            }
+            conn.prepareStatement(
+                "UPDATE plot_members SET role = 'owner' WHERE plot_id = ? AND user_id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, plotId); stmt.setObject(2, newOwnerId); stmt.executeUpdate()
+            }
+            conn.prepareStatement(
+                "UPDATE plots SET owner_user_id = ?, updated_at = NOW() WHERE id = ?"
+            ).use { stmt ->
+                stmt.setObject(1, newOwnerId); stmt.setObject(2, plotId); stmt.executeUpdate()
+            }
+        }
+        return TransferOwnershipResult.Success
+    }
+
+    sealed class SetPlotStatusResult {
+        object Success : SetPlotStatusResult()
+        object NotOwner : SetPlotStatusResult()
+        object NotFound : SetPlotStatusResult()
+        data class InvalidStatus(val status: String) : SetPlotStatusResult()
+    }
+
+    fun setPlotStatus(plotId: UUID, status: String, userId: UUID): SetPlotStatusResult {
+        if (status != "open" && status != "closed") return SetPlotStatusResult.InvalidStatus(status)
+        dataSource.connection.use { conn ->
+            val updated = conn.prepareStatement(
+                "UPDATE plots SET plot_status = ?, updated_at = NOW() WHERE id = ? AND owner_user_id = ?"
+            ).use { stmt ->
+                stmt.setString(1, status); stmt.setObject(2, plotId); stmt.setObject(3, userId)
+                stmt.executeUpdate()
+            }
+            return when {
+                updated > 0 -> SetPlotStatusResult.Success
+                else -> {
+                    val exists = conn.prepareStatement("SELECT 1 FROM plots WHERE id = ?").use { s ->
+                        s.setObject(1, plotId); s.executeQuery().next()
+                    }
+                    if (exists) SetPlotStatusResult.NotOwner else SetPlotStatusResult.NotFound
+                }
+            }
+        }
+    }
+
+    fun fetchExpiredTombstonedPlots(): List<UUID> {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "SELECT id FROM plots WHERE tombstoned_at < NOW() - INTERVAL '90 days'"
+            ).use { stmt ->
+                val rs = stmt.executeQuery()
+                val results = mutableListOf<UUID>()
+                while (rs.next()) results.add(rs.getObject("id", UUID::class.java))
+                return results
+            }
+        }
+    }
+
+    fun hardDeletePlot(plotId: UUID) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement("DELETE FROM plots WHERE id = ?").use { stmt ->
+                stmt.setObject(1, plotId); stmt.executeUpdate()
+            }
+        }
     }
 
     private fun java.sql.ResultSet.toFlowRecord() = FlowRecord(

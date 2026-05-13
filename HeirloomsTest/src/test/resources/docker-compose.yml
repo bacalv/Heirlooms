@@ -52,7 +52,7 @@ services:
       DB_URL: "jdbc:postgresql://postgres:5432/heirloom"
       DB_USER: "heirloom"
       DB_PASSWORD: "heirloom_test"
-      API_KEY: "${API_KEY:-}"
+      API_KEY: "${API_KEY:-heirloom-integration-test-key}"
     depends_on:
       postgres:
         condition: service_healthy

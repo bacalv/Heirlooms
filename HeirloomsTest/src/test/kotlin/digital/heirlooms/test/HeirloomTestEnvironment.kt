@@ -130,10 +130,15 @@ class HeirloomsTestEnvironment : BeforeAllCallback, ExtensionContext.Store.Close
             .forcePathStyle(true)
             .build()
 
+        val testApiKey = System.getenv("API_KEY")?.takeIf { it.isNotEmpty() }
+            ?: "heirloom-integration-test-key"
         httpClient = OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
+            .addInterceptor { chain ->
+                chain.proceed(chain.request().newBuilder().header("X-Api-Key", testApiKey).build())
+            }
             .build()
 
         context.root.getStore(ExtensionContext.Namespace.GLOBAL)

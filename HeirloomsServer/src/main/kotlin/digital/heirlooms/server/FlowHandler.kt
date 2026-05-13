@@ -206,6 +206,7 @@ private fun handleApproveStagingItem(plotId: UUID, uploadId: UUID, request: Requ
         Database.ApproveResult.AlreadyApproved -> Response(CONFLICT).body("Item is already in the collection")
         Database.ApproveResult.NotFound        -> Response(NOT_FOUND)
         Database.ApproveResult.PlotNotOwned    -> Response(NOT_FOUND)
+        Database.ApproveResult.PlotClosed      -> Response(FORBIDDEN).body("Plot is closed")
     }
 }
 
@@ -319,6 +320,7 @@ private fun handleAddPlotItem(plotId: UUID, request: Request, database: Database
             Database.AddItemResult.AlreadyPresent -> Response(CONFLICT).body("Item already in collection")
             Database.AddItemResult.PlotNotOwned   -> Response(NOT_FOUND)
             Database.AddItemResult.UploadNotOwned -> Response(NOT_FOUND)
+            Database.AddItemResult.PlotClosed     -> Response(FORBIDDEN).body("Plot is closed")
             is Database.AddItemResult.Error       -> Response(BAD_REQUEST).body("Cannot add item")
         }
     }
@@ -328,6 +330,7 @@ private fun handleAddPlotItem(plotId: UUID, request: Request, database: Database
         Database.AddItemResult.AlreadyPresent -> Response(CONFLICT).body("Item already in collection")
         Database.AddItemResult.PlotNotOwned   -> Response(NOT_FOUND)
         Database.AddItemResult.UploadNotOwned -> Response(NOT_FOUND)
+        Database.AddItemResult.PlotClosed     -> Response(FORBIDDEN).body("Plot is closed")
         is Database.AddItemResult.Error       -> Response(BAD_REQUEST).body("Cannot add item")
     }
 }

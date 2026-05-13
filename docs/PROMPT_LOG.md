@@ -3845,3 +3845,93 @@ already available.
 ### Deployment
 Server `heirlooms-server-00043-4ss` (v0.45.7). Web `heirlooms-web-00057-jcp` (v0.45.8).
 APK v0.45.6–v0.45.7 installed on Bret's Samsung A02. Sadaar's Fire OS tablet needs v0.45.6+ APK.
+
+---
+
+## v0.51.0 — Shared plot membership overhaul E1: server (13 May 2026)
+
+Prompt: implement the shared plot membership changes (from docs/briefs/shared_plot_membership.md).
+This is E1 of the three-increment overhaul. Server only; no client changes.
+
+### Migration V28
+`plot_members` gains `status TEXT NOT NULL DEFAULT 'joined' CHECK (status IN ('invited','joined','left'))`,
+`local_name TEXT NULL`, `left_at TIMESTAMPTZ NULL`. Indexes on `(user_id, status)`.
+`plots` gains `plot_status TEXT NOT NULL DEFAULT 'open' CHECK (plot_status IN ('open','closed'))`,
+`tombstoned_at TIMESTAMPTZ NULL`, `tombstoned_by UUID NULL REFERENCES users(id)`,
+`created_by UUID NULL REFERENCES users(id)`. Index on `tombstoned_at WHERE NOT NULL`. Backfills:
+existing plot_members → `status = 'joined'`; existing plots → `created_by = owner_user_id`.
+
+### Behaviour changes to existing endpoints
+
+**`POST /api/plots/:id/members`** (direct friend invite) and **`POST /api/plots/join`** + confirm:
+now produce `status = invited` rather than immediately joining. The recipient's plot does NOT
+appear in their garden until they accept via `POST /api/plots/:id/accept`.
+
+**`GET /api/plots`** (garden list): now filters to `status = joined` plot_members only and excludes
+tombstoned plots. Returns new fields `plot_status`, `local_name`, `tombstoned_at` on each plot.
+
+**`GET /api/plots/:id/members`**: now includes `status` and `localName` fields per member.
+
+**`DELETE /api/plots/:id/members/me`** (leave plot): behaviour changed from hard-delete to soft-leave.
+Sets `status = 'left'`, `left_at = NOW()`. Tombstones plot if no joined members remain. Owner must
+call `POST /api/plots/:id/transfer` first if other joined members exist.
+
+**`POST /api/plots/:id/items`** / staging approval: new `PlotClosed` path returns 403 when
+`plot_status = 'closed'`.
+
+### New endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/plots/shared` | All plot_members rows for current user (all statuses). Powers Shared Plots screen. |
+| `POST` | `/api/plots/:id/accept` | Accept invitation; body `{localName}`. Transitions `invited → joined`. |
+| `POST` | `/api/plots/:id/leave` | Leave a shared plot (same behaviour as DELETE /members/me; new preferred path). |
+| `POST` | `/api/plots/:id/rejoin` | Rejoin after leaving; body `{localName?}`. Transitions `left → joined`. |
+| `POST` | `/api/plots/:id/restore` | Restore tombstoned plot. Only `tombstoned_by` user, within 90-day window. |
+| `POST` | `/api/plots/:id/transfer` | Transfer ownership; body `{newOwnerId}`. Atomically swaps roles + `plots.owner_user_id`. |
+| `PATCH` | `/api/plots/:id/status` | Set `open` or `closed`; body `{status}`. Owner-only. |
+
+### Tombstone lifecycle
+
+When the last joined member leaves, `plots.tombstoned_at = NOW()`, `tombstoned_by = userId`. The
+plot disappears from the garden but appears in `GET /api/plots/shared` (all statuses). The user who
+triggered the tombstone sees it in "Recently removed" and can restore within 90 days. After 90 days
+the compost cleanup job hard-deletes it (cascading to plot_members, plot_items, staging decisions).
+
+### Static API key for integration tests
+
+`SessionAuthFilter` now accepts a static bypass: when the server is configured with `API_KEY` env
+var (non-empty), any request with `X-Api-Key: <API_KEY>` authenticates as the founding user without
+a session lookup. Used by the test Docker Compose stack (default `heirloom-integration-test-key`).
+`HeirloomTestEnvironment` adds an OkHttp interceptor adding this header automatically.
+
+### Files changed
+
+- `HeirloomsServer/src/main/resources/db/migration/V28__shared_plot_membership.sql` (new)
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/Database.kt` — PlotRecord/PlotMemberRecord
+  updated; SharedMembershipRecord (new); listPlots rewritten; isMemberConn → status='joined'; createPlot
+  sets created_by; addMember/confirmInvite → status='invited'; redeemInvite checks active statuses;
+  leavePlot → soft-leave + tombstone; AddItemResult.PlotClosed + ApproveResult.PlotClosed (new);
+  listSharedMemberships, acceptInvite, rejoinPlot, restorePlot, transferOwnership, setPlotStatus,
+  fetchExpiredTombstonedPlots, hardDeletePlot (all new)
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/SharedPlotHandler.kt` — 8 new routes,
+  updated leave handler, updated listMembers response (status + localName), updated sharedPlotRoutes list
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/PlotHandler.kt` — toJson() adds
+  plot_status, local_name, tombstoned_at fields
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/FlowHandler.kt` — handles PlotClosed in
+  addPlotItem and approveStagingItem response paths
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/UploadHandler.kt` — launchCompostCleanup
+  extended to hard-delete expired tombstoned plots
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/SessionAuthFilter.kt` — staticApiKey
+  bypass parameter
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/Main.kt` — passes config.apiKey to filter
+- `HeirloomsTest/src/test/resources/docker-compose.yml` — API_KEY default test value
+- `HeirloomsTest/src/test/kotlin/digital/heirlooms/test/HeirloomTestEnvironment.kt` — X-Api-Key interceptor
+- `HeirloomsTest/src/test/kotlin/digital/heirlooms/test/api/SharedPlotApiTest.kt` — body-read bug fixed,
+  27 tests covering E1 endpoints
+
+### Test results
+
+All 27 SharedPlotApiTest integration tests pass. PlotApiTest (16) and E2EncryptedUploadTest (11) all
+pass. 22 tests in UploadApiTest/CompostApiTest/FlowApiTest are pre-existing failures (response format
+mismatch and double-body-read bug) that predate this increment.

@@ -235,6 +235,9 @@ internal fun PlotRecord.toJson(authUserId: UUID? = null): String {
     node.put("is_system_defined", isSystemDefined)
     node.put("show_in_garden", showInGarden)
     node.put("visibility", visibility)
+    node.put("plot_status", plotStatus)
+    if (localName != null) node.put("local_name", localName) else node.putNull("local_name")
+    if (tombstonedAt != null) node.put("tombstoned_at", tombstonedAt.toString()) else node.putNull("tombstoned_at")
     node.put("created_at", createdAt.toString())
     node.put("updated_at", updatedAt.toString())
     if (criteria != null) {

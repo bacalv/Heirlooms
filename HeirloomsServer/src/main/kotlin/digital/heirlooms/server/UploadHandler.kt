@@ -505,6 +505,19 @@ private fun launchCompostCleanup(storage: FileStore, database: Database) {
         } catch (e: Exception) {
             println("[compost-cleanup] ERROR: cleanup failed: ${e.message}")
         }
+        try {
+            val expiredPlots = database.fetchExpiredTombstonedPlots()
+            for (plotId in expiredPlots) {
+                try {
+                    database.hardDeletePlot(plotId)
+                    println("[compost-cleanup] INFO: hard-deleted tombstoned plot $plotId")
+                } catch (e: Exception) {
+                    println("[compost-cleanup] WARNING: failed to hard-delete plot $plotId: ${e.message}")
+                }
+            }
+        } catch (e: Exception) {
+            println("[compost-cleanup] ERROR: tombstone plot cleanup failed: ${e.message}")
+        }
     }.also { it.isDaemon = true }.start()
 }
 

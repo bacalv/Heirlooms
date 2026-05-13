@@ -2,6 +2,48 @@
 
 ---
 
+## v0.51.0 — Shared plot membership overhaul E1: server (13 May 2026)
+
+Schema, server, and integration test foundation for the shared plot membership UX overhaul.
+No client changes in this increment.
+
+- **Migration V28:** adds `status` (`invited`/`joined`/`left`), `local_name`, `left_at` to
+  `plot_members`; adds `plot_status` (`open`/`closed`), `tombstoned_at`, `tombstoned_by`,
+  `created_by` to `plots`. Indexes on `(user_id, status)` and `tombstoned_at`.
+- **Invite flow:** `POST /api/plots/:id/members` (direct friend invite) and
+  `POST /api/plots/join` + confirm now produce `status = invited`. Plot does not appear in
+  the recipient's garden until they explicitly accept.
+- **New endpoints:**
+  - `GET /api/plots/shared` — all plot_members rows for current user (all statuses). Powers
+    the Shared Plots screen (Invitations / Joined / Left / Recently removed sections).
+  - `POST /api/plots/:id/accept` — accept invitation, provide `localName`. Transitions
+    `invited → joined`. Plot then appears in garden.
+  - `POST /api/plots/:id/leave` — leave a shared plot. Sets `status = left`; tombstones
+    the plot if no joined members remain. Owner must transfer ownership first if others exist.
+  - `DELETE /api/plots/:id/members/me` — backward-compat alias for POST leave.
+  - `POST /api/plots/:id/rejoin` — rejoin a left plot, optionally with new `localName`.
+  - `POST /api/plots/:id/restore` — restore a tombstoned plot (only `tombstoned_by` user,
+    within 90-day window).
+  - `POST /api/plots/:id/transfer` — transfer ownership to another joined member.
+  - `PATCH /api/plots/:id/status` — owner sets plot to `open` or `closed`. Closed plots
+    reject `POST /api/plots/:id/items` and staging approvals with 403.
+- **Garden list (`GET /api/plots`):** now filters to `status = joined` members only
+  (invited/left members don't see the plot in the garden), excludes tombstoned plots, and
+  returns `local_name` and `plot_status` fields.
+- **Member list (`GET /api/plots/:id/members`):** now includes `status` and `localName` fields.
+- **Plot JSON** (`GET /api/plots`, `POST /api/plots`): new fields `plot_status`, `local_name`,
+  `tombstoned_at` in response.
+- **Tombstone cleanup:** `launchCompostCleanup` extended to hard-delete plots where
+  `tombstoned_at < NOW() - INTERVAL '90 days'`.
+- **Static API key auth** (`SessionAuthFilter`): when `API_KEY` env var is non-empty, requests
+  with `X-Api-Key: <API_KEY>` bypass session lookup and authenticate as the founding user.
+  Used by integration tests (docker-compose default key `heirloom-integration-test-key`).
+- **Integration tests:** `HeirloomTestEnvironment` adds `X-Api-Key` interceptor so all test
+  requests authenticate. `SharedPlotApiTest` updated with 27 tests covering the full E1
+  endpoint surface (leave/tombstone/restore, open/close, shared list, etc.).
+
+---
+
 ## v0.50.4 — Client-side dedup for encrypted uploads (13 May 2026)
 
 - **Server:** new `GET /api/content/uploads/hash/{hash}` endpoint — returns 200 if a

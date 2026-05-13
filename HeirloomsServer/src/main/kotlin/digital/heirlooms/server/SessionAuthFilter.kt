@@ -23,26 +23,33 @@ private fun isUnauthenticated(path: String): Boolean =
     path.startsWith("/api/auth/pairing/status") ||
     path in UNAUTHENTICATED_PATHS
 
-fun sessionAuthFilter(database: Database): Filter = Filter { next ->
+fun sessionAuthFilter(database: Database, staticApiKey: String = ""): Filter = Filter { next ->
     { request ->
         if (isUnauthenticated(request.uri.path)) {
             next(request)
         } else {
             val raw = request.header("X-Api-Key")
-            val session = raw?.let { token ->
-                val bytes = runCatching { Base64.getUrlDecoder().decode(token) }
-                    .getOrElse { runCatching { Base64.getDecoder().decode(token) }.getOrNull() }
-                bytes?.let {
-                    val hash = MessageDigest.getInstance("SHA-256").digest(it)
-                    database.findSessionByTokenHash(hash)
-                }
-            }
-            if (session == null || session.expiresAt.isBefore(Instant.now())) {
-                Response(UNAUTHORIZED).body("Unauthorized")
+            // Static API key bypass: used for integration tests and local development.
+            // Only active when the server is configured with a non-empty API_KEY.
+            if (staticApiKey.isNotEmpty() && raw == staticApiKey) {
+                next(request.header("X-Auth-User-Id", FOUNDING_USER_ID.toString())
+                             .header("X-Auth-Device-Kind", "static"))
             } else {
-                database.refreshSession(session.id)
-                next(request.header("X-Auth-User-Id", session.userId.toString())
-                              .header("X-Auth-Device-Kind", session.deviceKind))
+                val session = raw?.let { token ->
+                    val bytes = runCatching { Base64.getUrlDecoder().decode(token) }
+                        .getOrElse { runCatching { Base64.getDecoder().decode(token) }.getOrNull() }
+                    bytes?.let {
+                        val hash = MessageDigest.getInstance("SHA-256").digest(it)
+                        database.findSessionByTokenHash(hash)
+                    }
+                }
+                if (session == null || session.expiresAt.isBefore(Instant.now())) {
+                    Response(UNAUTHORIZED).body("Unauthorized")
+                } else {
+                    database.refreshSession(session.id)
+                    next(request.header("X-Auth-User-Id", session.userId.toString())
+                                  .header("X-Auth-Device-Kind", session.deviceKind))
+                }
             }
         }
     }

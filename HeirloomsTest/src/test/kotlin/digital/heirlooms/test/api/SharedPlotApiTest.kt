@@ -32,8 +32,20 @@ class SharedPlotApiTest {
             Request.Builder().url("$base/api/plots")
                 .post(body.toString().toRequestBody("application/json".toMediaType())).build()
         ).execute()
-        assertThat(resp.code).withFailMessage("createSharedPlot failed: ${resp.body?.string()}").isEqualTo(201)
-        return JSONObject(resp.body!!.string())
+        val bodyStr = resp.body!!.string()
+        assertThat(resp.code).withFailMessage("createSharedPlot failed: $bodyStr").isEqualTo(201)
+        return JSONObject(bodyStr)
+    }
+
+    private fun createPrivatePlot(name: String): JSONObject {
+        val body = JSONObject().put("name", name)
+        val resp = client.newCall(
+            Request.Builder().url("$base/api/plots")
+                .post(body.toString().toRequestBody("application/json".toMediaType())).build()
+        ).execute()
+        val bodyStr = resp.body!!.string()
+        assertThat(resp.code).withFailMessage("createPrivatePlot failed: $bodyStr").isEqualTo(201)
+        return JSONObject(bodyStr)
     }
 
     private fun deletePlot(id: String) {
@@ -91,12 +103,7 @@ class SharedPlotApiTest {
 
     @Test
     fun `GET plot-key on private plot returns 403`() {
-        val plotBody = JSONObject().put("name", "d3-private-key-test")
-        val plotResp = client.newCall(
-            Request.Builder().url("$base/api/plots")
-                .post(plotBody.toString().toRequestBody("application/json".toMediaType())).build()
-        ).execute()
-        val plot = JSONObject(plotResp.body!!.string())
+        val plot = createPrivatePlot("d3-private-key-test")
         try {
             val resp = client.newCall(
                 Request.Builder().url("$base/api/plots/${plot.getString("id")}/plot-key").build()
@@ -118,6 +125,243 @@ class SharedPlotApiTest {
             val arr = org.json.JSONArray(resp.body!!.string())
             assertThat(arr.length()).isEqualTo(1)
             assertThat(arr.getJSONObject(0).getString("role")).isEqualTo("owner")
+            assertThat(arr.getJSONObject(0).getString("status")).isEqualTo("joined")
+        } finally { deletePlot(plot.getString("id")) }
+    }
+
+    // ---- New plot fields in response ----------------------------------------
+
+    @Test
+    fun `GET plots includes plot_status and local_name fields`() {
+        val plot = createSharedPlot("d3-plot-status-fields")
+        try {
+            val resp = client.newCall(
+                Request.Builder().url("$base/api/plots").build()
+            ).execute()
+            assertThat(resp.code).isEqualTo(200)
+            val arr = org.json.JSONArray(resp.body!!.string())
+            val found = (0 until arr.length())
+                .map { arr.getJSONObject(it) }
+                .firstOrNull { it.getString("id") == plot.getString("id") }
+            assertThat(found).isNotNull
+            assertThat(found!!.getString("plot_status")).isEqualTo("open")
+            assertThat(found.isNull("tombstoned_at")).isTrue()
+        } finally { deletePlot(plot.getString("id")) }
+    }
+
+    // ---- PATCH /api/plots/:id/status ----------------------------------------
+
+    @Test
+    fun `PATCH plot status open to closed returns 204`() {
+        val plot = createSharedPlot("d3-plot-status-close")
+        try {
+            val resp = client.newCall(
+                Request.Builder().url("$base/api/plots/${plot.getString("id")}/status")
+                    .patch("""{"status":"closed"}""".toRequestBody("application/json".toMediaType()))
+                    .build()
+            ).execute()
+            assertThat(resp.code).isEqualTo(204)
+        } finally { deletePlot(plot.getString("id")) }
+    }
+
+    @Test
+    fun `PATCH plot status with invalid value returns 400`() {
+        val plot = createSharedPlot("d3-plot-status-invalid")
+        try {
+            val resp = client.newCall(
+                Request.Builder().url("$base/api/plots/${plot.getString("id")}/status")
+                    .patch("""{"status":"archived"}""".toRequestBody("application/json".toMediaType()))
+                    .build()
+            ).execute()
+            assertThat(resp.code).isEqualTo(400)
+        } finally { deletePlot(plot.getString("id")) }
+    }
+
+    @Test
+    fun `POST plot items on closed plot returns 403`() {
+        val plot = createSharedPlot("d3-closed-plot-item")
+        val uploadId = uploadImage()
+        try {
+            client.newCall(
+                Request.Builder().url("$base/api/plots/${plot.getString("id")}/status")
+                    .patch("""{"status":"closed"}""".toRequestBody("application/json".toMediaType()))
+                    .build()
+            ).execute()
+
+            val body = JSONObject()
+                .put("uploadId", uploadId)
+                .put("wrappedItemDek", randomB64(80))
+                .put("itemDekFormat", "plot-aes256gcm-v1")
+                .put("wrappedThumbnailDek", randomB64(80))
+                .put("thumbnailDekFormat", "plot-aes256gcm-v1")
+            val resp = client.newCall(
+                Request.Builder().url("$base/api/plots/${plot.getString("id")}/items")
+                    .post(body.toString().toRequestBody("application/json".toMediaType())).build()
+            ).execute()
+            assertThat(resp.code).isEqualTo(403)
+        } finally { deletePlot(plot.getString("id")) }
+    }
+
+    // ---- GET /api/plots/shared ----------------------------------------------
+
+    @Test
+    fun `GET plots shared returns owner membership`() {
+        val plot = createSharedPlot("d3-shared-memberships")
+        try {
+            val resp = client.newCall(
+                Request.Builder().url("$base/api/plots/shared").build()
+            ).execute()
+            assertThat(resp.code).isEqualTo(200)
+            val arr = org.json.JSONArray(resp.body!!.string())
+            val found = (0 until arr.length())
+                .map { arr.getJSONObject(it) }
+                .firstOrNull { it.getString("plotId") == plot.getString("id") }
+            assertThat(found).isNotNull
+            assertThat(found!!.getString("role")).isEqualTo("owner")
+            assertThat(found.getString("status")).isEqualTo("joined")
+            assertThat(found.getString("plotStatus")).isEqualTo("open")
+        } finally { deletePlot(plot.getString("id")) }
+    }
+
+    // ---- POST /api/plots/:id/leave ------------------------------------------
+
+    @Test
+    fun `POST leave as sole member tombstones the plot`() {
+        val plot = createSharedPlot("d3-leave-tombstone")
+        val plotId = plot.getString("id")
+
+        val leaveResp = client.newCall(
+            Request.Builder().url("$base/api/plots/$plotId/leave")
+                .post("{}".toRequestBody("application/json".toMediaType())).build()
+        ).execute()
+        assertThat(leaveResp.code).isEqualTo(204)
+
+        // Plot should no longer appear in the garden (tombstoned)
+        val listResp = client.newCall(
+            Request.Builder().url("$base/api/plots").build()
+        ).execute()
+        val plots = org.json.JSONArray(listResp.body!!.string())
+        val stillPresent = (0 until plots.length()).any { plots.getJSONObject(it).getString("id") == plotId }
+        assertThat(stillPresent).isFalse()
+
+        // Plot should appear in shared memberships as tombstoned
+        val sharedResp = client.newCall(
+            Request.Builder().url("$base/api/plots/shared").build()
+        ).execute()
+        val memberships = org.json.JSONArray(sharedResp.body!!.string())
+        val mem = (0 until memberships.length())
+            .map { memberships.getJSONObject(it) }
+            .firstOrNull { it.getString("plotId") == plotId }
+        assertThat(mem).isNotNull
+        assertThat(mem!!.getString("status")).isEqualTo("left")
+        assertThat(mem.isNull("tombstonedAt")).isFalse()
+    }
+
+    @Test
+    fun `POST leave unknown plot returns 404`() {
+        val resp = client.newCall(
+            Request.Builder().url("$base/api/plots/00000000-0000-0000-0000-000000000099/leave")
+                .post("{}".toRequestBody("application/json".toMediaType())).build()
+        ).execute()
+        assertThat(resp.code).isEqualTo(404)
+    }
+
+    // ---- DELETE /members/me (backward compat) --------------------------------
+
+    @Test
+    fun `DELETE members me as sole member tombstones the plot`() {
+        val plot = createSharedPlot("d3-leave-delete-compat")
+        val plotId = plot.getString("id")
+
+        val leaveResp = client.newCall(
+            Request.Builder().url("$base/api/plots/$plotId/members/me").delete().build()
+        ).execute()
+        assertThat(leaveResp.code).isEqualTo(204)
+
+        val listResp = client.newCall(Request.Builder().url("$base/api/plots").build()).execute()
+        val plots = org.json.JSONArray(listResp.body!!.string())
+        val stillPresent = (0 until plots.length()).any { plots.getJSONObject(it).getString("id") == plotId }
+        assertThat(stillPresent).isFalse()
+    }
+
+    // ---- POST /api/plots/:id/restore ----------------------------------------
+
+    @Test
+    fun `POST restore brings back tombstoned plot`() {
+        val plot = createSharedPlot("d3-restore-plot")
+        val plotId = plot.getString("id")
+
+        client.newCall(
+            Request.Builder().url("$base/api/plots/$plotId/leave")
+                .post("{}".toRequestBody("application/json".toMediaType())).build()
+        ).execute()
+
+        val restoreResp = client.newCall(
+            Request.Builder().url("$base/api/plots/$plotId/restore")
+                .post("{}".toRequestBody("application/json".toMediaType())).build()
+        ).execute()
+        assertThat(restoreResp.code).isEqualTo(204)
+
+        // Plot should be back in garden
+        val listResp = client.newCall(Request.Builder().url("$base/api/plots").build()).execute()
+        val plots = org.json.JSONArray(listResp.body!!.string())
+        val present = (0 until plots.length()).any { plots.getJSONObject(it).getString("id") == plotId }
+        assertThat(present).isTrue()
+
+        try { deletePlot(plotId) } catch (_: Exception) { }
+    }
+
+    @Test
+    fun `POST restore non-tombstoned plot returns 404`() {
+        val plot = createSharedPlot("d3-restore-live")
+        try {
+            val resp = client.newCall(
+                Request.Builder().url("$base/api/plots/${plot.getString("id")}/restore")
+                    .post("{}".toRequestBody("application/json".toMediaType())).build()
+            ).execute()
+            assertThat(resp.code).isEqualTo(404)
+        } finally { deletePlot(plot.getString("id")) }
+    }
+
+    // ---- POST /api/plots/:id/accept -----------------------------------------
+
+    @Test
+    fun `POST accept when already joined returns 409`() {
+        val plot = createSharedPlot("d3-accept-already-joined")
+        try {
+            val resp = client.newCall(
+                Request.Builder().url("$base/api/plots/${plot.getString("id")}/accept")
+                    .post("""{"localName":"test"}""".toRequestBody("application/json".toMediaType())).build()
+            ).execute()
+            // Owner is already joined — not in 'invited' state → 409
+            assertThat(resp.code).isEqualTo(409)
+        } finally { deletePlot(plot.getString("id")) }
+    }
+
+    @Test
+    fun `POST accept without localName returns 400`() {
+        val plot = createSharedPlot("d3-accept-no-name")
+        try {
+            val resp = client.newCall(
+                Request.Builder().url("$base/api/plots/${plot.getString("id")}/accept")
+                    .post("{}".toRequestBody("application/json".toMediaType())).build()
+            ).execute()
+            assertThat(resp.code).isEqualTo(400)
+        } finally { deletePlot(plot.getString("id")) }
+    }
+
+    // ---- POST /api/plots/:id/transfer ---------------------------------------
+
+    @Test
+    fun `POST transfer to non-member returns 400`() {
+        val plot = createSharedPlot("d3-transfer-non-member")
+        try {
+            val body = JSONObject().put("newOwnerId", java.util.UUID.randomUUID().toString())
+            val resp = client.newCall(
+                Request.Builder().url("$base/api/plots/${plot.getString("id")}/transfer")
+                    .post(body.toString().toRequestBody("application/json".toMediaType())).build()
+            ).execute()
+            assertThat(resp.code).isEqualTo(400)
         } finally { deletePlot(plot.getString("id")) }
     }
 
@@ -272,8 +516,6 @@ class SharedPlotApiTest {
 
     @Test
     fun `GET plots does not expose shared plots of other users`() {
-        // In single-user test environment all plots belong to the founding user.
-        // This tests that the plot list doesn't error and shows only own plots.
         val resp = client.newCall(Request.Builder().url("$base/api/plots").build()).execute()
         assertThat(resp.code).isEqualTo(200)
     }
