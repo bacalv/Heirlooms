@@ -1321,6 +1321,7 @@ export function GardenPage() {
 
       {showNewSharedPlot && (
         <BrandModal onClose={() => { setShowNewSharedPlot(false); setSharedPlotName('') }} width="max-w-sm">
+          <div className="p-6">
           <h2 className="font-serif italic text-forest text-lg mb-4">New shared plot</h2>
           <p className="text-sm text-text-muted font-sans mb-3">
             A shared plot has a per-plot encryption key. Invite members after creation — they'll each get a wrapped copy of the key.
@@ -1342,6 +1343,7 @@ export function GardenPage() {
                 {creatingShared ? '…' : 'Create'}
               </button>
             </div>
+          </div>
           </div>
         </BrandModal>
       )}

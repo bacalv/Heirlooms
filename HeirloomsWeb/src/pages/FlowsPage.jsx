@@ -90,7 +90,16 @@ function FlowForm({ plots, initial, onSave, onCancel, saving, error }) {
 
 function FlowCard({ flow, plotName, isSharedPlot, onEdit, onDelete }) {
   const [showStaging, setShowStaging] = useState(false)
+  const [pendingCount, setPendingCount] = useState(null)
   const { apiKey } = useAuth()
+
+  useEffect(() => {
+    if (!flow.requiresStaging) return
+    apiFetch(`/api/flows/${flow.id}/staging`, apiKey)
+      .then((r) => r.ok ? r.json() : [])
+      .then((items) => setPendingCount(Array.isArray(items) ? items.length : 0))
+      .catch(() => {})
+  }, [flow.id, flow.requiresStaging, apiKey])
 
   return (
     <div className="border border-forest-08 rounded-card bg-parchment p-4">
@@ -109,7 +118,7 @@ function FlowCard({ flow, plotName, isSharedPlot, onEdit, onDelete }) {
           {flow.requiresStaging && (
             <button onClick={() => setShowStaging((s) => !s)}
               className="px-2 py-1 text-xs border border-forest-15 rounded-button text-forest hover:bg-forest-08 transition-colors">
-              {showStaging ? 'Hide staging' : 'Review'}
+              {showStaging ? 'Hide staging' : pendingCount ? `Review (${pendingCount})` : 'Review'}
             </button>
           )}
           <button onClick={() => onEdit(flow)}

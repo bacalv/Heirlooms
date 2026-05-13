@@ -48,6 +48,7 @@ async function loadSharedPlotKey(plotId, apiKey) {
 }
 
 async function buildApproveBody(upload, plotId, apiKey) {
+  if (!upload.wrappedDek) throw new Error('This item is not encrypted and cannot be added to a shared plot')
   const plotKeyBytes = await loadSharedPlotKey(plotId, apiKey)
   const masterKey = getMasterKey()
   if (!masterKey) throw new Error('Master key not available')
