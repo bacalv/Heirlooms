@@ -97,6 +97,7 @@ fun buildApp(
             uploadContractRoute(storage, database, thumbnailGenerator, metadataExtractor),
             listUploadsContractRoute(storage, database),
             listTagsContractRoute(database),
+            checkContentHashContractRoute(database),
             listCompostedUploadsContractRoute(database),
             getUploadByIdContractRoute(database),
             prepareUploadContractRoute(directUpload),
@@ -318,6 +319,22 @@ private fun getUploadByIdContractRoute(database: Database): ContractRoute {
             val record = database.findUploadByIdForUser(uploadId, request.authUserId())
             if (record == null) Response(NOT_FOUND)
             else Response(OK).header("Content-Type", "application/json").body(record.toJson())
+        }
+    }
+}
+
+private fun checkContentHashContractRoute(database: Database): ContractRoute {
+    val hash = Path.of("hash")
+    return "/uploads/hash" / hash meta {
+        summary = "Check if a content hash exists"
+        description = "Returns 200 if a non-composted upload with this SHA-256 hex digest exists for the authenticated user, 404 otherwise."
+    } bindContract GET to { h: String ->
+        { request: Request ->
+            val userId = request.authUserId()
+            if (database.existsByContentHash(h, userId))
+                Response(OK).header("Content-Type", "application/json").body("""{"exists":true}""")
+            else
+                Response(NOT_FOUND)
         }
     }
 }

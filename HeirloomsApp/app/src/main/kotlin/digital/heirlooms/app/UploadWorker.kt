@@ -87,6 +87,11 @@ class UploadWorker(
                 notifyResult(success = true)
                 Result.success()
             }
+            result is Uploader.UploadResult.Duplicate -> {
+                file.delete()
+                notifyDuplicate()
+                Result.success()
+            }
             // Retry up to MAX_ATTEMPTS before giving up. WorkManager resets progress
             // data between attempts so the UI stays accurate.
             runAttemptCount < MAX_ATTEMPTS - 1 -> Result.retry()
@@ -109,6 +114,18 @@ class UploadWorker(
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(title)
             .setContentText(text)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+        NotificationManagerCompat.from(context).notify(NOTIFICATION_RESULT, n)
+    }
+
+    private fun notifyDuplicate() {
+        ensureChannels()
+        val n = NotificationCompat.Builder(context, CHANNEL_RESULT)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(context.getString(R.string.notif_already_in_garden))
+            .setContentText(context.getString(R.string.notif_already_in_garden_text))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .build()

@@ -326,6 +326,18 @@ class Database(private val dataSource: DataSource) {
         }
     }
 
+    fun existsByContentHash(hash: String, userId: UUID): Boolean {
+        dataSource.connection.use { conn: Connection ->
+            conn.prepareStatement(
+                "SELECT 1 FROM uploads WHERE content_hash = ? AND user_id = ? AND composted_at IS NULL LIMIT 1"
+            ).use { stmt ->
+                stmt.setString(1, hash)
+                stmt.setObject(2, userId)
+                return stmt.executeQuery().next()
+            }
+        }
+    }
+
     fun getUploadById(id: UUID): UploadRecord? {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(

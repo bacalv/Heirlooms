@@ -36,6 +36,10 @@ class Uploader(
             val attempts: Int,
         ) : UploadResult()
 
+        data class Duplicate(
+            override val message: String = "Already uploaded",
+        ) : UploadResult()
+
         data class Failure(
             override val message: String,
             val httpCode: Int = NO_HTTP_CODE,
@@ -66,6 +70,7 @@ class Uploader(
         fun isRetryable(result: UploadResult): Boolean = when (result) {
             is UploadResult.Failure -> result.httpCode == NO_HTTP_CODE || result.httpCode >= 500
             is UploadResult.Success -> false
+            is UploadResult.Duplicate -> false
         }
 
         private fun backoffSequence(initialDelayMs: Long): Sequence<Long> =
@@ -119,6 +124,17 @@ class Uploader(
         // AAD binds each chunk to its position; same structure as the nonce.
         fun buildChunkAad(uploadIdPrefix: ByteArray, chunkIndex: Long): ByteArray =
             buildChunkNonce(uploadIdPrefix, chunkIndex)
+    }
+
+    private fun checkContentHashExists(baseUrl: String, hash: String, apiKey: String?): Boolean {
+        return try {
+            httpClient.newCall(
+                Request.Builder()
+                    .url("$baseUrl/api/content/uploads/hash/$hash")
+                    .apply { if (!apiKey.isNullOrBlank()) header("X-Api-Key", apiKey) }
+                    .build()
+            ).execute().use { response -> response.code == 200 }
+        } catch (_: IOException) { false }
     }
 
     fun upload(endpoint: String?, fileBytes: ByteArray?, mimeType: String, apiKey: String? = null): UploadResult {
@@ -381,6 +397,9 @@ class Uploader(
             }
         }
 
+        val contentHash = sha256Hex(file)
+        if (checkContentHashExists(base, contentHash, apiKey)) return UploadResult.Duplicate()
+
         val contentDek = VaultCrypto.generateDek()
         val thumbnailDek = VaultCrypto.generateDek()
         val isLargeVideo = file.length() > LARGE_FILE_THRESHOLD && mimeType.startsWith("video/")
@@ -568,7 +587,7 @@ class Uploader(
         else ""
         val chunkSizeJson = if (file.length() > LARGE_FILE_THRESHOLD) ""","plainChunkSize":$CHUNK_SIZE""" else ""
         val durationJson = if (fileDurationSeconds != null) ""","durationSeconds":$fileDurationSeconds""" else ""
-        val confirmBody = """{"storageKey":"$contentStorageKey","mimeType":"$mimeType","fileSize":$encryptedContentSize,"storage_class":"encrypted","envelopeVersion":1,"wrappedDek":"$wrappedDekB64","dekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}","thumbnailStorageKey":"$thumbStorageKey","wrappedThumbnailDek":"$wrappedThumbDekB64","thumbnailDekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}"$tagsJson$previewJson$chunkSizeJson$durationJson}"""
+        val confirmBody = """{"storageKey":"$contentStorageKey","mimeType":"$mimeType","fileSize":$encryptedContentSize,"storage_class":"encrypted","envelopeVersion":1,"wrappedDek":"$wrappedDekB64","dekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}","thumbnailStorageKey":"$thumbStorageKey","wrappedThumbnailDek":"$wrappedThumbDekB64","thumbnailDekFormat":"${VaultCrypto.ALG_MASTER_AES256GCM_V1}","contentHash":"$contentHash"$tagsJson$previewJson$chunkSizeJson$durationJson}"""
 
         return try {
             httpClient.newCall(

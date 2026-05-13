@@ -209,6 +209,11 @@ export function putBlobWithProgress(signedUrl, bytes, onProgress) {
   })
 }
 
+export async function checkContentHash(apiKey, hash) {
+  const r = await apiFetch(`/api/content/uploads/hash/${hash}`, apiKey)
+  return r.ok
+}
+
 export async function confirmEncryptedUpload(apiKey, {
   storageKey, mimeType, fileSize,
   envelopeVersion, wrappedDekB64, dekFormat,
@@ -216,7 +221,7 @@ export async function confirmEncryptedUpload(apiKey, {
   encryptedMetadataB64, encryptedMetadataFormat,
   previewStorageKey, wrappedPreviewDekB64, previewDekFormat,
   plainChunkSize, durationSeconds,
-  takenAt, tags,
+  takenAt, tags, contentHash,
 }) {
   const r = await apiFetch('/api/content/uploads/confirm', apiKey, {
     method: 'POST',
@@ -227,7 +232,7 @@ export async function confirmEncryptedUpload(apiKey, {
       encryptedMetadata: encryptedMetadataB64, encryptedMetadataFormat,
       previewStorageKey, wrappedPreviewDek: wrappedPreviewDekB64, previewDekFormat,
       plainChunkSize, durationSeconds,
-      takenAt, tags,
+      takenAt, tags, contentHash,
     }),
   })
   if (!r.ok) throw new Error(`HTTP ${r.status}`)

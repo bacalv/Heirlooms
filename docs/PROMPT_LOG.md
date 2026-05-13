@@ -2,6 +2,42 @@
 
 ---
 
+## Session — 13 May 2026 — Client-side dedup for encrypted uploads (v0.50.4)
+
+Encrypted uploads previously had no duplicate detection — each upload of the same file
+produced a new GCS object, a new `uploads` row, and `content_hash = null` in the DB.
+This change adds client-side dedup for both Android and web, with the server providing
+the lookup endpoint.
+
+**Server (`UploadHandler.kt`, `Database.kt`):**
+Added `GET /api/content/uploads/hash/{hash}` endpoint backed by a new
+`Database.existsByContentHash(hash, userId)` method. Returns 200 if a non-composted
+upload with that SHA-256 hex digest exists for the user, 404 otherwise. Registered in
+`contentContract.routes` alongside the other upload routes.
+
+**Android (`Uploader.kt`, `UploadWorker.kt`, `strings.xml`):**
+- Added `UploadResult.Duplicate` to the sealed class (and updated `isRetryable`).
+- `uploadEncryptedViaSigned()` now computes `sha256Hex(file)` before any GCS work
+  (checkpoint resume path is exempt — the check already fired before the checkpoint was
+  written). If the hash endpoint returns 200, returns `UploadResult.Duplicate` immediately.
+- `confirmBody` now includes `"contentHash"` so subsequent uploads of the same file can
+  be detected.
+- `UploadWorker` handles `Duplicate`: deletes the local file and shows an "Already in
+  your garden" notification instead of the success/failure notifications.
+
+**Web (`api.js`, `GardenPage.jsx`):**
+- Added `checkContentHash(apiKey, hash)` to `api.js`.
+- Added `contentHash` param to `confirmEncryptedUpload` (sent in confirm body).
+- `encryptAndUpload()` starts by streaming the file through `@noble/hashes/sha256` in
+  2 MiB chunks (`sha256HexFile`), then calls the check endpoint. If duplicate, returns
+  `{ duplicate: true }` without allocating any GCS slots.
+- `handlePlant()` checks the return value: duplicates show "Already in your garden"
+  status for 2.5 s without refreshing the plot grid.
+
+**Key constraint:** `content_hash` is only stored for fresh (non-resume) encrypted
+uploads. Checkpoint-resumed uploads continue to store `null`. The check endpoint
+excludes composted items — composting a photo and re-uploading it will succeed.
+
 ## Session — 13 May 2026 — Android share improvements (v0.50.3)
 
 Three share-related improvements to the Android app, all in `PhotoDetailScreen.kt` and

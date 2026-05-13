@@ -23,6 +23,8 @@
     <string name="notif_uploading">Planting your photos…</string>
     <string name="notif_planted">Something has been planted.</string>
     <string name="notif_didnt_take">didn\'t take</string>
+    <string name="notif_already_in_garden">Already in your garden</string>
+    <string name="notif_already_in_garden_text">This photo is already in your garden.</string>
 
     <!-- Settings screen -->
     <string name="settings_title">Settings</string>

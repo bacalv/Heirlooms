@@ -20,7 +20,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useAuth } from '../AuthContext'
-import { API_URL, apiFetch, initiateEncryptedUpload, initiateResumableUpload, putBlob, putBlobWithProgress, confirmEncryptedUpload, fetchSettings } from '../api'
+import { API_URL, apiFetch, initiateEncryptedUpload, initiateResumableUpload, putBlob, putBlobWithProgress, confirmEncryptedUpload, checkContentHash, fetchSettings } from '../api'
 import { ShareModal } from '../components/ShareModal'
 import { WorkingDots } from '../brand/WorkingDots'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -32,6 +32,7 @@ import {
 } from '../crypto/vaultCrypto'
 import { InviteMemberModal } from '../components/InviteMemberModal'
 import { parse as parseExif } from 'exifr'
+import { sha256 as sha256Noble } from '@noble/hashes/sha256'
 
 const JUST_ARRIVED_SENTINEL = '__just_arrived__'
 
@@ -811,7 +812,25 @@ async function buildEncryptedMetadata(file) {
   })
 }
 
+async function sha256HexFile(file) {
+  const h = sha256Noble.create()
+  const CHUNK = 2 * 1024 * 1024
+  let offset = 0
+  while (offset < file.size) {
+    const end = Math.min(offset + CHUNK, file.size)
+    h.update(new Uint8Array(await file.slice(offset, end).arrayBuffer()))
+    offset = end
+  }
+  return Array.from(h.digest()).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 async function encryptAndUpload(file, apiKey, onStatus) {
+  // Dedup check before allocating any GCS slots
+  onStatus('Checking…')
+  const contentHash = await sha256HexFile(file)
+  const isDuplicate = await checkContentHash(apiKey, contentHash)
+  if (isDuplicate) return { duplicate: true }
+
   const settings = await fetchSettings(apiKey)
   const previewDurationSeconds = settings.previewDurationSeconds ?? 15
   const isLarge = file.size > LARGE_FILE_THRESHOLD
@@ -905,6 +924,7 @@ async function encryptAndUpload(file, apiKey, onStatus) {
     durationSeconds,
     takenAt,
     tags: [],
+    contentHash,
   })
 }
 
@@ -1053,10 +1073,15 @@ export function GardenPage() {
     setUploadError(null)
     for (const file of files) {
       try {
-        await encryptAndUpload(file, apiKey, setUploadStatus)
-        setUploadStatus('Done')
-        setTimeout(() => setUploadStatus(''), 1500)
-        setPlotRefreshKey((k) => k + 1)
+        const result = await encryptAndUpload(file, apiKey, setUploadStatus)
+        if (result?.duplicate) {
+          setUploadStatus('Already in your garden')
+          setTimeout(() => setUploadStatus(''), 2500)
+        } else {
+          setUploadStatus('Done')
+          setTimeout(() => setUploadStatus(''), 1500)
+          setPlotRefreshKey((k) => k + 1)
+        }
       } catch (err) {
         setUploadError(`Couldn't upload "${file.name}".`)
         setUploadStatus('')
