@@ -483,10 +483,10 @@ export function ExplorePage() {
         </div>
       )}
 
-      {/* New-plot hint */}
-      {newPlotMode && !editPlot && (
+      {/* New-plot hint — only shown while no filters are active yet */}
+      {newPlotMode && !editPlot && !hasActiveFilters && (
         <div className="mb-4 px-4 py-2.5 bg-forest-04 border border-forest-15 rounded-card text-sm text-text-muted font-sans">
-          Apply filters below, then click <span className="font-medium text-forest">Save as plot</span> when the results look right.
+          Apply filters below, then click <span className="font-medium text-forest">Save as plot…</span> when the results look right.
         </div>
       )}
 
@@ -504,8 +504,8 @@ export function ExplorePage() {
         hasActiveFilters={hasActiveFilters}
       />
 
-      {/* Save-as-plot bar (not in edit mode, any filter active) */}
-      {!editPlot && hasActiveFilters && !showSaveForm && (
+      {/* Save-as-plot bar (not in edit mode, any filter active OR in new-plot mode) */}
+      {!editPlot && (hasActiveFilters || newPlotMode) && !showSaveForm && (
         <div className="mb-4 flex items-center gap-3 px-4 py-2 bg-forest-04 border border-forest-15 rounded-card text-sm">
           <span className="text-text-muted font-sans flex-1">
             {criteriaDescription(currentCriteria())}
