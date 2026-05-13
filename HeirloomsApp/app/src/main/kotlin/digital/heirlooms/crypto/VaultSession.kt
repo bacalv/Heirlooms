@@ -1,6 +1,8 @@
 package digital.heirlooms.crypto
 
 import androidx.compose.ui.graphics.ImageBitmap
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import java.util.concurrent.ConcurrentHashMap
 
 object VaultSession {
@@ -27,8 +29,14 @@ object VaultSession {
     // Populated lazily on first shared-plot access. Cleared on vault lock.
     val plotKeys: ConcurrentHashMap<String, ByteArray> = ConcurrentHashMap()
 
+    // Increments each time a plot key is added. Observed by HeirloomsImage to retry
+    // thumbnail decryption for items whose key wasn't cached on first render.
+    private val _plotKeysVersion = MutableStateFlow(0)
+    val plotKeysVersion: StateFlow<Int> get() = _plotKeysVersion
+
     fun setPlotKey(plotId: String, rawKeyBytes: ByteArray) {
         plotKeys[plotId] = rawKeyBytes.copyOf()
+        _plotKeysVersion.value++
     }
 
     fun getPlotKey(plotId: String): ByteArray? = plotKeys[plotId]?.copyOf()
@@ -49,5 +57,6 @@ object VaultSession {
         thumbnailCache.clear()
         plotKeys.values.forEach { it.fill(0) }
         plotKeys.clear()
+        _plotKeysVersion.value = 0
     }
 }

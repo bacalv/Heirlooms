@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.compositionLocalOf
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
 import digital.heirlooms.api.Upload
@@ -97,9 +98,16 @@ private fun EncryptedThumbnail(
     val api = LocalHeirloomsApi.current
     var imageBitmap by remember(upload.id) { mutableStateOf<ImageBitmap?>(VaultSession.thumbnailCache[upload.id]) }
     var failed by remember(upload.id) { mutableStateOf(false) }
+    val plotKeysVersion by VaultSession.plotKeysVersion.collectAsStateWithLifecycle()
 
-    LaunchedEffect(upload.id) {
+    // For plot-key items: re-run whenever a new plot key arrives, in case the key
+    // wasn't cached on the first render (plot keys load concurrently with uploads).
+    val effectKey = if (upload.thumbnailDekFormat == VaultCrypto.ALG_PLOT_AES256GCM_V1)
+        Pair(upload.id, plotKeysVersion) else Pair(upload.id, 0)
+
+    LaunchedEffect(effectKey) {
         if (imageBitmap != null) return@LaunchedEffect
+        failed = false
         withContext(Dispatchers.IO) {
             try {
                 val wrappedDek = upload.wrappedThumbnailDek
@@ -111,8 +119,6 @@ private fun EncryptedThumbnail(
                         VaultCrypto.unwrapWithSharingKey(wrappedDek, privkey)
                     }
                     VaultCrypto.ALG_PLOT_AES256GCM_V1 -> {
-                        // Find the plot this upload belongs to by checking all cached plot keys.
-                        // If not cached yet, decryption will fail gracefully (thumbnail shows empty).
                         val plotKey = VaultSession.plotKeys.values.firstOrNull { key ->
                             runCatching { VaultCrypto.unwrapDekWithPlotKey(wrappedDek, key) }.isSuccess
                         }
