@@ -2,6 +2,34 @@
 
 ---
 
+## v0.51.1 — Shared plot membership overhaul E2: web (13 May 2026)
+
+- **Shared Plots screen** (`/shared`) — new top-level nav destination. Four sections:
+  Invitations, Joined, Left, Recently removed. Polls `GET /api/plots/shared`.
+- **Accept invitation** — name prompt modal → `POST /api/plots/:id/accept`. Plot then appears
+  in garden with chosen local name.
+- **Leave** — confirm dialog → `POST /api/plots/:id/leave`. If last member, plot tombstones;
+  appears in "Recently removed" with Restore button (90-day window).
+- **Rejoin** — name prompt (pre-filled with previous name) → `POST /api/plots/:id/rejoin`.
+- **Restore** — `POST /api/plots/:id/restore` from Recently removed section.
+- **Owner controls** in Joined section: Open/Close toggle, Transfer Ownership (member picker).
+- **Garden attribution** — shared member plots show `local_name` as title (falling back to plot
+  name) + "Shared by [ownerDisplayName]" subtitle. People icon + closed badge on plot row header.
+  Shared memberships fetched in parallel with plot list on garden mount.
+- **Open/Close in garden gear menu** — owner-only "Close plot" / "Reopen plot" item. Updates
+  `plot_status` optimistically in the local list.
+- **Leave via gear menu** — unified confirm dialog for shared plots (both owner and member).
+  Uses `POST /leave` instead of old `DELETE /members/me`.
+- **Nav** — "Shared" added to desktop nav and mobile hamburger menu.
+- **InviteMemberModal** — success text updated: "has been invited. They'll accept from their
+  Shared Plots screen." Pending tab empty-state text updated accordingly.
+- **PlotJoinPage** — result text updated: "you'll see an invitation in your Shared Plots screen".
+- **api.js** — 7 new functions: `listSharedMemberships`, `listPlotMembers`, `acceptPlotInvite`,
+  `leaveSharedPlot`, `rejoinSharedPlot`, `restoreSharedPlot`, `transferPlotOwnership`,
+  `setSharedPlotStatus`.
+
+---
+
 ## v0.51.0 — Shared plot membership overhaul E1: server (13 May 2026)
 
 Schema, server, and integration test foundation for the shared plot membership UX overhaul.

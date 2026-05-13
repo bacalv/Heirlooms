@@ -66,7 +66,7 @@ export function PlotJoinPage() {
         <p className="font-serif italic text-forest text-xl">Request sent</p>
         <p className="text-sm text-text-muted font-sans">
           Your join request has been sent to <span className="font-medium text-forest">{result.inviterDisplayName}</span>.
-          Once they confirm, the plot will appear in your Garden.
+          Once they confirm, you'll see an invitation in your <span className="font-medium text-forest">Shared Plots</span> screen — accept it there to add the plot to your garden.
         </p>
         <button onClick={() => navigate('/')}
           className="px-4 py-2 bg-forest text-parchment rounded-button text-sm hover:opacity-90 transition-opacity">

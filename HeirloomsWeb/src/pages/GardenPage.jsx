@@ -20,7 +20,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useAuth } from '../AuthContext'
-import { API_URL, apiFetch, initiateEncryptedUpload, initiateResumableUpload, putBlob, putBlobWithProgress, confirmEncryptedUpload, checkContentHash, fetchSettings } from '../api'
+import { API_URL, apiFetch, initiateEncryptedUpload, initiateResumableUpload, putBlob, putBlobWithProgress, confirmEncryptedUpload, checkContentHash, fetchSettings, listSharedMemberships, leaveSharedPlot, setSharedPlotStatus } from '../api'
 import { ShareModal } from '../components/ShareModal'
 import { WorkingDots } from '../brand/WorkingDots'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -334,7 +334,7 @@ function DragHandleIcon() {
 
 // ---- Gear menu for user-defined plots --------------------------------------
 
-function PlotGearMenu({ plot, isFirst, isLast, onEdit, onDelete, onMoveUp, onMoveDown, onManageMembers }) {
+function PlotGearMenu({ plot, isFirst, isLast, onEdit, onDelete, onMoveUp, onMoveDown, onManageMembers, onToggleStatus }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -343,6 +343,9 @@ function PlotGearMenu({ plot, isFirst, isLast, onEdit, onDelete, onMoveUp, onMov
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
+
+  const isOwnerOfShared = plot.visibility === 'shared' && plot.is_owner !== false
+  const isMemberOfShared = plot.visibility === 'shared' && plot.is_owner === false
 
   return (
     <div ref={ref} className="relative">
@@ -355,25 +358,35 @@ function PlotGearMenu({ plot, isFirst, isLast, onEdit, onDelete, onMoveUp, onMov
         <GearIcon />
       </button>
       {open && (
-        <div className="absolute right-0 top-7 z-20 w-36 bg-white border border-forest-15 rounded shadow-md text-sm py-1">
+        <div className="absolute right-0 top-7 z-20 w-40 bg-white border border-forest-15 rounded shadow-md text-sm py-1">
           {plot.visibility === 'shared' && onManageMembers && (
             <button className="w-full text-left px-3 py-1.5 hover:bg-forest-04 text-forest"
               onClick={() => { setOpen(false); onManageMembers() }}>Manage members</button>
           )}
-          {plot.visibility !== 'shared' && (
-          <button className="w-full text-left px-3 py-1.5 hover:bg-forest-04 text-forest"
-            onClick={() => { setOpen(false); onEdit() }}>Edit</button>
+          {isOwnerOfShared && onToggleStatus && (
+            <button className="w-full text-left px-3 py-1.5 hover:bg-forest-04 text-forest"
+              onClick={() => { setOpen(false); onToggleStatus() }}>
+              {plot.plot_status === 'closed' ? 'Reopen plot' : 'Close plot'}
+            </button>
           )}
-          <button className="w-full text-left px-3 py-1.5 hover:bg-forest-04 text-forest disabled:opacity-40"
-            disabled={isFirst}
-            onClick={() => { setOpen(false); onMoveUp() }}>Move up</button>
-          <button className="w-full text-left px-3 py-1.5 hover:bg-forest-04 text-forest disabled:opacity-40"
-            disabled={isLast}
-            onClick={() => { setOpen(false); onMoveDown() }}>Move down</button>
+          {plot.visibility !== 'shared' && (
+            <button className="w-full text-left px-3 py-1.5 hover:bg-forest-04 text-forest"
+              onClick={() => { setOpen(false); onEdit() }}>Edit</button>
+          )}
+          {!isMemberOfShared && (
+            <>
+              <button className="w-full text-left px-3 py-1.5 hover:bg-forest-04 text-forest disabled:opacity-40"
+                disabled={isFirst}
+                onClick={() => { setOpen(false); onMoveUp() }}>Move up</button>
+              <button className="w-full text-left px-3 py-1.5 hover:bg-forest-04 text-forest disabled:opacity-40"
+                disabled={isLast}
+                onClick={() => { setOpen(false); onMoveDown() }}>Move down</button>
+            </>
+          )}
           <div className="border-t border-forest-08 my-1" />
           <button className="w-full text-left px-3 py-1.5 hover:bg-earth-10 text-earth"
             onClick={() => { setOpen(false); onDelete() }}>
-            {plot.visibility === 'shared' && plot.is_owner === false ? 'Leave' : 'Delete'}
+            {plot.visibility === 'shared' ? 'Leave' : 'Delete'}
           </button>
         </div>
       )}
@@ -547,7 +560,7 @@ function SystemPlotRow({ plot, apiKey, onTagClick, onVideoPlay, onImagePreview, 
 
 // ---- Sortable user plot row ------------------------------------------------
 
-function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMoveUp, onMoveDown, onManageMembers, onTagClick, onVideoPlay, onImagePreview, onCompostClick, onShareClick, refreshKey, excludeIds }) {
+function SortablePlotRow({ plot, membership, isFirst, isLast, apiKey, onEdit, onDelete, onMoveUp, onMoveDown, onManageMembers, onToggleStatus, onTagClick, onVideoPlay, onImagePreview, onCompostClick, onShareClick, refreshKey, excludeIds }) {
   const {
     attributes,
     listeners,
@@ -563,25 +576,44 @@ function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMo
     opacity: isDragging ? 0.5 : 1,
   }
 
+  const isMemberOfShared = plot.visibility === 'shared' && plot.is_owner === false
+  const displayName = isMemberOfShared && (membership?.localName || plot.local_name)
+    ? (membership?.localName || plot.local_name)
+    : plot.name
+  const ownerName = isMemberOfShared ? (membership?.ownerDisplayName) : null
+
   return (
-    <div ref={setNodeRef} style={style} className="space-y-2">
+    <div ref={setNodeRef} style={style} className="space-y-1">
       <div className="flex items-center gap-2">
-        <button
-          {...attributes}
-          {...listeners}
-          className="cursor-grab active:cursor-grabbing p-0.5 -ml-0.5 rounded hover:bg-forest-04 transition-colors touch-none"
-          title="Drag to reorder"
-          aria-label="Drag to reorder"
-        >
-          <DragHandleIcon />
-        </button>
-        <h2 className="font-sans text-forest text-sm font-medium flex-1 flex items-center gap-1.5">
-          {!plot.criteria && <span title="Collection plot" className="text-[10px] text-text-muted font-normal border border-forest-15 rounded px-1">collection</span>}
-          {plot.name}
-        </h2>
-        {plot.visibility === 'shared' && (
-          <span title="Shared plot" className="text-[10px] text-text-muted font-normal border border-forest-15 rounded px-1">shared</span>
+        {!isMemberOfShared && (
+          <button
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing p-0.5 -ml-0.5 rounded hover:bg-forest-04 transition-colors touch-none"
+            title="Drag to reorder"
+            aria-label="Drag to reorder"
+          >
+            <DragHandleIcon />
+          </button>
         )}
+        <div className="flex-1 min-w-0">
+          <h2 className="font-sans text-forest text-sm font-medium flex items-center gap-1.5">
+            {!plot.criteria && !isMemberOfShared && <span title="Collection plot" className="text-[10px] text-text-muted font-normal border border-forest-15 rounded px-1 flex-shrink-0">collection</span>}
+            {plot.visibility === 'shared' && (
+              <svg className="w-3 h-3 text-text-muted flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            )}
+            {plot.plot_status === 'closed' && (
+              <span className="text-[10px] text-text-muted font-normal border border-forest-15 rounded px-1 flex-shrink-0">closed</span>
+            )}
+            <span className="truncate">{displayName}</span>
+          </h2>
+          {ownerName && (
+            <p className="text-[11px] text-text-muted font-sans leading-tight">Shared by {ownerName}</p>
+          )}
+        </div>
         <PlotGearMenu
           plot={plot}
           isFirst={isFirst}
@@ -591,6 +623,7 @@ function SortablePlotRow({ plot, isFirst, isLast, apiKey, onEdit, onDelete, onMo
           onMoveUp={onMoveUp}
           onMoveDown={onMoveDown}
           onManageMembers={onManageMembers}
+          onToggleStatus={onToggleStatus}
         />
       </div>
       <PlotItemsRow plot={plot} apiKey={apiKey}
@@ -937,6 +970,7 @@ export function GardenPage() {
   const [plots, setPlots] = useState([])
   const [plotsLoading, setPlotsLoading] = useState(true)
   const [plotsError, setPlotsError] = useState(null)
+  const [membershipByPlotId, setMembershipByPlotId] = useState({})
   const [compostCount, setCompostCount] = useState(0)
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [showCompostedMsg] = useState(() => !!location.state?.composted)
@@ -976,10 +1010,18 @@ export function GardenPage() {
 
   useEffect(() => {
     document.title = 'Garden · Heirlooms'
-    apiFetch('/api/plots', apiKey)
-      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then((data) => setPlots(Array.isArray(data) ? data.filter((p) => p.show_in_garden !== false) : []))
-      .catch((e) => setPlotsError(e.message))
+    Promise.all([
+      apiFetch('/api/plots', apiKey)
+        .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))),
+      listSharedMemberships(apiKey).catch(() => []),
+    ]).then(([plotData, memberships]) => {
+      setPlots(Array.isArray(plotData) ? plotData.filter((p) => p.show_in_garden !== false) : [])
+      const map = {}
+      if (Array.isArray(memberships)) {
+        memberships.forEach((m) => { map[m.plotId] = m })
+      }
+      setMembershipByPlotId(map)
+    }).catch((e) => setPlotsError(e.message))
       .finally(() => setPlotsLoading(false))
   }, [apiKey])
 
@@ -1135,15 +1177,33 @@ export function GardenPage() {
   }
 
   async function handleDeletePlot(plot) {
-    const isMember = plot.visibility === 'shared' && plot.is_owner === false
-    const url = isMember ? `/api/plots/${plot.id}/members/me` : `/api/plots/${plot.id}`
     try {
-      const r = await apiFetch(url, apiKey, { method: 'DELETE' })
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      setPlots((prev) => prev.filter((p) => p.id !== plot.id))
+      if (plot.visibility === 'shared') {
+        await leaveSharedPlot(apiKey, plot.id)
+        // After leaving, remove from garden (tombstoned or just left — either way it's gone from garden)
+        setPlots((prev) => prev.filter((p) => p.id !== plot.id))
+      } else {
+        const r = await apiFetch(`/api/plots/${plot.id}`, apiKey, { method: 'DELETE' })
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        setPlots((prev) => prev.filter((p) => p.id !== plot.id))
+      }
       setConfirmDelete(null)
     } catch (e) {
-      alert(isMember ? `Couldn't leave plot: ${e.message}` : `Couldn't delete plot: ${e.message}`)
+      if (e.message === 'must_transfer') {
+        alert('Transfer ownership to another member before leaving the plot.')
+      } else {
+        alert(plot.visibility === 'shared' ? `Couldn't leave plot: ${e.message}` : `Couldn't delete plot: ${e.message}`)
+      }
+    }
+  }
+
+  async function handleTogglePlotStatus(plot) {
+    const newStatus = plot.plot_status === 'closed' ? 'open' : 'closed'
+    try {
+      await setSharedPlotStatus(apiKey, plot.id, newStatus)
+      setPlots((prev) => prev.map((p) => p.id === plot.id ? { ...p, plot_status: newStatus } : p))
+    } catch (e) {
+      alert(`Couldn't update plot status: ${e.message}`)
     }
   }
 
@@ -1214,6 +1274,7 @@ export function GardenPage() {
                 <SortablePlotRow
                   key={plot.id}
                   plot={plot}
+                  membership={membershipByPlotId[plot.id]}
                   isFirst={idx === 0}
                   isLast={idx === userPlots.length - 1}
                   apiKey={apiKey}
@@ -1222,12 +1283,14 @@ export function GardenPage() {
                   onMoveUp={() => handleMoveUp(plot.id)}
                   onMoveDown={() => handleMoveDown(plot.id)}
                   onManageMembers={() => setManageMembersPlot(plot)}
+                  onToggleStatus={plot.visibility === 'shared' && plot.is_owner !== false ? () => handleTogglePlotStatus(plot) : undefined}
                   onTagClick={setQuickTagUpload}
                   onVideoPlay={setVideoUpload}
                   onImagePreview={setPreviewUpload}
                   onCompostClick={setConfirmCompost}
                   onShareClick={setShareUploadItem}
                   refreshKey={plotRefreshKey}
+                  excludeIds={justArrivedExclude}
                 />
               ))}
             </div>
@@ -1264,14 +1327,18 @@ export function GardenPage() {
       </div>
 
       {confirmDelete && (() => {
-        const isMember = confirmDelete.visibility === 'shared' && confirmDelete.is_owner === false
+        const isShared = confirmDelete.visibility === 'shared'
+        const isOwnerOfShared = isShared && confirmDelete.is_owner !== false
+        const displayName = (isShared && (membershipByPlotId[confirmDelete.id]?.localName || confirmDelete.local_name)) || confirmDelete.name
         return (
           <ConfirmDialog
-            title={isMember ? 'Leave plot?' : 'Delete plot?'}
-            body={isMember
-              ? `You'll be removed from "${confirmDelete.name}". The plot and its items remain for other members.`
-              : `"${confirmDelete.name}" will be removed. Your photos are not affected.`}
-            primaryLabel={isMember ? 'Leave' : 'Delete'}
+            title={isShared ? 'Leave plot?' : 'Delete plot?'}
+            body={isShared
+              ? (isOwnerOfShared
+                  ? `You'll leave "${displayName}". If you're the last member, the plot will be removed and can be restored within 90 days from your Shared Plots screen.`
+                  : `You'll leave "${displayName}". The plot and its items remain for other members. You can re-join from your Shared Plots screen.`)
+              : `"${displayName}" will be removed. Your photos are not affected.`}
+            primaryLabel={isShared ? 'Leave' : 'Delete'}
             primaryClass="bg-earth text-parchment"
             cancelLabel="Cancel"
             onConfirm={() => handleDeletePlot(confirmDelete)}

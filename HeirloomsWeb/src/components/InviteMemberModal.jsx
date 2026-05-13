@@ -69,7 +69,7 @@ function FriendsTab({ plotId, apiKey, onDone }) {
 
   if (done) return (
     <p className="text-sm font-sans text-forest text-center py-4">
-      {selected?.displayName} has been added to the plot.
+      {selected?.displayName} has been invited. They'll accept from their Shared Plots screen.
     </p>
   )
 
@@ -155,7 +155,7 @@ function PendingTab({ plotId, apiKey, onDone }) {
     <div className="space-y-3">
       {pending.length === 0 ? (
         <p className="text-text-muted text-sm text-center py-4">
-          No pending joins. Friends added directly via the Friends tab don't appear here — this tab is only for people who redeemed an invite link.
+          No pending joins. This tab shows people who redeemed an invite link and are waiting for you to confirm. After confirming, they'll accept from their Shared Plots screen.
         </p>
       ) : (
         <div className="space-y-1 max-h-48 overflow-y-auto">

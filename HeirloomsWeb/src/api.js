@@ -24,6 +24,69 @@ export async function listPlots(apiKey) {
   return r.json()
 }
 
+export async function listSharedMemberships(apiKey) {
+  const r = await apiFetch('/api/plots/shared', apiKey)
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json()
+}
+
+export async function listPlotMembers(apiKey, plotId) {
+  const r = await apiFetch(`/api/plots/${plotId}/members`, apiKey)
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json()
+}
+
+export async function acceptPlotInvite(apiKey, plotId, localName) {
+  const r = await apiFetch(`/api/plots/${plotId}/accept`, apiKey, {
+    method: 'POST',
+    body: JSON.stringify({ localName }),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+}
+
+export async function leaveSharedPlot(apiKey, plotId) {
+  const r = await apiFetch(`/api/plots/${plotId}/leave`, apiKey, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+  if (r.status === 403) throw new Error('must_transfer')
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+}
+
+export async function rejoinSharedPlot(apiKey, plotId, localName) {
+  const r = await apiFetch(`/api/plots/${plotId}/rejoin`, apiKey, {
+    method: 'POST',
+    body: JSON.stringify(localName ? { localName } : {}),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+}
+
+export async function restoreSharedPlot(apiKey, plotId) {
+  const r = await apiFetch(`/api/plots/${plotId}/restore`, apiKey, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+  if (r.status === 403) throw new Error('not_authorized')
+  if (r.status === 410) throw new Error('window_expired')
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+}
+
+export async function transferPlotOwnership(apiKey, plotId, newOwnerId) {
+  const r = await apiFetch(`/api/plots/${plotId}/transfer`, apiKey, {
+    method: 'POST',
+    body: JSON.stringify({ newOwnerId }),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+}
+
+export async function setSharedPlotStatus(apiKey, plotId, status) {
+  const r = await apiFetch(`/api/plots/${plotId}/status`, apiKey, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+}
+
 export async function createPlot(apiKey, { name, criteria, showInGarden = true, visibility = 'private' }) {
   const r = await apiFetch('/api/plots', apiKey, {
     method: 'POST',

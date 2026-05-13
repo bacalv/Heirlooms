@@ -16,6 +16,7 @@ import { CompostHeapPage } from './pages/CompostHeapPage'
 import { ExplorePage } from './pages/ExplorePage'
 import { FlowsPage } from './pages/FlowsPage'
 import { PlotJoinPage } from './pages/PlotJoinPage'
+import { SharedPlotsPage } from './pages/SharedPlotsPage'
 import { lock, unlock, setSharingPrivkey } from './crypto/vaultSession'
 import { authLogout, authMe, API_URL } from './api'
 import { unwrapMasterKeyForDevice, unwrapDekWithMasterKey, fromB64, importSharingPrivkey } from './crypto/vaultCrypto'
@@ -158,6 +159,7 @@ export default function App() {
             <Route path="capsules/:id" element={<CapsuleDetailPage />} />
             <Route path="compost" element={<CompostHeapPage />} />
             <Route path="flows" element={<FlowsPage />} />
+            <Route path="shared" element={<SharedPlotsPage />} />
             <Route path="plots/join" element={<PlotJoinPage />} />
             <Route path="access" element={<AccessPage />} />
             <Route path="access/pair" element={<PairPage onPaired={handleLogin} />} />

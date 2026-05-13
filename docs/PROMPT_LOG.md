@@ -3848,6 +3848,73 @@ APK v0.45.6–v0.45.7 installed on Bret's Samsung A02. Sadaar's Fire OS tablet n
 
 ---
 
+## v0.51.1 — Shared plot membership overhaul E2: web (13 May 2026)
+
+Prompt: now do E2 — web.
+
+### New page: SharedPlotsPage (`/shared`)
+
+`GET /api/plots/shared` is called on mount; memberships grouped into four sections:
+
+- **Invitations** (`status=invited`): plot name + inviter attribution + Accept button →
+  `NamePromptModal` → `POST /api/plots/:id/accept`. On success, page reloads.
+- **Joined** (`status=joined`, not tombstoned): local_name (or plot name) + owner attribution
+  (for members) + Leave button + owner controls (Open/Close toggle, Transfer Ownership).
+  Transfer opens `TransferOwnershipModal` which fetches `GET /api/plots/:id/members` and lets
+  the owner pick a joined non-owner member, then calls `POST /api/plots/:id/transfer`.
+- **Left** (`status=left`, not tombstoned): greyed cards with Re-join button →
+  `NamePromptModal` pre-filled with previous `local_name` → `POST /api/plots/:id/rejoin`.
+- **Recently removed** (tombstoned): strikethrough name, days-until-expiry, Restore button →
+  `POST /api/plots/:id/restore`. Error shown if not authorized or window expired.
+
+### Garden changes
+
+`GardenPage` now fetches `GET /api/plots/shared` in parallel with `GET /api/plots` on mount.
+Builds `membershipByPlotId` map (plotId → SharedMembershipRecord).
+
+`SortablePlotRow` accepts `membership` prop. For shared plots where user is a member
+(`is_owner === false`):
+- Title shows `membership.localName` (or `plot.local_name`) if set, otherwise `plot.name`.
+- "Shared by [ownerDisplayName]" subtitle shown below the title.
+- Drag handle hidden (members can't reorder shared plots; this is consistent with server
+  not supporting reordering of shared plots for non-owners).
+- Move up/down hidden in gear menu.
+
+`PlotGearMenu` gets `onToggleStatus` prop. Owner of a shared plot sees "Close plot" /
+"Reopen plot" in the menu. All shared plots (owner or member) see "Leave" (not "Delete").
+
+People icon and `closed` badge shown on shared plot row header.
+
+Leave confirm dialog updated: owner and member get different body text explaining what
+happens (tombstone if last member; re-join from Shared Plots screen if member).
+
+`handleDeletePlot` updated: shared plots call `leaveSharedPlot` (POST /leave); on
+`must_transfer` error, shows alert. Personal plots still use DELETE /api/plots/:id.
+
+`handleTogglePlotStatus` (new): calls `setSharedPlotStatus`, updates `plot_status` optimistically.
+
+### Other file changes
+
+- `Nav.jsx`: "Shared" added to desktop nav and mobile hamburger menu.
+- `App.jsx`: `/shared` route added, `SharedPlotsPage` imported.
+- `InviteMemberModal.jsx` (`FriendsTab`): success message updated to "has been invited. They'll
+  accept from their Shared Plots screen." `PendingTab` empty-state updated.
+- `PlotJoinPage.jsx`: result message updated: "you'll see an invitation in your Shared Plots screen."
+- `api.js`: 8 new functions added for all E2 endpoints.
+
+### Files changed
+
+- `HeirloomsWeb/src/pages/SharedPlotsPage.jsx` (new)
+- `HeirloomsWeb/src/pages/GardenPage.jsx`
+- `HeirloomsWeb/src/pages/PlotJoinPage.jsx`
+- `HeirloomsWeb/src/components/Nav.jsx`
+- `HeirloomsWeb/src/components/InviteMemberModal.jsx`
+- `HeirloomsWeb/src/App.jsx`
+- `HeirloomsWeb/src/api.js`
+- `docs/VERSIONS.md`, `docs/PROMPT_LOG.md`
+
+---
+
 ## v0.51.0 — Shared plot membership overhaul E1: server (13 May 2026)
 
 Prompt: implement the shared plot membership changes (from docs/briefs/shared_plot_membership.md).
