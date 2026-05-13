@@ -45,10 +45,10 @@ class FlowsViewModel : ViewModel() {
         }
     }
 
-    fun createFlow(api: HeirloomsApi, name: String, targetPlotId: String, requiresStaging: Boolean) {
+    fun createFlow(api: HeirloomsApi, name: String, targetPlotId: String, requiresStaging: Boolean, criteria: String) {
         viewModelScope.launch {
             try {
-                api.createFlow(name, criteria = """{"type":"just_arrived"}""", targetPlotId = targetPlotId, requiresStaging = requiresStaging)
+                api.createFlow(name, criteria = criteria, targetPlotId = targetPlotId, requiresStaging = requiresStaging)
                 load(api)
             } catch (_: Exception) { }
         }
