@@ -336,7 +336,7 @@ fun GardenScreen(
                                         row.plot?.let { vm.leavePlot(api, it.id) }
                                     },
                                     ownerDisplayName = row.plot?.let { ownerNames[it.id] },
-                                    emptyLabel = if (isJustArrived) "Nothing waiting." else "No items match this plot's tags.",
+                                    emptyLabel = if (isJustArrived) "Nothing waiting." else "Empty",
                                 )
                             }
                             // "+ Add plot" row at the bottom of the garden scroll

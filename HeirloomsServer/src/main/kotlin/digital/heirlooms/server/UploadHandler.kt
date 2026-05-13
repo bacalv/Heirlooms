@@ -665,7 +665,9 @@ private fun thumbProxyContractRoute(storage: FileStore, database: Database): Con
         description = "Returns the JPEG thumbnail for the given upload ID if one exists, otherwise falls back to the full file."
     } bindContract GET to { uploadId: UUID, _: String ->
         { request: Request ->
-            val record = database.findUploadByIdForUser(uploadId, request.authUserId())
+            val userId = request.authUserId()
+            val record = database.findUploadByIdForUser(uploadId, userId)
+                ?: database.findUploadByIdForSharedMember(uploadId, userId)
             if (record == null) {
                 Response(NOT_FOUND)
             } else {

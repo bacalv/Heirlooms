@@ -102,7 +102,7 @@ describe('GardenPage', () => {
     mockFetch({ plots: [systemPlot, userPlot1], plotItems: [] })
     render(<Wrapper><GardenPage /></Wrapper>)
     await waitFor(() =>
-      expect(screen.getByText(/No items match this plot's criteria/i)).toBeInTheDocument()
+      expect(screen.getByText(/Empty/i)).toBeInTheDocument()
     )
   })
 

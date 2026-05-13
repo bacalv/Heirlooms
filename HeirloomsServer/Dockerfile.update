@@ -1,0 +1,5 @@
+FROM --platform=linux/amd64 europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-server:latest
+USER root
+COPY build/libs/HeirloomsServer-*-all.jar app.jar
+RUN chown heirloom:heirloom app.jar
+USER heirloom

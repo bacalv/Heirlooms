@@ -402,6 +402,34 @@ class Database(private val dataSource: DataSource) {
         }
     }
 
+    fun findUploadByIdForSharedMember(id: UUID, userId: UUID): UploadRecord? {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """SELECT u.id, u.storage_key, u.mime_type, u.file_size, u.uploaded_at, u.content_hash,
+                          u.thumbnail_key, u.taken_at, u.latitude, u.longitude, u.altitude,
+                          u.device_make, u.device_model, u.rotation, u.tags, u.composted_at,
+                          u.exif_processed_at, u.last_viewed_at, u.storage_class, u.envelope_version,
+                          u.wrapped_dek, u.dek_format, u.encrypted_metadata, u.encrypted_metadata_format,
+                          u.thumbnail_storage_key, u.wrapped_thumbnail_dek, u.thumbnail_dek_format,
+                          u.preview_storage_key, u.wrapped_preview_dek, u.preview_dek_format,
+                          u.plain_chunk_size, u.duration_seconds
+                   FROM uploads u
+                   WHERE u.id = ?
+                   AND EXISTS (
+                       SELECT 1 FROM plot_items pi
+                       JOIN plots p ON p.id = pi.plot_id AND p.visibility = 'shared'
+                       JOIN plot_members pm ON pm.plot_id = p.id AND pm.user_id = ? AND pm.status = 'joined'
+                       WHERE pi.upload_id = u.id
+                   )"""
+            ).use { stmt ->
+                stmt.setObject(1, id); stmt.setObject(2, userId)
+                val rs = stmt.executeQuery()
+                if (!rs.next()) return null
+                return rs.toUploadRecord()
+            }
+        }
+    }
+
     fun recordView(id: UUID, userId: UUID = FOUNDING_USER_ID): Boolean {
         dataSource.connection.use { conn: Connection ->
             conn.prepareStatement(
@@ -1327,9 +1355,16 @@ class Database(private val dataSource: DataSource) {
                 else if (isReceived == false) conditions += "shared_from_user_id IS NULL"
             }
 
+            var sharedCollectionPlotId: UUID? = null
+
             if (plotId != null) {
                 val plot = getPlotByIdForUser(conn, plotId, userId)
                     ?: throw IllegalArgumentException("Plot $plotId not found")
+                if (plot.visibility == "shared") {
+                    // Shared plot: show items from all joined members, not just the requester
+                    conditions[0] = "user_id IN (SELECT user_id FROM plot_members WHERE plot_id = ? AND status = 'joined')"
+                    setters[0] = { stmt, idx -> stmt.setObject(idx, plotId); idx + 1 }
+                }
                 val criteriaJson = plot.criteria
                 if (criteriaJson != null) {
                     val fragment = CriteriaEvaluator.evaluate(criteriaJson, userId, conn)
@@ -1339,6 +1374,7 @@ class Database(private val dataSource: DataSource) {
                     // Collection plot: only return items explicitly added via plot_items
                     conditions += "id IN (SELECT upload_id FROM plot_items WHERE plot_id = ?)"
                     setters += listOf { stmt, idx -> stmt.setObject(idx, plotId); idx + 1 }
+                    if (plot.visibility == "shared") sharedCollectionPlotId = plotId
                 }
             }
 
@@ -1375,7 +1411,42 @@ class Database(private val dataSource: DataSource) {
                 val results = mutableListOf<UploadRecord>()
                 while (rs.next()) results.add(rs.toUploadRecord())
                 val hasMore = results.size > effectiveLimit
-                val items = if (hasMore) results.dropLast(1) else results
+                var items = if (hasMore) results.dropLast(1) else results
+
+                // Overlay plot-key-wrapped DEKs so all members can decrypt shared collection items
+                if (sharedCollectionPlotId != null && items.isNotEmpty()) {
+                    val ids = items.map { it.id }
+                    val placeholders = ids.indices.joinToString(",") { "?" }
+                    val wrappedDeks = mutableMapOf<UUID, ByteArray>()
+                    val dekFormats = mutableMapOf<UUID, String>()
+                    val wrappedThumbDeks = mutableMapOf<UUID, ByteArray>()
+                    val thumbFormats = mutableMapOf<UUID, String>()
+                    conn.prepareStatement(
+                        """SELECT upload_id, wrapped_item_dek, item_dek_format,
+                                  wrapped_thumbnail_dek, thumbnail_dek_format
+                           FROM plot_items WHERE plot_id = ? AND upload_id IN ($placeholders)"""
+                    ).use { dekStmt ->
+                        dekStmt.setObject(1, sharedCollectionPlotId)
+                        ids.forEachIndexed { i, id -> dekStmt.setObject(i + 2, id) }
+                        val rs2 = dekStmt.executeQuery()
+                        while (rs2.next()) {
+                            val uid = rs2.getObject("upload_id", UUID::class.java)
+                            rs2.getBytes("wrapped_item_dek")?.let { wrappedDeks[uid] = it }
+                            rs2.getString("item_dek_format")?.let { dekFormats[uid] = it }
+                            rs2.getBytes("wrapped_thumbnail_dek")?.let { wrappedThumbDeks[uid] = it }
+                            rs2.getString("thumbnail_dek_format")?.let { thumbFormats[uid] = it }
+                        }
+                    }
+                    items = items.map { u ->
+                        if (wrappedDeks.containsKey(u.id)) u.copy(
+                            wrappedDek = wrappedDeks[u.id],
+                            dekFormat = dekFormats[u.id] ?: u.dekFormat,
+                            wrappedThumbnailDek = wrappedThumbDeks[u.id] ?: u.wrappedThumbnailDek,
+                            thumbnailDekFormat = thumbFormats[u.id] ?: u.thumbnailDekFormat,
+                        ) else u
+                    }
+                }
+
                 val nextCursor = if (hasMore) encodeCursor(items.last(), effectiveSort) else null
                 return UploadPage(items, nextCursor)
             }

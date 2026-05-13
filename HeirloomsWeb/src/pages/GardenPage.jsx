@@ -38,7 +38,7 @@ const JUST_ARRIVED_SENTINEL = '__just_arrived__'
 
 // ---- Thumbnail card for horizontal plot row --------------------------------
 
-function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, onImagePreview, onCompostClick, onShareClick, isNew, onArrivalComplete }) {
+function PlotThumbCard({ upload, apiKey, plotId, onTagClick, onVideoPlay, onRotate, onImagePreview, onCompostClick, onShareClick, isNew, onArrivalComplete }) {
   const navigate = useNavigate()
   const isImage = upload.mimeType?.startsWith('image/')
   const isVideo = upload.mimeType?.startsWith('video/')
@@ -58,6 +58,7 @@ function PlotThumbCard({ upload, apiKey, onTagClick, onVideoPlay, onRotate, onIm
         style={isComposted ? saturate : undefined}
         rotation={upload.rotation}
         alt=""
+        plotId={plotId}
       />
       {isVideo && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/25 pointer-events-none">
@@ -279,7 +280,7 @@ function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, onImagePreview, o
   if (visibleItems.length === 0) {
     const emptyMsg = plot.name === JUST_ARRIVED_SENTINEL
       ? 'Nothing new to tend.'
-      : "No items match this plot's criteria yet."
+      : "Empty"
     return (
       <div className="h-24 flex items-center px-1">
         <p className="font-serif italic text-text-muted text-sm">{emptyMsg}</p>
@@ -291,6 +292,7 @@ function PlotItemsRow({ plot, apiKey, onTagClick, onVideoPlay, onImagePreview, o
     <div ref={rowRef} className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
       {visibleItems.map((upload) => (
         <PlotThumbCard key={upload.id} upload={upload} apiKey={apiKey}
+          plotId={plot.visibility === 'shared' ? plot.id : undefined}
           onTagClick={onTagClick} onVideoPlay={onVideoPlay} onImagePreview={onImagePreview} onCompostClick={onCompostClick} onShareClick={onShareClick} onRotate={handleRotateItem}
           isNew={newlyArrivedIds.has(upload.id)}
           onArrivalComplete={() => setNewlyArrivedIds((prev) => {

@@ -2,16 +2,17 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../AuthContext'
 import { API_URL } from '../api'
 import { getThumb } from '../thumbCache'
-import { getMasterKey, getSharingPrivkey, thumbnailCache, cacheThumbnail } from '../crypto/vaultSession'
-import { unwrapDekWithMasterKey, unwrapWithSharingKey, decryptSymmetric, fromB64, ALG_P256_ECDH_HKDF_V1 } from '../crypto/vaultCrypto'
+import { getMasterKey, getSharingPrivkey, thumbnailCache, cacheThumbnail, getPlotKey, setPlotKey } from '../crypto/vaultSession'
+import { unwrapDekWithMasterKey, unwrapWithSharingKey, unwrapPlotKey, unwrapDekWithPlotKey, decryptSymmetric, fromB64, ALG_P256_ECDH_HKDF_V1, ALG_PLOT_AES256GCM_V1 } from '../crypto/vaultCrypto'
+import { apiFetch } from '../api'
 import { OliveBranchIcon } from '../brand/OliveBranchIcon'
 
 // Drop-in replacement for <img> wherever an `upload` object is in scope.
 // Handles encrypted and public storage classes transparently.
-export function UploadThumb({ upload, className, style, alt = '', rotation }) {
+export function UploadThumb({ upload, className, style, alt = '', rotation, plotId }) {
   if (!upload) return <div className={`bg-forest-08 ${className ?? ''}`} style={style} />
   if (upload.storageClass === 'encrypted') {
-    return <EncryptedThumb upload={upload} className={className} style={style} alt={alt} rotation={rotation} />
+    return <EncryptedThumb upload={upload} className={className} style={style} alt={alt} rotation={rotation} plotId={plotId} />
   }
   return <PlaintextThumb upload={upload} className={className} style={style} alt={alt} rotation={rotation} />
 }
@@ -43,7 +44,18 @@ function PlaintextThumb({ upload, className, style, alt, rotation }) {
   return <img src={blobUrl} alt={alt} className={className} style={{ ...rotateStyle, ...style }} />
 }
 
-function EncryptedThumb({ upload, className, style, alt, rotation }) {
+async function loadPlotKey(plotId, apiKey) {
+  const cached = getPlotKey(plotId)
+  if (cached) return cached
+  const resp = await apiFetch(`/api/plots/${plotId}/plot-key`, apiKey)
+  if (!resp.ok) throw new Error('Could not fetch plot key')
+  const { wrappedPlotKey } = await resp.json()
+  const plotKeyBytes = await unwrapPlotKey(fromB64(wrappedPlotKey), getSharingPrivkey())
+  setPlotKey(plotId, plotKeyBytes)
+  return plotKeyBytes
+}
+
+function EncryptedThumb({ upload, className, style, alt, rotation, plotId }) {
   const { apiKey } = useAuth()
   const cached = thumbnailCache.get(upload.id) ?? null
   const [src, setSrc] = useState(cached)
@@ -58,9 +70,15 @@ function EncryptedThumb({ upload, className, style, alt, rotation }) {
         const raw = upload.wrappedThumbnailDek
         if (!raw) return
         const wrappedDek = typeof raw === 'string' ? fromB64(raw) : raw
-        const thumbDek = upload.thumbnailDekFormat === ALG_P256_ECDH_HKDF_V1
-          ? await unwrapWithSharingKey(wrappedDek, getSharingPrivkey())
-          : await unwrapDekWithMasterKey(wrappedDek, masterKey)
+        let thumbDek
+        if (upload.thumbnailDekFormat === ALG_P256_ECDH_HKDF_V1) {
+          thumbDek = await unwrapWithSharingKey(wrappedDek, getSharingPrivkey())
+        } else if (upload.thumbnailDekFormat === ALG_PLOT_AES256GCM_V1 && plotId) {
+          const plotKey = await loadPlotKey(plotId, apiKey)
+          thumbDek = await unwrapDekWithPlotKey(wrappedDek, plotKey)
+        } else {
+          thumbDek = await unwrapDekWithMasterKey(wrappedDek, masterKey)
+        }
         const r = await fetch(`${API_URL}/api/content/uploads/${upload.id}/thumb`, {
           headers: { 'X-Api-Key': apiKey },
         })
@@ -75,7 +93,7 @@ function EncryptedThumb({ upload, className, style, alt, rotation }) {
         } else {
           URL.revokeObjectURL(url)
         }
-      } catch { /* show fallback */ }
+      } catch (e) { console.error('[EncryptedThumb]', upload.id, upload.thumbnailDekFormat, e) }
       if (!cancelled) setLoading(false)
     })()
     return () => { cancelled = true }
