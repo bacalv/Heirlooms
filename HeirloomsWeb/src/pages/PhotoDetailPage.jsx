@@ -615,11 +615,8 @@ export function PhotoDetailPage() {
         const blob = new Blob([plainBytes], { type: 'video/mp4' })
         objectUrl = URL.createObjectURL(blob)
         if (!cancelled) setBlobUrl(objectUrl)
-      } else if (isEncrypted && isVideo && exceedsThreshold && !upload.previewStorageKey) {
-        // Exceeds threshold but no preview — show nothing (thumbnail will display instead).
-        if (!cancelled) setBlobUrl(null)
       } else if (isEncrypted && isVideo && upload.fileSize > LARGE && typeof MediaSource !== 'undefined') {
-        // Full video path (under threshold, or old upload): MSE streaming for large files.
+        // Large encrypted video (no preview clip, or under threshold): MSE streaming.
         const masterKey = getMasterKey()
         const raw = upload.wrappedDek
         if (!raw) throw new Error('Missing wrappedDek')
