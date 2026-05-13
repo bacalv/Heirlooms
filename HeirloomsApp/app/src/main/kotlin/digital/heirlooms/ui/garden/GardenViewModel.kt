@@ -318,19 +318,42 @@ class GardenViewModel(
         }
     }
 
+    private val _leaveError = MutableStateFlow<String?>(null)
+    val leaveError: StateFlow<String?> = _leaveError.asStateFlow()
+
+    fun clearLeaveError() { _leaveError.value = null }
+
     fun leavePlot(api: HeirloomsApi, plotId: String) {
         val current = _state.value as? GardenLoadState.Ready ?: return
         _state.value = GardenLoadState.Ready(current.rows.filter { it.plot?.id != plotId })
         viewModelScope.launch {
             try {
-                api.leavePlot(plotId)
-            } catch (_: Exception) {
+                api.leaveSharedPlot(plotId)
+            } catch (e: Exception) {
                 _state.value = GardenLoadState.Ready(current.rows)
+                if (e.message == "must_transfer") {
+                    _leaveError.value = "Transfer ownership to another member before leaving."
+                }
             }
         }
     }
 
     // ---- Cached friends list (loaded lazily for display name resolution) ---
+
+    // Maps plotId → ownerDisplayName for non-owner shared plots shown in the garden.
+    private val _ownerNames = MutableStateFlow<Map<String, String>>(emptyMap())
+    val ownerNames: StateFlow<Map<String, String>> = _ownerNames.asStateFlow()
+
+    fun loadSharedMemberships(api: HeirloomsApi) {
+        viewModelScope.launch {
+            try {
+                val memberships = api.listSharedMemberships()
+                _ownerNames.value = memberships
+                    .filter { it.role == "member" && it.ownerDisplayName != null }
+                    .associate { it.plotId to it.ownerDisplayName!! }
+            } catch (_: Exception) { }
+        }
+    }
 
     private val _friends = MutableStateFlow<List<HeirloomsApi.Friend>>(emptyList())
     val friends: StateFlow<List<HeirloomsApi.Friend>> = _friends.asStateFlow()

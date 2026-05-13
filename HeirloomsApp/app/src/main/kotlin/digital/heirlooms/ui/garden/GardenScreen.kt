@@ -26,8 +26,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.PeopleAlt
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -215,6 +218,7 @@ fun GardenScreen(
         if (state is GardenLoadState.Loading) vm.load(api) else vm.refresh(api)
         vm.ensureSharingKey(api)
         vm.loadFriends(api)
+        vm.loadSharedMemberships(api)
     }
 
     LaunchedEffect(Unit) {
@@ -226,7 +230,18 @@ fun GardenScreen(
 
     val newlyArrivedIds by vm.newlyArrivedIds.collectAsStateWithLifecycle()
     val friends by vm.friends.collectAsStateWithLifecycle()
+    val ownerNames by vm.ownerNames.collectAsStateWithLifecycle()
+    val leaveError by vm.leaveError.collectAsStateWithLifecycle()
     var showCreatePlot by remember { mutableStateOf(false) }
+
+    if (leaveError != null) {
+        AlertDialog(
+            onDismissRequest = { vm.clearLeaveError() },
+            title = { Text("Can't leave") },
+            text = { Text(leaveError!!) },
+            confirmButton = { TextButton(onClick = { vm.clearLeaveError() }) { Text("OK") } },
+        )
+    }
 
     if (showCreatePlot) {
         PlotCreateSheet(
@@ -273,7 +288,11 @@ fun GardenScreen(
                         ) {
                             s.rows.forEachIndexed { index, row ->
                                 val rowKey = row.plot?.id ?: "__just_arrived__"
-                                val rowLabel = if (row.plot?.isSystemDefined == true) "Just arrived" else row.plot?.name ?: "Just arrived"
+                                val rowLabel = when {
+                                    row.plot?.isSystemDefined == true || row.plot == null -> "Just arrived"
+                                    row.plot.visibility == "shared" && !row.plot.isOwner && row.plot.localName != null -> row.plot.localName
+                                    else -> row.plot.name
+                                }
                                 val isJustArrived = row.plot?.isSystemDefined == true || row.plot == null
 
                                 PlotRowSection(
@@ -314,11 +333,9 @@ fun GardenScreen(
                                         row.plot?.let { vm.renamePlot(api, it, newName) }
                                     },
                                     onDeletePlot = {
-                                        row.plot?.let {
-                                            if (it.visibility == "shared" && !it.isOwner) vm.leavePlot(api, it.id)
-                                            else vm.deletePlot(api, it.id)
-                                        }
+                                        row.plot?.let { vm.leavePlot(api, it.id) }
                                     },
+                                    ownerDisplayName = row.plot?.let { ownerNames[it.id] },
                                     emptyLabel = if (isJustArrived) "Nothing waiting." else "No items match this plot's tags.",
                                 )
                             }
@@ -445,10 +462,14 @@ private fun PlotRowSection(
     onTagsUpdated: (uploadId: String, oldTags: List<String>, newTags: List<String>) -> Unit,
     onRenamePlot: (name: String) -> Unit = {},
     onDeletePlot: () -> Unit = {},
+    ownerDisplayName: String? = null,
     emptyLabel: String,
 ) {
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = savedScrollIndex)
     var showEditPlot by remember { mutableStateOf(false) }
+
+    val api = LocalHeirloomsApi.current
+    val scope = rememberCoroutineScope()
 
     if (showEditPlot && plot != null) {
         PlotEditSheet(
@@ -457,6 +478,10 @@ private fun PlotRowSection(
             onSave = { name -> showEditPlot = false; onRenamePlot(name) },
             onDelete = { showEditPlot = false; onDeletePlot() },
             onLeave = { showEditPlot = false; onDeletePlot() },
+            onToggleStatus = { newStatus ->
+                showEditPlot = false
+                scope.launch { try { api.setPlotStatus(plot.id, newStatus) } catch (_: Exception) { } }
+            },
         )
     }
 
@@ -473,13 +498,31 @@ private fun PlotRowSection(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier.weight(1f).clickable(onClick = onTitleTap),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(label, style = MaterialTheme.typography.titleSmall.copy(color = Forest))
-                Spacer(Modifier.width(4.dp))
-                Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Forest.copy(alpha = 0.5f), modifier = Modifier.size(16.dp))
+            Column(Modifier.weight(1f).clickable(onClick = onTitleTap)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (plot?.visibility == "shared") {
+                        Icon(
+                            Icons.Filled.PeopleAlt,
+                            contentDescription = null,
+                            tint = Forest.copy(alpha = 0.45f),
+                            modifier = Modifier.size(13.dp),
+                        )
+                        Spacer(Modifier.width(3.dp))
+                    }
+                    Text(label, style = MaterialTheme.typography.titleSmall.copy(color = Forest))
+                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Forest.copy(alpha = 0.5f), modifier = Modifier.size(16.dp))
+                    if (plot?.plotStatus == "closed") {
+                        Spacer(Modifier.width(4.dp))
+                        Text("closed", style = MaterialTheme.typography.labelSmall.copy(color = TextMuted))
+                    }
+                }
+                if (ownerDisplayName != null) {
+                    Text(
+                        "Shared by $ownerDisplayName",
+                        style = MaterialTheme.typography.bodySmall.copy(color = TextMuted, fontSize = 11.sp),
+                    )
+                }
             }
             if (plot != null && !plot.isSystemDefined) {
                 Icon(

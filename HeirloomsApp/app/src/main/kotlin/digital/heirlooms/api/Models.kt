@@ -50,10 +50,36 @@ data class Plot(
     val sortOrder: Int,
     val isSystemDefined: Boolean,
     val isOwner: Boolean = true,    // false when user is a member but not the owner
+    val plotStatus: String = "open",     // "open" or "closed"
+    val localName: String? = null,       // member's chosen display name (non-null for non-owner members)
 )
 
 val Plot.isCollection: Boolean get() = criteria == null
 val Plot.isShared: Boolean get() = visibility == "shared"
+
+data class SharedMembership(
+    val plotId: String,
+    val plotName: String,
+    val ownerUserId: String?,
+    val ownerDisplayName: String?,
+    val role: String,           // "owner" or "member"
+    val status: String,         // "invited", "joined", "left"
+    val localName: String?,
+    val joinedAt: String,
+    val leftAt: String?,
+    val plotStatus: String,
+    val tombstonedAt: String?,
+    val tombstonedBy: String?,
+)
+
+data class PlotMember(
+    val userId: String,
+    val displayName: String,
+    val username: String,
+    val role: String,
+    val status: String = "joined",
+    val localName: String? = null,
+)
 
 data class Flow(
     val id: String,
@@ -65,13 +91,6 @@ data class Flow(
 
 data class StagingItem(
     val upload: Upload,
-)
-
-data class PlotMember(
-    val userId: String,
-    val displayName: String,
-    val username: String,
-    val role: String,
 )
 
 data class PlotItem(

@@ -2,6 +2,32 @@
 
 ---
 
+## v0.51.2 — Shared plot membership overhaul E3: Android (13 May 2026)
+
+- **Shared Plots tab** — new "Shared" bottom nav tab (`PeopleAlt` icon). Four sections populated
+  from `GET /api/plots/shared`: Invitations, Joined, Left, Recently removed.
+- **Accept invitation** — name prompt dialog → `POST /api/plots/:id/accept`. Plot then appears
+  in the garden with the chosen local name.
+- **Leave** — confirm dialog in both Shared screen and garden gear menu → `POST /api/plots/:id/leave`.
+  Owner sees a warning about last-member tombstone and transfer-first requirement.
+  `must_transfer` 403 response surfaces as an alert dialog in both entry points.
+- **Rejoin** — name prompt (pre-filled with previous `localName`) → `POST /api/plots/:id/rejoin`.
+- **Restore** — `POST /api/plots/:id/restore` from Recently removed section.
+- **Owner controls** in Joined section and garden `PlotEditSheet`: Open/Close toggle
+  (`PATCH /api/plots/:id/status`), Transfer Ownership (member picker dialog → `POST /api/plots/:id/transfer`).
+- **Garden attribution** — shared member plots show `localName` (or `plot.name` fallback) as title
+  + "Shared by [ownerDisplayName]" subtitle. People icon before the title. `closed` badge shown.
+  `GardenViewModel.loadSharedMemberships()` fetches `GET /api/plots/shared` on garden load to
+  populate `ownerNames` map used for attribution.
+- **Models** — `Plot` gains `plotStatus` and `localName` fields. New `SharedMembership` data
+  class. `PlotMember` gains `status` and `localName` fields.
+- **HeirloomsApi** — `leaveSharedPlot()` (POST, throws `must_transfer` on 403) replaces old
+  `leavePlot()` (DELETE). New: `listSharedMemberships()`, `acceptPlotInvite()`, `rejoinPlot()`,
+  `restorePlot()`, `transferOwnership()`, `setPlotStatus()`.
+- **build.gradle.kts** — versionCode 54→55, versionName 0.50.4→0.51.2.
+
+---
+
 ## v0.51.1 — Shared plot membership overhaul E2: web (13 May 2026)
 
 - **Shared Plots screen** (`/shared`) — new top-level nav destination. Four sections:

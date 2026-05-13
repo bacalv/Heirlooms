@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.PeopleAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -61,6 +62,7 @@ import digital.heirlooms.ui.share.UploadProgressScreen
 import digital.heirlooms.ui.garden.GardenScreen
 import digital.heirlooms.ui.garden.PhotoDetailScreen
 import digital.heirlooms.ui.settings.SettingsScreen
+import digital.heirlooms.ui.shared.SharedPlotsScreen
 import digital.heirlooms.ui.social.FriendsScreen
 import digital.heirlooms.ui.theme.Forest
 import digital.heirlooms.ui.theme.Forest15
@@ -71,6 +73,7 @@ import okhttp3.OkHttpClient
 internal object Routes {
     const val GARDEN = "garden"
     const val EXPLORE = "explore"
+    const val SHARED = "shared"
     // Photo detail — neutral route serving garden/explore/compost flavours via ?from= param.
     const val PHOTO_DETAIL = "photo/{uploadId}?from={from}"
     const val COMPOST = "compost"
@@ -106,6 +109,7 @@ private enum class Tab(val route: String, val label: String) {
     Garden(Routes.GARDEN, "Garden"),
     Explore(Routes.EXPLORE, "Explore"),
     Capsules(Routes.CAPSULES, "Capsules"),
+    Shared(Routes.SHARED, "Shared"),
     Burger("burger", "More"),
 }
 
@@ -253,6 +257,7 @@ private fun HeirloomsBottomNav(
                         Tab.Garden -> OliveBranchIcon(Modifier.size(24.dp))
                         Tab.Explore -> Icon(Icons.Filled.Search, contentDescription = null)
                         Tab.Capsules -> WaxSealOliveIcon(Modifier.size(24.dp))
+                        Tab.Shared -> Icon(Icons.Filled.PeopleAlt, contentDescription = null)
                         Tab.Burger -> Icon(Icons.Filled.Menu, contentDescription = null)
                     }
                 },
@@ -356,6 +361,9 @@ private fun AppNavHost(navController: NavController, apiKey: String, onApiKeyRes
                 navController = navController as androidx.navigation.NavHostController,
                 onDismiss = { navController.popBackStack() },
             )
+        }
+        composable(Routes.SHARED) {
+            SharedPlotsScreen()
         }
         composable(Routes.FRIENDS) {
             FriendsScreen(onBack = { navController.popBackStack() })

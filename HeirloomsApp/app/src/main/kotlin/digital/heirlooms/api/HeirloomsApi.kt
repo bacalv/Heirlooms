@@ -195,17 +195,60 @@ class HeirloomsApi(
         }
     }
 
-    suspend fun leavePlot(id: String) {
+    // Throws IOException("must_transfer") when the server returns 403 (owner has other members).
+    suspend fun leaveSharedPlot(id: String) {
         withContext(Dispatchers.IO) {
             val request = Request.Builder()
-                .url("$baseUrl/api/plots/$id/members/me")
+                .url("$baseUrl/api/plots/$id/leave")
                 .withAuth()
-                .delete()
+                .post("{}".toRequestBody("application/json".toMediaType()))
                 .build()
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+                when (response.code) {
+                    403 -> throw IOException("must_transfer")
+                    else -> if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+                }
             }
         }
+    }
+
+    suspend fun listSharedMemberships(): List<SharedMembership> {
+        val arr = JSONArray(get("/api/plots/shared"))
+        return (0 until arr.length()).map { arr.getJSONObject(it).toSharedMembership() }
+    }
+
+    suspend fun acceptPlotInvite(plotId: String, localName: String) {
+        post("/api/plots/$plotId/accept", """{"localName":${localName.jsonEsc()}}""")
+    }
+
+    suspend fun rejoinPlot(plotId: String, localName: String? = null) {
+        val body = if (localName != null) """{"localName":${localName.jsonEsc()}}""" else "{}"
+        post("/api/plots/$plotId/rejoin", body)
+    }
+
+    suspend fun restorePlot(plotId: String) {
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url("$baseUrl/api/plots/$plotId/restore")
+                .withAuth()
+                .post("{}".toRequestBody("application/json".toMediaType()))
+                .build()
+            client.newCall(request).execute().use { response ->
+                when (response.code) {
+                    403 -> throw IOException("not_authorized")
+                    410 -> throw IOException("window_expired")
+                    else -> if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+                }
+            }
+        }
+    }
+
+    suspend fun transferOwnership(plotId: String, newOwnerId: String) {
+        post("/api/plots/$plotId/transfer", """{"newOwnerId":${newOwnerId.jsonEsc()}}""")
+    }
+
+    suspend fun setPlotStatus(plotId: String, status: String) {
+        patch("/api/plots/$plotId/status", """{"status":${status.jsonEsc()}}""")
     }
 
     // ── Plot key + members ───────────────────────────────────────────────────
@@ -224,6 +267,8 @@ class HeirloomsApi(
                 displayName = o.getString("displayName"),
                 username = o.getString("username"),
                 role = o.getString("role"),
+                status = o.optString("status", "joined"),
+                localName = o.optString("localName").takeIf { s -> s.isNotEmpty() && s != "null" },
             )
         }
     }
@@ -774,6 +819,23 @@ class HeirloomsApi(
         sortOrder = optInt("sort_order", 0),
         isSystemDefined = optBoolean("is_system_defined", false),
         isOwner = optBoolean("is_owner", true),
+        plotStatus = optString("plot_status", "open").let { if (it.isEmpty() || it == "null") "open" else it },
+        localName = optString("local_name").takeIf { it.isNotEmpty() && it != "null" },
+    )
+
+    private fun JSONObject.toSharedMembership() = SharedMembership(
+        plotId = getString("plotId"),
+        plotName = getString("plotName"),
+        ownerUserId = optString("ownerUserId").takeIf { it.isNotEmpty() && it != "null" },
+        ownerDisplayName = optString("ownerDisplayName").takeIf { it.isNotEmpty() && it != "null" },
+        role = getString("role"),
+        status = getString("status"),
+        localName = optString("localName").takeIf { it.isNotEmpty() && it != "null" },
+        joinedAt = getString("joinedAt"),
+        leftAt = optString("leftAt").takeIf { it.isNotEmpty() && it != "null" },
+        plotStatus = optString("plotStatus", "open"),
+        tombstonedAt = optString("tombstonedAt").takeIf { it.isNotEmpty() && it != "null" },
+        tombstonedBy = optString("tombstonedBy").takeIf { it.isNotEmpty() && it != "null" },
     )
 
     private fun JSONObject.toFlow() = Flow(

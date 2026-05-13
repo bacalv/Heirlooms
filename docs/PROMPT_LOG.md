@@ -3848,6 +3848,81 @@ APK v0.45.6–v0.45.7 installed on Bret's Samsung A02. Sadaar's Fire OS tablet n
 
 ---
 
+## v0.51.2 — Shared plot membership overhaul E3: Android (13 May 2026)
+
+Prompt: please implement this now (E3).
+
+### New: SharedPlotsScreen + SharedPlotsViewModel
+
+`SharedPlotsViewModel` loads `GET /api/plots/shared` and exposes `SharedPlotsLoadState`.
+Actions: `acceptInvite`, `leavePlot`, `rejoinPlot`, `restorePlot`, `transferOwnership`,
+`setPlotStatus`, `loadMembersForTransfer`. Each action refreshes the state on success;
+errors go to `_actionError` StateFlow which the screen shows as an AlertDialog.
+
+`SharedPlotsScreen` is a `Scaffold` with a top app bar and pull-to-refresh `LazyColumn`.
+Four sections rendered with helpers:
+- `InvitationCard` — Forest15 tinted card. "Accept" button opens `NamePromptDialog`.
+- `JoinedCard` — Owner controls (Open/Close, Transfer) + Leave for all members.
+  Leave triggers an AlertDialog with contextual body text.
+- `LeftCard` — greyed card, Re-join button opens `NamePromptDialog` pre-filled with `localName`.
+- `TombstonedCard` — italic strikethrough style, days-remaining countdown, Restore button.
+
+`NamePromptDialog` wraps `AlertDialog` with an `OutlinedTextField` for name input.
+`TransferOwnershipDialog` wraps `AlertDialog` with a scrollable list of joined non-owner members.
+
+### New "Shared" bottom tab
+
+`AppNavigation.kt`: `Routes.SHARED = "shared"`, `Tab.Shared` added between Capsules and Burger,
+uses `Icons.Filled.PeopleAlt`. `AppNavHost` adds `composable(Routes.SHARED) { SharedPlotsScreen() }`.
+
+### Garden changes
+
+`Plot` data class: `plotStatus: String = "open"`, `localName: String? = null`. `toPlot()` reads
+`plot_status` and `local_name` from JSON.
+
+`SharedMembership` data class added to Models.kt. `PlotMember` gains `status` and `localName`.
+
+`GardenViewModel`:
+- `leaveSharedPlot` (POST /leave, 403 → `must_transfer`) replaces `leavePlot` (DELETE /members/me).
+- `_leaveError` / `leaveError` / `clearLeaveError()` — surfaces error to screen.
+- `_ownerNames` / `ownerNames` / `loadSharedMemberships()` — fetches `GET /api/plots/shared` on
+  garden load, builds `plotId → ownerDisplayName` map for attribution.
+
+`GardenScreen`:
+- `rowLabel` computation: uses `plot.localName` for non-owner shared plots.
+- `ownerNames` StateFlow observed; `ownerDisplayName` passed to `PlotRowSection`.
+- `leaveError` StateFlow observed; `AlertDialog` shown when non-null.
+- `vm.loadSharedMemberships(api)` called in `LaunchedEffect(Unit)`.
+- `onDeletePlot` now calls `vm.leavePlot` for all plots (shared and non-shared). Personal plots
+  still use DELETE via `deletePlot`; the unified path routes correctly in the ViewModel.
+- `PlotRowSection` gains `ownerDisplayName: String? = null` param.
+- `PlotRowSection` header: PeopleAlt icon + `closed` badge for shared plots;
+  "Shared by [ownerDisplayName]" subtitle beneath the title row.
+- `PlotEditSheet` called with `onToggleStatus` lambda that calls `api.setPlotStatus` on owner's plots.
+- `PeopleAlt` added to imports.
+
+`PlotSheets.kt` (`PlotEditSheet`):
+- `onToggleStatus: ((String) -> Unit)? = null` parameter added.
+- For shared plots: separate Leave confirm dialog for members vs. owners (different body text).
+- For owners: "Close plot"/"Reopen plot" `TextButton` shown when `onToggleStatus` is non-null.
+- Title shows "Shared plot" for shared visibility; name editing disabled for shared plots.
+- Done/Cancel button layout simplified for shared plots (no Save button).
+
+### Files changed
+
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/api/Models.kt`
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/api/HeirloomsApi.kt`
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/shared/SharedPlotsViewModel.kt` (new)
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/shared/SharedPlotsScreen.kt` (new)
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/main/AppNavigation.kt`
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/garden/GardenViewModel.kt`
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/garden/GardenScreen.kt`
+- `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/garden/PlotSheets.kt`
+- `HeirloomsApp/app/build.gradle.kts`
+- `docs/VERSIONS.md`, `docs/PROMPT_LOG.md`
+
+---
+
 ## v0.51.1 — Shared plot membership overhaul E2: web (13 May 2026)
 
 Prompt: now do E2 — web.

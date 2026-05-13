@@ -78,33 +78,50 @@ fun PlotEditSheet(
     onSave: (name: String) -> Unit,
     onDelete: () -> Unit,
     onLeave: () -> Unit = {},
+    onToggleStatus: ((String) -> Unit)? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val isMember = plot.visibility == "shared" && !plot.isOwner
-    var name by remember { mutableStateOf(plot.name) }
+    val isShared = plot.visibility == "shared"
+    val isMember = isShared && !plot.isOwner
+    val isOwner = isShared && plot.isOwner
+    val displayName = if (!isMember) plot.name else (plot.localName ?: plot.name)
+    var name by remember { mutableStateOf(if (!isShared) plot.name else (plot.localName ?: plot.name)) }
+    var showLeaveConfirm by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    if (showDeleteConfirm) {
+    if (showLeaveConfirm) {
         AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text(if (isMember) "Leave plot?" else "Delete plot?") },
+            onDismissRequest = { showLeaveConfirm = false },
+            title = { Text("Leave plot?") },
             text = {
                 Text(
-                    if (isMember) "You'll be removed from \"${plot.name}\". The plot and its items will remain for other members."
-                    else "\"${plot.name}\" will be removed. Items in this plot won't be deleted."
+                    if (isOwner)
+                        "If you're the last member, \"$displayName\" will be removed (restorable within 90 days). Otherwise, transfer ownership first."
+                    else
+                        "You'll leave \"$displayName\". You can re-join from the Shared screen."
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
-                    showDeleteConfirm = false
-                    if (isMember) onLeave() else onDelete()
-                }) {
-                    Text(if (isMember) "Leave" else "Delete", color = androidx.compose.ui.graphics.Color.Red)
+                    showLeaveConfirm = false
+                    if (isMember) onLeave() else onLeave()
+                }) { Text("Leave", color = androidx.compose.ui.graphics.Color.Red) }
+            },
+            dismissButton = { TextButton(onClick = { showLeaveConfirm = false }) { Text("Cancel") } },
+        )
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete plot?") },
+            text = { Text("\"${plot.name}\" will be removed. Items in this plot won't be deleted.") },
+            confirmButton = {
+                TextButton(onClick = { showDeleteConfirm = false; onDelete() }) {
+                    Text("Delete", color = androidx.compose.ui.graphics.Color.Red)
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
-            },
+            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") } },
         )
     }
 
@@ -121,25 +138,41 @@ fun PlotEditSheet(
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Edit plot", style = MaterialTheme.typography.titleMedium, color = Forest)
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Plot name") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Text(if (isShared) "Shared plot" else "Edit plot", style = MaterialTheme.typography.titleMedium, color = Forest)
+            if (!isShared) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Plot name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            if (isOwner && onToggleStatus != null) {
+                val isClosed = plot.plotStatus == "closed"
+                TextButton(
+                    onClick = { onToggleStatus(if (isClosed) "open" else "closed") },
+                ) {
+                    Text(if (isClosed) "Reopen plot" else "Close plot", color = Forest)
+                }
+            }
             Spacer(Modifier.height(4.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = { showDeleteConfirm = true }) {
-                    Text(if (isMember) "Leave plot" else "Delete plot", color = androidx.compose.ui.graphics.Color.Red)
+                TextButton(onClick = {
+                    if (isShared) showLeaveConfirm = true else showDeleteConfirm = true
+                }) {
+                    Text(if (isShared) "Leave plot" else "Delete plot", color = androidx.compose.ui.graphics.Color.Red)
                 }
-                Row {
-                    TextButton(onClick = onDismiss) { Text("Cancel", color = TextMuted) }
-                    TextButton(
-                        onClick = { if (name.isNotBlank()) onSave(name.trim()) },
-                        enabled = name.isNotBlank(),
-                    ) { Text("Save", color = Forest) }
+                if (!isShared) {
+                    Row {
+                        TextButton(onClick = onDismiss) { Text("Cancel", color = TextMuted) }
+                        TextButton(
+                            onClick = { if (name.isNotBlank()) onSave(name.trim()) },
+                            enabled = name.isNotBlank(),
+                        ) { Text("Save", color = Forest) }
+                    }
+                } else {
+                    TextButton(onClick = onDismiss) { Text("Done", color = TextMuted) }
                 }
             }
         }
