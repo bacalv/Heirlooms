@@ -2,6 +2,19 @@
 
 ---
 
+## v0.50.3 — Android share improvements (13 May 2026)
+
+- **Detail screen:** "Share with a friend" button added to both `GardenFlavour` and
+  `ExploreFlavour` in `PhotoDetailScreen` — opens `ShareSheet` (Heirlooms-internal
+  friend picker). Only shown for encrypted, non-shared items.
+- **Detail screen:** "Share to another app" button now appears in `ExploreFlavour`'s
+  body (was only in the top-bar overflow menu, easy to miss).
+- **Explore grid:** Share icon (bottom-right corner) on each encrypted/owned thumbnail,
+  same style as Garden row thumbnails. Tapping opens `ShareSheet` without navigating
+  to the detail screen.
+
+---
+
 ## v0.50.2 — Web image upload fix (13 May 2026)
 
 - **Server:** `confirmEncryptedUpload` — added `.takeIf { !it.isNull }` before `.asText()`

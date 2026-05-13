@@ -2,6 +2,34 @@
 
 ---
 
+## Session — 13 May 2026 — Android share improvements (v0.50.3)
+
+Three share-related improvements to the Android app, all in `PhotoDetailScreen.kt` and
+`ExploreScreen.kt`.
+
+**"Share to another app" in ExploreFlavour body (`PhotoDetailScreen.kt`):**
+Previously the option existed only in the top-bar overflow (3-dot menu) when viewing
+an item from the Explore tab — not obvious to users. Added the same `OutlinedButton`
+that `GardenFlavour` shows in its body, wired to the existing `handleShareToApp`
+function. `ExploreFlavour` now accepts `onShareToApp` and `isPreparingShare` params.
+
+**"Share with a friend" in both flavours (`PhotoDetailScreen.kt`):**
+Added a "Share with a friend" `OutlinedButton` to both `GardenFlavour` and
+`ExploreFlavour`. Tapping it opens `ShareSheet` (the Heirlooms-internal friend picker).
+Managed via `shareSheetUpload: Upload?` state in `PhotoDetailScreen` — set to the
+current upload on tap, cleared on dismiss. Only shown for `isEncrypted && !isShared`
+items. Button appears above "Share to another app".
+
+**Share icon on Explore grid thumbnails (`ExploreScreen.kt`):**
+The private `UploadThumbnail` composable now shows the same share icon (bottom-right
+corner, `Icons.Filled.Share`, same Forest overlay style as Garden thumbnails) for
+encrypted/owned items. The outer `Box` was restructured: a clipped inner `Box` handles
+the tap-to-open gesture; the share icon is a sibling `Box` at `Alignment.BottomEnd`
+with its own `clickable`, so tapping the icon doesn't navigate to the detail screen.
+Tapping opens `ShareSheet` via local `showShareSheet` state.
+
+---
+
 ## Session — 13 May 2026 — Web image upload fix (v0.50.2)
 
 **Bug:** Uploading an image via the Garden "Plant" button failed with HTTP 400 on

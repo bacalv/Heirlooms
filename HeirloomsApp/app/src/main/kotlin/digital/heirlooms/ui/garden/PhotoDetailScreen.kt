@@ -93,6 +93,7 @@ import digital.heirlooms.ui.common.formatInstantDate
 import digital.heirlooms.ui.common.formatOffsetDate
 import digital.heirlooms.ui.common.daysUntilDeletion
 import digital.heirlooms.ui.share.RecentTagsStore
+import digital.heirlooms.ui.social.ShareSheet
 import digital.heirlooms.ui.theme.Bloom
 import digital.heirlooms.ui.theme.Earth
 import digital.heirlooms.ui.theme.Forest
@@ -135,6 +136,9 @@ fun PhotoDetailScreen(
         vm.load(api, uploadId, context, videoThreshold)
         vm.trackView(api, uploadId)
     }
+
+    var shareSheetUpload by remember { mutableStateOf<digital.heirlooms.api.Upload?>(null) }
+    shareSheetUpload?.let { ShareSheet(upload = it, onDismiss = { shareSheetUpload = null }) }
 
     var preparingShare by remember { mutableStateOf(false) }
 
@@ -302,6 +306,9 @@ fun PhotoDetailScreen(
                         decryptedVideoUri = decryptedVideoUri,
                         contentDek = contentDek,
                         onDownload = { vm.downloadFullFile(api, u, context) },
+                        onShareWithFriend = if (u.isEncrypted && !u.isShared) { -> shareSheetUpload = u } else null,
+                        onShareToApp = if (!u.isShared) { -> handleShareToApp(u) } else null,
+                        isPreparingShare = preparingShare,
                     )
                     else -> GardenFlavour(
                         upload = u,
@@ -319,6 +326,7 @@ fun PhotoDetailScreen(
                         decryptedVideoUri = decryptedVideoUri,
                         contentDek = contentDek,
                         onDownload = { vm.downloadFullFile(api, u, context) },
+                        onShareWithFriend = if (u.isEncrypted && !u.isShared) { -> shareSheetUpload = u } else null,
                         onShareToApp = if (!u.isShared) { -> handleShareToApp(u) } else null,
                         isPreparingShare = preparingShare,
                         onCompost = {
@@ -567,6 +575,7 @@ internal fun GardenFlavour(
     decryptedVideoUri: Uri? = null,
     contentDek: ByteArray? = null,
     onDownload: (() -> Unit)? = null,
+    onShareWithFriend: (() -> Unit)? = null,
     onShareToApp: (() -> Unit)? = null,
     isPreparingShare: Boolean = false,
 ) {
@@ -643,6 +652,19 @@ internal fun GardenFlavour(
                 border = BorderStroke(1.dp, Forest),
             ) {
                 Text("Add this to a capsule", color = Forest)
+            }
+
+            if (onShareWithFriend != null) {
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = Forest15)
+                Spacer(Modifier.height(16.dp))
+                OutlinedButton(
+                    onClick = onShareWithFriend,
+                    modifier = Modifier.fillMaxWidth(),
+                    border = BorderStroke(1.dp, Forest),
+                ) {
+                    Text("Share with a friend", color = Forest)
+                }
             }
 
             if (onShareToApp != null) {
@@ -734,6 +756,9 @@ internal fun ExploreFlavour(
     decryptedVideoUri: Uri? = null,
     contentDek: ByteArray? = null,
     onDownload: (() -> Unit)? = null,
+    onShareWithFriend: (() -> Unit)? = null,
+    onShareToApp: (() -> Unit)? = null,
+    isPreparingShare: Boolean = false,
 ) {
     Column(
         Modifier
@@ -790,6 +815,41 @@ internal fun ExploreFlavour(
                 availableTags = availableTags,
                 recentTags = recentTags,
             )
+
+            if (onShareWithFriend != null) {
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = Forest15)
+                Spacer(Modifier.height(16.dp))
+                OutlinedButton(
+                    onClick = onShareWithFriend,
+                    modifier = Modifier.fillMaxWidth(),
+                    border = BorderStroke(1.dp, Forest),
+                ) {
+                    Text("Share with a friend", color = Forest)
+                }
+            }
+
+            if (onShareToApp != null) {
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = Forest15)
+                Spacer(Modifier.height(16.dp))
+                OutlinedButton(
+                    onClick = onShareToApp,
+                    enabled = !isPreparingShare,
+                    modifier = Modifier.fillMaxWidth(),
+                    border = BorderStroke(1.dp, Forest),
+                ) {
+                    if (isPreparingShare) {
+                        CircularProgressIndicator(
+                            color = Forest,
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Text("Share to another app", color = Forest)
+                    }
+                }
+            }
 
             Spacer(Modifier.height(32.dp))
         }

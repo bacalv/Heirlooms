@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Button
@@ -71,6 +72,7 @@ import digital.heirlooms.ui.common.TagInputField
 import digital.heirlooms.ui.common.UploadThumbnail as CommonUploadThumbnail
 import digital.heirlooms.ui.garden.DidntTake
 import digital.heirlooms.ui.share.RecentTagsStore
+import digital.heirlooms.ui.social.ShareSheet
 import digital.heirlooms.ui.theme.Forest
 import digital.heirlooms.ui.theme.Forest15
 import digital.heirlooms.ui.theme.HeirloomsSerifItalic
@@ -258,41 +260,65 @@ private fun ActiveChip(label: String, onRemove: () -> Unit) {
 @Composable
 private fun UploadThumbnail(upload: Upload, showNoDateBadge: Boolean, onClick: () -> Unit) {
     val desaturate = upload.compostedAt != null
-    Box(
-        Modifier
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(2.dp))
-            .clickable(onClick = onClick)
-    ) {
-        CommonUploadThumbnail(
-            upload = upload,
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            rotation = upload.rotation,
-            colorFilter = if (desaturate) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null,
-        )
-        if (showNoDateBadge) {
-            Text(
-                "no date",
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp),
-                color = Parchment,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .background(Forest.copy(alpha = 0.65f), RoundedCornerShape(topEnd = 4.dp))
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
-            )
-        }
-        if (upload.isVideo) {
-            Icon(
-                imageVector = Icons.Filled.PlayArrow,
+    var showShareSheet by remember { mutableStateOf(false) }
+
+    if (showShareSheet) {
+        ShareSheet(upload = upload, onDismiss = { showShareSheet = false })
+    }
+
+    Box(Modifier.aspectRatio(1f)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(2.dp))
+                .clickable(onClick = onClick)
+        ) {
+            CommonUploadThumbnail(
+                upload = upload,
                 contentDescription = null,
-                tint = Parchment,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .background(Forest.copy(alpha = 0.65f), RoundedCornerShape(topStart = 4.dp))
-                    .padding(2.dp)
-                    .size(14.dp),
+                modifier = Modifier.fillMaxSize(),
+                rotation = upload.rotation,
+                colorFilter = if (desaturate) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null,
             )
+            if (showNoDateBadge) {
+                Text(
+                    "no date",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp),
+                    color = Parchment,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .background(Forest.copy(alpha = 0.65f), RoundedCornerShape(topEnd = 4.dp))
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                )
+            }
+            if (upload.isVideo) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    tint = Parchment,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .background(Forest.copy(alpha = 0.65f), RoundedCornerShape(topStart = 4.dp))
+                        .padding(2.dp)
+                        .size(14.dp),
+                )
+            }
+        }
+        if (upload.isEncrypted && !upload.isShared) {
+            Box(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .clickable { showShareSheet = true }
+                    .background(Forest.copy(alpha = 0.65f), RoundedCornerShape(topStart = 4.dp))
+                    .padding(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Share,
+                    contentDescription = "Share",
+                    tint = Parchment,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
         }
     }
 }
