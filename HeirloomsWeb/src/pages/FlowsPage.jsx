@@ -88,7 +88,7 @@ function FlowForm({ plots, initial, onSave, onCancel, saving, error }) {
 
 // ---- Flow card -----------------------------------------------------------
 
-function FlowCard({ flow, plotName, onEdit, onDelete, onToggleStaging }) {
+function FlowCard({ flow, plotName, isSharedPlot, onEdit, onDelete }) {
   const [showStaging, setShowStaging] = useState(false)
   const { apiKey } = useAuth()
 
@@ -125,7 +125,7 @@ function FlowCard({ flow, plotName, onEdit, onDelete, onToggleStaging }) {
 
       {showStaging && (
         <div className="mt-4 border-t border-forest-08 pt-4">
-          <StagingPanel plotId={flow.targetPlotId} flowId={flow.id} apiKey={apiKey} />
+          <StagingPanel plotId={flow.targetPlotId} flowId={flow.id} apiKey={apiKey} isSharedPlot={isSharedPlot} />
         </div>
       )}
     </div>
@@ -270,6 +270,7 @@ export function FlowsPage() {
         <div className="space-y-3">
           {flows.map((f) => (
             <FlowCard key={f.id} flow={f} plotName={plotName(f.targetPlotId)}
+              isSharedPlot={plots.find((p) => p.id === f.targetPlotId)?.visibility === 'shared'}
               onEdit={(flow) => { setEditFlow(flow); setSaveError(null) }}
               onDelete={(id) => setDeleteConfirm(flows.find((x) => x.id === id))}
             />

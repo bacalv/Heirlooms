@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react'
 import { apiFetch } from '../api'
 import { UploadThumb } from './UploadThumb'
 import { WorkingDots } from '../brand/WorkingDots'
+import {
+  unwrapDekWithMasterKey, unwrapWithSharingKey, unwrapPlotKey, wrapDekWithPlotKey,
+  fromB64, toB64, ALG_P256_ECDH_HKDF_V1,
+} from '../crypto/vaultCrypto'
+import { getMasterKey, getPlotKey, setPlotKey, getSharingPrivkey } from '../crypto/vaultSession'
 
 function StagingThumb({ upload, onApprove, onReject, approving, rejecting }) {
   const isVideo = upload.mimeType?.startsWith('video/')
@@ -29,12 +34,50 @@ function StagingThumb({ upload, onApprove, onReject, approving, rejecting }) {
   )
 }
 
-export function StagingPanel({ plotId, flowId, apiKey, onItemActioned }) {
+async function loadSharedPlotKey(plotId, apiKey) {
+  const cached = getPlotKey(plotId)
+  if (cached) return cached
+  const resp = await apiFetch(`/api/plots/${plotId}/plot-key`, apiKey)
+  if (!resp.ok) throw new Error('Could not fetch plot key')
+  const { wrappedPlotKey } = await resp.json()
+  const sharingPrivkey = getSharingPrivkey()
+  if (!sharingPrivkey) throw new Error('Sharing key not loaded — try logging in again')
+  const plotKeyBytes = await unwrapPlotKey(fromB64(wrappedPlotKey), sharingPrivkey)
+  setPlotKey(plotId, plotKeyBytes)
+  return plotKeyBytes
+}
+
+async function buildApproveBody(upload, plotId, apiKey) {
+  const plotKeyBytes = await loadSharedPlotKey(plotId, apiKey)
+  const masterKey = getMasterKey()
+  if (!masterKey) throw new Error('Master key not available')
+
+  const unwrapDek = async (wrappedB64, fmt) =>
+    fmt === ALG_P256_ECDH_HKDF_V1
+      ? unwrapWithSharingKey(fromB64(wrappedB64), getSharingPrivkey())
+      : unwrapDekWithMasterKey(fromB64(wrappedB64), masterKey)
+
+  const rawDek = await unwrapDek(upload.wrappedDek, upload.dekFormat)
+  const { wrappedDek: wrappedItemDek, format: itemDekFormat } = await wrapDekWithPlotKey(rawDek, plotKeyBytes)
+  const obj = { wrappedItemDek: toB64(wrappedItemDek), itemDekFormat }
+
+  if (upload.wrappedThumbnailDek) {
+    const rawThumb = await unwrapDek(upload.wrappedThumbnailDek, upload.thumbnailDekFormat)
+    const { wrappedDek: wrappedThumbDek, format: thumbFormat } = await wrapDekWithPlotKey(rawThumb, plotKeyBytes)
+    obj.wrappedThumbnailDek = toB64(wrappedThumbDek)
+    obj.thumbnailDekFormat = thumbFormat
+  }
+
+  return JSON.stringify(obj)
+}
+
+export function StagingPanel({ plotId, flowId, apiKey, onItemActioned, isSharedPlot }) {
   const [pending, setPending] = useState([])
   const [rejected, setRejected] = useState([])
   const [loading, setLoading] = useState(true)
   const [showRejected, setShowRejected] = useState(false)
   const [working, setWorking] = useState({}) // uploadId → 'approving'|'rejecting'
+  const [approveError, setApproveError] = useState(null)
 
   const stagingUrl = flowId
     ? `/api/flows/${flowId}/staging`
@@ -55,12 +98,21 @@ export function StagingPanel({ plotId, flowId, apiKey, onItemActioned }) {
 
   async function handleApprove(uploadId) {
     setWorking((w) => ({ ...w, [uploadId]: 'approving' }))
+    setApproveError(null)
     try {
+      let body = '{}'
+      if (isSharedPlot) {
+        const upload = pending.find((u) => u.id === uploadId)
+        if (!upload) throw new Error('Upload not found in pending list')
+        body = await buildApproveBody(upload, plotId, apiKey)
+      }
       await apiFetch(`/api/plots/${plotId}/staging/${uploadId}/approve`, apiKey, {
-        method: 'POST', body: '{}',
+        method: 'POST', body,
       })
       onItemActioned?.()
       reload()
+    } catch (e) {
+      setApproveError(e.message)
     } finally {
       setWorking((w) => { const n = { ...w }; delete n[uploadId]; return n })
     }
@@ -96,6 +148,10 @@ export function StagingPanel({ plotId, flowId, apiKey, onItemActioned }) {
 
   return (
     <div className="space-y-4">
+      {approveError && (
+        <p className="text-earth text-xs font-sans">{approveError}</p>
+      )}
+
       {pending.length === 0 ? (
         <p className="text-text-muted text-sm font-sans text-center py-6">Nothing waiting for review.</p>
       ) : (

@@ -103,6 +103,79 @@ function FriendsTab({ plotId, apiKey, onDone }) {
   )
 }
 
+// Confirm pending joins from invite-link redemptions.
+function PendingTab({ plotId, apiKey, onDone }) {
+  const [pending, setPending] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [working, setWorking] = useState({}) // inviteId → true
+  const [error, setError] = useState(null)
+
+  function reload() {
+    setLoading(true)
+    apiFetch(`/api/plots/${plotId}/members/pending`, apiKey)
+      .then((r) => r.ok ? r.json() : [])
+      .then((arr) => setPending(Array.isArray(arr) ? arr : []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { reload() }, [plotId, apiKey])
+
+  async function handleConfirm(invite) {
+    setWorking((w) => ({ ...w, [invite.id]: true }))
+    setError(null)
+    try {
+      const pkResp = await apiFetch(`/api/plots/${plotId}/plot-key`, apiKey)
+      if (!pkResp.ok) throw new Error('Could not fetch plot key')
+      const { wrappedPlotKey } = await pkResp.json()
+      const sharingPrivkey = getSharingPrivkey()
+      if (!sharingPrivkey) throw new Error('Sharing key not loaded — try logging in again')
+      const plotKeyBytes = await unwrapPlotKey(fromB64(wrappedPlotKey), sharingPrivkey)
+
+      const recipientPubkey = fromB64(invite.recipientPubkey)
+      const { wrappedKey, format } = await wrapPlotKeyForMember(plotKeyBytes, recipientPubkey)
+
+      const r = await apiFetch(`/api/plots/${plotId}/members/pending/${encodeURIComponent(invite.id)}/confirm`, apiKey, {
+        method: 'POST',
+        body: JSON.stringify({ wrappedPlotKey: toB64(wrappedKey), plotKeyFormat: format }),
+      })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      onDone?.()
+      reload()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setWorking((w) => { const n = { ...w }; delete n[invite.id]; return n })
+    }
+  }
+
+  if (loading) return <p className="text-text-muted text-sm text-center py-4">Loading…</p>
+
+  return (
+    <div className="space-y-3">
+      {pending.length === 0 ? (
+        <p className="text-text-muted text-sm text-center py-4">No pending joins.</p>
+      ) : (
+        <div className="space-y-1 max-h-48 overflow-y-auto">
+          {pending.map((inv) => (
+            <div key={inv.id} className="flex items-center justify-between px-3 py-2 rounded hover:bg-forest-04">
+              <span className="text-sm font-sans text-forest">
+                <span className="font-medium">{inv.displayName}</span>
+                <span className="text-xs ml-2 opacity-70">@{inv.username}</span>
+              </span>
+              <button onClick={() => handleConfirm(inv)} disabled={!!working[inv.id]}
+                className="px-3 py-1 text-xs bg-forest text-parchment rounded-button hover:opacity-90 transition-opacity disabled:opacity-40">
+                {working[inv.id] ? '…' : 'Confirm'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {error && <p className="text-earth text-xs">{error}</p>}
+    </div>
+  )
+}
+
 // Generate an invite link (token). The recipient redeems it, then the inviter confirms.
 function InviteLinkTab({ plotId, apiKey }) {
   const [token, setToken] = useState(null)
@@ -160,7 +233,7 @@ export function InviteMemberModal({ plotId, apiKey, onClose, onMemberAdded }) {
       <h2 className="font-serif italic text-forest text-lg mb-4">Invite a member</h2>
 
       <div className="flex border-b border-forest-08 mb-4">
-        {[['friends', 'Friends'], ['link', 'Invite link']].map(([key, label]) => (
+        {[['friends', 'Friends'], ['link', 'Invite link'], ['pending', 'Pending']].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             className={`px-4 py-2 text-sm font-sans transition-colors ${
               tab === key
@@ -172,10 +245,13 @@ export function InviteMemberModal({ plotId, apiKey, onClose, onMemberAdded }) {
         ))}
       </div>
 
-      {tab === 'friends'
-        ? <FriendsTab plotId={plotId} apiKey={apiKey} onDone={() => { onMemberAdded?.(); onClose() }} />
-        : <InviteLinkTab plotId={plotId} apiKey={apiKey} />
-      }
+      {tab === 'friends' && (
+        <FriendsTab plotId={plotId} apiKey={apiKey} onDone={() => { onMemberAdded?.(); onClose() }} />
+      )}
+      {tab === 'link' && <InviteLinkTab plotId={plotId} apiKey={apiKey} />}
+      {tab === 'pending' && (
+        <PendingTab plotId={plotId} apiKey={apiKey} onDone={() => onMemberAdded?.()} />
+      )}
     </BrandModal>
   )
 }
