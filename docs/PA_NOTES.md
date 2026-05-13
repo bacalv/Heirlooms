@@ -28,6 +28,8 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
   All four increments shipped: E1 predicate/criteria, E2 flows+staging, E3 shared plots E2EE,
   E4 Android (VaultCrypto plot key helpers, FlowsScreen, StagingScreen, plot key caching).
 - Active milestone: none — M10 complete. M11 TBD (strong sealing + social recovery).
+  Next planned work: shared plot membership UX overhaul — brief at `docs/briefs/shared_plot_membership.md`.
+  Three increments: E1 server, E2 web, E3 Android.
   v0.36.0 = Preview clips, 1 MiB chunks, parallel prefetch, download button (server + web + Android).
   v0.35.0 = Web encrypted video playback + MSE streaming (web only).
   v0.34.0 = Web: streaming-format decrypt fix for large encrypted videos.

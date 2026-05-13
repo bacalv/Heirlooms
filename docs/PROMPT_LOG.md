@@ -2,6 +2,32 @@
 
 ---
 
+## Session — 13 May 2026 — Shared plot membership brief
+
+Designed and wrote the brief for a UX overhaul of M10's shared plot membership
+model. No code changes in this session — output is `docs/briefs/shared_plot_membership.md`.
+
+**Key decisions:**
+- Invitation acceptance is now a two-step flow: inviter confirms (plot key wrapped as
+  today) → recipient sees invitation in a new Shared Plots screen → recipient accepts
+  and gives the plot their own `local_name`.
+- `local_name` is stored per member on `plot_members`, not on the plot itself.
+- Plots have an open/closed lifecycle (owner-controlled); closed means no new items
+  but members can still view existing content.
+- Owner must transfer ownership before leaving (unless last member). After transfer,
+  former owner becomes a regular member who can leave and re-join like anyone else.
+- Leaving sets `status = left`; the invitation record persists so the member can
+  re-join. Name is restored silently on re-join unless a conflict exists.
+- Last member leaving soft-deletes the plot (`tombstoned_at`); only that user can
+  restore it within a 90-day window, after which a cleanup job hard-deletes it.
+- `plots.created_by` tracks the original creator permanently, independent of who
+  currently holds the `owner` role.
+- New Shared Plots screen (top-level tab on Android, nav item on web) with four
+  sections: Invitations, Joined, Left, Recently removed.
+- Three increments: E1 server-only, E2 web, E3 Android.
+
+---
+
 ## Session — 13 May 2026 — Client-side dedup for encrypted uploads (v0.50.4)
 
 Encrypted uploads previously had no duplicate detection — each upload of the same file
