@@ -90,9 +90,10 @@ class UploadApiTest {
             .withFailMessage("Expected 200 but got ${response.code}: $responseBody")
             .isEqualTo(200)
         assertThat(response.header("Content-Type")).contains("application/json")
-        assertThat(responseBody).startsWith("[")
-        assertThat(responseBody).endsWith("]")
-        JSONArray(responseBody)
+        val page = JSONObject(responseBody)
+        assertThat(page.has("items")).isTrue()
+        assertThat(page.has("next_cursor")).isTrue()
+        page.getJSONArray("items")
     }
 
     @Test
@@ -113,7 +114,7 @@ class UploadApiTest {
             Request.Builder().url("$base/api/content/uploads").get().build()
         ).execute()
 
-        val uploads = JSONArray(listResponse.body?.string() ?: "[]")
+        val uploads = JSONObject(listResponse.body?.string() ?: "{}").getJSONArray("items")
         val keys = (0 until uploads.length()).map { uploads.getJSONObject(it).getString("storageKey") }
         assertThat(keys).contains(storageKey)
     }

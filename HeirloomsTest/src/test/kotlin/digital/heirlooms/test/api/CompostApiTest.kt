@@ -62,13 +62,13 @@ class CompostApiTest {
     private fun listActive(): JSONArray {
         val resp = client.newCall(Request.Builder().url("$base/api/content/uploads").get().build()).execute()
         assertThat(resp.code).isEqualTo(200)
-        return JSONArray(resp.body!!.string())
+        return JSONObject(resp.body!!.string()).getJSONArray("items")
     }
 
     private fun listComposted(): JSONArray {
         val resp = client.newCall(Request.Builder().url("$base/api/content/uploads/composted").get().build()).execute()
         assertThat(resp.code).isEqualTo(200)
-        return JSONObject(resp.body!!.string()).getJSONArray("uploads")
+        return JSONObject(resp.body!!.string()).getJSONArray("items")
     }
 
     private fun getUpload(id: String): JSONObject {

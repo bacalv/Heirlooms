@@ -42,7 +42,7 @@ class UploadJourneyTest {
             Request.Builder().url("$base/api/content/uploads").get().build()
         ).execute()
 
-        val uploads = JSONArray(listResponse.body?.string() ?: "[]")
+        val uploads = JSONObject(listResponse.body?.string() ?: "{}").getJSONArray("items")
         val keys = (0 until uploads.length()).map {
             uploads.getJSONObject(it).getString("storageKey")
         }
@@ -79,7 +79,7 @@ class UploadJourneyTest {
             Request.Builder().url("$base/api/content/uploads").get().build()
         ).execute()
 
-        val listed = JSONArray(listResponse.body?.string() ?: "[]")
+        val listed = JSONObject(listResponse.body?.string() ?: "{}").getJSONArray("items")
         val listedKeys = (0 until listed.length()).map {
             listed.getJSONObject(it).getString("storageKey")
         }

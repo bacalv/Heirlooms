@@ -9,6 +9,8 @@ import org.assertj.core.api.Assertions.assertThat
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.jupiter.api.Test
+import java.security.SecureRandom
+import java.util.Base64
 
 @HeirloomsTest
 class FlowApiTest {
@@ -35,6 +37,24 @@ class FlowApiTest {
         return id
     }
 
+    private fun randomB64(bytes: Int = 64): String =
+        Base64.getEncoder().encodeToString(ByteArray(bytes).also { SecureRandom().nextBytes(it) })
+
+    // Shared plot: requiresStaging is respected (private plots force it false).
+    private fun createStagingPlot(name: String): JSONObject {
+        val body = JSONObject()
+            .put("name", name)
+            .put("visibility", "shared")
+            .put("wrappedPlotKey", randomB64(64))
+            .put("plotKeyFormat", "p256-ecdh-hkdf-aes256gcm-v1")
+        val resp = client.newCall(
+            Request.Builder().url("$base/api/plots")
+                .post(body.toString().toRequestBody("application/json".toMediaType())).build()
+        ).execute()
+        assertThat(resp.code).isEqualTo(201)
+        return JSONObject(resp.body!!.string())
+    }
+
     private fun createCollectionPlot(name: String): JSONObject {
         val resp = client.newCall(
             Request.Builder().url("$base/api/plots")
@@ -58,8 +78,9 @@ class FlowApiTest {
             Request.Builder().url("$base/api/flows")
                 .post(body.toString().toRequestBody("application/json".toMediaType())).build()
         ).execute()
-        assertThat(resp.code).withFailMessage("createFlow failed: ${resp.body?.string()}").isEqualTo(201)
-        return JSONObject(resp.body!!.string())
+        val bodyStr = resp.body!!.string()
+        assertThat(resp.code).withFailMessage("createFlow failed: $bodyStr").isEqualTo(201)
+        return JSONObject(bodyStr)
     }
 
     private fun deleteFlow(id: String) {
@@ -87,9 +108,12 @@ class FlowApiTest {
     }
 
     private fun approve(plotId: String, uploadId: String): Int {
+        val body = JSONObject()
+            .put("wrappedItemDek", randomB64(80))
+            .put("itemDekFormat", "plot-aes256gcm-v1")
         val resp = client.newCall(
             Request.Builder().url("$base/api/plots/$plotId/staging/$uploadId/approve")
-                .post("{}".toRequestBody("application/json".toMediaType())).build()
+                .post(body.toString().toRequestBody("application/json".toMediaType())).build()
         ).execute()
         return resp.code
     }
@@ -133,7 +157,7 @@ class FlowApiTest {
             val flow = createFlow("d3-flow-crud", tagCriteria("d3-flow-crud-tag"), plot.getString("id"))
             assertThat(flow.has("id")).isTrue()
             assertThat(flow.getString("name")).isEqualTo("d3-flow-crud")
-            assertThat(flow.getBoolean("requiresStaging")).isTrue()
+            assertThat(flow.getBoolean("requiresStaging")).isFalse()
             deleteFlow(flow.getString("id"))
         } finally { deletePlot(plot.getString("id")) }
     }
@@ -240,7 +264,7 @@ class FlowApiTest {
     fun `item matching flow criteria appears in staging`() {
         val tag = "d3-staging-appear"
         val uploadId = uploadImage(tag = tag)
-        val plot = createCollectionPlot("d3-staging-plot")
+        val plot = createStagingPlot("d3-staging-plot")
         val flow = createFlow("d3-staging-flow", tagCriteria(tag), plot.getString("id"))
         try {
             val staging = getStagingForFlow(flow.getString("id"))
@@ -255,7 +279,7 @@ class FlowApiTest {
     fun `approving item removes it from staging and adds to plot items`() {
         val tag = "d3-staging-approve"
         val uploadId = uploadImage(tag = tag)
-        val plot = createCollectionPlot("d3-approve-plot")
+        val plot = createStagingPlot("d3-approve-plot")
         val flow = createFlow("d3-approve-flow", tagCriteria(tag), plot.getString("id"))
         try {
             assertThat(approve(plot.getString("id"), uploadId)).isEqualTo(204)
@@ -275,7 +299,7 @@ class FlowApiTest {
     fun `rejecting item removes it from staging and appears in rejected list`() {
         val tag = "d3-staging-reject"
         val uploadId = uploadImage(tag = tag)
-        val plot = createCollectionPlot("d3-reject-plot")
+        val plot = createStagingPlot("d3-reject-plot")
         val flow = createFlow("d3-reject-flow", tagCriteria(tag), plot.getString("id"))
         try {
             assertThat(reject(plot.getString("id"), uploadId)).isEqualTo(204)
@@ -295,7 +319,7 @@ class FlowApiTest {
     fun `un-rejecting item reappears in staging`() {
         val tag = "d3-staging-unreject"
         val uploadId = uploadImage(tag = tag)
-        val plot = createCollectionPlot("d3-unreject-plot")
+        val plot = createStagingPlot("d3-unreject-plot")
         val flow = createFlow("d3-unreject-flow", tagCriteria(tag), plot.getString("id"))
         try {
             reject(plot.getString("id"), uploadId)
@@ -385,7 +409,7 @@ class FlowApiTest {
         val tag2 = "d3-multi-flow-tag2"
         val id1 = uploadImage(tag = tag1)
         val id2 = uploadImage(tag = tag2)
-        val plot = createCollectionPlot("d3-multi-flow-plot")
+        val plot = createStagingPlot("d3-multi-flow-plot")
         val flow1 = createFlow("d3-multi-flow-1", tagCriteria(tag1), plot.getString("id"))
         val flow2 = createFlow("d3-multi-flow-2", tagCriteria(tag2), plot.getString("id"))
         try {
