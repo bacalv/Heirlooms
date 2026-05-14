@@ -17,11 +17,17 @@ class SharedPlotService(
 ) {
     // ---- Plot key --------------------------------------------------------------
 
-    /** Returns (wrappedPlotKey bytes, plotKeyFormat) or null if not found / not shared. */
-    fun getPlotKey(plotId: UUID, userId: UUID): Pair<ByteArray, String>? {
-        val plot = database.getPlotById(plotId) ?: return null
-        if (plot.visibility != "shared") return null
-        return database.getPlotKey(plotId, userId)
+    sealed class GetPlotKeyResult {
+        data class Success(val wrappedKey: ByteArray, val format: String) : GetPlotKeyResult()
+        object NotShared : GetPlotKeyResult()
+        object NotFound : GetPlotKeyResult()
+    }
+
+    fun getPlotKey(plotId: UUID, userId: UUID): GetPlotKeyResult {
+        val plot = database.getPlotById(plotId) ?: return GetPlotKeyResult.NotFound
+        if (plot.visibility != "shared") return GetPlotKeyResult.NotShared
+        val pair = database.getPlotKey(plotId, userId) ?: return GetPlotKeyResult.NotFound
+        return GetPlotKeyResult.Success(pair.first, pair.second)
     }
 
     // ---- Members ---------------------------------------------------------------

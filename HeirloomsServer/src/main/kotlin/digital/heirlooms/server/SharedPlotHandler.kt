@@ -55,15 +55,15 @@ private fun getPlotKeyRoute(sharedPlotService: SharedPlotService): ContractRoute
         summary = "Get own wrapped plot key"
     } bindContract GET to { plotId: UUID, _: String ->
         { request: Request ->
-            val pair = sharedPlotService.getPlotKey(plotId, request.authUserId())
-            if (pair == null) {
-                Response(NOT_FOUND)
-            } else {
-                val (keyBytes, fmt) = pair
-                val node = JsonNodeFactory.instance.objectNode()
-                node.put("wrappedPlotKey", Base64.getEncoder().encodeToString(keyBytes))
-                node.put("plotKeyFormat", fmt)
-                Response(OK).header("Content-Type", "application/json").body(node.toString())
+            when (val result = sharedPlotService.getPlotKey(plotId, request.authUserId())) {
+                is SharedPlotService.GetPlotKeyResult.Success -> {
+                    val node = JsonNodeFactory.instance.objectNode()
+                    node.put("wrappedPlotKey", Base64.getEncoder().encodeToString(result.wrappedKey))
+                    node.put("plotKeyFormat", result.format)
+                    Response(OK).header("Content-Type", "application/json").body(node.toString())
+                }
+                SharedPlotService.GetPlotKeyResult.NotShared -> Response(FORBIDDEN)
+                SharedPlotService.GetPlotKeyResult.NotFound -> Response(NOT_FOUND)
             }
         }
     }
@@ -202,7 +202,7 @@ private fun listPendingInvitesRoute(sharedPlotService: SharedPlotService): Contr
     val id = Path.uuid().of("id")
     return "/plots" / id / "members" / "pending" meta {
         summary = "List pending joins awaiting key wrap confirmation"
-    } bindContract GET to { plotId: UUID, _s1: String, _s2: String ->
+    } bindContract GET to { plotId: UUID, _: String, _: String ->
         { request: Request ->
             val pending = sharedPlotService.listPendingInvites(plotId, request.authUserId())
             val arr = sharedMapper.writeValueAsString(pending)
@@ -216,7 +216,7 @@ private fun confirmInviteRoute(sharedPlotService: SharedPlotService): ContractRo
     val inviteId = Path.uuid().of("inviteId")
     return "/plots" / plotId / "members" / "pending" / inviteId / "confirm" meta {
         summary = "Confirm a pending join by supplying the wrapped plot key for the recipient"
-    } bindContract POST to { pId: UUID, _s1: String, _s2: String, iId: UUID, _s3: String ->
+    } bindContract POST to { pId: UUID, _: String, _: String, iId: UUID, _: String ->
         { request: Request -> handleConfirmInvite(pId, iId, request, sharedPlotService) }
     }
 }
@@ -250,7 +250,7 @@ private fun leavePlotRoute(sharedPlotService: SharedPlotService): ContractRoute 
     val id = Path.uuid().of("id")
     return "/plots" / id / "members" / "me" meta {
         summary = "Leave a shared plot (backward-compat DELETE alias)"
-    } bindContract DELETE to { plotId: UUID, _s1: String, _s2: String ->
+    } bindContract DELETE to { plotId: UUID, _: String, _: String ->
         { request: Request -> leavePlotHandler(plotId, request, sharedPlotService) }
     }
 }
