@@ -1,53 +1,98 @@
 package digital.heirlooms.server.representation.capsule
 
+import com.fasterxml.jackson.annotation.JsonInclude
+import com.fasterxml.jackson.annotation.JsonProperty
 import digital.heirlooms.server.domain.capsule.CapsuleDetail
 import digital.heirlooms.server.domain.capsule.CapsuleSummary
-import digital.heirlooms.server.representation.upload.toJson
-import com.fasterxml.jackson.databind.ObjectMapper
+import digital.heirlooms.server.representation.responseMapper
+import digital.heirlooms.server.representation.upload.UploadRecordResponse
+import digital.heirlooms.server.representation.upload.toResponse
+import java.time.Instant
+import java.time.OffsetDateTime
 
-private val capsuleMapper = ObjectMapper()
+private data class CapsuleDetailResponse(
+    val id: String,
+    val shape: String,
+    val state: String,
+    @JsonProperty("created_at") val createdAt: Instant,
+    @JsonProperty("updated_at") val updatedAt: Instant,
+    @JsonProperty("unlock_at") val unlockAt: OffsetDateTime,
+    val recipients: List<String>,
+    val uploads: List<UploadRecordResponse>,
+    val message: String,
+    @JsonProperty("cancelled_at") @JsonInclude(JsonInclude.Include.ALWAYS) val cancelledAt: Instant?,
+    @JsonProperty("delivered_at") @JsonInclude(JsonInclude.Include.ALWAYS) val deliveredAt: Instant?,
+)
+
+private data class CapsuleSummaryResponse(
+    val id: String,
+    val shape: String,
+    val state: String,
+    @JsonProperty("created_at") val createdAt: Instant,
+    @JsonProperty("updated_at") val updatedAt: Instant,
+    @JsonProperty("unlock_at") val unlockAt: OffsetDateTime,
+    val recipients: List<String>,
+    @JsonProperty("upload_count") val uploadCount: Int,
+    @JsonProperty("has_message") val hasMessage: Boolean,
+    @JsonProperty("cancelled_at") @JsonInclude(JsonInclude.Include.ALWAYS) val cancelledAt: Instant?,
+    @JsonProperty("delivered_at") @JsonInclude(JsonInclude.Include.ALWAYS) val deliveredAt: Instant?,
+)
+
+private data class CapsuleReverseLookupResponse(
+    val id: String,
+    val shape: String,
+    val state: String,
+    @JsonProperty("unlock_at") val unlockAt: OffsetDateTime,
+    val recipients: List<String>,
+)
 
 fun CapsuleDetail.toDetailJson(): String {
     val r = record
-    val node = capsuleMapper.createObjectNode()
-    node.put("id", r.id.toString())
-    node.put("shape", r.shape.name.lowercase())
-    node.put("state", r.state.name.lowercase())
-    node.put("created_at", r.createdAt.toString())
-    node.put("updated_at", r.updatedAt.toString())
-    node.put("unlock_at", r.unlockAt.toString())
-    node.putArray("recipients").also { arr -> recipients.forEach { arr.add(it) } }
-    node.putArray("uploads").also { arr -> uploads.forEach { arr.add(capsuleMapper.readTree(it.toJson())) } }
-    node.put("message", message)
-    if (r.cancelledAt != null) node.put("cancelled_at", r.cancelledAt.toString()) else node.putNull("cancelled_at")
-    if (r.deliveredAt != null) node.put("delivered_at", r.deliveredAt.toString()) else node.putNull("delivered_at")
-    return capsuleMapper.writeValueAsString(node)
+    return responseMapper.writeValueAsString(
+        CapsuleDetailResponse(
+            id = r.id.toString(),
+            shape = r.shape.name.lowercase(),
+            state = r.state.name.lowercase(),
+            createdAt = r.createdAt,
+            updatedAt = r.updatedAt,
+            unlockAt = r.unlockAt,
+            recipients = recipients,
+            uploads = uploads.map { it.toResponse() },
+            message = message,
+            cancelledAt = r.cancelledAt,
+            deliveredAt = r.deliveredAt,
+        )
+    )
 }
 
 fun CapsuleSummary.toSummaryJson(): String {
     val r = record
-    val node = capsuleMapper.createObjectNode()
-    node.put("id", r.id.toString())
-    node.put("shape", r.shape.name.lowercase())
-    node.put("state", r.state.name.lowercase())
-    node.put("created_at", r.createdAt.toString())
-    node.put("updated_at", r.updatedAt.toString())
-    node.put("unlock_at", r.unlockAt.toString())
-    node.putArray("recipients").also { arr -> recipients.forEach { arr.add(it) } }
-    node.put("upload_count", uploadCount)
-    node.put("has_message", hasMessage)
-    if (r.cancelledAt != null) node.put("cancelled_at", r.cancelledAt.toString()) else node.putNull("cancelled_at")
-    if (r.deliveredAt != null) node.put("delivered_at", r.deliveredAt.toString()) else node.putNull("delivered_at")
-    return capsuleMapper.writeValueAsString(node)
+    return responseMapper.writeValueAsString(
+        CapsuleSummaryResponse(
+            id = r.id.toString(),
+            shape = r.shape.name.lowercase(),
+            state = r.state.name.lowercase(),
+            createdAt = r.createdAt,
+            updatedAt = r.updatedAt,
+            unlockAt = r.unlockAt,
+            recipients = recipients,
+            uploadCount = uploadCount,
+            hasMessage = hasMessage,
+            cancelledAt = r.cancelledAt,
+            deliveredAt = r.deliveredAt,
+        )
+    )
 }
 
 fun CapsuleSummary.toReverseLookupJson(): String {
     val r = record
-    val node = capsuleMapper.createObjectNode()
-    node.put("id", r.id.toString())
-    node.put("shape", r.shape.name.lowercase())
-    node.put("state", r.state.name.lowercase())
-    node.put("unlock_at", r.unlockAt.toString())
-    node.putArray("recipients").also { arr -> recipients.forEach { arr.add(it) } }
-    return capsuleMapper.writeValueAsString(node)
+    return responseMapper.writeValueAsString(
+        CapsuleReverseLookupResponse(
+            id = r.id.toString(),
+            shape = r.shape.name.lowercase(),
+            state = r.state.name.lowercase(),
+            unlockAt = r.unlockAt,
+            recipients = recipients,
+        )
+    )
 }

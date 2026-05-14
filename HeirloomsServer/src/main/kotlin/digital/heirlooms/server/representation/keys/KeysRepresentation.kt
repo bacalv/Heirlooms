@@ -1,37 +1,62 @@
 package digital.heirlooms.server.representation.keys
 
+import com.fasterxml.jackson.databind.JsonNode
 import digital.heirlooms.server.domain.keys.RecoveryPassphraseRecord
 import digital.heirlooms.server.domain.keys.WrappedKeyRecord
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.databind.node.JsonNodeFactory
+import digital.heirlooms.server.representation.responseMapper
+import java.time.Instant
 import java.util.Base64
 
-private val keysRepMapper = ObjectMapper()
-private val keysRepEnc = Base64.getEncoder()
+private val enc = Base64.getEncoder()
 
-fun WrappedKeyRecord.toJson(): String {
-    val node = JsonNodeFactory.instance.objectNode()
-    node.put("id", id.toString())
-    node.put("deviceId", deviceId)
-    node.put("deviceLabel", deviceLabel)
-    node.put("deviceKind", deviceKind)
-    node.put("pubkeyFormat", pubkeyFormat)
-    node.put("pubkey", keysRepEnc.encodeToString(pubkey))
-    node.put("wrappedMasterKey", keysRepEnc.encodeToString(wrappedMasterKey))
-    node.put("wrapFormat", wrapFormat)
-    node.put("createdAt", createdAt.toString())
-    node.put("lastUsedAt", lastUsedAt.toString())
-    if (retiredAt != null) node.put("retiredAt", retiredAt.toString()) else node.putNull("retiredAt")
-    return node.toString()
-}
+private data class WrappedKeyResponse(
+    val id: String,
+    val deviceId: String,
+    val deviceLabel: String,
+    val deviceKind: String,
+    val pubkeyFormat: String,
+    val pubkey: String,
+    val wrappedMasterKey: String,
+    val wrapFormat: String,
+    val createdAt: Instant,
+    val lastUsedAt: Instant,
+    val retiredAt: Instant?,
+)
 
-fun RecoveryPassphraseRecord.toJson(): String {
-    val node = JsonNodeFactory.instance.objectNode()
-    node.put("wrappedMasterKey", keysRepEnc.encodeToString(wrappedMasterKey))
-    node.put("wrapFormat", wrapFormat)
-    node.set<com.fasterxml.jackson.databind.JsonNode>("argon2Params", keysRepMapper.readTree(argon2Params))
-    node.put("salt", keysRepEnc.encodeToString(salt))
-    node.put("createdAt", createdAt.toString())
-    node.put("updatedAt", updatedAt.toString())
-    return node.toString()
-}
+private data class RecoveryPassphraseResponse(
+    val wrappedMasterKey: String,
+    val wrapFormat: String,
+    val argon2Params: JsonNode,
+    val salt: String,
+    val createdAt: Instant,
+    val updatedAt: Instant,
+)
+
+fun WrappedKeyRecord.toJson(): String =
+    responseMapper.writeValueAsString(
+        WrappedKeyResponse(
+            id = id.toString(),
+            deviceId = deviceId,
+            deviceLabel = deviceLabel,
+            deviceKind = deviceKind,
+            pubkeyFormat = pubkeyFormat,
+            pubkey = enc.encodeToString(pubkey),
+            wrappedMasterKey = enc.encodeToString(wrappedMasterKey),
+            wrapFormat = wrapFormat,
+            createdAt = createdAt,
+            lastUsedAt = lastUsedAt,
+            retiredAt = retiredAt,
+        )
+    )
+
+fun RecoveryPassphraseRecord.toJson(): String =
+    responseMapper.writeValueAsString(
+        RecoveryPassphraseResponse(
+            wrappedMasterKey = enc.encodeToString(wrappedMasterKey),
+            wrapFormat = wrapFormat,
+            argon2Params = responseMapper.readTree(argon2Params),
+            salt = enc.encodeToString(salt),
+            createdAt = createdAt,
+            updatedAt = updatedAt,
+        )
+    )

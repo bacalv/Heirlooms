@@ -1,55 +1,95 @@
 package digital.heirlooms.server.representation.upload
 
+import com.fasterxml.jackson.annotation.JsonInclude
+import com.fasterxml.jackson.annotation.JsonProperty
 import digital.heirlooms.server.domain.upload.UploadPage
 import digital.heirlooms.server.domain.upload.UploadRecord
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.databind.node.JsonNodeFactory
+import digital.heirlooms.server.representation.responseMapper
+import java.time.Instant
+import java.util.Base64
 
-private val uploadMapper = ObjectMapper()
+private val enc = Base64.getEncoder()
 
-fun UploadRecord.toJson(): String {
-    val enc = java.util.Base64.getEncoder()
-    val node = JsonNodeFactory.instance.objectNode()
-    node.put("id", id.toString())
-    node.put("storageKey", storageKey)
-    node.put("storageClass", storageClass)
-    node.put("mimeType", mimeType)
-    node.put("fileSize", fileSize)
-    node.put("uploadedAt", uploadedAt.toString())
-    node.put("rotation", rotation)
-    if (thumbnailKey != null) node.put("thumbnailKey", thumbnailKey) else node.putNull("thumbnailKey")
-    val tagsNode = node.putArray("tags")
-    tags.forEach { tagsNode.add(it) }
-    if (takenAt != null) node.put("takenAt", takenAt.toString()) else node.putNull("takenAt")
-    if (latitude != null) node.put("latitude", latitude) else node.putNull("latitude")
-    if (longitude != null) node.put("longitude", longitude) else node.putNull("longitude")
-    if (altitude != null) node.put("altitude", altitude) else node.putNull("altitude")
-    if (deviceMake != null) node.put("deviceMake", deviceMake) else node.putNull("deviceMake")
-    if (deviceModel != null) node.put("deviceModel", deviceModel) else node.putNull("deviceModel")
-    if (compostedAt != null) node.put("compostedAt", compostedAt.toString()) else node.putNull("compostedAt")
-    if (storageClass == "encrypted") {
-        if (envelopeVersion != null) node.put("envelopeVersion", envelopeVersion)
-        if (wrappedDek != null) node.put("wrappedDek", enc.encodeToString(wrappedDek))
-        if (dekFormat != null) node.put("dekFormat", dekFormat)
-        if (encryptedMetadata != null) node.put("encryptedMetadata", enc.encodeToString(encryptedMetadata))
-        if (encryptedMetadataFormat != null) node.put("encryptedMetadataFormat", encryptedMetadataFormat)
-        if (thumbnailStorageKey != null) node.put("thumbnailStorageKey", thumbnailStorageKey)
-        if (wrappedThumbnailDek != null) node.put("wrappedThumbnailDek", enc.encodeToString(wrappedThumbnailDek))
-        if (thumbnailDekFormat != null) node.put("thumbnailDekFormat", thumbnailDekFormat)
-        if (previewStorageKey != null) node.put("previewStorageKey", previewStorageKey)
-        if (wrappedPreviewDek != null) node.put("wrappedPreviewDek", enc.encodeToString(wrappedPreviewDek))
-        if (previewDekFormat != null) node.put("previewDekFormat", previewDekFormat)
-        if (plainChunkSize != null) node.put("plainChunkSize", plainChunkSize)
-    }
-    if (durationSeconds != null) node.put("durationSeconds", durationSeconds)
-    if (sharedFromUserId != null) node.put("sharedFromUserId", sharedFromUserId.toString())
-    return node.toString()
+internal data class UploadRecordResponse(
+    val id: String,
+    val storageKey: String,
+    val storageClass: String,
+    val mimeType: String,
+    val fileSize: Long,
+    val uploadedAt: Instant,
+    val rotation: Int,
+    @JsonInclude(JsonInclude.Include.ALWAYS) val thumbnailKey: String?,
+    val tags: List<String>,
+    val takenAt: Instant?,
+    val latitude: Double?,
+    val longitude: Double?,
+    val altitude: Double?,
+    val deviceMake: String?,
+    val deviceModel: String?,
+    val compostedAt: Instant?,
+    val envelopeVersion: Int?,
+    val wrappedDek: String?,
+    val dekFormat: String?,
+    val encryptedMetadata: String?,
+    val encryptedMetadataFormat: String?,
+    val thumbnailStorageKey: String?,
+    val wrappedThumbnailDek: String?,
+    val thumbnailDekFormat: String?,
+    val previewStorageKey: String?,
+    val wrappedPreviewDek: String?,
+    val previewDekFormat: String?,
+    val plainChunkSize: Int?,
+    val durationSeconds: Int?,
+    val sharedFromUserId: String?,
+)
+
+private data class UploadPageResponse(
+    val items: List<UploadRecordResponse>,
+    @JsonProperty("next_cursor") @JsonInclude(JsonInclude.Include.ALWAYS) val nextCursor: String?,
+)
+
+internal fun UploadRecord.toResponse(): UploadRecordResponse {
+    val encrypted = storageClass == "encrypted"
+    return UploadRecordResponse(
+        id = id.toString(),
+        storageKey = storageKey,
+        storageClass = storageClass,
+        mimeType = mimeType,
+        fileSize = fileSize,
+        uploadedAt = uploadedAt,
+        rotation = rotation,
+        thumbnailKey = thumbnailKey,
+        tags = tags,
+        takenAt = takenAt,
+        latitude = latitude,
+        longitude = longitude,
+        altitude = altitude,
+        deviceMake = deviceMake,
+        deviceModel = deviceModel,
+        compostedAt = compostedAt,
+        envelopeVersion = if (encrypted) envelopeVersion else null,
+        wrappedDek = if (encrypted) wrappedDek?.let { enc.encodeToString(it) } else null,
+        dekFormat = if (encrypted) dekFormat else null,
+        encryptedMetadata = if (encrypted) encryptedMetadata?.let { enc.encodeToString(it) } else null,
+        encryptedMetadataFormat = if (encrypted) encryptedMetadataFormat else null,
+        thumbnailStorageKey = if (encrypted) thumbnailStorageKey else null,
+        wrappedThumbnailDek = if (encrypted) wrappedThumbnailDek?.let { enc.encodeToString(it) } else null,
+        thumbnailDekFormat = if (encrypted) thumbnailDekFormat else null,
+        previewStorageKey = if (encrypted) previewStorageKey else null,
+        wrappedPreviewDek = if (encrypted) wrappedPreviewDek?.let { enc.encodeToString(it) } else null,
+        previewDekFormat = if (encrypted) previewDekFormat else null,
+        plainChunkSize = if (encrypted) plainChunkSize else null,
+        durationSeconds = durationSeconds,
+        sharedFromUserId = sharedFromUserId?.toString(),
+    )
 }
 
-fun UploadPage.toJson(): String {
-    val node = uploadMapper.createObjectNode()
-    val arr = node.putArray("items")
-    items.forEach { arr.add(uploadMapper.readTree(it.toJson())) }
-    if (nextCursor != null) node.put("next_cursor", nextCursor) else node.putNull("next_cursor")
-    return node.toString()
-}
+fun UploadRecord.toJson(): String = responseMapper.writeValueAsString(toResponse())
+
+fun UploadPage.toJson(): String =
+    responseMapper.writeValueAsString(
+        UploadPageResponse(
+            items = items.map { it.toResponse() },
+            nextCursor = nextCursor,
+        )
+    )
