@@ -463,9 +463,29 @@ struct SettingsView: View {
 // MARK: - Stub views
 
 struct PairingView: View {
+    @State private var isPairing = false
+
     var body: some View {
-        Text("Pairing code generation — TODO")
-            .navigationTitle("Devices & Access")
+        VStack(spacing: 24) {
+            Spacer()
+            Image(systemName: "laptopcomputer.and.iphone")
+                .font(.system(size: 56))
+                .foregroundStyle(.secondary)
+            Text("Open Heirlooms on the web and tap \"Link device\" to show a pairing QR code.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 32)
+            Button("Scan pairing code") {
+                isPairing = true
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            Spacer()
+        }
+        .navigationTitle("Devices & Access")
+        .sheet(isPresented: $isPairing) {
+            ActivateView(scanMode: .webPairing)
+        }
     }
 }
 
