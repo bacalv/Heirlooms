@@ -24,16 +24,27 @@ import digital.heirlooms.server.domain.upload.UploadPage
 import digital.heirlooms.server.domain.upload.UploadRecord
 import digital.heirlooms.server.domain.upload.UploadSort
 import digital.heirlooms.server.repository.auth.AuthRepository
+import digital.heirlooms.server.repository.auth.PostgresAuthRepository
 import digital.heirlooms.server.repository.capsule.CapsuleRepository
+import digital.heirlooms.server.repository.capsule.PostgresCapsuleRepository
 import digital.heirlooms.server.repository.diag.DiagRepository
+import digital.heirlooms.server.repository.diag.PostgresDiagRepository
 import digital.heirlooms.server.repository.keys.KeyRepository
+import digital.heirlooms.server.repository.keys.PostgresKeyRepository
 import digital.heirlooms.server.repository.plot.FlowRepository
 import digital.heirlooms.server.repository.plot.PlotItemRepository
 import digital.heirlooms.server.repository.plot.PlotMemberRepository
 import digital.heirlooms.server.repository.plot.PlotRepository
+import digital.heirlooms.server.repository.plot.PostgresFlowRepository
+import digital.heirlooms.server.repository.plot.PostgresPlotItemRepository
+import digital.heirlooms.server.repository.plot.PostgresPlotMemberRepository
+import digital.heirlooms.server.repository.plot.PostgresPlotRepository
 import digital.heirlooms.server.repository.social.SocialRepository
+import digital.heirlooms.server.repository.social.PostgresSocialRepository
 import digital.heirlooms.server.repository.storage.BlobRepository
+import digital.heirlooms.server.repository.storage.PostgresBlobRepository
 import digital.heirlooms.server.repository.upload.UploadRepository
+import digital.heirlooms.server.repository.upload.PostgresUploadRepository
 import org.flywaydb.core.Flyway
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -81,21 +92,21 @@ typealias InviteInfo = digital.heirlooms.server.repository.plot.PlotMemberReposi
  * repository — this is the shim layer for phases 2-4; handlers are updated
  * to call repositories directly in phase 5+.
  */
-class Database(private val dataSource: DataSource) {
+class Database(val dataSource: DataSource) {
 
     // ── Repository instances ──────────────────────────────────────────────────
 
-    private val uploads = UploadRepository(dataSource)
-    private val plots   = PlotRepository(dataSource)
-    private val flows   = FlowRepository(dataSource)
-    private val items   = PlotItemRepository(dataSource)
-    private val members = PlotMemberRepository(dataSource)
-    private val capsules = CapsuleRepository(dataSource)
-    private val auth    = AuthRepository(dataSource)
-    private val keys    = KeyRepository(dataSource)
-    private val social  = SocialRepository(dataSource)
-    private val blobs   = BlobRepository(dataSource)
-    private val diag    = DiagRepository(dataSource)
+    private val uploads = PostgresUploadRepository(dataSource)
+    private val plots   = PostgresPlotRepository(dataSource)
+    private val flows   = PostgresFlowRepository(dataSource)
+    private val items   = PostgresPlotItemRepository(dataSource)
+    private val members = PostgresPlotMemberRepository(dataSource)
+    private val capsules = PostgresCapsuleRepository(dataSource)
+    private val auth    = PostgresAuthRepository(dataSource)
+    private val keys    = PostgresKeyRepository(dataSource)
+    private val social  = PostgresSocialRepository(dataSource)
+    private val blobs   = PostgresBlobRepository(dataSource)
+    private val diag    = PostgresDiagRepository(dataSource)
 
     // ── Migrations ────────────────────────────────────────────────────────────
 

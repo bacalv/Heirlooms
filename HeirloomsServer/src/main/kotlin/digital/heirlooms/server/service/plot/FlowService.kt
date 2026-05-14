@@ -2,12 +2,13 @@ package digital.heirlooms.server.service.plot
 
 import digital.heirlooms.server.CriteriaCycleException
 import digital.heirlooms.server.CriteriaValidationException
-import digital.heirlooms.server.Database
 import digital.heirlooms.server.domain.plot.FlowRecord
 import digital.heirlooms.server.domain.plot.PlotItemWithUpload
 import digital.heirlooms.server.domain.upload.UploadRecord
 import digital.heirlooms.server.repository.plot.FlowRepository
 import digital.heirlooms.server.repository.plot.PlotItemRepository
+import digital.heirlooms.server.repository.plot.PlotRepository
+import digital.heirlooms.server.repository.upload.UploadRepository
 import com.fasterxml.jackson.databind.JsonNode
 import java.util.Base64
 import java.util.UUID
@@ -18,7 +19,10 @@ import java.util.UUID
  * approval, and plot-item management.
  */
 class FlowService(
-    private val database: Database,
+    private val flowRepo: FlowRepository,
+    private val plotRepo: PlotRepository,
+    private val itemRepo: PlotItemRepository,
+    private val uploadRepo: UploadRepository,
 ) {
     // ---- Criteria validation (reused from PlotService) ----------------------
 
@@ -29,7 +33,7 @@ class FlowService(
 
     fun validateAndSerializeCriteria(node: JsonNode, userId: UUID): CriteriaResult {
         return try {
-            database.withCriteriaValidation(node, userId)
+            plotRepo.withCriteriaValidation(node, userId)
             CriteriaResult.Ok(node.toString())
         } catch (e: CriteriaValidationException) {
             CriteriaResult.Error(e.message ?: "Invalid criteria")
@@ -42,9 +46,9 @@ class FlowService(
 
     // ---- Flow CRUD ----------------------------------------------------------
 
-    fun listFlows(userId: UUID): List<FlowRecord> = database.listFlows(userId)
+    fun listFlows(userId: UUID): List<FlowRecord> = flowRepo.listFlows(userId)
 
-    fun getFlowById(id: UUID, userId: UUID): FlowRecord? = database.getFlowById(id, userId)
+    fun getFlowById(id: UUID, userId: UUID): FlowRecord? = flowRepo.getFlowById(id, userId)
 
     sealed class CreateFlowResult {
         data class Created(val flow: FlowRecord) : CreateFlowResult()
@@ -62,7 +66,11 @@ class FlowService(
             is CriteriaResult.Error -> return CreateFlowResult.Invalid(r.message)
             is CriteriaResult.Ok -> r.json
         }
-        return when (val result = database.createFlow(name, criteriaJson, targetPlotId, requiresStaging, userId)) {
+        val targetPlot = plotRepo.getPlotById(targetPlotId)
+            ?: return CreateFlowResult.Invalid("Target plot not found")
+        if (targetPlot.ownerUserId != userId)
+            return CreateFlowResult.Invalid("Target plot not found")
+        return when (val result = flowRepo.createFlow(name, criteriaJson, targetPlotId, requiresStaging, targetPlot, userId)) {
             is FlowRepository.FlowCreateResult.Success -> CreateFlowResult.Created(result.flow)
             is FlowRepository.FlowCreateResult.Error -> CreateFlowResult.Invalid(result.message)
         }
@@ -87,24 +95,30 @@ class FlowService(
                 is CriteriaResult.Ok -> r.json
             }
         } else null
-        return when (database.updateFlow(flowId, name, criteriaJson, requiresStaging, userId)) {
+        val existingFlow = flowRepo.getFlowById(flowId, userId) ?: return UpdateFlowResult.NotFound
+        val targetPlot = plotRepo.getPlotById(existingFlow.targetPlotId)
+        return when (flowRepo.updateFlow(flowId, name, criteriaJson, requiresStaging, targetPlot, userId)) {
             is FlowRepository.FlowUpdateResult.Success -> {
-                val flow = database.getFlowById(flowId, userId) ?: return UpdateFlowResult.NotFound
+                val flow = flowRepo.getFlowById(flowId, userId) ?: return UpdateFlowResult.NotFound
                 UpdateFlowResult.Updated(flow)
             }
             FlowRepository.FlowUpdateResult.NotFound -> UpdateFlowResult.NotFound
         }
     }
 
-    fun deleteFlow(id: UUID, userId: UUID): Boolean = database.deleteFlow(id, userId)
+    fun deleteFlow(id: UUID, userId: UUID): Boolean = flowRepo.deleteFlow(id, userId)
 
     // ---- Staging operations ------------------------------------------------
 
-    fun getStagingItems(flowId: UUID, userId: UUID): List<UploadRecord> =
-        database.getStagingItems(flowId, userId)
+    fun getStagingItems(flowId: UUID, userId: UUID): List<UploadRecord> {
+        val flow = flowRepo.getFlowById(flowId, userId) ?: return emptyList()
+        return itemRepo.getStagingItems(flowId, flow, userId)
+    }
 
-    fun getStagingItemsForPlot(plotId: UUID, userId: UUID): List<UploadRecord> =
-        database.getStagingItemsForPlot(plotId, userId)
+    fun getStagingItemsForPlot(plotId: UUID, userId: UUID): List<UploadRecord> {
+        val stagingFlows = flowRepo.listFlows(userId).filter { it.targetPlotId == plotId && it.requiresStaging }
+        return itemRepo.getStagingItemsForPlot(plotId, stagingFlows, userId)
+    }
 
     sealed class ApproveStagingResult {
         object Success : ApproveStagingResult()
@@ -131,7 +145,7 @@ class FlowService(
         var thumbBytes: ByteArray? = null
         var thumbFormat: String? = null
 
-        val plot = database.getPlotById(plotId) ?: return ApproveStagingResult.NotFound
+        val plot = plotRepo.getPlotById(plotId) ?: return ApproveStagingResult.NotFound
 
         if (plot.visibility == "shared" && wrappedItemDekB64 != null) {
             dekFormat = itemDekFormatRaw
@@ -144,7 +158,7 @@ class FlowService(
             }
         }
 
-        return when (database.approveStagingItem(plotId, uploadId, sourceFlowId, userId, dekBytes, dekFormat, thumbBytes, thumbFormat)) {
+        return when (itemRepo.approveStagingItem(plot, uploadId, sourceFlowId, userId, dekBytes, dekFormat, thumbBytes, thumbFormat)) {
             PlotItemRepository.ApproveResult.Success          -> ApproveStagingResult.Success
             PlotItemRepository.ApproveResult.DuplicateContent -> ApproveStagingResult.DuplicateContent
             PlotItemRepository.ApproveResult.AlreadyApproved  -> ApproveStagingResult.AlreadyApproved
@@ -154,19 +168,33 @@ class FlowService(
         }
     }
 
-    fun rejectStagingItem(plotId: UUID, uploadId: UUID, sourceFlowId: UUID?, userId: UUID): PlotItemRepository.RejectResult =
-        database.rejectStagingItem(plotId, uploadId, sourceFlowId, userId)
+    fun rejectStagingItem(plotId: UUID, uploadId: UUID, sourceFlowId: UUID?, userId: UUID): PlotItemRepository.RejectResult {
+        val plot = plotRepo.getPlotById(plotId) ?: return PlotItemRepository.RejectResult.NotFound
+        return itemRepo.rejectStagingItem(plot, uploadId, sourceFlowId, userId)
+    }
 
-    fun deleteDecision(plotId: UUID, uploadId: UUID, userId: UUID): Boolean =
-        database.deleteDecision(plotId, uploadId, userId)
+    fun deleteDecision(plotId: UUID, uploadId: UUID, userId: UUID): Boolean {
+        val plot = plotRepo.getPlotById(plotId) ?: return false
+        return itemRepo.deleteDecision(plot, uploadId, userId)
+    }
 
-    fun getRejectedItems(plotId: UUID, userId: UUID): List<UploadRecord> =
-        database.getRejectedItems(plotId, userId)
+    fun getRejectedItems(plotId: UUID, userId: UUID): List<UploadRecord> {
+        val plot = plotRepo.getPlotById(plotId) ?: return emptyList()
+        return itemRepo.getRejectedItems(plot, userId)
+    }
 
     // ---- Collection plot items ---------------------------------------------
 
-    fun getPlotItems(plotId: UUID, userId: UUID): List<PlotItemWithUpload> =
-        database.getPlotItems(plotId, userId)
+    fun getPlotItems(plotId: UUID, userId: UUID): List<PlotItemWithUpload> {
+        val plot = plotRepo.getPlotById(plotId)?.let { p ->
+            when {
+                p.ownerUserId == userId -> p
+                p.visibility == "shared" && plotRepo.isMember(plotId, userId) -> p
+                else -> null
+            }
+        }
+        return itemRepo.getPlotItems(plotId, userId, plot)
+    }
 
     sealed class AddPlotItemResult {
         object Success : AddPlotItemResult()
@@ -186,7 +214,8 @@ class FlowService(
         wrappedThumbnailDekB64: String?,
         thumbnailDekFormatRaw: String?,
     ): AddPlotItemResult {
-        val plot = database.getPlotById(plotId)
+        val plot = plotRepo.getPlotById(plotId)
+        val uploadExists = uploadRepo.uploadExists(uploadId, userId)
         if (plot?.visibility == "shared") {
             if (wrappedItemDekB64.isNullOrBlank())
                 return AddPlotItemResult.Invalid("wrappedItemDek required for shared plots")
@@ -197,7 +226,7 @@ class FlowService(
             val thumbBytes = wrappedThumbnailDekB64?.let {
                 try { Base64.getDecoder().decode(it) } catch (_: Exception) { null }
             }
-            return when (database.addPlotItem(plotId, uploadId, userId, dekBytes, itemDekFormatRaw, thumbBytes, thumbnailDekFormatRaw)) {
+            return when (itemRepo.addPlotItem(plot, uploadId, userId, uploadExists, dekBytes, itemDekFormatRaw, thumbBytes, thumbnailDekFormatRaw)) {
                 PlotItemRepository.AddItemResult.Success        -> AddPlotItemResult.Success
                 PlotItemRepository.AddItemResult.AlreadyPresent -> AddPlotItemResult.AlreadyPresent
                 PlotItemRepository.AddItemResult.PlotNotOwned   -> AddPlotItemResult.PlotNotOwned
@@ -206,7 +235,7 @@ class FlowService(
                 is PlotItemRepository.AddItemResult.Error       -> AddPlotItemResult.Invalid("Cannot add item")
             }
         }
-        return when (database.addPlotItem(plotId, uploadId, userId)) {
+        return when (itemRepo.addPlotItem(plot, uploadId, userId, uploadExists)) {
             PlotItemRepository.AddItemResult.Success        -> AddPlotItemResult.Success
             PlotItemRepository.AddItemResult.AlreadyPresent -> AddPlotItemResult.AlreadyPresent
             PlotItemRepository.AddItemResult.PlotNotOwned   -> AddPlotItemResult.PlotNotOwned
@@ -217,5 +246,5 @@ class FlowService(
     }
 
     fun removePlotItem(plotId: UUID, uploadId: UUID, userId: UUID): PlotItemRepository.RemoveItemResult =
-        database.removePlotItem(plotId, uploadId, userId)
+        itemRepo.removePlotItem(plotId, uploadId, userId)
 }

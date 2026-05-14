@@ -10,9 +10,78 @@ import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
 
-class PlotMemberRepository(private val dataSource: DataSource) {
+interface PlotMemberRepository {
+    data class InviteInfo(
+        val plotId: UUID,
+        val plotName: String,
+        val inviterDisplayName: String,
+        val inviterUserId: UUID,
+    )
+    sealed class AddMemberResult {
+        object Success : AddMemberResult()
+        object NotMember : AddMemberResult()
+        object NotFriends : AddMemberResult()
+        object AlreadyMember : AddMemberResult()
+    }
+    sealed class RedeemInviteResult {
+        data class Pending(val inviteId: UUID, val inviterDisplayName: String) : RedeemInviteResult()
+        object Invalid : RedeemInviteResult()
+        object AlreadyMember : RedeemInviteResult()
+    }
+    sealed class AcceptInviteResult {
+        object Success : AcceptInviteResult()
+        object NotInvited : AcceptInviteResult()
+        object AlreadyJoined : AcceptInviteResult()
+    }
+    sealed class RejoinResult {
+        object Success : RejoinResult()
+        object NotLeft : RejoinResult()
+        object PlotTombstoned : RejoinResult()
+    }
+    sealed class RestorePlotResult {
+        object Success : RestorePlotResult()
+        object NotTombstoned : RestorePlotResult()
+        object NotAuthorized : RestorePlotResult()
+        object WindowExpired : RestorePlotResult()
+    }
+    sealed class TransferOwnershipResult {
+        object Success : TransferOwnershipResult()
+        object NotOwner : TransferOwnershipResult()
+        object TargetNotMember : TransferOwnershipResult()
+        object NotFound : TransferOwnershipResult()
+    }
+    sealed class SetPlotStatusResult {
+        object Success : SetPlotStatusResult()
+        object NotOwner : SetPlotStatusResult()
+        object NotFound : SetPlotStatusResult()
+        data class InvalidStatus(val status: String) : SetPlotStatusResult()
+    }
+    sealed class LeavePlotResult {
+        object Success : LeavePlotResult()
+        object NotFound : LeavePlotResult()
+        object MustTransferFirst : LeavePlotResult()
+    }
 
-    fun getPlotKey(plotId: UUID, userId: UUID = FOUNDING_USER_ID): Pair<ByteArray, String>? {
+    fun getPlotKey(plotId: UUID, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): Pair<ByteArray, String>?
+    fun listMembers(plotId: UUID, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): List<digital.heirlooms.server.domain.plot.PlotMemberRecord>?
+    fun addMember(plotId: UUID, newUserId: UUID, wrappedPlotKey: ByteArray, plotKeyFormat: String, inviterUserId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): AddMemberResult
+    fun createInvite(plotId: UUID, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): digital.heirlooms.server.domain.plot.PlotInviteRecord?
+    fun getInviteInfo(token: String): InviteInfo?
+    fun redeemInvite(token: String, recipientUserId: UUID, recipientPubkey: String): RedeemInviteResult
+    fun listPendingInvites(plotId: UUID, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): List<Map<String, String>>
+    fun confirmInvite(inviteId: UUID, plotId: UUID, wrappedPlotKey: ByteArray, plotKeyFormat: String, confirmerUserId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): Boolean
+    fun listSharedMemberships(userId: UUID): List<digital.heirlooms.server.domain.plot.SharedMembershipRecord>
+    fun acceptInvite(plotId: UUID, userId: UUID, localName: String): AcceptInviteResult
+    fun rejoinPlot(plotId: UUID, userId: UUID, localName: String?): RejoinResult
+    fun restorePlot(plotId: UUID, userId: UUID): RestorePlotResult
+    fun transferOwnership(plotId: UUID, newOwnerId: UUID, currentOwnerId: UUID): TransferOwnershipResult
+    fun setPlotStatus(plotId: UUID, status: String, userId: UUID): SetPlotStatusResult
+    fun leavePlot(plotId: UUID, userId: UUID): LeavePlotResult
+}
+
+class PostgresPlotMemberRepository(private val dataSource: DataSource) : PlotMemberRepository {
+
+    override fun getPlotKey(plotId: UUID, userId: UUID): Pair<ByteArray, String>? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT wrapped_plot_key, plot_key_format FROM plot_members WHERE plot_id = ? AND user_id = ?"
@@ -27,7 +96,7 @@ class PlotMemberRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun listMembers(plotId: UUID, userId: UUID = FOUNDING_USER_ID): List<PlotMemberRecord>? {
+    override fun listMembers(plotId: UUID, userId: UUID): List<PlotMemberRecord>? {
         dataSource.connection.use { conn ->
             if (!isMemberConn(conn, plotId, userId)) return null
             conn.prepareStatement(
@@ -60,22 +129,16 @@ class PlotMemberRepository(private val dataSource: DataSource) {
         }
     }
 
-    sealed class AddMemberResult {
-        object Success : AddMemberResult()
-        object NotMember : AddMemberResult()
-        object NotFriends : AddMemberResult()
-        object AlreadyMember : AddMemberResult()
-    }
 
-    fun addMember(
+    override fun addMember(
         plotId: UUID,
         newUserId: UUID,
         wrappedPlotKey: ByteArray,
         plotKeyFormat: String,
-        inviterUserId: UUID = FOUNDING_USER_ID,
-    ): AddMemberResult {
+        inviterUserId: UUID,
+    ): PlotMemberRepository.AddMemberResult {
         dataSource.connection.use { conn ->
-            if (!isMemberConn(conn, plotId, inviterUserId)) return AddMemberResult.NotMember
+            if (!isMemberConn(conn, plotId, inviterUserId)) return PlotMemberRepository.AddMemberResult.NotMember
 
             val areFriends = conn.prepareStatement(
                 """SELECT 1 FROM friendships
@@ -85,7 +148,7 @@ class PlotMemberRepository(private val dataSource: DataSource) {
                 stmt.setObject(3, inviterUserId); stmt.setObject(4, newUserId)
                 stmt.executeQuery().next()
             }
-            if (!areFriends) return AddMemberResult.NotFriends
+            if (!areFriends) return PlotMemberRepository.AddMemberResult.NotFriends
 
             val existingStatus = conn.prepareStatement(
                 "SELECT status FROM plot_members WHERE plot_id = ? AND user_id = ?"
@@ -94,7 +157,7 @@ class PlotMemberRepository(private val dataSource: DataSource) {
                 val rs = stmt.executeQuery()
                 if (!rs.next()) null else rs.getString("status")
             }
-            if (existingStatus == "joined" || existingStatus == "invited") return AddMemberResult.AlreadyMember
+            if (existingStatus == "joined" || existingStatus == "invited") return PlotMemberRepository.AddMemberResult.AlreadyMember
 
             if (existingStatus == null) {
                 conn.prepareStatement(
@@ -117,10 +180,10 @@ class PlotMemberRepository(private val dataSource: DataSource) {
                 }
             }
         }
-        return AddMemberResult.Success
+        return PlotMemberRepository.AddMemberResult.Success
     }
 
-    fun createInvite(plotId: UUID, userId: UUID = FOUNDING_USER_ID): PlotInviteRecord? {
+    override fun createInvite(plotId: UUID, userId: UUID): PlotInviteRecord? {
         if (!isMember(plotId, userId)) return null
         val id = UUID.randomUUID()
         val token = java.util.Base64.getUrlEncoder().withoutPadding()
@@ -140,14 +203,7 @@ class PlotMemberRepository(private val dataSource: DataSource) {
         return PlotInviteRecord(id, plotId, userId, token, null, null, null, expiresAt, now)
     }
 
-    data class InviteInfo(
-        val plotId: UUID,
-        val plotName: String,
-        val inviterDisplayName: String,
-        val inviterUserId: UUID,
-    )
-
-    fun getInviteInfo(token: String): InviteInfo? {
+    override fun getInviteInfo(token: String): PlotMemberRepository.InviteInfo? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """SELECT pi.plot_id, p.name AS plot_name, u.display_name, pi.created_by,
@@ -162,7 +218,7 @@ class PlotMemberRepository(private val dataSource: DataSource) {
                 if (!rs.next()) return null
                 if (rs.getTimestamp("used_at") != null) return null
                 if (rs.getTimestamp("expires_at").toInstant().isBefore(Instant.now())) return null
-                return InviteInfo(
+                return PlotMemberRepository.InviteInfo(
                     plotId = rs.getObject("plot_id", UUID::class.java),
                     plotName = rs.getString("plot_name"),
                     inviterDisplayName = rs.getString("display_name"),
@@ -172,15 +228,10 @@ class PlotMemberRepository(private val dataSource: DataSource) {
         }
     }
 
-    sealed class RedeemInviteResult {
-        data class Pending(val inviteId: UUID, val inviterDisplayName: String) : RedeemInviteResult()
-        object Invalid : RedeemInviteResult()
-        object AlreadyMember : RedeemInviteResult()
-    }
 
-    fun redeemInvite(token: String, recipientUserId: UUID, recipientPubkey: String): RedeemInviteResult {
+    override fun redeemInvite(token: String, recipientUserId: UUID, recipientPubkey: String): PlotMemberRepository.RedeemInviteResult {
         dataSource.connection.use { conn ->
-            val info = getInviteInfo(token) ?: return RedeemInviteResult.Invalid
+            val info = getInviteInfo(token) ?: return PlotMemberRepository.RedeemInviteResult.Invalid
             val existingStatus = conn.prepareStatement(
                 "SELECT status FROM plot_members WHERE plot_id = ? AND user_id = ?"
             ).use { stmt ->
@@ -188,7 +239,7 @@ class PlotMemberRepository(private val dataSource: DataSource) {
                 val rs = stmt.executeQuery()
                 if (!rs.next()) null else rs.getString("status")
             }
-            if (existingStatus == "joined" || existingStatus == "invited") return RedeemInviteResult.AlreadyMember
+            if (existingStatus == "joined" || existingStatus == "invited") return PlotMemberRepository.RedeemInviteResult.AlreadyMember
 
             val inviteId = conn.prepareStatement(
                 """UPDATE plot_invites SET recipient_user_id = ?, recipient_pubkey = ?
@@ -198,14 +249,14 @@ class PlotMemberRepository(private val dataSource: DataSource) {
                 stmt.setObject(1, recipientUserId); stmt.setString(2, recipientPubkey)
                 stmt.setString(3, token)
                 val rs = stmt.executeQuery()
-                if (!rs.next()) return RedeemInviteResult.Invalid
+                if (!rs.next()) return PlotMemberRepository.RedeemInviteResult.Invalid
                 Pair(rs.getObject("id", UUID::class.java), rs.getString("display_name"))
             }
-            return RedeemInviteResult.Pending(inviteId.first, inviteId.second)
+            return PlotMemberRepository.RedeemInviteResult.Pending(inviteId.first, inviteId.second)
         }
     }
 
-    fun listPendingInvites(plotId: UUID, userId: UUID = FOUNDING_USER_ID): List<Map<String, String>> {
+    override fun listPendingInvites(plotId: UUID, userId: UUID): List<Map<String, String>> {
         if (!isMember(plotId, userId)) return emptyList()
         dataSource.connection.use { conn ->
             conn.prepareStatement(
@@ -231,12 +282,12 @@ class PlotMemberRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun confirmInvite(
+    override fun confirmInvite(
         inviteId: UUID,
         plotId: UUID,
         wrappedPlotKey: ByteArray,
         plotKeyFormat: String,
-        confirmerUserId: UUID = FOUNDING_USER_ID,
+        confirmerUserId: UUID,
     ): Boolean {
         if (!isMember(plotId, confirmerUserId)) return false
         withTransaction { conn ->
@@ -271,7 +322,7 @@ class PlotMemberRepository(private val dataSource: DataSource) {
         return true
     }
 
-    fun listSharedMemberships(userId: UUID): List<SharedMembershipRecord> {
+    override fun listSharedMemberships(userId: UUID): List<SharedMembershipRecord> {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """SELECT pm.plot_id, p.name AS plot_name, p.owner_user_id,
@@ -306,24 +357,19 @@ class PlotMemberRepository(private val dataSource: DataSource) {
         }
     }
 
-    sealed class AcceptInviteResult {
-        object Success : AcceptInviteResult()
-        object NotInvited : AcceptInviteResult()
-        object AlreadyJoined : AcceptInviteResult()
-    }
 
-    fun acceptInvite(plotId: UUID, userId: UUID, localName: String): AcceptInviteResult {
+    override fun acceptInvite(plotId: UUID, userId: UUID, localName: String): PlotMemberRepository.AcceptInviteResult {
         dataSource.connection.use { conn ->
             val status = conn.prepareStatement(
                 "SELECT status FROM plot_members WHERE plot_id = ? AND user_id = ?"
             ).use { stmt ->
                 stmt.setObject(1, plotId); stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
-                if (!rs.next()) return AcceptInviteResult.NotInvited
+                if (!rs.next()) return PlotMemberRepository.AcceptInviteResult.NotInvited
                 rs.getString("status")
             }
-            if (status == "joined") return AcceptInviteResult.AlreadyJoined
-            if (status != "invited") return AcceptInviteResult.NotInvited
+            if (status == "joined") return PlotMemberRepository.AcceptInviteResult.AlreadyJoined
+            if (status != "invited") return PlotMemberRepository.AcceptInviteResult.NotInvited
             conn.prepareStatement(
                 "UPDATE plot_members SET status = 'joined', local_name = ? WHERE plot_id = ? AND user_id = ?"
             ).use { stmt ->
@@ -332,16 +378,11 @@ class PlotMemberRepository(private val dataSource: DataSource) {
                 stmt.executeUpdate()
             }
         }
-        return AcceptInviteResult.Success
+        return PlotMemberRepository.AcceptInviteResult.Success
     }
 
-    sealed class RejoinResult {
-        object Success : RejoinResult()
-        object NotLeft : RejoinResult()
-        object PlotTombstoned : RejoinResult()
-    }
 
-    fun rejoinPlot(plotId: UUID, userId: UUID, localName: String?): RejoinResult {
+    override fun rejoinPlot(plotId: UUID, userId: UUID, localName: String?): PlotMemberRepository.RejoinResult {
         dataSource.connection.use { conn ->
             val row = conn.prepareStatement(
                 """SELECT pm.status, pm.local_name, p.tombstoned_at
@@ -351,11 +392,11 @@ class PlotMemberRepository(private val dataSource: DataSource) {
             ).use { stmt ->
                 stmt.setObject(1, plotId); stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
-                if (!rs.next()) return RejoinResult.NotLeft
+                if (!rs.next()) return PlotMemberRepository.RejoinResult.NotLeft
                 Triple(rs.getString("status"), rs.getString("local_name"), rs.getTimestamp("tombstoned_at"))
             }
-            if (row.first != "left") return RejoinResult.NotLeft
-            if (row.third != null) return RejoinResult.PlotTombstoned
+            if (row.first != "left") return PlotMemberRepository.RejoinResult.NotLeft
+            if (row.third != null) return PlotMemberRepository.RejoinResult.PlotTombstoned
 
             val resolvedName = localName?.trim()?.takeIf { it.isNotBlank() } ?: row.second
             conn.prepareStatement(
@@ -366,31 +407,25 @@ class PlotMemberRepository(private val dataSource: DataSource) {
                 stmt.executeUpdate()
             }
         }
-        return RejoinResult.Success
+        return PlotMemberRepository.RejoinResult.Success
     }
 
-    sealed class RestorePlotResult {
-        object Success : RestorePlotResult()
-        object NotTombstoned : RestorePlotResult()
-        object NotAuthorized : RestorePlotResult()
-        object WindowExpired : RestorePlotResult()
-    }
 
-    fun restorePlot(plotId: UUID, userId: UUID): RestorePlotResult {
+    override fun restorePlot(plotId: UUID, userId: UUID): PlotMemberRepository.RestorePlotResult {
         withTransaction { conn ->
             val row = conn.prepareStatement(
                 "SELECT tombstoned_at, tombstoned_by FROM plots WHERE id = ?"
             ).use { stmt ->
                 stmt.setObject(1, plotId)
                 val rs = stmt.executeQuery()
-                if (!rs.next()) return RestorePlotResult.NotTombstoned
+                if (!rs.next()) return PlotMemberRepository.RestorePlotResult.NotTombstoned
                 Pair(rs.getTimestamp("tombstoned_at")?.toInstant(), rs.getObject("tombstoned_by", UUID::class.java))
             }
             val (tombstonedAt, tombstonedBy) = row
-            if (tombstonedAt == null) return RestorePlotResult.NotTombstoned
-            if (tombstonedBy != userId) return RestorePlotResult.NotAuthorized
+            if (tombstonedAt == null) return PlotMemberRepository.RestorePlotResult.NotTombstoned
+            if (tombstonedBy != userId) return PlotMemberRepository.RestorePlotResult.NotAuthorized
             if (tombstonedAt.isBefore(Instant.now().minus(90, java.time.temporal.ChronoUnit.DAYS)))
-                return RestorePlotResult.WindowExpired
+                return PlotMemberRepository.RestorePlotResult.WindowExpired
 
             conn.prepareStatement(
                 "UPDATE plots SET tombstoned_at = NULL, tombstoned_by = NULL WHERE id = ?"
@@ -403,27 +438,21 @@ class PlotMemberRepository(private val dataSource: DataSource) {
                 stmt.setObject(1, plotId); stmt.setObject(2, userId); stmt.executeUpdate()
             }
         }
-        return RestorePlotResult.Success
+        return PlotMemberRepository.RestorePlotResult.Success
     }
 
-    sealed class TransferOwnershipResult {
-        object Success : TransferOwnershipResult()
-        object NotOwner : TransferOwnershipResult()
-        object TargetNotMember : TransferOwnershipResult()
-        object NotFound : TransferOwnershipResult()
-    }
 
-    fun transferOwnership(plotId: UUID, newOwnerId: UUID, currentOwnerId: UUID): TransferOwnershipResult {
+    override fun transferOwnership(plotId: UUID, newOwnerId: UUID, currentOwnerId: UUID): PlotMemberRepository.TransferOwnershipResult {
         withTransaction { conn ->
             val ownerUserId = conn.prepareStatement(
                 "SELECT owner_user_id FROM plots WHERE id = ?"
             ).use { stmt ->
                 stmt.setObject(1, plotId)
                 val rs = stmt.executeQuery()
-                if (!rs.next()) return TransferOwnershipResult.NotFound
+                if (!rs.next()) return PlotMemberRepository.TransferOwnershipResult.NotFound
                 rs.getObject("owner_user_id", UUID::class.java)
             }
-            if (ownerUserId != currentOwnerId) return TransferOwnershipResult.NotOwner
+            if (ownerUserId != currentOwnerId) return PlotMemberRepository.TransferOwnershipResult.NotOwner
 
             val targetIsJoined = conn.prepareStatement(
                 "SELECT 1 FROM plot_members WHERE plot_id = ? AND user_id = ? AND status = 'joined'"
@@ -431,7 +460,7 @@ class PlotMemberRepository(private val dataSource: DataSource) {
                 stmt.setObject(1, plotId); stmt.setObject(2, newOwnerId)
                 stmt.executeQuery().next()
             }
-            if (!targetIsJoined) return TransferOwnershipResult.TargetNotMember
+            if (!targetIsJoined) return PlotMemberRepository.TransferOwnershipResult.TargetNotMember
 
             conn.prepareStatement(
                 "UPDATE plot_members SET role = 'member' WHERE plot_id = ? AND user_id = ?"
@@ -449,18 +478,12 @@ class PlotMemberRepository(private val dataSource: DataSource) {
                 stmt.setObject(1, newOwnerId); stmt.setObject(2, plotId); stmt.executeUpdate()
             }
         }
-        return TransferOwnershipResult.Success
+        return PlotMemberRepository.TransferOwnershipResult.Success
     }
 
-    sealed class SetPlotStatusResult {
-        object Success : SetPlotStatusResult()
-        object NotOwner : SetPlotStatusResult()
-        object NotFound : SetPlotStatusResult()
-        data class InvalidStatus(val status: String) : SetPlotStatusResult()
-    }
 
-    fun setPlotStatus(plotId: UUID, status: String, userId: UUID): SetPlotStatusResult {
-        if (status != "open" && status != "closed") return SetPlotStatusResult.InvalidStatus(status)
+    override fun setPlotStatus(plotId: UUID, status: String, userId: UUID): PlotMemberRepository.SetPlotStatusResult {
+        if (status != "open" && status != "closed") return PlotMemberRepository.SetPlotStatusResult.InvalidStatus(status)
         dataSource.connection.use { conn ->
             val updated = conn.prepareStatement(
                 "UPDATE plots SET plot_status = ?, updated_at = NOW() WHERE id = ? AND owner_user_id = ?"
@@ -469,31 +492,26 @@ class PlotMemberRepository(private val dataSource: DataSource) {
                 stmt.executeUpdate()
             }
             return when {
-                updated > 0 -> SetPlotStatusResult.Success
+                updated > 0 -> PlotMemberRepository.SetPlotStatusResult.Success
                 else -> {
                     val exists = conn.prepareStatement("SELECT 1 FROM plots WHERE id = ?").use { s ->
                         s.setObject(1, plotId); s.executeQuery().next()
                     }
-                    if (exists) SetPlotStatusResult.NotOwner else SetPlotStatusResult.NotFound
+                    if (exists) PlotMemberRepository.SetPlotStatusResult.NotOwner else PlotMemberRepository.SetPlotStatusResult.NotFound
                 }
             }
         }
     }
 
-    sealed class LeavePlotResult {
-        object Success : LeavePlotResult()
-        object NotFound : LeavePlotResult()
-        object MustTransferFirst : LeavePlotResult()
-    }
 
-    fun leavePlot(plotId: UUID, userId: UUID): LeavePlotResult {
+    override fun leavePlot(plotId: UUID, userId: UUID): PlotMemberRepository.LeavePlotResult {
         withTransaction { conn ->
             val role = conn.prepareStatement(
                 "SELECT role FROM plot_members WHERE plot_id = ? AND user_id = ? AND status = 'joined'"
             ).use { stmt ->
                 stmt.setObject(1, plotId); stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
-                if (!rs.next()) return LeavePlotResult.NotFound
+                if (!rs.next()) return PlotMemberRepository.LeavePlotResult.NotFound
                 rs.getString("role")
             }
 
@@ -504,7 +522,7 @@ class PlotMemberRepository(private val dataSource: DataSource) {
                     stmt.setObject(1, plotId); stmt.setObject(2, userId)
                     val rs = stmt.executeQuery(); rs.next(); rs.getInt(1)
                 }
-                if (otherJoined > 0) return LeavePlotResult.MustTransferFirst
+                if (otherJoined > 0) return PlotMemberRepository.LeavePlotResult.MustTransferFirst
             }
 
             conn.prepareStatement(
@@ -530,7 +548,7 @@ class PlotMemberRepository(private val dataSource: DataSource) {
                 }
             }
         }
-        return LeavePlotResult.Success
+        return PlotMemberRepository.LeavePlotResult.Success
     }
 
     private fun isMember(plotId: UUID, userId: UUID): Boolean {

@@ -16,9 +16,49 @@ import java.util.Base64
 import java.util.UUID
 import javax.sql.DataSource
 
-class UploadRepository(private val dataSource: DataSource) {
+interface UploadRepository {
+    sealed class CompostResult {
+        data class Success(val record: digital.heirlooms.server.domain.upload.UploadRecord) : CompostResult()
+        object NotFound : CompostResult()
+        object AlreadyComposted : CompostResult()
+        object PreconditionFailed : CompostResult()
+    }
+    sealed class RestoreResult {
+        data class Success(val record: digital.heirlooms.server.domain.upload.UploadRecord) : RestoreResult()
+        object NotFound : RestoreResult()
+        object NotComposted : RestoreResult()
+    }
 
-    fun recordUpload(record: UploadRecord, userId: UUID = FOUNDING_USER_ID) {
+    fun recordUpload(record: digital.heirlooms.server.domain.upload.UploadRecord, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID)
+    fun findByContentHash(hash: String, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): digital.heirlooms.server.domain.upload.UploadRecord?
+    fun existsByContentHash(hash: String, userId: UUID): Boolean
+    fun getUploadById(id: UUID): digital.heirlooms.server.domain.upload.UploadRecord?
+    fun findUploadByIdForUser(id: UUID, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): digital.heirlooms.server.domain.upload.UploadRecord?
+    fun findUploadByIdForSharedMember(id: UUID, userId: UUID): digital.heirlooms.server.domain.upload.UploadRecord?
+    fun recordView(id: UUID, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): Boolean
+    fun listUploads(tag: String? = null, excludeTag: String? = null, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): List<digital.heirlooms.server.domain.upload.UploadRecord>
+    fun listCompostedUploads(userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): List<digital.heirlooms.server.domain.upload.UploadRecord>
+    fun compostUpload(id: UUID, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): CompostResult
+    fun restoreUpload(id: UUID, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): RestoreResult
+    fun fetchExpiredCompostedUploads(): List<digital.heirlooms.server.domain.upload.UploadRecord>
+    fun hardDeleteUpload(id: UUID)
+    fun userAlreadyHasStorageKey(userId: UUID, storageKey: String): Boolean
+    fun hasLiveSharedReference(storageKey: String, excludeUploadId: UUID): Boolean
+    fun createSharedUpload(fromRecord: digital.heirlooms.server.domain.upload.UploadRecord, fromUserId: UUID, toUserId: UUID, wrappedDek: ByteArray, wrappedThumbnailDek: ByteArray?, dekFormat: String, rotationOverride: Int? = null): digital.heirlooms.server.domain.upload.UploadRecord
+    fun updateRotation(id: UUID, rotation: Int, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): Boolean
+    fun updateTags(id: UUID, tags: List<String>, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID, runFlows: (java.sql.Connection, UUID, UUID) -> Unit): Boolean
+    fun uploadExists(id: UUID, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): Boolean
+    fun listPendingExifIds(): List<UUID>
+    fun updateExif(id: UUID, takenAt: java.time.Instant?, latitude: Double?, longitude: Double?, altitude: Double?, deviceMake: String?, deviceModel: String?)
+    fun migrateUploadToEncrypted(id: UUID, newStorageKey: String, newContentHash: String?, envelopeVersion: Int?, wrappedDek: ByteArray, dekFormat: String, encryptedMetadata: ByteArray?, encryptedMetadataFormat: String?, thumbnailStorageKey: String?, wrappedThumbnailDek: ByteArray?, thumbnailDekFormat: String?): Boolean
+    fun listUploadsPaginated(cursor: String? = null, limit: Int = 50, tags: List<String> = emptyList(), excludeTag: String? = null, fromDate: java.time.Instant? = null, toDate: java.time.Instant? = null, inCapsule: Boolean? = null, includeComposted: Boolean = false, hasLocation: Boolean? = null, sort: digital.heirlooms.server.domain.upload.UploadSort = digital.heirlooms.server.domain.upload.UploadSort.UPLOAD_NEWEST, justArrived: Boolean = false, mediaType: String? = null, isReceived: Boolean? = null, plotId: UUID? = null, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID, plotRepository: PlotRepository? = null): digital.heirlooms.server.domain.upload.UploadPage
+    fun listCompostedUploadsPaginated(cursor: String? = null, limit: Int = 50, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): digital.heirlooms.server.domain.upload.UploadPage
+    fun listAllTags(userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): List<String>
+}
+
+class PostgresUploadRepository(private val dataSource: DataSource) : UploadRepository {
+
+    override fun recordUpload(record: UploadRecord, userId: UUID) {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """INSERT INTO uploads
@@ -64,7 +104,7 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun findByContentHash(hash: String, userId: UUID = FOUNDING_USER_ID): UploadRecord? {
+    override fun findByContentHash(hash: String, userId: UUID): UploadRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
@@ -85,7 +125,7 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun existsByContentHash(hash: String, userId: UUID): Boolean {
+    override fun existsByContentHash(hash: String, userId: UUID): Boolean {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT 1 FROM uploads WHERE content_hash = ? AND user_id = ? AND composted_at IS NULL LIMIT 1"
@@ -97,7 +137,7 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun getUploadById(id: UUID): UploadRecord? {
+    override fun getUploadById(id: UUID): UploadRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
@@ -117,7 +157,7 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun findUploadByIdForUser(id: UUID, userId: UUID = FOUNDING_USER_ID): UploadRecord? {
+    override fun findUploadByIdForUser(id: UUID, userId: UUID): UploadRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
@@ -138,7 +178,7 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun findUploadByIdForSharedMember(id: UUID, userId: UUID): UploadRecord? {
+    override fun findUploadByIdForSharedMember(id: UUID, userId: UUID): UploadRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """SELECT u.id, u.storage_key, u.mime_type, u.file_size, u.uploaded_at, u.content_hash,
@@ -168,7 +208,7 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun recordView(id: UUID, userId: UUID = FOUNDING_USER_ID): Boolean {
+    override fun recordView(id: UUID, userId: UUID): Boolean {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "UPDATE uploads SET last_viewed_at = NOW() WHERE id = ? AND user_id = ?"
@@ -180,7 +220,7 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun listUploads(tag: String? = null, excludeTag: String? = null, userId: UUID = FOUNDING_USER_ID): List<UploadRecord> {
+    override fun listUploads(tag: String?, excludeTag: String?, userId: UUID): List<UploadRecord> {
         dataSource.connection.use { conn ->
             val conditions = mutableListOf("composted_at IS NULL", "user_id = ?")
             if (tag != null) conditions.add("tags @> ARRAY[?]::text[]")
@@ -208,7 +248,7 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun listCompostedUploads(userId: UUID = FOUNDING_USER_ID): List<UploadRecord> {
+    override fun listCompostedUploads(userId: UUID): List<UploadRecord> {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
@@ -229,14 +269,8 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    sealed class CompostResult {
-        data class Success(val record: UploadRecord) : CompostResult()
-        object NotFound : CompostResult()
-        object AlreadyComposted : CompostResult()
-        object PreconditionFailed : CompostResult()
-    }
 
-    fun compostUpload(id: UUID, userId: UUID = FOUNDING_USER_ID): CompostResult {
+    override fun compostUpload(id: UUID, userId: UUID): UploadRepository.CompostResult {
         withTransaction { conn ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
@@ -247,10 +281,10 @@ class UploadRepository(private val dataSource: DataSource) {
                 stmt.setObject(1, id)
                 stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
-                if (!rs.next()) return CompostResult.NotFound
+                if (!rs.next()) return UploadRepository.CompostResult.NotFound
                 val compostedAt = rs.getTimestamp("composted_at")
-                if (compostedAt != null) return CompostResult.AlreadyComposted
-                if (!canCompost(id, conn)) return CompostResult.PreconditionFailed
+                if (compostedAt != null) return UploadRepository.CompostResult.AlreadyComposted
+                if (!canCompost(id, conn)) return UploadRepository.CompostResult.PreconditionFailed
             }
             conn.prepareStatement("UPDATE uploads SET composted_at = NOW() WHERE id = ? AND user_id = ?").use { stmt ->
                 stmt.setObject(1, id)
@@ -258,16 +292,11 @@ class UploadRepository(private val dataSource: DataSource) {
                 stmt.executeUpdate()
             }
         }
-        return findUploadByIdForUser(id, userId)?.let { CompostResult.Success(it) } ?: CompostResult.NotFound
+        return findUploadByIdForUser(id, userId)?.let { UploadRepository.CompostResult.Success(it) } ?: UploadRepository.CompostResult.NotFound
     }
 
-    sealed class RestoreResult {
-        data class Success(val record: UploadRecord) : RestoreResult()
-        object NotFound : RestoreResult()
-        object NotComposted : RestoreResult()
-    }
 
-    fun restoreUpload(id: UUID, userId: UUID = FOUNDING_USER_ID): RestoreResult {
+    override fun restoreUpload(id: UUID, userId: UUID): UploadRepository.RestoreResult {
         withTransaction { conn ->
             conn.prepareStatement(
                 "SELECT composted_at FROM uploads WHERE id = ? AND user_id = ? FOR UPDATE"
@@ -275,9 +304,9 @@ class UploadRepository(private val dataSource: DataSource) {
                 stmt.setObject(1, id)
                 stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
-                if (!rs.next()) return RestoreResult.NotFound
+                if (!rs.next()) return UploadRepository.RestoreResult.NotFound
                 val compostedAt = rs.getTimestamp("composted_at")
-                if (compostedAt == null) return RestoreResult.NotComposted
+                if (compostedAt == null) return UploadRepository.RestoreResult.NotComposted
             }
             conn.prepareStatement("UPDATE uploads SET composted_at = NULL WHERE id = ? AND user_id = ?").use { stmt ->
                 stmt.setObject(1, id)
@@ -285,10 +314,10 @@ class UploadRepository(private val dataSource: DataSource) {
                 stmt.executeUpdate()
             }
         }
-        return findUploadByIdForUser(id, userId)?.let { RestoreResult.Success(it) } ?: RestoreResult.NotFound
+        return findUploadByIdForUser(id, userId)?.let { UploadRepository.RestoreResult.Success(it) } ?: UploadRepository.RestoreResult.NotFound
     }
 
-    fun fetchExpiredCompostedUploads(): List<UploadRecord> {
+    override fun fetchExpiredCompostedUploads(): List<UploadRecord> {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash, thumbnail_key,
@@ -308,7 +337,7 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun hardDeleteUpload(id: UUID) {
+    override fun hardDeleteUpload(id: UUID) {
         dataSource.connection.use { conn ->
             conn.prepareStatement("DELETE FROM uploads WHERE id = ?").use { stmt ->
                 stmt.setObject(1, id)
@@ -317,7 +346,7 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun userAlreadyHasStorageKey(userId: UUID, storageKey: String): Boolean {
+    override fun userAlreadyHasStorageKey(userId: UUID, storageKey: String): Boolean {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT EXISTS(SELECT 1 FROM uploads WHERE user_id = ? AND storage_key = ? AND composted_at IS NULL)"
@@ -330,7 +359,7 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun hasLiveSharedReference(storageKey: String, excludeUploadId: UUID): Boolean {
+    override fun hasLiveSharedReference(storageKey: String, excludeUploadId: UUID): Boolean {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT EXISTS(SELECT 1 FROM uploads WHERE storage_key = ? AND id != ? AND composted_at IS NULL)"
@@ -343,14 +372,14 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun createSharedUpload(
+    override fun createSharedUpload(
         fromRecord: UploadRecord,
         fromUserId: UUID,
         toUserId: UUID,
         wrappedDek: ByteArray,
         wrappedThumbnailDek: ByteArray?,
         dekFormat: String,
-        rotationOverride: Int? = null,
+        rotationOverride: Int?,
     ): UploadRecord {
         val newId = UUID.randomUUID()
         dataSource.connection.use { conn ->
@@ -402,7 +431,7 @@ class UploadRepository(private val dataSource: DataSource) {
         )
     }
 
-    fun updateRotation(id: UUID, rotation: Int, userId: UUID = FOUNDING_USER_ID): Boolean {
+    override fun updateRotation(id: UUID, rotation: Int, userId: UUID): Boolean {
         dataSource.connection.use { conn ->
             conn.prepareStatement("UPDATE uploads SET rotation = ? WHERE id = ? AND user_id = ?").use { stmt ->
                 stmt.setInt(1, rotation)
@@ -413,7 +442,7 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun updateTags(id: UUID, tags: List<String>, userId: UUID = FOUNDING_USER_ID, runFlows: (Connection, UUID, UUID) -> Unit): Boolean {
+    override fun updateTags(id: UUID, tags: List<String>, userId: UUID, runFlows: (Connection, UUID, UUID) -> Unit): Boolean {
         dataSource.connection.use { conn ->
             conn.prepareStatement("UPDATE uploads SET tags = ? WHERE id = ? AND user_id = ?").use { stmt ->
                 stmt.setArray(1, conn.createArrayOf("text", tags.toTypedArray()))
@@ -426,7 +455,7 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun uploadExists(id: UUID, userId: UUID = FOUNDING_USER_ID): Boolean {
+    override fun uploadExists(id: UUID, userId: UUID): Boolean {
         dataSource.connection.use { conn ->
             conn.prepareStatement("SELECT 1 FROM uploads WHERE id = ? AND user_id = ?").use { stmt ->
                 stmt.setObject(1, id)
@@ -436,7 +465,7 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun listPendingExifIds(): List<UUID> {
+    override fun listPendingExifIds(): List<UUID> {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT id FROM uploads WHERE exif_processed_at IS NULL ORDER BY uploaded_at"
@@ -449,7 +478,7 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun updateExif(
+    override fun updateExif(
         id: UUID,
         takenAt: Instant?,
         latitude: Double?,
@@ -477,7 +506,7 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun migrateUploadToEncrypted(
+    override fun migrateUploadToEncrypted(
         id: UUID,
         newStorageKey: String,
         newContentHash: String?,
@@ -530,23 +559,23 @@ class UploadRepository(private val dataSource: DataSource) {
 
     // ── Pagination ─────────────────────────────────────────────────────────
 
-    fun listUploadsPaginated(
-        cursor: String? = null,
-        limit: Int = 50,
-        tags: List<String> = emptyList(),
-        excludeTag: String? = null,
-        fromDate: Instant? = null,
-        toDate: Instant? = null,
-        inCapsule: Boolean? = null,
-        includeComposted: Boolean = false,
-        hasLocation: Boolean? = null,
-        sort: UploadSort = UploadSort.UPLOAD_NEWEST,
-        justArrived: Boolean = false,
-        mediaType: String? = null,
-        isReceived: Boolean? = null,
-        plotId: UUID? = null,
-        userId: UUID = FOUNDING_USER_ID,
-        plotRepository: PlotRepository? = null,
+    override fun listUploadsPaginated(
+        cursor: String?,
+        limit: Int,
+        tags: List<String>,
+        excludeTag: String?,
+        fromDate: Instant?,
+        toDate: Instant?,
+        inCapsule: Boolean?,
+        includeComposted: Boolean,
+        hasLocation: Boolean?,
+        sort: UploadSort,
+        justArrived: Boolean,
+        mediaType: String?,
+        isReceived: Boolean?,
+        plotId: UUID?,
+        userId: UUID,
+        plotRepository: PlotRepository?,
     ): UploadPage {
         val effectiveLimit = limit.coerceIn(1, 200)
         val effectiveSort = if (justArrived) UploadSort.UPLOAD_NEWEST else sort
@@ -707,7 +736,7 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun listCompostedUploadsPaginated(cursor: String? = null, limit: Int = 50, userId: UUID = FOUNDING_USER_ID): UploadPage {
+    override fun listCompostedUploadsPaginated(cursor: String?, limit: Int, userId: UUID): UploadPage {
         val effectiveLimit = limit.coerceIn(1, 200)
         val decoded = cursor?.let { decodeCompostedCursor(it) }
         dataSource.connection.use { conn ->
@@ -747,7 +776,7 @@ class UploadRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun listAllTags(userId: UUID = FOUNDING_USER_ID): List<String> {
+    override fun listAllTags(userId: UUID): List<String> {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT DISTINCT UNNEST(tags) AS tag FROM uploads WHERE composted_at IS NULL AND user_id = ? ORDER BY tag"

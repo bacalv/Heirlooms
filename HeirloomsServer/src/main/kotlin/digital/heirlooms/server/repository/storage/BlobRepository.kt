@@ -5,9 +5,15 @@ import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
 
-class BlobRepository(private val dataSource: DataSource) {
+interface BlobRepository {
+    fun insertPendingBlob(storageKey: String): UUID
+    fun deletePendingBlob(storageKey: String)
+    fun deleteStalePendingBlobs(olderThan: java.time.Instant): List<String>
+}
 
-    fun insertPendingBlob(storageKey: String): UUID {
+class PostgresBlobRepository(private val dataSource: DataSource) : BlobRepository {
+
+    override fun insertPendingBlob(storageKey: String): UUID {
         val id = UUID.randomUUID()
         dataSource.connection.use { conn ->
             conn.prepareStatement("INSERT INTO pending_blobs (id, storage_key) VALUES (?, ?)").use { stmt ->
@@ -19,7 +25,7 @@ class BlobRepository(private val dataSource: DataSource) {
         return id
     }
 
-    fun deletePendingBlob(storageKey: String) {
+    override fun deletePendingBlob(storageKey: String) {
         dataSource.connection.use { conn ->
             conn.prepareStatement("DELETE FROM pending_blobs WHERE storage_key = ?").use { stmt ->
                 stmt.setString(1, storageKey)
@@ -28,7 +34,7 @@ class BlobRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun deleteStalePendingBlobs(olderThan: Instant): List<String> {
+    override fun deleteStalePendingBlobs(olderThan: Instant): List<String> {
         dataSource.connection.use { conn ->
             val keys = mutableListOf<String>()
             conn.prepareStatement("SELECT storage_key FROM pending_blobs WHERE created_at < ?").use { stmt ->

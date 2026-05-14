@@ -1,9 +1,9 @@
 package digital.heirlooms.server.service.keys
 
-import digital.heirlooms.server.Database
 import digital.heirlooms.server.domain.keys.PendingDeviceLinkRecord
 import digital.heirlooms.server.domain.keys.RecoveryPassphraseRecord
 import digital.heirlooms.server.domain.keys.WrappedKeyRecord
+import digital.heirlooms.server.repository.keys.KeyRepository
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.Base64
@@ -18,7 +18,7 @@ private const val CODE_CHARSET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
  * only HTTP parsing and response formatting.
  */
 class KeyService(
-    private val database: Database,
+    private val keyRepo: KeyRepository,
 ) {
     private val enc = Base64.getEncoder()
     private val dec = Base64.getDecoder()
@@ -53,7 +53,7 @@ class KeyService(
     ): RegisterResult {
         if (deviceKind !in VALID_DEVICE_KINDS)
             return RegisterResult.Invalid("deviceKind must be one of: android, web, ios")
-        if (database.getWrappedKeyByDeviceIdForUser(deviceId, userId) != null)
+        if (keyRepo.getWrappedKeyByDeviceIdForUser(deviceId, userId) != null)
             return RegisterResult.AlreadyRegistered
         val pubkey = runCatching { dec.decode(pubkeyB64) }.getOrNull()
             ?: return RegisterResult.Invalid("pubkey is not valid Base64")
@@ -73,32 +73,32 @@ class KeyService(
             lastUsedAt = now,
             retiredAt = null,
         )
-        database.insertWrappedKey(record, userId)
+        keyRepo.insertWrappedKey(record, userId)
         return RegisterResult.Created(record)
     }
 
-    fun listDevices(userId: UUID): List<WrappedKeyRecord> = database.listWrappedKeys(userId)
+    fun listDevices(userId: UUID): List<WrappedKeyRecord> = keyRepo.listWrappedKeys(userId)
 
     fun getDeviceForUser(deviceId: String, userId: UUID): WrappedKeyRecord? =
-        database.getWrappedKeyByDeviceIdForUser(deviceId, userId)
+        keyRepo.getWrappedKeyByDeviceIdForUser(deviceId, userId)
 
     fun retireDevice(deviceId: String, userId: UUID): Boolean {
-        val record = database.getWrappedKeyByDeviceIdForUser(deviceId, userId) ?: return false
+        val record = keyRepo.getWrappedKeyByDeviceIdForUser(deviceId, userId) ?: return false
         if (record.retiredAt != null) return false
-        database.retireWrappedKey(record.id, Instant.now())
+        keyRepo.retireWrappedKey(record.id, Instant.now())
         return true
     }
 
     fun touchDevice(deviceId: String, userId: UUID): Boolean {
-        val record = database.getWrappedKeyByDeviceIdForUser(deviceId, userId)
+        val record = keyRepo.getWrappedKeyByDeviceIdForUser(deviceId, userId)
         if (record == null || record.retiredAt != null) return false
-        database.touchWrappedKey(record.id)
+        keyRepo.touchWrappedKey(record.id)
         return true
     }
 
     // ---- Passphrase ------------------------------------------------------------
 
-    fun getPassphrase(userId: UUID): RecoveryPassphraseRecord? = database.getRecoveryPassphrase(userId)
+    fun getPassphrase(userId: UUID): RecoveryPassphraseRecord? = keyRepo.getRecoveryPassphrase(userId)
 
     sealed class PutPassphraseResult {
         data class Updated(val record: RecoveryPassphraseRecord) : PutPassphraseResult()
@@ -116,7 +116,7 @@ class KeyService(
             ?: return PutPassphraseResult.Invalid("wrappedMasterKey is not valid Base64")
         val salt = runCatching { dec.decode(saltB64) }.getOrNull()
             ?: return PutPassphraseResult.Invalid("salt is not valid Base64")
-        database.upsertRecoveryPassphrase(
+        keyRepo.upsertRecoveryPassphrase(
             RecoveryPassphraseRecord(
                 wrappedMasterKey = wrappedMasterKey,
                 wrapFormat = wrapFormat,
@@ -127,11 +127,11 @@ class KeyService(
             ),
             userId,
         )
-        val updated = database.getRecoveryPassphrase(userId)!!
+        val updated = keyRepo.getRecoveryPassphrase(userId)!!
         return PutPassphraseResult.Updated(updated)
     }
 
-    fun deletePassphrase(userId: UUID): Boolean = database.deleteRecoveryPassphrase(userId)
+    fun deletePassphrase(userId: UUID): Boolean = keyRepo.deleteRecoveryPassphrase(userId)
 
     // ---- Device link flow ------------------------------------------------------
 
@@ -141,7 +141,7 @@ class KeyService(
         val id = UUID.randomUUID()
         val code = generateLinkCode()
         val expiresAt = Instant.now().plus(15, ChronoUnit.MINUTES)
-        database.insertPendingDeviceLink(
+        keyRepo.insertPendingDeviceLink(
             PendingDeviceLinkRecord(
                 id = id,
                 oneTimeCode = code,
@@ -173,18 +173,18 @@ class KeyService(
         pubkeyFormat: String,
         pubkeyB64: String,
     ): RegisterOnLinkResult {
-        val link = database.getPendingDeviceLink(linkId) ?: return RegisterOnLinkResult.NotFound
+        val link = keyRepo.getPendingDeviceLink(linkId) ?: return RegisterOnLinkResult.NotFound
         if (Instant.now().isAfter(link.expiresAt)) return RegisterOnLinkResult.Expired
         if (link.state != "initiated") return RegisterOnLinkResult.WrongState
         if (code != link.oneTimeCode) return RegisterOnLinkResult.Invalid("code does not match")
         if (deviceKind !in VALID_DEVICE_KINDS) return RegisterOnLinkResult.Invalid("deviceKind must be one of: android, web, ios")
         val pubkey = runCatching { dec.decode(pubkeyB64) }.getOrNull()
             ?: return RegisterOnLinkResult.Invalid("pubkey is not valid Base64")
-        database.registerNewDevice(linkId, deviceId, deviceLabel, deviceKind, pubkeyFormat, pubkey)
+        keyRepo.registerNewDevice(linkId, deviceId, deviceLabel, deviceKind, pubkeyFormat, pubkey)
         return RegisterOnLinkResult.Accepted
     }
 
-    fun getLinkStatus(linkId: UUID): PendingDeviceLinkRecord? = database.getPendingDeviceLink(linkId)
+    fun getLinkStatus(linkId: UUID): PendingDeviceLinkRecord? = keyRepo.getPendingDeviceLink(linkId)
 
     sealed class WrapLinkResult {
         data class Wrapped(val newDevice: WrappedKeyRecord) : WrapLinkResult()
@@ -200,12 +200,12 @@ class KeyService(
         wrapFormat: String,
         userId: UUID,
     ): WrapLinkResult {
-        val link = database.getPendingDeviceLink(linkId) ?: return WrapLinkResult.NotFound
+        val link = keyRepo.getPendingDeviceLink(linkId) ?: return WrapLinkResult.NotFound
         if (Instant.now().isAfter(link.expiresAt)) return WrapLinkResult.Expired
         if (link.state != "device_registered") return WrapLinkResult.WrongState
         val wrappedMasterKey = runCatching { dec.decode(wrappedMasterKeyB64) }.getOrNull()
             ?: return WrapLinkResult.Invalid("wrappedMasterKey is not valid Base64")
-        database.completeDeviceLink(
+        keyRepo.completeDeviceLink(
             id = linkId,
             wrappedMasterKey = wrappedMasterKey,
             wrapFormat = wrapFormat,
@@ -216,7 +216,7 @@ class KeyService(
             pubkey = link.newPubkey!!,
             userId = userId,
         )
-        val newDevice = database.getWrappedKeyByDeviceIdForUser(link.newDeviceId, userId)!!
+        val newDevice = keyRepo.getWrappedKeyByDeviceIdForUser(link.newDeviceId, userId)!!
         return WrapLinkResult.Wrapped(newDevice)
     }
 }

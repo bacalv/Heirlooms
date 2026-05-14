@@ -1,8 +1,8 @@
 package digital.heirlooms.server.service.social
 
-import digital.heirlooms.server.Database
 import digital.heirlooms.server.domain.keys.AccountSharingKeyRecord
 import digital.heirlooms.server.domain.keys.FriendRecord
+import digital.heirlooms.server.repository.social.SocialRepository
 import java.util.Base64
 import java.util.UUID
 
@@ -12,9 +12,9 @@ import java.util.UUID
  * lookup lives here so handlers stay free of authorization logic.
  */
 class SocialService(
-    private val database: Database,
+    private val socialRepo: SocialRepository,
 ) {
-    fun listFriends(userId: UUID): List<FriendRecord> = database.listFriends(userId)
+    fun listFriends(userId: UUID): List<FriendRecord> = socialRepo.listFriends(userId)
 
     // ---- Sharing key -----------------------------------------------------------
 
@@ -34,11 +34,11 @@ class SocialService(
             ?: return PutSharingKeyResult.Invalid("pubkey is not valid Base64")
         val wrappedPrivkey = runCatching { dec.decode(wrappedPrivkeyB64) }.getOrNull()
             ?: return PutSharingKeyResult.Invalid("wrappedPrivkey is not valid Base64")
-        database.upsertSharingKey(userId, pubkey, wrappedPrivkey, wrapFormat)
+        socialRepo.upsertSharingKey(userId, pubkey, wrappedPrivkey, wrapFormat)
         return PutSharingKeyResult.Ok
     }
 
-    fun getMySharingKey(userId: UUID): AccountSharingKeyRecord? = database.getSharingKey(userId)
+    fun getMySharingKey(userId: UUID): AccountSharingKeyRecord? = socialRepo.getSharingKey(userId)
 
     sealed class GetFriendSharingKeyResult {
         data class Ok(val pubkeyBytes: ByteArray) : GetFriendSharingKeyResult()
@@ -47,8 +47,8 @@ class SocialService(
     }
 
     fun getFriendSharingKey(requesterId: UUID, friendId: UUID): GetFriendSharingKeyResult {
-        if (!database.areFriends(requesterId, friendId)) return GetFriendSharingKeyResult.NotFriends
-        val record = database.getSharingKey(friendId) ?: return GetFriendSharingKeyResult.NotFound
+        if (!socialRepo.areFriends(requesterId, friendId)) return GetFriendSharingKeyResult.NotFriends
+        val record = socialRepo.getSharingKey(friendId) ?: return GetFriendSharingKeyResult.NotFound
         return GetFriendSharingKeyResult.Ok(record.pubkey)
     }
 }

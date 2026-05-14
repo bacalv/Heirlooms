@@ -3,9 +3,14 @@ package digital.heirlooms.server.repository.diag
 import java.util.UUID
 import javax.sql.DataSource
 
-class DiagRepository(private val dataSource: DataSource) {
+interface DiagRepository {
+    fun insertDiagEvent(deviceLabel: String, tag: String, message: String, detail: String, userId: UUID)
+    fun listDiagEvents(userId: UUID, limit: Int = 200): List<Map<String, String>>
+}
 
-    fun insertDiagEvent(
+class PostgresDiagRepository(private val dataSource: DataSource) : DiagRepository {
+
+    override fun insertDiagEvent(
         deviceLabel: String,
         tag: String,
         message: String,
@@ -26,7 +31,7 @@ class DiagRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun listDiagEvents(userId: UUID, limit: Int = 200): List<Map<String, String>> {
+    override fun listDiagEvents(userId: UUID, limit: Int): List<Map<String, String>> {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT id, created_at, device_label, tag, message, detail FROM diagnostic_events WHERE user_id = ? ORDER BY created_at DESC LIMIT ?"

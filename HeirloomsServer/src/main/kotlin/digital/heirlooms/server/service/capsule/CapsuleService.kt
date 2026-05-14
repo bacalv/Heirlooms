@@ -1,6 +1,5 @@
 package digital.heirlooms.server.service.capsule
 
-import digital.heirlooms.server.Database
 import digital.heirlooms.server.domain.capsule.CapsuleDetail
 import digital.heirlooms.server.domain.capsule.CapsuleShape
 import digital.heirlooms.server.domain.capsule.CapsuleState
@@ -18,7 +17,7 @@ private const val RECIPIENT_MAX_LENGTH = 200
  * HTTP parsing and response formatting; this service owns all decisions.
  */
 class CapsuleService(
-    private val database: Database,
+    private val capsuleRepo: CapsuleRepository,
 ) {
     // ---- Create ----------------------------------------------------------------
 
@@ -43,11 +42,11 @@ class CapsuleService(
             else null
         if (validationError != null) return CreateResult.Invalid(validationError)
 
-        val unknownId = uploadIds.firstOrNull { !database.uploadExists(it, userId) }
+        val unknownId = uploadIds.firstOrNull { !capsuleRepo.uploadExists(it, userId) }
         if (unknownId != null) return CreateResult.UnknownUpload(unknownId)
 
         val initialState = if (shape == CapsuleShape.SEALED) CapsuleState.SEALED else CapsuleState.OPEN
-        val detail = database.createCapsule(
+        val detail = capsuleRepo.createCapsule(
             id = UUID.randomUUID(),
             createdByUser = "api-user",
             shape = shape,
@@ -79,27 +78,27 @@ class CapsuleService(
             val err = validateMessage(message)
             if (err != null) return CapsuleRepository.UpdateResult.MessageTooLong(MESSAGE_MAX_BYTES)
         }
-        return database.updateCapsule(capsuleId, userId, unlockAt, recipients, uploadIds, message)
+        return capsuleRepo.updateCapsule(capsuleId, userId, unlockAt, recipients, uploadIds, message)
     }
 
     // ---- Read ------------------------------------------------------------------
 
     fun getCapsule(capsuleId: UUID, userId: UUID): CapsuleDetail? =
-        database.getCapsuleById(capsuleId, userId)
+        capsuleRepo.getCapsuleById(capsuleId, userId)
 
     fun listCapsules(states: List<CapsuleState>, orderBy: String, userId: UUID): List<CapsuleSummary> =
-        database.listCapsules(states, orderBy, userId)
+        capsuleRepo.listCapsules(states, orderBy, userId)
 
     fun getCapsulesForUpload(uploadId: UUID, userId: UUID): List<CapsuleSummary>? =
-        database.getCapsulesForUpload(uploadId, userId)
+        capsuleRepo.getCapsulesForUpload(uploadId, userId)
 
     // ---- Seal / cancel ---------------------------------------------------------
 
     fun sealCapsule(capsuleId: UUID, userId: UUID): CapsuleRepository.SealResult =
-        database.sealCapsule(capsuleId, userId)
+        capsuleRepo.sealCapsule(capsuleId, userId)
 
     fun cancelCapsule(capsuleId: UUID, userId: UUID): CapsuleRepository.CancelResult =
-        database.cancelCapsule(capsuleId, userId)
+        capsuleRepo.cancelCapsule(capsuleId, userId)
 
     // ---- Validation helpers ----------------------------------------------------
 

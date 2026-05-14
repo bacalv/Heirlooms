@@ -12,16 +12,37 @@ import java.time.temporal.ChronoUnit
 import java.util.UUID
 import javax.sql.DataSource
 
-class AuthRepository(private val dataSource: DataSource) {
+interface AuthRepository {
+    fun createUser(id: UUID = UUID.randomUUID(), username: String, displayName: String, authVerifier: ByteArray? = null, authSalt: ByteArray? = null): UserRecord
+    fun findUserByUsername(username: String): UserRecord?
+    fun findUserById(id: UUID): UserRecord?
+    fun setUserAuth(userId: UUID, authVerifier: ByteArray, authSalt: ByteArray)
+    fun resetUserAuth(userId: UUID)
+    fun createSession(userId: UUID, tokenHash: ByteArray, deviceKind: String): UserSessionRecord
+    fun findSessionByTokenHash(tokenHash: ByteArray): UserSessionRecord?
+    fun deleteSession(id: UUID)
+    fun refreshSession(id: UUID)
+    fun deleteExpiredSessions()
+    fun createInvite(createdBy: UUID, rawToken: String): InviteRecord
+    fun findInviteByToken(token: String): InviteRecord?
+    fun markInviteUsed(id: UUID, usedBy: UUID)
+    fun createPairingLink(userId: UUID, code: String): PendingDeviceLinkRecord
+    fun setPairingWebSession(id: UUID, webSessionId: String)
+    fun completePairingLink(id: UUID, wrappedMasterKey: ByteArray, wrapFormat: String, rawSessionToken: String, sessionRecord: UserSessionRecord)
+    fun getPendingDeviceLinkByCode(code: String): PendingDeviceLinkRecord?
+    fun getPendingDeviceLinkByWebSessionId(webSessionId: String): PendingDeviceLinkRecord?
+}
+
+class PostgresAuthRepository(private val dataSource: DataSource) : AuthRepository {
 
     // ── Users ─────────────────────────────────────────────────────────────────
 
-    fun createUser(
-        id: UUID = UUID.randomUUID(),
+    override fun createUser(
+        id: UUID,
         username: String,
         displayName: String,
-        authVerifier: ByteArray? = null,
-        authSalt: ByteArray? = null,
+        authVerifier: ByteArray?,
+        authSalt: ByteArray?,
     ): UserRecord {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
@@ -39,7 +60,7 @@ class AuthRepository(private val dataSource: DataSource) {
         return findUserById(id)!!
     }
 
-    fun findUserByUsername(username: String): UserRecord? {
+    override fun findUserByUsername(username: String): UserRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT id, username, display_name, auth_verifier, auth_salt, created_at FROM users WHERE username = ?"
@@ -52,7 +73,7 @@ class AuthRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun findUserById(id: UUID): UserRecord? {
+    override fun findUserById(id: UUID): UserRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT id, username, display_name, auth_verifier, auth_salt, created_at FROM users WHERE id = ?"
@@ -65,7 +86,7 @@ class AuthRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun setUserAuth(userId: UUID, authVerifier: ByteArray, authSalt: ByteArray) {
+    override fun setUserAuth(userId: UUID, authVerifier: ByteArray, authSalt: ByteArray) {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "UPDATE users SET auth_verifier = ?, auth_salt = ? WHERE id = ?"
@@ -78,7 +99,7 @@ class AuthRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun resetUserAuth(userId: UUID) {
+    override fun resetUserAuth(userId: UUID) {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "UPDATE users SET auth_verifier = NULL, auth_salt = NULL WHERE id = ?"
@@ -91,7 +112,7 @@ class AuthRepository(private val dataSource: DataSource) {
 
     // ── Sessions ──────────────────────────────────────────────────────────────
 
-    fun createSession(userId: UUID, tokenHash: ByteArray, deviceKind: String): UserSessionRecord {
+    override fun createSession(userId: UUID, tokenHash: ByteArray, deviceKind: String): UserSessionRecord {
         val id = UUID.randomUUID()
         val now = Instant.now()
         val expiresAt = now.plus(90, ChronoUnit.DAYS)
@@ -113,7 +134,7 @@ class AuthRepository(private val dataSource: DataSource) {
         return UserSessionRecord(id, userId, tokenHash, deviceKind, now, now, expiresAt)
     }
 
-    fun findSessionByTokenHash(tokenHash: ByteArray): UserSessionRecord? {
+    override fun findSessionByTokenHash(tokenHash: ByteArray): UserSessionRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """SELECT id, user_id, token_hash, device_kind, created_at, last_used_at, expires_at
@@ -127,7 +148,7 @@ class AuthRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun deleteSession(id: UUID) {
+    override fun deleteSession(id: UUID) {
         dataSource.connection.use { conn ->
             conn.prepareStatement("DELETE FROM user_sessions WHERE id = ?").use { stmt ->
                 stmt.setObject(1, id)
@@ -136,7 +157,7 @@ class AuthRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun refreshSession(id: UUID) {
+    override fun refreshSession(id: UUID) {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "UPDATE user_sessions SET last_used_at = NOW(), expires_at = NOW() + INTERVAL '90 days' WHERE id = ?"
@@ -147,7 +168,7 @@ class AuthRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun deleteExpiredSessions() {
+    override fun deleteExpiredSessions() {
         dataSource.connection.use { conn ->
             conn.createStatement().use { stmt ->
                 stmt.execute("DELETE FROM user_sessions WHERE expires_at < NOW()")
@@ -159,7 +180,7 @@ class AuthRepository(private val dataSource: DataSource) {
 
     // ── Invites ───────────────────────────────────────────────────────────────
 
-    fun createInvite(createdBy: UUID, rawToken: String): InviteRecord {
+    override fun createInvite(createdBy: UUID, rawToken: String): InviteRecord {
         val id = UUID.randomUUID()
         val now = Instant.now()
         val expiresAt = now.plus(48, ChronoUnit.HOURS)
@@ -178,7 +199,7 @@ class AuthRepository(private val dataSource: DataSource) {
         return InviteRecord(id, rawToken, createdBy, now, expiresAt, null, null)
     }
 
-    fun findInviteByToken(token: String): InviteRecord? {
+    override fun findInviteByToken(token: String): InviteRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT id, token, created_by, created_at, expires_at, used_at, used_by FROM invites WHERE token = ?"
@@ -191,7 +212,7 @@ class AuthRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun markInviteUsed(id: UUID, usedBy: UUID) {
+    override fun markInviteUsed(id: UUID, usedBy: UUID) {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "UPDATE invites SET used_at = NOW(), used_by = ? WHERE id = ?"
@@ -205,7 +226,7 @@ class AuthRepository(private val dataSource: DataSource) {
 
     // ── M8 Pairing ────────────────────────────────────────────────────────────
 
-    fun createPairingLink(userId: UUID, code: String): PendingDeviceLinkRecord {
+    override fun createPairingLink(userId: UUID, code: String): PendingDeviceLinkRecord {
         val id = UUID.randomUUID()
         val expiresAt = Instant.now().plus(5, ChronoUnit.MINUTES)
         dataSource.connection.use { conn ->
@@ -228,7 +249,7 @@ class AuthRepository(private val dataSource: DataSource) {
         )
     }
 
-    fun setPairingWebSession(id: UUID, webSessionId: String) {
+    override fun setPairingWebSession(id: UUID, webSessionId: String) {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "UPDATE pending_device_links SET state = 'device_registered', web_session_id = ? WHERE id = ?"
@@ -240,7 +261,7 @@ class AuthRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun completePairingLink(
+    override fun completePairingLink(
         id: UUID,
         wrappedMasterKey: ByteArray,
         wrapFormat: String,
@@ -267,7 +288,7 @@ class AuthRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun getPendingDeviceLinkByCode(code: String): PendingDeviceLinkRecord? {
+    override fun getPendingDeviceLinkByCode(code: String): PendingDeviceLinkRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT $PENDING_LINK_COLUMNS FROM pending_device_links WHERE one_time_code = ?"
@@ -280,7 +301,7 @@ class AuthRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun getPendingDeviceLinkByWebSessionId(webSessionId: String): PendingDeviceLinkRecord? {
+    override fun getPendingDeviceLinkByWebSessionId(webSessionId: String): PendingDeviceLinkRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT $PENDING_LINK_COLUMNS FROM pending_device_links WHERE web_session_id = ?"

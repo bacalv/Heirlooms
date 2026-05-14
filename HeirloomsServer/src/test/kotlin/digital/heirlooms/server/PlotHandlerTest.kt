@@ -3,6 +3,16 @@ package digital.heirlooms.server
 import digital.heirlooms.server.routes.buildApp
 import digital.heirlooms.server.domain.plot.PlotRecord
 import digital.heirlooms.server.repository.plot.PlotRepository
+import digital.heirlooms.server.repository.auth.AuthRepository
+import digital.heirlooms.server.repository.capsule.CapsuleRepository
+import digital.heirlooms.server.repository.diag.DiagRepository
+import digital.heirlooms.server.repository.keys.KeyRepository
+import digital.heirlooms.server.repository.plot.FlowRepository
+import digital.heirlooms.server.repository.plot.PlotItemRepository
+import digital.heirlooms.server.repository.plot.PlotMemberRepository
+import digital.heirlooms.server.repository.social.SocialRepository
+import digital.heirlooms.server.repository.storage.BlobRepository
+import digital.heirlooms.server.repository.upload.UploadRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.mockk.every
 import io.mockk.justRun
@@ -30,8 +40,34 @@ import java.util.UUID
 class PlotHandlerTest {
 
     private val mockStorage = mockk<FileStore>()
-    private val mockDatabase = mockk<Database>()
-    private val app = buildApp(mockStorage, mockDatabase)
+    private val mockDatabase = mockk<Database>(relaxed = true)
+    private val mockPlotRepo = mockk<PlotRepository>(relaxed = true)
+    private val mockUploadRepo = mockk<UploadRepository>(relaxed = true)
+    private val mockAuthRepo = mockk<AuthRepository>(relaxed = true)
+    private val mockCapsuleRepo = mockk<CapsuleRepository>(relaxed = true)
+    private val mockDiagRepo = mockk<DiagRepository>(relaxed = true)
+    private val mockKeyRepo = mockk<KeyRepository>(relaxed = true)
+    private val mockFlowRepo = mockk<FlowRepository>(relaxed = true)
+    private val mockItemRepo = mockk<PlotItemRepository>(relaxed = true)
+    private val mockMemberRepo = mockk<PlotMemberRepository>(relaxed = true)
+    private val mockSocialRepo = mockk<SocialRepository>(relaxed = true)
+    private val mockBlobRepo = mockk<BlobRepository>(relaxed = true)
+
+    private val app = buildApp(
+        storage = mockStorage,
+        database = mockDatabase,
+        uploadRepo = mockUploadRepo,
+        authRepo = mockAuthRepo,
+        capsuleRepo = mockCapsuleRepo,
+        plotRepo = mockPlotRepo,
+        flowRepo = mockFlowRepo,
+        itemRepo = mockItemRepo,
+        memberRepo = mockMemberRepo,
+        keyRepo = mockKeyRepo,
+        socialRepo = mockSocialRepo,
+        blobRepo = mockBlobRepo,
+        diagRepo = mockDiagRepo,
+    )
     private val mapper = ObjectMapper()
 
     private val plotId = UUID.randomUUID()
@@ -62,7 +98,7 @@ class PlotHandlerTest {
 
     @Test
     fun `GET plots returns 200 with array`() {
-        every { mockDatabase.listPlots() } returns listOf(plot())
+        every { mockPlotRepo.listPlots() } returns listOf(plot())
 
         val response = app(Request(GET, "/api/plots"))
 
@@ -75,7 +111,7 @@ class PlotHandlerTest {
     @Test
     fun `GET plots includes criteria in response`() {
         val c = """{"type":"tag","tag":"family"}"""
-        every { mockDatabase.listPlots() } returns listOf(plot(criteria = c))
+        every { mockPlotRepo.listPlots() } returns listOf(plot(criteria = c))
 
         val response = app(Request(GET, "/api/plots"))
 
@@ -87,7 +123,7 @@ class PlotHandlerTest {
 
     @Test
     fun `GET plots includes null criteria when plot has no criteria`() {
-        every { mockDatabase.listPlots() } returns listOf(plot(criteria = null))
+        every { mockPlotRepo.listPlots() } returns listOf(plot(criteria = null))
 
         val first = mapper.readTree(app(Request(GET, "/api/plots")).bodyString()).first()
         assertTrue(first.has("criteria"))
@@ -96,7 +132,7 @@ class PlotHandlerTest {
 
     @Test
     fun `GET plots empty returns empty array`() {
-        every { mockDatabase.listPlots() } returns emptyList()
+        every { mockPlotRepo.listPlots() } returns emptyList()
 
         val body = mapper.readTree(app(Request(GET, "/api/plots")).bodyString())
         assertEquals(0, body.size())
@@ -106,7 +142,7 @@ class PlotHandlerTest {
 
     @Test
     fun `POST plots creates a plot and returns 201`() {
-        every { mockDatabase.createPlot(any(), any(), any(), any(), any()) } returns plot()
+        every { mockPlotRepo.createPlot(any(), any(), any(), any(), any()) } returns plot()
 
         val response = app(
             Request(POST, "/api/plots").body("""{"name":"Summer"}""")
@@ -119,8 +155,8 @@ class PlotHandlerTest {
 
     @Test
     fun `POST plots with criteria creates plot`() {
-        justRun { mockDatabase.withCriteriaValidation(any(), any()) }
-        every { mockDatabase.createPlot(any(), any(), any(), any(), any()) } returns plot()
+        justRun { mockPlotRepo.withCriteriaValidation(any(), any()) }
+        every { mockPlotRepo.createPlot(any(), any(), any(), any(), any()) } returns plot()
 
         val response = app(
             Request(POST, "/api/plots").body("""{"name":"Test","criteria":{"type":"tag","tag":"family"}}""")
@@ -144,7 +180,7 @@ class PlotHandlerTest {
 
     @Test
     fun `PUT plots updates and returns 200`() {
-        every { mockDatabase.updatePlot(plotId, any(), any(), any(), any(), any()) } returns
+        every { mockPlotRepo.updatePlot(plotId, any(), any(), any(), any(), any()) } returns
             PlotRepository.PlotUpdateResult.Success(plot(name = "Winter"))
 
         val response = app(
@@ -158,7 +194,7 @@ class PlotHandlerTest {
 
     @Test
     fun `PUT system-defined plot returns 403`() {
-        every { mockDatabase.updatePlot(systemPlotId, any(), any(), any(), any(), any()) } returns
+        every { mockPlotRepo.updatePlot(systemPlotId, any(), any(), any(), any(), any()) } returns
             PlotRepository.PlotUpdateResult.SystemDefined
 
         val response = app(
@@ -170,7 +206,7 @@ class PlotHandlerTest {
 
     @Test
     fun `PUT unknown plot returns 404`() {
-        every { mockDatabase.updatePlot(plotId, any(), any(), any(), any(), any()) } returns
+        every { mockPlotRepo.updatePlot(plotId, any(), any(), any(), any(), any()) } returns
             PlotRepository.PlotUpdateResult.NotFound
 
         val response = app(Request(PUT, "/api/plots/$plotId").body("""{"name":"X"}"""))
@@ -187,7 +223,7 @@ class PlotHandlerTest {
 
     @Test
     fun `DELETE plot returns 204`() {
-        every { mockDatabase.deletePlot(plotId) } returns PlotRepository.PlotDeleteResult.Success
+        every { mockPlotRepo.deletePlot(plotId) } returns PlotRepository.PlotDeleteResult.Success
 
         val response = app(Request(DELETE, "/api/plots/$plotId"))
         assertEquals(NO_CONTENT, response.status)
@@ -195,7 +231,7 @@ class PlotHandlerTest {
 
     @Test
     fun `DELETE system-defined plot returns 403`() {
-        every { mockDatabase.deletePlot(systemPlotId) } returns PlotRepository.PlotDeleteResult.SystemDefined
+        every { mockPlotRepo.deletePlot(systemPlotId) } returns PlotRepository.PlotDeleteResult.SystemDefined
 
         val response = app(Request(DELETE, "/api/plots/$systemPlotId"))
         assertEquals(FORBIDDEN, response.status)
@@ -203,7 +239,7 @@ class PlotHandlerTest {
 
     @Test
     fun `DELETE unknown plot returns 404`() {
-        every { mockDatabase.deletePlot(plotId) } returns PlotRepository.PlotDeleteResult.NotFound
+        every { mockPlotRepo.deletePlot(plotId) } returns PlotRepository.PlotDeleteResult.NotFound
 
         val response = app(Request(DELETE, "/api/plots/$plotId"))
         assertEquals(NOT_FOUND, response.status)
@@ -213,7 +249,7 @@ class PlotHandlerTest {
 
     @Test
     fun `plot JSON includes all required fields`() {
-        every { mockDatabase.listPlots() } returns listOf(plot())
+        every { mockPlotRepo.listPlots() } returns listOf(plot())
 
         val body = mapper.readTree(app(Request(GET, "/api/plots")).bodyString()).first()
         assertTrue(body.has("id"))
@@ -230,7 +266,7 @@ class PlotHandlerTest {
 
     @Test
     fun `plot JSON does not include tag_criteria`() {
-        every { mockDatabase.listPlots() } returns listOf(plot())
+        every { mockPlotRepo.listPlots() } returns listOf(plot())
 
         val body = mapper.readTree(app(Request(GET, "/api/plots")).bodyString()).first()
         assertFalse(body.has("tag_criteria"))

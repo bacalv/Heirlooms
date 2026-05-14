@@ -1,6 +1,5 @@
 package digital.heirlooms.server.service.upload
 
-import digital.heirlooms.server.Database
 import digital.heirlooms.server.DirectUploadSupport
 import digital.heirlooms.server.EnvelopeFormat
 import digital.heirlooms.server.EnvelopeFormatException
@@ -8,16 +7,18 @@ import digital.heirlooms.server.FileStore
 import digital.heirlooms.server.MediaMetadata
 import digital.heirlooms.server.MetadataExtractor
 import digital.heirlooms.server.StorageKey
-import digital.heirlooms.server.TagValidationResult
 import digital.heirlooms.server.METADATA_IMAGE_MIME_TYPES
 import digital.heirlooms.server.METADATA_SUPPORTED_MIME_TYPES
 import digital.heirlooms.server.THUMBNAIL_SUPPORTED_MIME_TYPES
-import digital.heirlooms.server.domain.keys.RecoveryPassphraseRecord
 import digital.heirlooms.server.domain.upload.UploadPage
 import digital.heirlooms.server.domain.upload.UploadRecord
 import digital.heirlooms.server.domain.upload.UploadSort
 import digital.heirlooms.server.extractVideoDuration
 import digital.heirlooms.server.generateThumbnail
+import digital.heirlooms.server.repository.plot.FlowRepository
+import digital.heirlooms.server.repository.plot.PlotRepository
+import digital.heirlooms.server.repository.social.SocialRepository
+import digital.heirlooms.server.repository.storage.BlobRepository
 import digital.heirlooms.server.repository.upload.UploadRepository
 import java.security.MessageDigest
 import java.time.Instant
@@ -34,7 +35,11 @@ private const val EXIF_HEADER_BYTES = 65_536
  * extraction, blob tracking, migration, sharing).
  */
 class UploadService(
-    private val database: Database,
+    private val uploadRepo: UploadRepository,
+    private val blobRepo: BlobRepository,
+    private val socialRepo: SocialRepository,
+    private val plotRepo: PlotRepository,
+    private val flowRepo: FlowRepository,
     private val storage: FileStore,
     private val thumbnailGenerator: (ByteArray, String) -> ByteArray? = ::generateThumbnail,
     private val metadataExtractor: (ByteArray, String) -> MediaMetadata = MetadataExtractor()::extract,
@@ -86,15 +91,15 @@ class UploadService(
         return if (storageClassRaw == "encrypted") {
             val content = du.prepareUpload(mimeType)
             val thumb = du.prepareUpload("application/octet-stream")
-            database.insertPendingBlob(content.storageKey.value)
-            database.insertPendingBlob(thumb.storageKey.value)
+            blobRepo.insertPendingBlob(content.storageKey.value)
+            blobRepo.insertPendingBlob(thumb.storageKey.value)
             InitiateResult.Encrypted(
                 content.storageKey.value, content.uploadUrl,
                 thumb.storageKey.value, thumb.uploadUrl,
             )
         } else {
             val prepared = du.prepareUpload(mimeType)
-            database.insertPendingBlob(prepared.storageKey.value)
+            blobRepo.insertPendingBlob(prepared.storageKey.value)
             InitiateResult.Public(prepared.storageKey.value, prepared.uploadUrl)
         }
     }
@@ -118,7 +123,7 @@ class UploadService(
     fun handleUpload(body: ByteArray, mimeType: String, userId: UUID): UploadResult {
         if (body.isEmpty()) return UploadResult.Invalid("Request body is empty")
         val hash = sha256Hex(body)
-        val existing = database.findByContentHash(hash, userId)
+        val existing = uploadRepo.findByContentHash(hash, userId)
         if (existing != null) return UploadResult.Duplicate(existing.storageKey)
         return try {
             val id = UUID.randomUUID()
@@ -141,7 +146,7 @@ class UploadService(
                 deviceMake = metadata.deviceMake,
                 deviceModel = metadata.deviceModel,
             )
-            database.recordUpload(record, userId)
+            uploadRepo.recordUpload(record, userId)
             UploadResult.Created(record)
         } catch (e: Exception) {
             UploadResult.Failed("Failed to store file: ${e.message}")
@@ -218,7 +223,7 @@ class UploadService(
         }
 
         val id = UUID.randomUUID()
-        database.recordUpload(
+        uploadRepo.recordUpload(
             UploadRecord(
                 id = id,
                 storageKey = storageKey,
@@ -243,10 +248,10 @@ class UploadService(
             ),
             userId,
         )
-        if (tags.isNotEmpty()) database.updateTags(id, tags, userId)
-        runCatching { database.deletePendingBlob(storageKey) }
-        if (thumbStorageKey != null) runCatching { database.deletePendingBlob(thumbStorageKey) }
-        if (previewStorageKey != null) runCatching { database.deletePendingBlob(previewStorageKey) }
+        if (tags.isNotEmpty()) uploadRepo.updateTags(id, tags, userId) { conn, uploadId, uid -> flowRepo.runUnstagedFlowsForUpload(conn, uploadId, uid) }
+        runCatching { blobRepo.deletePendingBlob(storageKey) }
+        if (thumbStorageKey != null) runCatching { blobRepo.deletePendingBlob(thumbStorageKey) }
+        if (previewStorageKey != null) runCatching { blobRepo.deletePendingBlob(previewStorageKey) }
         return ConfirmResult.Created
     }
 
@@ -258,7 +263,7 @@ class UploadService(
         tags: List<String>,
         userId: UUID,
     ): ConfirmResult {
-        val existing = if (contentHash != null) database.findByContentHash(contentHash, userId) else null
+        val existing = if (contentHash != null) uploadRepo.findByContentHash(contentHash, userId) else null
         if (existing != null) return ConfirmResult.Duplicate(existing.storageKey)
 
         val bytes = fetchBytesIfNeeded(storageKey, mimeType)
@@ -272,7 +277,7 @@ class UploadService(
             runCatching { extractVideoDuration(bytes, mimeType) }.getOrNull()
         else null
         val id = UUID.randomUUID()
-        database.recordUpload(
+        uploadRepo.recordUpload(
             UploadRecord(
                 id = id,
                 storageKey = storageKey,
@@ -290,8 +295,8 @@ class UploadService(
             ),
             userId,
         )
-        if (tags.isNotEmpty()) database.updateTags(id, tags, userId)
-        runCatching { database.deletePendingBlob(storageKey) }
+        if (tags.isNotEmpty()) uploadRepo.updateTags(id, tags, userId) { conn, uploadId, uid -> flowRepo.runUnstagedFlowsForUpload(conn, uploadId, uid) }
+        runCatching { blobRepo.deletePendingBlob(storageKey) }
         return ConfirmResult.Created
     }
 
@@ -319,7 +324,7 @@ class UploadService(
         wrappedThumbDekB64: String?,
         thumbDekFormat: String?,
     ): MigrateResult {
-        val existing = database.findUploadByIdForUser(uploadId, userId) ?: return MigrateResult.NotFound
+        val existing = uploadRepo.findUploadByIdForUser(uploadId, userId) ?: return MigrateResult.NotFound
         if (existing.storageClass != "public")
             return MigrateResult.WrongStorageClass("upload is already migrated or wrong storage class")
 
@@ -358,7 +363,7 @@ class UploadService(
         val oldStorageKey = existing.storageKey
         val oldThumbnailKey = existing.thumbnailKey
 
-        val migrated = database.migrateUploadToEncrypted(
+        val migrated = uploadRepo.migrateUploadToEncrypted(
             id = uploadId,
             newStorageKey = newStorageKey,
             newContentHash = contentHash,
@@ -384,12 +389,12 @@ class UploadService(
         }
 
         // Clean up pending_blobs entries for the new ciphertext keys
-        try { database.deletePendingBlob(newStorageKey) } catch (_: Exception) {}
+        try { blobRepo.deletePendingBlob(newStorageKey) } catch (_: Exception) {}
         if (thumbStorageKey != null) {
-            try { database.deletePendingBlob(thumbStorageKey) } catch (_: Exception) {}
+            try { blobRepo.deletePendingBlob(thumbStorageKey) } catch (_: Exception) {}
         }
 
-        val updated = database.findUploadByIdForUser(uploadId, userId) ?: return MigrateResult.NotFound
+        val updated = uploadRepo.findUploadByIdForUser(uploadId, userId) ?: return MigrateResult.NotFound
         return MigrateResult.Migrated(updated)
     }
 
@@ -412,19 +417,19 @@ class UploadService(
         dekFormat: String?,
         rotationOverride: Int?,
     ): ShareResult {
-        val record = database.findUploadByIdForUser(uploadId, requesterId) ?: return ShareResult.NotFound
+        val record = uploadRepo.findUploadByIdForUser(uploadId, requesterId) ?: return ShareResult.NotFound
         if (toUserIdStr.isNullOrBlank() || wrappedDekB64.isNullOrBlank() || dekFormat.isNullOrBlank())
             return ShareResult.Invalid("Missing required fields")
         val toUserId = runCatching { UUID.fromString(toUserIdStr) }.getOrNull()
             ?: return ShareResult.Invalid("Invalid toUserId")
-        if (!database.areFriends(requesterId, toUserId)) return ShareResult.NotFriends
-        if (database.userAlreadyHasStorageKey(toUserId, record.storageKey)) return ShareResult.AlreadyHasItem
+        if (!socialRepo.areFriends(requesterId, toUserId)) return ShareResult.NotFriends
+        if (uploadRepo.userAlreadyHasStorageKey(toUserId, record.storageKey)) return ShareResult.AlreadyHasItem
         val dec = Base64.getDecoder()
         val wrappedDek = runCatching { dec.decode(wrappedDekB64) }.getOrNull()
             ?: return ShareResult.Invalid("wrappedDek is not valid Base64")
         val wrappedThumbnailDek = if (!wrappedThumbnailDekB64.isNullOrBlank())
             runCatching { dec.decode(wrappedThumbnailDekB64) }.getOrNull() else null
-        val shared = database.createSharedUpload(record, requesterId, toUserId, wrappedDek, wrappedThumbnailDek, dekFormat, rotationOverride)
+        val shared = uploadRepo.createSharedUpload(record, requesterId, toUserId, wrappedDek, wrappedThumbnailDek, dekFormat, rotationOverride)
         return ShareResult.Shared(shared)
     }
 
@@ -433,10 +438,10 @@ class UploadService(
     fun launchCompostCleanup() {
         Thread {
             try {
-                val expired = database.fetchExpiredCompostedUploads()
+                val expired = uploadRepo.fetchExpiredCompostedUploads()
                 for (record in expired) {
                     try {
-                        val hasLiveRef = database.hasLiveSharedReference(record.storageKey, record.id)
+                        val hasLiveRef = uploadRepo.hasLiveSharedReference(record.storageKey, record.id)
                         if (!hasLiveRef) {
                             storage.delete(StorageKey(record.storageKey))
                             if (record.thumbnailKey != null) {
@@ -452,7 +457,7 @@ class UploadService(
                         } else {
                             println("[compost-cleanup] INFO: skipping GCS delete for upload ${record.id} — live shared reference exists")
                         }
-                        database.hardDeleteUpload(record.id)
+                        uploadRepo.hardDeleteUpload(record.id)
                         println("[compost-cleanup] INFO: hard-deleted upload ${record.id} (composted ${record.compostedAt})")
                     } catch (e: Exception) {
                         println("[compost-cleanup] WARNING: failed to hard-delete upload ${record.id}: ${e.message}")
@@ -462,10 +467,10 @@ class UploadService(
                 println("[compost-cleanup] ERROR: cleanup failed: ${e.message}")
             }
             try {
-                val expiredPlots = database.fetchExpiredTombstonedPlots()
+                val expiredPlots = plotRepo.fetchExpiredTombstonedPlots()
                 for (plotId in expiredPlots) {
                     try {
-                        database.hardDeletePlot(plotId)
+                        plotRepo.hardDeletePlot(plotId)
                         println("[compost-cleanup] INFO: hard-deleted tombstoned plot $plotId")
                     } catch (e: Exception) {
                         println("[compost-cleanup] WARNING: failed to hard-delete plot $plotId: ${e.message}")

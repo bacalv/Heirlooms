@@ -3,6 +3,17 @@ package digital.heirlooms.server
 import digital.heirlooms.server.routes.buildApp
 import digital.heirlooms.server.domain.upload.UploadPage
 import digital.heirlooms.server.domain.upload.UploadRecord
+import digital.heirlooms.server.repository.auth.AuthRepository
+import digital.heirlooms.server.repository.capsule.CapsuleRepository
+import digital.heirlooms.server.repository.diag.DiagRepository
+import digital.heirlooms.server.repository.keys.KeyRepository
+import digital.heirlooms.server.repository.plot.FlowRepository
+import digital.heirlooms.server.repository.plot.PlotItemRepository
+import digital.heirlooms.server.repository.plot.PlotMemberRepository
+import digital.heirlooms.server.repository.plot.PlotRepository
+import digital.heirlooms.server.repository.social.SocialRepository
+import digital.heirlooms.server.repository.storage.BlobRepository
+import digital.heirlooms.server.repository.upload.UploadRepository
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -21,8 +32,24 @@ import java.util.UUID
 class PaginationTest {
 
     private val mockStorage = mockk<FileStore>()
-    private val mockDatabase = mockk<Database>()
-    private val app = buildApp(mockStorage, mockDatabase)
+    private val mockDatabase = mockk<Database>(relaxed = true)
+    private val mockUploadRepo = mockk<UploadRepository>(relaxed = true)
+
+    private val app = buildApp(
+        storage = mockStorage,
+        database = mockDatabase,
+        uploadRepo = mockUploadRepo,
+        authRepo = mockk<AuthRepository>(relaxed = true),
+        capsuleRepo = mockk<CapsuleRepository>(relaxed = true),
+        plotRepo = mockk<PlotRepository>(relaxed = true),
+        flowRepo = mockk<FlowRepository>(relaxed = true),
+        itemRepo = mockk<PlotItemRepository>(relaxed = true),
+        memberRepo = mockk<PlotMemberRepository>(relaxed = true),
+        keyRepo = mockk<KeyRepository>(relaxed = true),
+        socialRepo = mockk<SocialRepository>(relaxed = true),
+        blobRepo = mockk<BlobRepository>(relaxed = true),
+        diagRepo = mockk<DiagRepository>(relaxed = true),
+    )
     private val mapper = ObjectMapper()
 
     private fun upload(id: String = UUID.randomUUID().toString()) = UploadRecord(
@@ -39,7 +66,7 @@ class PaginationTest {
     fun `GET uploads returns items and null next_cursor on last page`() {
         every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns
             UploadPage(listOf(upload()), null)
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
@@ -55,7 +82,7 @@ class PaginationTest {
     fun `GET uploads returns next_cursor when more pages exist`() {
         every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns
             UploadPage(listOf(upload()), "some-cursor-value")
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
@@ -68,7 +95,7 @@ class PaginationTest {
         val cursorSlot = slot<String?>()
         every { mockDatabase.listUploadsPaginated(captureNullable(cursorSlot), any(), any(), any()) } returns
             UploadPage(emptyList(), null)
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         app(Request(GET, "/api/content/uploads?cursor=abc123"))
 
@@ -80,7 +107,7 @@ class PaginationTest {
         val limitSlot = slot<Int>()
         every { mockDatabase.listUploadsPaginated(any(), capture(limitSlot), any(), any()) } returns
             UploadPage(emptyList(), null)
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         app(Request(GET, "/api/content/uploads?limit=10"))
 
@@ -92,7 +119,7 @@ class PaginationTest {
         val limitSlot = slot<Int>()
         every { mockDatabase.listUploadsPaginated(any(), capture(limitSlot), any(), any()) } returns
             UploadPage(emptyList(), null)
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         app(Request(GET, "/api/content/uploads?limit=9999"))
 
@@ -104,7 +131,7 @@ class PaginationTest {
         val uploads = listOf(upload(), upload(), upload())
         every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns
             UploadPage(uploads, null)
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 

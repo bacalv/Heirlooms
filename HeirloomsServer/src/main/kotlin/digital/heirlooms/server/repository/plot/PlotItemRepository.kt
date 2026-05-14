@@ -11,14 +11,54 @@ import java.sql.ResultSet
 import java.util.UUID
 import javax.sql.DataSource
 
-class PlotItemRepository(private val dataSource: DataSource) {
+interface PlotItemRepository {
+    sealed class ApproveResult {
+        object Success : ApproveResult()
+        object NotFound : ApproveResult()
+        object AlreadyApproved : ApproveResult()
+        object PlotNotOwned : ApproveResult()
+        object PlotClosed : ApproveResult()
+        object DuplicateContent : ApproveResult()
+    }
+    sealed class RejectResult {
+        object Success : RejectResult()
+        object NotFound : RejectResult()
+        object AlreadyApproved : RejectResult()
+        object PlotNotOwned : RejectResult()
+    }
+    sealed class AddItemResult {
+        object Success : AddItemResult()
+        object AlreadyPresent : AddItemResult()
+        object PlotNotOwned : AddItemResult()
+        object UploadNotOwned : AddItemResult()
+        object PlotClosed : AddItemResult()
+        data class Error(val message: String) : AddItemResult()
+    }
+    sealed class RemoveItemResult {
+        object Success : RemoveItemResult()
+        object NotFound : RemoveItemResult()
+        object Forbidden : RemoveItemResult()
+    }
+
+    fun getStagingItems(flowId: UUID, flow: digital.heirlooms.server.domain.plot.FlowRecord, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): List<digital.heirlooms.server.domain.upload.UploadRecord>
+    fun getStagingItemsForPlot(plotId: UUID, flows: List<digital.heirlooms.server.domain.plot.FlowRecord>, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): List<digital.heirlooms.server.domain.upload.UploadRecord>
+    fun approveStagingItem(plot: PlotRecord, uploadId: UUID, sourceFlowId: UUID?, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID, wrappedItemDekBytes: ByteArray? = null, itemDekFormat: String? = null, wrappedThumbnailDekBytes: ByteArray? = null, thumbnailDekFormat: String? = null): ApproveResult
+    fun rejectStagingItem(plot: PlotRecord, uploadId: UUID, sourceFlowId: UUID?, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): RejectResult
+    fun deleteDecision(plot: PlotRecord, uploadId: UUID, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): Boolean
+    fun getRejectedItems(plot: PlotRecord, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): List<digital.heirlooms.server.domain.upload.UploadRecord>
+    fun getPlotItems(plotId: UUID, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID, plot: PlotRecord?): List<digital.heirlooms.server.domain.plot.PlotItemWithUpload>
+    fun addPlotItem(plot: PlotRecord?, uploadId: UUID, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID, uploadExists: Boolean, wrappedItemDekBytes: ByteArray? = null, itemDekFormat: String? = null, wrappedThumbnailDekBytes: ByteArray? = null, thumbnailDekFormat: String? = null): AddItemResult
+    fun removePlotItem(plotId: UUID, uploadId: UUID, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): RemoveItemResult
+}
+
+class PostgresPlotItemRepository(private val dataSource: DataSource) : PlotItemRepository {
 
     // ── Staging operations ────────────────────────────────────────────────────
 
-    fun getStagingItems(
+    override fun getStagingItems(
         flowId: UUID,
         flow: digital.heirlooms.server.domain.plot.FlowRecord,
-        userId: UUID = FOUNDING_USER_ID,
+        userId: UUID,
     ): List<UploadRecord> {
         val plotId = flow.targetPlotId
 
@@ -59,10 +99,10 @@ class PlotItemRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun getStagingItemsForPlot(
+    override fun getStagingItemsForPlot(
         plotId: UUID,
         flows: List<digital.heirlooms.server.domain.plot.FlowRecord>,
-        userId: UUID = FOUNDING_USER_ID,
+        userId: UUID,
     ): List<UploadRecord> {
         if (flows.isEmpty()) return emptyList()
 
@@ -110,30 +150,21 @@ class PlotItemRepository(private val dataSource: DataSource) {
         }
     }
 
-    sealed class ApproveResult {
-        object Success : ApproveResult()
-        object NotFound : ApproveResult()
-        object AlreadyApproved : ApproveResult()
-        object PlotNotOwned : ApproveResult()
-        object PlotClosed : ApproveResult()
-        object DuplicateContent : ApproveResult()
-    }
-
-    fun approveStagingItem(
+    override fun approveStagingItem(
         plot: PlotRecord,
         uploadId: UUID,
         sourceFlowId: UUID?,
-        userId: UUID = FOUNDING_USER_ID,
-        wrappedItemDekBytes: ByteArray? = null,
-        itemDekFormat: String? = null,
-        wrappedThumbnailDekBytes: ByteArray? = null,
-        thumbnailDekFormat: String? = null,
-    ): ApproveResult {
+        userId: UUID,
+        wrappedItemDekBytes: ByteArray?,
+        itemDekFormat: String?,
+        wrappedThumbnailDekBytes: ByteArray?,
+        thumbnailDekFormat: String?,
+    ): PlotItemRepository.ApproveResult {
         val plotId = plot.id
         val isOwner = plot.ownerUserId == userId
         val isMember = plot.visibility == "shared" && isMember(plotId, userId)
-        if (!isOwner && !isMember) return ApproveResult.PlotNotOwned
-        if (plot.plotStatus == "closed") return ApproveResult.PlotClosed
+        if (!isOwner && !isMember) return PlotItemRepository.ApproveResult.PlotNotOwned
+        if (plot.plotStatus == "closed") return PlotItemRepository.ApproveResult.PlotClosed
 
         withTransaction { conn ->
             val exists = conn.prepareStatement(
@@ -142,7 +173,7 @@ class PlotItemRepository(private val dataSource: DataSource) {
                 stmt.setObject(1, plotId); stmt.setObject(2, uploadId)
                 stmt.executeQuery().next()
             }
-            if (exists) return ApproveResult.AlreadyApproved
+            if (exists) return PlotItemRepository.ApproveResult.AlreadyApproved
 
             if (plot.visibility == "shared") {
                 val incomingHash = conn.prepareStatement(
@@ -171,7 +202,7 @@ class PlotItemRepository(private val dataSource: DataSource) {
                             stmt.setObject(1, plotId); stmt.setObject(2, uploadId); stmt.setObject(3, sourceFlowId)
                             stmt.executeUpdate()
                         }
-                        return ApproveResult.DuplicateContent
+                        return PlotItemRepository.ApproveResult.DuplicateContent
                     }
                 }
             }
@@ -197,18 +228,11 @@ class PlotItemRepository(private val dataSource: DataSource) {
                 stmt.executeUpdate()
             }
         }
-        return ApproveResult.Success
+        return PlotItemRepository.ApproveResult.Success
     }
 
-    sealed class RejectResult {
-        object Success : RejectResult()
-        object NotFound : RejectResult()
-        object AlreadyApproved : RejectResult()
-        object PlotNotOwned : RejectResult()
-    }
-
-    fun rejectStagingItem(plot: PlotRecord, uploadId: UUID, sourceFlowId: UUID?, userId: UUID = FOUNDING_USER_ID): RejectResult {
-        if (plot.ownerUserId != userId) return RejectResult.PlotNotOwned
+    override fun rejectStagingItem(plot: PlotRecord, uploadId: UUID, sourceFlowId: UUID?, userId: UUID): PlotItemRepository.RejectResult {
+        if (plot.ownerUserId != userId) return PlotItemRepository.RejectResult.PlotNotOwned
 
         dataSource.connection.use { conn ->
             val approved = conn.prepareStatement(
@@ -217,7 +241,7 @@ class PlotItemRepository(private val dataSource: DataSource) {
                 stmt.setObject(1, plot.id); stmt.setObject(2, uploadId)
                 stmt.executeQuery().next()
             }
-            if (approved) return RejectResult.AlreadyApproved
+            if (approved) return PlotItemRepository.RejectResult.AlreadyApproved
 
             conn.prepareStatement(
                 """INSERT INTO plot_staging_decisions (plot_id, upload_id, decision, source_flow_id)
@@ -228,10 +252,10 @@ class PlotItemRepository(private val dataSource: DataSource) {
                 stmt.executeUpdate()
             }
         }
-        return RejectResult.Success
+        return PlotItemRepository.RejectResult.Success
     }
 
-    fun deleteDecision(plot: PlotRecord, uploadId: UUID, userId: UUID = FOUNDING_USER_ID): Boolean {
+    override fun deleteDecision(plot: PlotRecord, uploadId: UUID, userId: UUID): Boolean {
         if (plot.ownerUserId != userId) return false
         dataSource.connection.use { conn ->
             conn.prepareStatement(
@@ -243,7 +267,7 @@ class PlotItemRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun getRejectedItems(plot: PlotRecord, userId: UUID = FOUNDING_USER_ID): List<UploadRecord> {
+    override fun getRejectedItems(plot: PlotRecord, userId: UUID): List<UploadRecord> {
         if (plot.ownerUserId != userId) return emptyList()
         dataSource.connection.use { conn ->
             conn.prepareStatement(
@@ -271,7 +295,7 @@ class PlotItemRepository(private val dataSource: DataSource) {
 
     // ── Collection plot item operations ───────────────────────────────────────
 
-    fun getPlotItems(plotId: UUID, userId: UUID = FOUNDING_USER_ID, plot: PlotRecord?): List<PlotItemWithUpload> {
+    override fun getPlotItems(plotId: UUID, userId: UUID, plot: PlotRecord?): List<PlotItemWithUpload> {
         if (plot == null) return emptyList()
         dataSource.connection.use { conn ->
             conn.prepareStatement(
@@ -309,33 +333,24 @@ class PlotItemRepository(private val dataSource: DataSource) {
         }
     }
 
-    sealed class AddItemResult {
-        object Success : AddItemResult()
-        object AlreadyPresent : AddItemResult()
-        object PlotNotOwned : AddItemResult()
-        object UploadNotOwned : AddItemResult()
-        object PlotClosed : AddItemResult()
-        data class Error(val message: String) : AddItemResult()
-    }
-
-    fun addPlotItem(
+    override fun addPlotItem(
         plot: PlotRecord?,
         uploadId: UUID,
-        userId: UUID = FOUNDING_USER_ID,
+        userId: UUID,
         uploadExists: Boolean,
-        wrappedItemDekBytes: ByteArray? = null,
-        itemDekFormat: String? = null,
-        wrappedThumbnailDekBytes: ByteArray? = null,
-        thumbnailDekFormat: String? = null,
-    ): AddItemResult {
-        if (plot == null) return AddItemResult.PlotNotOwned
+        wrappedItemDekBytes: ByteArray?,
+        itemDekFormat: String?,
+        wrappedThumbnailDekBytes: ByteArray?,
+        thumbnailDekFormat: String?,
+    ): PlotItemRepository.AddItemResult {
+        if (plot == null) return PlotItemRepository.AddItemResult.PlotNotOwned
         val isOwner = plot.ownerUserId == userId
         val isMember = plot.visibility == "shared" && isMember(plot.id, userId)
-        if (!isOwner && !isMember) return AddItemResult.PlotNotOwned
-        if (plot.tombstonedAt != null) return AddItemResult.PlotNotOwned
-        if (plot.plotStatus == "closed") return AddItemResult.PlotClosed
-        if (plot.criteria != null) return AddItemResult.Error("Plot is a query plot, not a collection plot")
-        if (!uploadExists) return AddItemResult.UploadNotOwned
+        if (!isOwner && !isMember) return PlotItemRepository.AddItemResult.PlotNotOwned
+        if (plot.tombstonedAt != null) return PlotItemRepository.AddItemResult.PlotNotOwned
+        if (plot.plotStatus == "closed") return PlotItemRepository.AddItemResult.PlotClosed
+        if (plot.criteria != null) return PlotItemRepository.AddItemResult.Error("Plot is a query plot, not a collection plot")
+        if (!uploadExists) return PlotItemRepository.AddItemResult.UploadNotOwned
 
         return try {
             dataSource.connection.use { conn ->
@@ -349,22 +364,16 @@ class PlotItemRepository(private val dataSource: DataSource) {
                     stmt.executeUpdate()
                 }
             }
-            AddItemResult.Success
+            PlotItemRepository.AddItemResult.Success
         } catch (_: java.sql.SQLIntegrityConstraintViolationException) {
-            AddItemResult.AlreadyPresent
+            PlotItemRepository.AddItemResult.AlreadyPresent
         } catch (e: java.sql.SQLException) {
-            if (e.sqlState?.startsWith("23") == true) AddItemResult.AlreadyPresent
-            else AddItemResult.Error(e.message ?: "DB error")
+            if (e.sqlState?.startsWith("23") == true) PlotItemRepository.AddItemResult.AlreadyPresent
+            else PlotItemRepository.AddItemResult.Error(e.message ?: "DB error")
         }
     }
 
-    sealed class RemoveItemResult {
-        object Success : RemoveItemResult()
-        object NotFound : RemoveItemResult()
-        object Forbidden : RemoveItemResult()
-    }
-
-    fun removePlotItem(plotId: UUID, uploadId: UUID, userId: UUID = FOUNDING_USER_ID): RemoveItemResult {
+    override fun removePlotItem(plotId: UUID, uploadId: UUID, userId: UUID): PlotItemRepository.RemoveItemResult {
         dataSource.connection.use { conn ->
             val row = conn.prepareStatement(
                 """SELECT pi.added_by, p.owner_user_id
@@ -374,14 +383,14 @@ class PlotItemRepository(private val dataSource: DataSource) {
             ).use { stmt ->
                 stmt.setObject(1, plotId); stmt.setObject(2, uploadId)
                 val rs = stmt.executeQuery()
-                if (!rs.next()) return RemoveItemResult.NotFound
+                if (!rs.next()) return PlotItemRepository.RemoveItemResult.NotFound
                 Pair(
                     rs.getObject("added_by", UUID::class.java),
                     rs.getObject("owner_user_id", UUID::class.java)
                 )
             }
             val (addedBy, ownerUserId) = row
-            if (ownerUserId != userId && addedBy != userId) return RemoveItemResult.Forbidden
+            if (ownerUserId != userId && addedBy != userId) return PlotItemRepository.RemoveItemResult.Forbidden
 
             conn.prepareStatement(
                 "DELETE FROM plot_items WHERE plot_id = ? AND upload_id = ?"
@@ -390,7 +399,7 @@ class PlotItemRepository(private val dataSource: DataSource) {
                 stmt.executeUpdate()
             }
         }
-        return RemoveItemResult.Success
+        return PlotItemRepository.RemoveItemResult.Success
     }
 
     private fun isMember(plotId: UUID, userId: UUID): Boolean {

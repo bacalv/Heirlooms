@@ -2,7 +2,6 @@ package digital.heirlooms.server.service.plot
 
 import digital.heirlooms.server.CriteriaCycleException
 import digital.heirlooms.server.CriteriaValidationException
-import digital.heirlooms.server.Database
 import digital.heirlooms.server.domain.plot.PlotRecord
 import digital.heirlooms.server.repository.plot.PlotRepository
 import com.fasterxml.jackson.databind.JsonNode
@@ -13,7 +12,7 @@ import java.util.UUID
  * visibility guards for shared plots, reorder, and delete.
  */
 class PlotService(
-    private val database: Database,
+    private val plotRepo: PlotRepository,
 ) {
     // ---- Criteria validation ---------------------------------------------------
 
@@ -24,7 +23,7 @@ class PlotService(
 
     fun validateAndSerializeCriteria(node: JsonNode, userId: UUID): CriteriaResult {
         return try {
-            database.withCriteriaValidation(node, userId)
+            plotRepo.withCriteriaValidation(node, userId)
             CriteriaResult.Ok(node.toString())
         } catch (e: CriteriaValidationException) {
             CriteriaResult.Error(e.message ?: "Invalid criteria")
@@ -37,7 +36,7 @@ class PlotService(
 
     // ---- CRUD ------------------------------------------------------------------
 
-    fun listPlots(userId: UUID): List<PlotRecord> = database.listPlots(userId)
+    fun listPlots(userId: UUID): List<PlotRecord> = plotRepo.listPlots(userId)
 
     sealed class CreateResult {
         data class Created(val plot: PlotRecord) : CreateResult()
@@ -63,7 +62,7 @@ class PlotService(
                 is CriteriaResult.Ok -> r.json
             }
         } else null
-        val plot = database.createPlot(
+        val plot = plotRepo.createPlot(
             name = name,
             criteria = criteriaJson,
             showInGarden = showInGarden,
@@ -90,7 +89,7 @@ class PlotService(
                 is CriteriaResult.Ok -> result.json
             }
         } else null
-        return database.updatePlot(plotId, name, sortOrder, criteriaJson, showInGarden, userId)
+        return plotRepo.updatePlot(plotId, name, sortOrder, criteriaJson, showInGarden, userId)
     }
 
     fun updatePlotWithValidation(
@@ -107,12 +106,12 @@ class PlotService(
                 is CriteriaResult.Ok -> result.json
             }
         } else null
-        return Pair(database.updatePlot(plotId, name, sortOrder, criteriaJson, showInGarden, userId), null)
+        return Pair(plotRepo.updatePlot(plotId, name, sortOrder, criteriaJson, showInGarden, userId), null)
     }
 
     fun deletePlot(plotId: UUID, userId: UUID): PlotRepository.PlotDeleteResult =
-        database.deletePlot(plotId, userId)
+        plotRepo.deletePlot(plotId, userId)
 
     fun batchReorderPlots(updates: List<Pair<UUID, Int>>, userId: UUID): PlotRepository.BatchReorderResult =
-        database.batchReorderPlots(updates, userId)
+        plotRepo.batchReorderPlots(updates, userId)
 }

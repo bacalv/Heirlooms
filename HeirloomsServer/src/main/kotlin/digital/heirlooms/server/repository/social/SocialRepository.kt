@@ -5,9 +5,17 @@ import digital.heirlooms.server.domain.keys.FriendRecord
 import java.util.UUID
 import javax.sql.DataSource
 
-class SocialRepository(private val dataSource: DataSource) {
+interface SocialRepository {
+    fun upsertSharingKey(userId: UUID, pubkey: ByteArray, wrappedPrivkey: ByteArray, wrapFormat: String)
+    fun getSharingKey(userId: UUID): digital.heirlooms.server.domain.keys.AccountSharingKeyRecord?
+    fun listFriends(userId: UUID): List<digital.heirlooms.server.domain.keys.FriendRecord>
+    fun createFriendship(a: UUID, b: UUID)
+    fun areFriends(a: UUID, b: UUID): Boolean
+}
 
-    fun upsertSharingKey(userId: UUID, pubkey: ByteArray, wrappedPrivkey: ByteArray, wrapFormat: String) {
+class PostgresSocialRepository(private val dataSource: DataSource) : SocialRepository {
+
+    override fun upsertSharingKey(userId: UUID, pubkey: ByteArray, wrappedPrivkey: ByteArray, wrapFormat: String) {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """INSERT INTO account_sharing_keys (user_id, pubkey, wrapped_privkey, wrap_format)
@@ -25,7 +33,7 @@ class SocialRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun getSharingKey(userId: UUID): AccountSharingKeyRecord? {
+    override fun getSharingKey(userId: UUID): AccountSharingKeyRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT user_id, pubkey, wrapped_privkey, wrap_format FROM account_sharing_keys WHERE user_id = ?"
@@ -44,7 +52,7 @@ class SocialRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun listFriends(userId: UUID): List<FriendRecord> {
+    override fun listFriends(userId: UUID): List<FriendRecord> {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """SELECT u.id, u.username, u.display_name
@@ -70,7 +78,7 @@ class SocialRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun createFriendship(a: UUID, b: UUID) {
+    override fun createFriendship(a: UUID, b: UUID) {
         val u1 = if (a.toString() < b.toString()) a else b
         val u2 = if (a.toString() < b.toString()) b else a
         dataSource.connection.use { conn ->
@@ -84,7 +92,7 @@ class SocialRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun areFriends(a: UUID, b: UUID): Boolean {
+    override fun areFriends(a: UUID, b: UUID): Boolean {
         val u1 = if (a.toString() < b.toString()) a else b
         val u2 = if (a.toString() < b.toString()) b else a
         dataSource.connection.use { conn ->
