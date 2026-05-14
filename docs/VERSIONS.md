@@ -1,3 +1,4 @@
+<!-- Superseded for task tracking by tasks/done/ — kept as a detailed changelog reference -->
 # Heirlooms — Version History
 
 ---

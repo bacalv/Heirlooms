@@ -22,7 +22,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |----|-------|----------|----------|-------------|------------|
 | [TST-003](queue/TST-003_manual-staging-checklist.md) | Manual staging test checklist | Testing | High | TestManager | — |
-| [DOC-002](queue/DOC-002_doc-cleanup-history-backfill.md) | Doc cleanup + history backfill from git | Docs | Medium | TechnicalArchitect | — |
 | [IOS-002](queue/IOS-002_share-extension.md) | iOS Share Extension target | iOS | Medium | Developer | IOS-001 |
 | [REF-001](queue/REF-001_rename-flow-to-trellis.md) | Rename Flow → Trellis across all platforms | Refactoring | Medium | Developer | — |
 | [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | Developer | TST-003 |
@@ -49,6 +48,16 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [ARCH-001](done/ARCH-001_m10-task-breakdown.md) | M10 — produce queue tasks for all four increments | Planning | 2026-05-14 |
 | [TST-001](done/TST-001_sanity-test-production.md) | Sanity test production | Testing | 2026-05-14 |
 | [TST-002](done/TST-002_staging-first-user.md) | Create first user in staging | Testing | 2026-05-14 |
+| [DONE-M5](done/DONE-M5_capsules.md) | Milestone 5 — Capsules (web + backend) | Feature | 2026-05-08 |
+| [DONE-M6](done/DONE-M6_garden-explore.md) | Milestone 6 — Garden / Explore restructure | Feature | 2026-05-08 |
+| [DONE-M7](done/DONE-M7_vault-e2ee.md) | Milestone 7 — Vault E2EE | Feature | 2026-05-09 |
+| [DONE-M8](done/DONE-M8_multi-user-access.md) | Milestone 8 — Multi-user access | Feature | 2026-05-11 |
+| [DONE-M9](done/DONE-M9_friends-sharing.md) | Milestone 9 — Friends, item sharing, Android plot management | Feature | 2026-05-12 |
+| [DONE-M10](done/DONE-M10_shared-plots.md) | Milestone 10 — Shared plots (all four increments E1–E4) | Feature | 2026-05-12 |
+| [DONE-iOS](done/DONE-iOS_ios-app-implementation.md) | iOS app implementation | Feature | 2026-05-14 |
+| [DONE-BUG-v051](done/DONE-BUG-v051_shared-plot-membership.md) | Post-M10 fixes — shared plot membership overhaul (v0.50.1–v0.51.5) | Bug Fix | 2026-05-14 |
+| [DONE-BUG-v053](done/DONE-BUG-v053_server-refactor-security.md) | Post-M10 fixes — server refactor + security hardening (v0.52.0–v0.53.1) | Bug Fix | 2026-05-14 |
+| [DOC-002](done/DOC-002_doc-cleanup-history-backfill.md) | Doc cleanup + history backfill from git | Docs | 2026-05-14 |
 
 ## Brainstorming
 

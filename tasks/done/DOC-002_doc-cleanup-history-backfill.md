@@ -102,4 +102,4 @@ For bugfixes: group post-M10 fixes (v0.50.1–v0.53.1) into one or two files by 
 
 ## Completion notes
 
-<!-- Agent appends here and moves file to tasks/done/ -->
+Completed 2026-05-14. Nine done/ files created: DONE-M5 through DONE-M10, DONE-iOS, DONE-BUG-v051, DONE-BUG-v053. All git hashes verified against `git log --oneline` before writing. `docs/PROMPT_LOG.md` moved to `docs/sessions/PROMPT_LOG_archive.md`. Superseded comment added to `docs/VERSIONS.md`. DOC-002 removed from Queue and added to Done table in `tasks/progress.md`.
