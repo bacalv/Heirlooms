@@ -19,7 +19,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |----|-------|----------|----------|-------------|------------|
 | [TST-003](queue/TST-003_manual-staging-checklist.md) | Manual staging test checklist | Testing | High | TestManager | — |
-| [ARCH-002](queue/ARCH-002_behavioral-spec-diagrams.md) | Behavioral spec diagrams — use case inventory + Mermaid sequences | Docs | High | TechnicalArchitect | — |
 | [IOS-002](queue/IOS-002_share-extension.md) | iOS Share Extension target | iOS | Medium | Developer | IOS-001 |
 | [REF-001](queue/REF-001_rename-flow-to-trellis.md) | Rename Flow → Trellis across all platforms | Refactoring | Medium | Developer | — |
 | [TST-005](queue/TST-005_playwright-infrastructure.md) | Playwright infrastructure setup | Testing | Medium | TestManager | TST-003, ARCH-002 |
@@ -60,6 +59,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [DOC-002](done/DOC-002_doc-cleanup-history-backfill.md) | Doc cleanup + history backfill from git | Docs | 2026-05-14 |
 | [IOS-001](done/IOS-001_qr-scanner-avfoundation.md) | Complete iOS QRScannerView (AVFoundation) | iOS | 2026-05-15 |
 | [SEC-001](done/SEC-001_security-hardening.md) | Security hardening + threat model | Security | 2026-05-15 |
+| [ARCH-002](done/ARCH-002_behavioral-spec-diagrams.md) | Behavioral spec diagrams — use case inventory + Mermaid sequences | Docs | 2026-05-15 |
 
 ## Brainstorming
 
