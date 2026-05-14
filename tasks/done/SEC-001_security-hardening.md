@@ -67,3 +67,35 @@ Perform a systematic security review of the server and produce:
 - CORS locked to `https://heirlooms.digital` in production
 - `AUTH_SECRET` confirmed set in production (check Cloud Run env vars)
 - All tests still pass after any code changes
+
+## Completion notes
+
+**Completed:** 2026-05-14  
+**Agent:** SecurityManager
+
+### Deliverables produced
+
+1. **`docs/security/threat-model.md`** — Full threat model with 16 findings across authentication, transport, input validation, cryptography, secrets management, and OWASP Top 10 areas. All HIGH findings were mitigated in commit af2e856 (CORS lockdown, AUTH_SECRET warning, opaque auth error responses, session auth logging).
+
+2. **No new code changes required** — All HIGH and CRITICAL findings were already addressed by af2e856. No unmitigated HIGH or CRITICAL findings remain.
+
+3. **Three MEDIUM tasks created:**
+   - `tasks/queue/SEC-004_rate-limiting-auth-logging.md` — F-05 (no rate limiting) + F-06 (no failed-login logging)
+   - `tasks/queue/SEC-005_session-invalidation-mime-validation.md` — F-07 (session not invalidated on passphrase change) + F-08 (no server-side MIME validation)
+   - `tasks/queue/SEC-006_criteria-date-input-validation.md` — F-09 (date field format not validated in CriteriaEvaluator)
+
+### Acceptance criteria check
+
+- [x] No HIGH or CRITICAL unmitigated findings remain (all four HIGH findings mitigated in af2e856)
+- [x] CORS locked to `https://heirlooms.digital` in production via `CORS_ALLOWED_ORIGINS` env var — documented in threat model §4
+- [ ] `AUTH_SECRET` confirmed set in production — **manual verification required by CTO** (see threat model §3; cannot be confirmed from code)
+- [x] All tests pass — no code changes made in this task; af2e856 changes are already on main and tests passed at that commit
+
+### Key findings summary
+
+| Severity | Count | Status |
+|----------|-------|--------|
+| HIGH | 4 | All mitigated (af2e856) |
+| MEDIUM | 5 | 3 tasks created (SEC-004, SEC-005, SEC-006) |
+| LOW | 3 | Accepted risks |
+| INFO | 4 | Accepted risks |

@@ -10,9 +10,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 ## Currently Running
 
-| Agent ID | Task | Started |
-|----------|------|---------|
-| security | [SEC-001](in-progress/SEC-001_security-hardening.md) | 2026-05-14 |
+*(none)*
 
 ---
 
@@ -30,12 +28,13 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [SEC-003](queue/SEC-003_client-security-review.md) | Client security flaw testing plan | Security | Medium | SecurityManager | SEC-001 |
 | [DOC-001](queue/DOC-001_uml-sequence-diagrams.md) | UML sequence diagrams from test output | Docs | Low | Developer | TST-004 |
 | [BUG-001](queue/BUG-001_keychain-master-key-slot-collision.md) | Keychain slot collision — master key vs plot key | Bug Fix | Medium | Developer | — |
+| [SEC-004](queue/SEC-004_rate-limiting-auth-logging.md) | Rate limiting + failed-login logging | Security | Medium | SecurityManager | — |
+| [SEC-005](queue/SEC-005_session-invalidation-mime-validation.md) | Session invalidation + MIME validation | Security | Medium | SecurityManager | — |
+| [SEC-006](queue/SEC-006_criteria-date-input-validation.md) | Criteria date input validation | Security | Medium | SecurityManager | — |
 
 ## In Progress
 
-| ID | Title | Category | Assigned to | Claimed by |
-|----|-------|----------|-------------|------------|
-| [SEC-001](in-progress/SEC-001_security-hardening.md) | Security hardening + threat model | Security | SecurityManager | security |
+*(none)*
 
 ## Done
 
@@ -60,6 +59,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [DONE-BUG-v053](done/DONE-BUG-v053_server-refactor-security.md) | Post-M10 fixes — server refactor + security hardening (v0.52.0–v0.53.1) | Bug Fix | 2026-05-14 |
 | [DOC-002](done/DOC-002_doc-cleanup-history-backfill.md) | Doc cleanup + history backfill from git | Docs | 2026-05-14 |
 | [IOS-001](done/IOS-001_qr-scanner-avfoundation.md) | Complete iOS QRScannerView (AVFoundation) | iOS | 2026-05-15 |
+| [SEC-001](done/SEC-001_security-hardening.md) | Security hardening + threat model | Security | 2026-05-15 |
 
 ## Brainstorming
 
