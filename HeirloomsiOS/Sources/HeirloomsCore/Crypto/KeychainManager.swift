@@ -3,10 +3,11 @@ import Security
 
 /// Manages all Keychain interactions for HeirloomsCore.
 ///
-/// Stores three items:
+/// Stores four items:
 ///  - The P-256 private sharing key (Secure Enclave if available)
 ///  - The session token (raw string)
-///  - The plot key (raw 32-byte AES-256 key)
+///  - The master key (raw 32-byte AES-256 key, stored at account activation)
+///  - The plot key (raw 32-byte AES-256 key, stored after joining a shared plot)
 ///
 /// All items use `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` so they are
 /// bound to the device and survive app re-install and re-signing, but do NOT
@@ -18,6 +19,7 @@ public final class KeychainManager {
     private static let sharingKeyTag = "digital.heirlooms.sharing.privkey"
         .data(using: .utf8)!
     private static let sessionTokenAccount = "session_token"
+    private static let masterKeyAccount = "master_key"
     private static let plotKeyAccount = "plot_key"
     private static let plotIdAccount = "plot_id"
     private static let userIdAccount = "user_id"
@@ -155,6 +157,28 @@ public final class KeychainManager {
     /// Deletes the stored session token.
     public static func deleteSessionToken() {
         deleteGenericPassword(account: sessionTokenAccount)
+    }
+
+    // MARK: - Master key
+
+    /// Stores the 32-byte raw master key in the Keychain.
+    /// The master key is derived at account activation (friend-invite flow) and is used
+    /// to wrap keys for web-session pairing. It must never be overwritten by the plot key.
+    public static func saveMasterKey(_ keyData: Data) throws {
+        guard keyData.count == 32 else {
+            throw HeirloomsError.encryptionFailed("Master key must be 32 bytes, got \(keyData.count)")
+        }
+        try saveGenericPassword(data: keyData, account: masterKeyAccount)
+    }
+
+    /// Retrieves the 32-byte master key.
+    public static func getMasterKey() throws -> Data {
+        try getGenericPassword(account: masterKeyAccount)
+    }
+
+    /// Deletes the master key (e.g. on account reset).
+    public static func deleteMasterKey() {
+        deleteGenericPassword(account: masterKeyAccount)
     }
 
     // MARK: - Plot key

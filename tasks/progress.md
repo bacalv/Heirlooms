@@ -61,6 +61,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [DOC-002](done/DOC-002_doc-cleanup-history-backfill.md) | Doc cleanup + history backfill from git | Docs | 2026-05-14 |
 | [IOS-001](done/IOS-001_qr-scanner-avfoundation.md) | Complete iOS QRScannerView (AVFoundation) | iOS | 2026-05-15 |
 | [SEC-001](done/SEC-001_security-hardening.md) | Security hardening + threat model | Security | 2026-05-15 |
+| [BUG-001](done/BUG-001_keychain-master-key-slot-collision.md) | Keychain slot collision — master key vs plot key | Bug Fix | 2026-05-15 |
 
 ## Brainstorming
 
