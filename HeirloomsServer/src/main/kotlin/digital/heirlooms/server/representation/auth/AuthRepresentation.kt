@@ -1,49 +1,72 @@
 package digital.heirlooms.server.representation.auth
 
-import com.fasterxml.jackson.databind.node.JsonNodeFactory
+import com.fasterxml.jackson.annotation.JsonInclude
+import com.fasterxml.jackson.annotation.JsonProperty
+import digital.heirlooms.server.representation.responseMapper
 import java.time.Instant
 import java.util.Base64
 import java.util.UUID
 
-fun sessionTokenJson(token: String, userId: UUID, expiresAt: Instant): String {
-    val node = JsonNodeFactory.instance.objectNode()
-    node.put("session_token", token)
-    node.put("user_id", userId.toString())
-    node.put("expires_at", expiresAt.toString())
-    return node.toString()
-}
+private val urlEnc = Base64.getUrlEncoder().withoutPadding()
 
-fun challengeResponseJson(salt: ByteArray): String {
-    val urlEnc = Base64.getUrlEncoder().withoutPadding()
-    return """{"auth_salt":"${urlEnc.encodeToString(salt)}"}"""
-}
+private data class SessionTokenResponse(
+    @JsonProperty("session_token") val sessionToken: String,
+    @JsonProperty("user_id") val userId: String,
+    @JsonProperty("expires_at") val expiresAt: Instant,
+)
 
-fun inviteResponseJson(token: String, expiresAt: Instant): String {
-    val node = JsonNodeFactory.instance.objectNode()
-    node.put("token", token)
-    node.put("expires_at", expiresAt.toString())
-    return node.toString()
-}
+private data class ChallengeResponse(
+    @JsonProperty("auth_salt") val authSalt: String,
+)
 
-fun pairingInitiateResponseJson(code: String, expiresAt: Instant): String {
-    val node = JsonNodeFactory.instance.objectNode()
-    node.put("code", code)
-    node.put("expires_at", expiresAt.toString())
-    return node.toString()
-}
+private data class InviteResponse(
+    val token: String,
+    @JsonProperty("expires_at") val expiresAt: Instant,
+)
+
+private data class PairingInitiateResponse(
+    val code: String,
+    @JsonProperty("expires_at") val expiresAt: Instant,
+)
+
+private data class PairingStatusCompleteResponse(
+    val state: String,
+    @JsonProperty("session_token") val sessionToken: String,
+    @JsonProperty("wrapped_master_key") val wrappedMasterKey: String,
+    @JsonProperty("wrap_format") val wrapFormat: String,
+    @JsonProperty("expires_at") @JsonInclude(JsonInclude.Include.ALWAYS) val expiresAt: Instant?,
+)
+
+fun sessionTokenJson(token: String, userId: UUID, expiresAt: Instant): String =
+    responseMapper.writeValueAsString(
+        SessionTokenResponse(
+            sessionToken = token,
+            userId = userId.toString(),
+            expiresAt = expiresAt,
+        )
+    )
+
+fun challengeResponseJson(salt: ByteArray): String =
+    responseMapper.writeValueAsString(ChallengeResponse(authSalt = urlEnc.encodeToString(salt)))
+
+fun inviteResponseJson(token: String, expiresAt: Instant): String =
+    responseMapper.writeValueAsString(InviteResponse(token = token, expiresAt = expiresAt))
+
+fun pairingInitiateResponseJson(code: String, expiresAt: Instant): String =
+    responseMapper.writeValueAsString(PairingInitiateResponse(code = code, expiresAt = expiresAt))
 
 fun pairingStatusCompleteJson(
     sessionToken: String,
     wrappedMasterKey: ByteArray,
     wrapFormat: String,
     expiresAt: Instant?,
-): String {
-    val urlEnc = Base64.getUrlEncoder().withoutPadding()
-    val node = JsonNodeFactory.instance.objectNode()
-    node.put("state", "complete")
-    node.put("session_token", sessionToken)
-    node.put("wrapped_master_key", urlEnc.encodeToString(wrappedMasterKey))
-    node.put("wrap_format", wrapFormat)
-    node.put("expires_at", expiresAt?.toString())
-    return node.toString()
-}
+): String =
+    responseMapper.writeValueAsString(
+        PairingStatusCompleteResponse(
+            state = "complete",
+            sessionToken = sessionToken,
+            wrappedMasterKey = urlEnc.encodeToString(wrappedMasterKey),
+            wrapFormat = wrapFormat,
+            expiresAt = expiresAt,
+        )
+    )

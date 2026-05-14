@@ -22,6 +22,7 @@ dependencies {
     implementation("org.http4k:http4k-server-netty:$http4kVersion")
     implementation("org.http4k:http4k-contract:$http4kVersion")
     implementation("org.http4k:http4k-format-jackson:$http4kVersion")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.1")
     implementation("org.webjars:swagger-ui:$swaggerUiVersion")
 
     // EXIF / video metadata extraction
