@@ -2,6 +2,52 @@
 
 ---
 
+## Session — 14 May 2026 — Server refactor phases 1–4 + JaCoCo coverage baseline
+
+### Server refactor (phases 1–4)
+
+Pure code reorganisation — no behaviour changes. Two commits on `main`:
+
+**Phase 1 (`a66b529`):** Extracted all domain data classes from `Database.kt` into `domain/` sub-packages:
+- `domain/auth/` — UserRecord, UserSessionRecord, InviteRecord, FOUNDING_USER_ID
+- `domain/capsule/` — CapsuleRecord, CapsuleShape, CapsuleState, CapsuleSummary, CapsuleDetail
+- `domain/upload/` — UploadRecord, UploadPage, UploadSort, DecodedCursor
+- `domain/keys/` — WrappedKeyRecord, RecoveryPassphraseRecord, PendingDeviceLinkRecord, AccountSharingKeyRecord, FriendRecord
+- `domain/plot/` — PlotRecord, FlowRecord, PlotItemRecord, PlotItemWithUpload, PlotMemberRecord, SharedMembershipRecord, PlotInviteRecord
+
+**Phases 2–4 (`3c7a6dd`):** 11 repository classes created under `repository/`:
+DiagRepository, BlobRepository, SocialRepository, AuthRepository, KeyRepository, CapsuleRepository, PlotRepository, FlowRepository, PlotItemRepository, PlotMemberRepository, UploadRepository.
+
+`Database.kt` is now a delegation facade routing all calls to the repositories. Handler files updated to reference sealed class variants via repository prefix (e.g. `CapsuleRepository.UpdateResult.Success`). `withTransaction` is a private helper in each repository that needs it. `listUploadsPaginated` accepts `PlotRepository?` as a parameter for plot-scoped queries.
+
+See: `docs/task9_refactor_changes.md`, `docs/briefs/task4_server_refactor_proposal.md`
+
+### JaCoCo coverage baseline and post-refactor comparison
+
+Infrastructure: in-process server mode added to `HeirloomsTestEnvironment` (system property `heirloom.test.mode=inprocess`). Postgres + MinIO via Testcontainers, Netty on :18080. New `coverageTest` Gradle task in `HeirloomsTest/`. HTML + XML reports at `HeirloomsTest/build/reports/jacoco/`. 90% gate wired via `jacocoCoverageVerify`.
+
+**Coverage comparison — before vs after refactor (instruction coverage):**
+
+| Counter | Before refactor | After refactor | Delta |
+|---|---|---|---|
+| INSTRUCTION | **52.3%** (24,998/47,840) | **52.1%** (28,650/54,998) | -0.2% |
+| LINE | 58.1% | 56.9% | -1.2% |
+| METHOD | 63.6% | 59.8% | -3.8% |
+| CLASS | 70.8% | 71.6% | +0.8% |
+| BRANCH | 33.3% | 33.5% | +0.2% |
+
+**Interpretation:** Coverage is essentially flat — as expected for a pure reorganisation. The slight percentage decrease is because the delegation layer in `Database.kt` + 11 new repository files added ~7,158 new instructions, while ~3,652 more are now directly exercised (net dilution). No test coverage was lost. The 90% gate remains unmet — gap is driven by GcsFileStore/LocalFileStore (wrong backend in tests), ExifExtractionService/PendingBlobsCleanupService (background services), and AuthRepository/SocialRepository (multi-user auth paths undertested). These are known gaps, not regressions.
+
+**Notable post-refactor class coverage:**
+- New repository classes: CapsuleRepository 75.2%, PlotItemRepository 72.4%, FlowRepository 69.5%, PlotRepository 53.1%, UploadRepository 49.4%
+- Domain data classes extracted to own files: now show 100% (WrappedKeyRecord, CapsuleSummary, UploadRecord 97.1%, etc.)
+- Database.kt (delegation facade): 42.9% (was 48.0% — delegation wrapper methods add uncovered paths)
+
+HTML report: `HeirloomsTest/build/reports/jacoco/html/index.html`
+Baseline doc: `docs/coverage_baseline.md`
+
+---
+
 ## Session — 14 May 2026 — Web upload UX, Android shared-plot shortcuts, iOS scaffold (v0.52.0)
 
 Four parallel workstreams implemented by four concurrent agents.
