@@ -78,7 +78,7 @@ class PhotoDetailViewModel(
             _contentDek.value = null
             try {
                 val upload = api.getUpload(uploadId)
-                val refs = api.getCapsulesForUpload(uploadId)
+                val refs = try { api.getCapsulesForUpload(uploadId) } catch (_: Exception) { emptyList() }
                 _state.value = PhotoDetailState.Ready(upload, refs)
                 if (upload.isEncrypted && context != null) {
                     loadEncryptedContent(api, upload, context, thresholdSeconds)
@@ -118,11 +118,18 @@ class PhotoDetailViewModel(
                 }
 
                 val wrappedDek = upload.wrappedDek ?: return@runCatching
-                val dek = if (upload.dekFormat == VaultCrypto.ALG_P256_ECDH_HKDF_V1) {
-                    val privkey = VaultSession.sharingPrivkey ?: return@runCatching
-                    VaultCrypto.unwrapWithSharingKey(wrappedDek, privkey)
-                } else {
-                    VaultCrypto.unwrapDekWithMasterKey(wrappedDek, mk)
+                val dek = when (upload.dekFormat) {
+                    VaultCrypto.ALG_P256_ECDH_HKDF_V1 -> {
+                        val privkey = VaultSession.sharingPrivkey ?: return@runCatching
+                        VaultCrypto.unwrapWithSharingKey(wrappedDek, privkey)
+                    }
+                    VaultCrypto.ALG_PLOT_AES256GCM_V1 -> {
+                        val plotKey = VaultSession.plotKeys.values.firstOrNull { key ->
+                            runCatching { VaultCrypto.unwrapDekWithPlotKey(wrappedDek, key) }.isSuccess
+                        } ?: return@runCatching
+                        VaultCrypto.unwrapDekWithPlotKey(wrappedDek, plotKey)
+                    }
+                    else -> VaultCrypto.unwrapDekWithMasterKey(wrappedDek, mk)
                 }
 
                 if (upload.isVideo && exceedsThreshold && upload.previewStorageKey == null) {
@@ -179,11 +186,18 @@ class PhotoDetailViewModel(
             runCatching {
                 val mk = VaultSession.masterKey
                 val wrappedDek = upload.wrappedDek ?: return@runCatching
-                val dek = if (upload.dekFormat == VaultCrypto.ALG_P256_ECDH_HKDF_V1) {
-                    val privkey = VaultSession.sharingPrivkey ?: return@runCatching
-                    VaultCrypto.unwrapWithSharingKey(wrappedDek, privkey)
-                } else {
-                    VaultCrypto.unwrapDekWithMasterKey(wrappedDek, mk)
+                val dek = when (upload.dekFormat) {
+                    VaultCrypto.ALG_P256_ECDH_HKDF_V1 -> {
+                        val privkey = VaultSession.sharingPrivkey ?: return@runCatching
+                        VaultCrypto.unwrapWithSharingKey(wrappedDek, privkey)
+                    }
+                    VaultCrypto.ALG_PLOT_AES256GCM_V1 -> {
+                        val plotKey = VaultSession.plotKeys.values.firstOrNull { key ->
+                            runCatching { VaultCrypto.unwrapDekWithPlotKey(wrappedDek, key) }.isSuccess
+                        } ?: return@runCatching
+                        VaultCrypto.unwrapDekWithPlotKey(wrappedDek, plotKey)
+                    }
+                    else -> VaultCrypto.unwrapDekWithMasterKey(wrappedDek, mk)
                 }
                 val encryptedBytes = api.fetchBytes(api.fileUrl(upload.id))
                 val plainBytes = if (encryptedBytes.isNotEmpty() && (encryptedBytes[0].toInt() and 0xFF) == 1) {
@@ -269,7 +283,7 @@ class PhotoDetailViewModel(
         viewModelScope.launch {
             try {
                 val upload = api.getUpload(uploadId)
-                val refs = api.getCapsulesForUpload(uploadId)
+                val refs = try { api.getCapsulesForUpload(uploadId) } catch (_: Exception) { emptyList() }
                 _state.value = PhotoDetailState.Ready(upload, refs)
             } catch (_: Exception) {}
         }
