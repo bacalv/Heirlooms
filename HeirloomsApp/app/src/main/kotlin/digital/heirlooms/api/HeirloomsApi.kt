@@ -1,6 +1,7 @@
 package digital.heirlooms.api
 
 import android.util.Base64
+import digital.heirlooms.app.BuildConfig
 import digital.heirlooms.crypto.VaultCrypto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -901,6 +902,9 @@ class HeirloomsApi(
     private fun String.jsonEsc(): String = "\"${replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")}\""
 
     companion object {
-        const val BASE_URL = "https://api.heirlooms.digital"
+        val BASE_URL: String = if (BuildConfig.BASE_URL_OVERRIDE.isNotEmpty())
+            BuildConfig.BASE_URL_OVERRIDE
+        else
+            "https://api.heirlooms.digital"
     }
 }

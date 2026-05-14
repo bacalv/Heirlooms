@@ -18,6 +18,21 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    flavorDimensions += "environment"
+    productFlavors {
+        create("prod") {
+            dimension = "environment"
+            buildConfigField("String", "BASE_URL_OVERRIDE", "\"\"")
+        }
+        create("staging") {
+            dimension = "environment"
+            applicationIdSuffix = ".staging"
+            versionNameSuffix = "-staging"
+            resValue("string", "app_name", "Heirlooms Test")
+            buildConfigField("String", "BASE_URL_OVERRIDE", "\"https://heirlooms-server-test-340655233963.europe-west2.run.app\"")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
