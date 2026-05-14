@@ -316,7 +316,9 @@ private fun getUploadByIdContractRoute(database: Database): ContractRoute {
         description = "Returns a single upload by ID regardless of composted state. Returns 404 if not found."
     } bindContract GET to { uploadId: UUID ->
         { request: Request ->
-            val record = database.findUploadByIdForUser(uploadId, request.authUserId())
+            val userId = request.authUserId()
+            val record = database.findUploadByIdForUser(uploadId, userId)
+                ?: database.findUploadByIdForSharedMember(uploadId, userId)
             if (record == null) Response(NOT_FOUND)
             else Response(OK).header("Content-Type", "application/json").body(record.toJson())
         }
@@ -621,7 +623,9 @@ private fun fileProxyContractRoute(storage: FileStore, database: Database): Cont
         description = "Streams the raw file bytes for the given upload ID with the correct Content-Type."
     } bindContract GET to { uploadId: UUID, _: String ->
         { request: Request ->
-            val record = database.findUploadByIdForUser(uploadId, request.authUserId())
+            val userId = request.authUserId()
+            val record = database.findUploadByIdForUser(uploadId, userId)
+                ?: database.findUploadByIdForSharedMember(uploadId, userId)
             if (record == null) {
                 Response(NOT_FOUND)
             } else {
@@ -703,7 +707,9 @@ private fun previewProxyContractRoute(storage: FileStore, database: Database): C
         description = "Returns the encrypted preview clip for the given upload ID if one exists, otherwise 404."
     } bindContract GET to { uploadId: UUID, _: String ->
         { request: Request ->
-            val record = database.findUploadByIdForUser(uploadId, request.authUserId())
+            val userId = request.authUserId()
+            val record = database.findUploadByIdForUser(uploadId, userId)
+                ?: database.findUploadByIdForSharedMember(uploadId, userId)
             when {
                 record == null -> Response(NOT_FOUND)
                 record.previewStorageKey == null -> Response(NOT_FOUND)
