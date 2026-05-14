@@ -2,6 +2,14 @@
 
 ---
 
+## v0.53.1 — Server refactor phase 6: representation layer (14 May 2026)
+
+Pure code reorganisation — no behaviour or API changes.
+
+Eight representation files created under `representation/` sub-packages: `UploadRepresentation.kt`, `CapsuleRepresentation.kt`, `PlotRepresentation.kt`, `FlowRepresentation.kt`, `SharedPlotRepresentation.kt`, `AuthRepresentation.kt`, `KeysRepresentation.kt`, `SocialRepresentation.kt`. All `toJson()` extension functions and inline ObjectNode/Jackson JSON-building code moved from handler files and `Database.kt` into the representation layer. Handlers now contain only: parse HTTP request → call service → call representation function → return `Response`.
+
+---
+
 ## v0.53.0 — Server refactor phase 5: service layer (14 May 2026)
 
 Pure code reorganisation — no behaviour or API changes.

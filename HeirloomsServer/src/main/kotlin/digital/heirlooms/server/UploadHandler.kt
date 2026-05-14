@@ -1,9 +1,8 @@
 package digital.heirlooms.server
 
-import digital.heirlooms.server.domain.upload.UploadPage
-import digital.heirlooms.server.domain.upload.UploadRecord
 import digital.heirlooms.server.domain.upload.UploadSort
 import digital.heirlooms.server.repository.upload.UploadRepository
+import digital.heirlooms.server.representation.upload.toJson
 import digital.heirlooms.server.service.upload.UploadService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ArrayNode
@@ -52,15 +51,6 @@ import java.util.Base64
 import java.util.UUID
 
 private const val SWAGGER_UI_VERSION = "5.11.8"
-
-private fun UploadPage.toJson(): String {
-    val mapper = ObjectMapper()
-    val node = mapper.createObjectNode()
-    val arr = node.putArray("items")
-    items.forEach { arr.add(mapper.readTree(it.toJson())) }
-    if (nextCursor != null) node.put("next_cursor", nextCursor) else node.putNull("next_cursor")
-    return node.toString()
-}
 
 private val swaggerInitializerJs = """
 window.onload = function() {

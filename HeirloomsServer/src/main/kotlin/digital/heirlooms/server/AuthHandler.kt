@@ -1,7 +1,11 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.representation.auth.challengeResponseJson
+import digital.heirlooms.server.representation.auth.inviteResponseJson
+import digital.heirlooms.server.representation.auth.pairingInitiateResponseJson
+import digital.heirlooms.server.representation.auth.pairingStatusCompleteJson
+import digital.heirlooms.server.representation.auth.sessionTokenJson
 import digital.heirlooms.server.service.auth.AuthService
-import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import org.http4k.contract.ContractRoute
 import org.http4k.contract.meta
 import org.http4k.core.Method.GET
@@ -18,19 +22,11 @@ import org.http4k.core.Status.Companion.NO_CONTENT
 import org.http4k.core.Status.Companion.OK
 import org.http4k.core.Status.Companion.UNAUTHORIZED
 import com.fasterxml.jackson.databind.ObjectMapper
-import java.time.Instant
-import java.util.Base64
 import java.util.UUID
 
 private val authMapper = ObjectMapper()
 
-private fun sessionTokenJson(token: String, userId: UUID, expiresAt: Instant): String {
-    val node = JsonNodeFactory.instance.objectNode()
-    node.put("session_token", token)
-    node.put("user_id", userId.toString())
-    node.put("expires_at", expiresAt.toString())
-    return node.toString()
-}
+// sessionTokenJson has moved to representation/auth/AuthRepresentation.kt
 
 fun authRoutes(authService: AuthService): List<ContractRoute> = listOf(
     challengeRoute(authService),
@@ -58,9 +54,8 @@ private fun challengeRoute(authService: AuthService): ContractRoute =
             if (username.isNullOrBlank())
                 return@to Response(BAD_REQUEST).body("Missing username")
             val salt = authService.getSaltForChallenge(username)
-            val urlEnc = Base64.getUrlEncoder().withoutPadding()
             Response(OK).header("Content-Type", "application/json")
-                .body("""{"auth_salt":"${urlEnc.encodeToString(salt)}"}""")
+                .body(challengeResponseJson(salt))
         } catch (e: Exception) {
             Response(INTERNAL_SERVER_ERROR).body("challenge failed: ${e.message}")
         }
@@ -177,10 +172,8 @@ private fun getInviteRoute(authService: AuthService): ContractRoute =
             val session = authService.resolveSession(request.header("X-Api-Key"))
                 ?: return@to Response(UNAUTHORIZED).body("Unauthorized")
             val invite = authService.generateInvite(session.userId)
-            val node = JsonNodeFactory.instance.objectNode()
-            node.put("token", invite.token)
-            node.put("expires_at", invite.expiresAt.toString())
-            Response(OK).header("Content-Type", "application/json").body(node.toString())
+            Response(OK).header("Content-Type", "application/json")
+                .body(inviteResponseJson(invite.token, invite.expiresAt))
         } catch (e: Exception) {
             Response(INTERNAL_SERVER_ERROR).body("invites failed: ${e.message}")
         }
@@ -259,10 +252,8 @@ private fun pairingInitiateRoute(authService: AuthService): ContractRoute =
             val session = authService.resolveSession(request.header("X-Api-Key"))
                 ?: return@to Response(UNAUTHORIZED).body("Unauthorized")
             val link = authService.initiatePairing(session.userId)
-            val node = JsonNodeFactory.instance.objectNode()
-            node.put("code", link.oneTimeCode)
-            node.put("expires_at", link.expiresAt.toString())
-            Response(OK).header("Content-Type", "application/json").body(node.toString())
+            Response(OK).header("Content-Type", "application/json")
+                .body(pairingInitiateResponseJson(link.oneTimeCode, link.expiresAt))
         } catch (e: Exception) {
             Response(INTERNAL_SERVER_ERROR).body("pairing/initiate failed: ${e.message}")
         }
@@ -336,18 +327,12 @@ private fun pairingStatusRoute(authService: AuthService): ContractRoute =
             val sessionId = request.query("session_id")
             if (sessionId.isNullOrBlank())
                 return@to Response(BAD_REQUEST).body("Missing session_id")
-            val urlEnc = Base64.getUrlEncoder().withoutPadding()
             when (val result = authService.pairingStatus(sessionId)) {
                 AuthService.PairingStatusResult.Pending ->
                     Response(OK).header("Content-Type", "application/json").body("""{"state":"pending"}""")
                 is AuthService.PairingStatusResult.Complete -> {
-                    val node = JsonNodeFactory.instance.objectNode()
-                    node.put("state", "complete")
-                    node.put("session_token", result.sessionToken)
-                    node.put("wrapped_master_key", urlEnc.encodeToString(result.wrappedMasterKey))
-                    node.put("wrap_format", result.wrapFormat)
-                    node.put("expires_at", result.expiresAt?.toString())
-                    Response(OK).header("Content-Type", "application/json").body(node.toString())
+                    Response(OK).header("Content-Type", "application/json")
+                        .body(pairingStatusCompleteJson(result.sessionToken, result.wrappedMasterKey, result.wrapFormat, result.expiresAt))
                 }
                 AuthService.PairingStatusResult.NotFound ->
                     Response(NOT_FOUND).header("Content-Type", "application/json")

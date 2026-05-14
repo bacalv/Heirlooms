@@ -2,10 +2,10 @@ package digital.heirlooms.server
 
 import digital.heirlooms.server.domain.plot.PlotRecord
 import digital.heirlooms.server.repository.plot.PlotRepository
+import digital.heirlooms.server.representation.plot.toJson
 import digital.heirlooms.server.service.plot.PlotService
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import org.http4k.contract.ContractRoute
 import org.http4k.contract.div
 import org.http4k.contract.meta
@@ -195,27 +195,4 @@ private fun parsePlotBody(request: Request): PlotBodyParsed {
     }
 }
 
-internal fun PlotRecord.toJson(authUserId: UUID? = null): String {
-    val factory = JsonNodeFactory.instance
-    val node = factory.objectNode()
-    node.put("id", id.toString())
-    if (ownerUserId != null) node.put("owner_user_id", ownerUserId.toString())
-    else node.putNull("owner_user_id")
-    if (authUserId != null) node.put("is_owner", ownerUserId == authUserId)
-    node.put("name", name)
-    node.put("sort_order", sortOrder)
-    node.put("is_system_defined", isSystemDefined)
-    node.put("show_in_garden", showInGarden)
-    node.put("visibility", visibility)
-    node.put("plot_status", plotStatus)
-    if (localName != null) node.put("local_name", localName) else node.putNull("local_name")
-    if (tombstonedAt != null) node.put("tombstoned_at", tombstonedAt.toString()) else node.putNull("tombstoned_at")
-    node.put("created_at", createdAt.toString())
-    node.put("updated_at", updatedAt.toString())
-    if (criteria != null) {
-        node.set<JsonNode>("criteria", plotMapper.readTree(criteria))
-    } else {
-        node.putNull("criteria")
-    }
-    return node.toString()
-}
+// PlotRecord.toJson() has moved to representation/plot/PlotRepresentation.kt

@@ -2,6 +2,48 @@
 
 ---
 
+## Session — 14 May 2026 — Server refactor phase 6: extract representation layer
+
+### What was done
+
+Pure code reorganisation — no behaviour changes. All JSON serialisation extension functions and inline JSON-building code extracted from handler files into a dedicated `representation/` package.
+
+**Representation files created:**
+
+| File | Package | What moved there |
+|---|---|---|
+| `UploadRepresentation.kt` | `representation/upload/` | `UploadRecord.toJson()` (from `Database.kt`), `UploadPage.toJson()` (from `UploadHandler.kt`) |
+| `CapsuleRepresentation.kt` | `representation/capsule/` | `toDetailJson()`, `toSummaryJson()`, `toReverseLookupJson()` (all from `CapsuleHandler.kt`) |
+| `PlotRepresentation.kt` | `representation/plot/` | `PlotRecord.toJson()` (from `PlotHandler.kt`) |
+| `FlowRepresentation.kt` | `representation/plot/` | `FlowRecord.toJson()`, `PlotItemWithUpload.toJson()` (from `FlowHandler.kt`) |
+| `SharedPlotRepresentation.kt` | `representation/plot/` | `PlotMemberRecord.toJson()`, `SharedMembershipRecord.toJson()`, `plotKeyResponseJson()`, `inviteResponseJson()`, `joinInfoResponseJson()`, `pendingJoinResponseJson()` — extracted from inline JSON building in `SharedPlotHandler.kt` |
+| `AuthRepresentation.kt` | `representation/auth/` | `sessionTokenJson()` (from `AuthHandler.kt`), `challengeResponseJson()`, `inviteResponseJson()`, `pairingInitiateResponseJson()`, `pairingStatusCompleteJson()` — extracted from inline JSON building in `AuthHandler.kt` |
+| `KeysRepresentation.kt` | `representation/keys/` | `WrappedKeyRecord.toJson()`, `RecoveryPassphraseRecord.toJson()` (from `KeysHandler.kt`) |
+| `SocialRepresentation.kt` | `representation/social/` | `AccountSharingKeyRecord.toJson()` (from `SharingKeyHandler.kt`), `List<FriendRecord>.toFriendsJson()` (extracted from `FriendsHandler.kt`), `friendSharingKeyResponseJson()` (from `SharingKeyHandler.kt`) |
+
+**Design decisions:**
+
+- `SharedPlotHandler` had no dedicated serialisation functions — all JSON was built inline in route handlers. Extracted these to named functions in `SharedPlotRepresentation.kt` for clarity and reuse.
+- `AuthHandler` similarly had inline JSON building in several routes (challenge, invite, pairing initiate, pairing complete). Each became a named function in `AuthRepresentation.kt`.
+- All functions are top-level (not inside classes/objects) to match the idiomatic Kotlin extension-function pattern used throughout the codebase.
+- Unused imports cleaned up from all modified handler files (removed `JsonNodeFactory`, `Base64`, `Instant`, `UploadRecord`, `CapsuleDetail`, `CapsuleSummary`, `JsonNode`, `JsonNodeFactory` where no longer needed).
+- `CapsuleHandlerTest.kt` updated to import representation functions from `representation/capsule/` instead of the old handler package.
+
+**Build results:** `./gradlew clean shadowJar` — BUILD SUCCESSFUL (warnings only, all pre-existing).
+
+**Unit tests:** `./gradlew test` — BUILD SUCCESSFUL.
+
+**Coverage (after):**
+- INSTRUCTION: 51.7% (unchanged)
+- LINE: 56.8% (baseline 56.9%, rounding)
+- METHOD: 57.3% (unchanged)
+- CLASS: 67.0% (baseline 66.8%)
+- BRANCH: 33.8% (unchanged)
+
+No regression — pure code move.
+
+---
+
 ## Session — 14 May 2026 — Server refactor phase 5: extract service classes
 
 ### What was done

@@ -1,9 +1,13 @@
 package digital.heirlooms.server
 
 import digital.heirlooms.server.repository.plot.PlotMemberRepository
+import digital.heirlooms.server.representation.plot.inviteResponseJson
+import digital.heirlooms.server.representation.plot.joinInfoResponseJson
+import digital.heirlooms.server.representation.plot.pendingJoinResponseJson
+import digital.heirlooms.server.representation.plot.plotKeyResponseJson
+import digital.heirlooms.server.representation.plot.toJson
 import digital.heirlooms.server.service.plot.SharedPlotService
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import org.http4k.contract.ContractRoute
 import org.http4k.contract.div
 import org.http4k.contract.meta
@@ -57,10 +61,8 @@ private fun getPlotKeyRoute(sharedPlotService: SharedPlotService): ContractRoute
         { request: Request ->
             when (val result = sharedPlotService.getPlotKey(plotId, request.authUserId())) {
                 is SharedPlotService.GetPlotKeyResult.Success -> {
-                    val node = JsonNodeFactory.instance.objectNode()
-                    node.put("wrappedPlotKey", Base64.getEncoder().encodeToString(result.wrappedKey))
-                    node.put("plotKeyFormat", result.format)
-                    Response(OK).header("Content-Type", "application/json").body(node.toString())
+                    Response(OK).header("Content-Type", "application/json")
+                        .body(plotKeyResponseJson(result.wrappedKey, result.format))
                 }
                 SharedPlotService.GetPlotKeyResult.NotShared -> Response(FORBIDDEN)
                 SharedPlotService.GetPlotKeyResult.NotFound -> Response(NOT_FOUND)
@@ -81,17 +83,7 @@ private fun listMembersRoute(sharedPlotService: SharedPlotService): ContractRout
             if (members == null) {
                 Response(NOT_FOUND)
             } else {
-                val json = "[${members.joinToString(",") { m ->
-                    val node = JsonNodeFactory.instance.objectNode()
-                    node.put("userId", m.userId.toString())
-                    node.put("displayName", m.displayName)
-                    node.put("username", m.username)
-                    node.put("role", m.role)
-                    node.put("status", m.status)
-                    if (m.localName != null) node.put("localName", m.localName) else node.putNull("localName")
-                    node.put("joinedAt", m.joinedAt.toString())
-                    node.toString()
-                }}]"
+                val json = "[${members.joinToString(",") { m -> m.toJson() }}]"
                 Response(OK).header("Content-Type", "application/json").body(json)
             }
         }
@@ -140,10 +132,8 @@ private fun createInviteRoute(sharedPlotService: SharedPlotService): ContractRou
             if (invite == null) {
                 Response(NOT_FOUND)
             } else {
-                val node = JsonNodeFactory.instance.objectNode()
-                node.put("token", invite.token)
-                node.put("expiresAt", invite.expiresAt.toString())
-                Response(CREATED).header("Content-Type", "application/json").body(node.toString())
+                Response(CREATED).header("Content-Type", "application/json")
+                    .body(inviteResponseJson(invite.token, invite.expiresAt))
             }
         }
     }
@@ -161,12 +151,8 @@ private fun joinInfoRoute(sharedPlotService: SharedPlotService): ContractRoute =
             if (info == null) {
                 Response(NOT_FOUND).body("Invite not found or expired")
             } else {
-                val node = JsonNodeFactory.instance.objectNode()
-                node.put("plotId", info.plotId.toString())
-                node.put("plotName", info.plotName)
-                node.put("inviterDisplayName", info.inviterDisplayName)
-                node.put("inviterUserId", info.inviterUserId.toString())
-                Response(OK).header("Content-Type", "application/json").body(node.toString())
+                Response(OK).header("Content-Type", "application/json")
+                    .body(joinInfoResponseJson(info.plotId, info.plotName, info.inviterDisplayName, info.inviterUserId))
             }
         }
     }
@@ -185,11 +171,8 @@ private fun handleJoin(request: Request, sharedPlotService: SharedPlotService): 
         ?: return Response(BAD_REQUEST).body("recipientSharingPubkey is required")
     return when (val result = sharedPlotService.redeemInvite(token, request.authUserId(), recipientPubkey)) {
         is PlotMemberRepository.RedeemInviteResult.Pending -> {
-            val resp = JsonNodeFactory.instance.objectNode()
-            resp.put("status", "pending")
-            resp.put("inviteId", result.inviteId.toString())
-            resp.put("inviterDisplayName", result.inviterDisplayName)
-            Response(OK).header("Content-Type", "application/json").body(resp.toString())
+            Response(OK).header("Content-Type", "application/json")
+                .body(pendingJoinResponseJson("pending", result.inviteId, result.inviterDisplayName))
         }
         PlotMemberRepository.RedeemInviteResult.AlreadyMember ->
             Response(CONFLICT).body("You are already a member of this plot")
@@ -382,25 +365,6 @@ private fun listSharedMembershipsRoute(sharedPlotService: SharedPlotService): Co
         summary = "List all shared plot memberships for current user (all statuses)"
     } bindContract GET to { request: Request ->
         val memberships = sharedPlotService.listSharedMemberships(request.authUserId())
-        val factory = JsonNodeFactory.instance
-        val arr = factory.arrayNode()
-        memberships.forEach { m ->
-            val node = factory.objectNode()
-            node.put("plotId", m.plotId.toString())
-            node.put("plotName", m.plotName)
-            if (m.ownerUserId != null) node.put("ownerUserId", m.ownerUserId.toString())
-            else node.putNull("ownerUserId")
-            if (m.ownerDisplayName != null) node.put("ownerDisplayName", m.ownerDisplayName)
-            else node.putNull("ownerDisplayName")
-            node.put("role", m.role)
-            node.put("status", m.status)
-            if (m.localName != null) node.put("localName", m.localName) else node.putNull("localName")
-            node.put("joinedAt", m.joinedAt.toString())
-            if (m.leftAt != null) node.put("leftAt", m.leftAt.toString()) else node.putNull("leftAt")
-            node.put("plotStatus", m.plotStatus)
-            if (m.tombstonedAt != null) node.put("tombstonedAt", m.tombstonedAt.toString()) else node.putNull("tombstonedAt")
-            if (m.tombstonedBy != null) node.put("tombstonedBy", m.tombstonedBy.toString()) else node.putNull("tombstonedBy")
-            arr.add(node)
-        }
-        Response(OK).header("Content-Type", "application/json").body(sharedMapper.writeValueAsString(arr))
+        val json = "[${memberships.joinToString(",") { m -> m.toJson() }}]"
+        Response(OK).header("Content-Type", "application/json").body(json)
     }

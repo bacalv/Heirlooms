@@ -1,8 +1,9 @@
 package digital.heirlooms.server
 
 import digital.heirlooms.server.domain.keys.AccountSharingKeyRecord
+import digital.heirlooms.server.representation.social.friendSharingKeyResponseJson
+import digital.heirlooms.server.representation.social.toJson
 import digital.heirlooms.server.service.social.SocialService
-import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import org.http4k.contract.ContractRoute
 import org.http4k.contract.div
 import org.http4k.contract.meta
@@ -19,11 +20,9 @@ import org.http4k.core.Status.Companion.OK
 import org.http4k.lens.Path
 import org.http4k.lens.uuid
 import com.fasterxml.jackson.databind.ObjectMapper
-import java.util.Base64
 import java.util.UUID
 
 private val sharingMapper = ObjectMapper()
-private val sharingEnc = Base64.getEncoder()
 
 fun sharingKeyRoutes(socialService: SocialService): List<ContractRoute> = listOf(
     putSharingKeyRoute(socialService),
@@ -83,9 +82,8 @@ private fun handleGetFriendSharingKey(friendId: UUID, request: Request, socialSe
         val requesterId = request.authUserId() ?: return Response(FORBIDDEN)
         when (val result = socialService.getFriendSharingKey(requesterId, friendId)) {
             is SocialService.GetFriendSharingKeyResult.Ok -> {
-                val node = JsonNodeFactory.instance.objectNode()
-                node.put("pubkey", sharingEnc.encodeToString(result.pubkeyBytes))
-                Response(OK).header("Content-Type", "application/json").body(node.toString())
+                Response(OK).header("Content-Type", "application/json")
+                    .body(friendSharingKeyResponseJson(result.pubkeyBytes))
             }
             SocialService.GetFriendSharingKeyResult.NotFriends ->
                 Response(FORBIDDEN).body("Not friends")
@@ -97,11 +95,4 @@ private fun handleGetFriendSharingKey(friendId: UUID, request: Request, socialSe
     }
 }
 
-internal fun AccountSharingKeyRecord.toJson(): String {
-    val enc = Base64.getEncoder()
-    val node = JsonNodeFactory.instance.objectNode()
-    node.put("pubkey", enc.encodeToString(pubkey))
-    node.put("wrappedPrivkey", enc.encodeToString(wrappedPrivkey))
-    node.put("wrapFormat", wrapFormat)
-    return node.toString()
-}
+// AccountSharingKeyRecord.toJson() has moved to representation/social/SocialRepresentation.kt
