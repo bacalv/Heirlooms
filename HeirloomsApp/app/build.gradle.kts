@@ -29,7 +29,7 @@ android {
             applicationIdSuffix = ".staging"
             versionNameSuffix = "-staging"
             resValue("string", "app_name", "Heirlooms Test")
-            buildConfigField("String", "BASE_URL_OVERRIDE", "\"https://heirlooms-server-test-340655233963.europe-west2.run.app\"")
+            buildConfigField("String", "BASE_URL_OVERRIDE", "\"https://test.api.heirlooms.digital\"")
         }
     }
 
