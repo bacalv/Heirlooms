@@ -6,20 +6,31 @@ A personal digital vault — share photos and videos from your phone to your own
 
 | Directory | Description |
 |---|---|
-| `HeirloomsServer/` | Kotlin/http4k backend server — receives uploads, stores metadata in PostgreSQL, files in MinIO/S3 |
-| `HeirloomsApp/` | Android app — adds "My Heirlooms" to the system share sheet |
-| `HeirloomsTest/` | End-to-end test suite — spins up the full stack in Docker and runs tests |
+| `HeirloomsServer/` | Kotlin/http4k backend server — stores metadata in PostgreSQL, media in GCS |
+| `HeirloomsApp/` | Android app (Jetpack Compose) — E2EE upload, garden, shared plots |
+| `HeirloomsWeb/` | React/Vite web app — garden, uploads, shared plots |
+| `HeirloomsiOS/` | Swift/SwiftUI iOS app — E2EE upload, home grid, QR activation |
+| `HeirloomsTest/` | Integration test suite — spins up the full stack via Testcontainers |
 
 ## Docs
 
 | File | Description |
 |---|---|
-| [ROADMAP.md](docs/ROADMAP.md) | Product vision, milestone plan, and key concepts explored during the founding session |
-| [PROMPT_LOG.md](docs/PROMPT_LOG.md) | Running record of key decisions, prompts, and technical choices made during development |
-| [TEAM.md](docs/TEAM.md) | Team structure: roles, responsibilities, and working agreements |
-| [PA_NOTES.md](docs/PA_NOTES.md) | PA (claude.ai) working memory — preferences, project facts, pending decisions, and known gotchas |
-| [SE_NOTES.md](docs/SE_NOTES.md) | Software Engineer (Claude Code) working memory — session context, commit conventions, and project notes |
-| [chats/2026-04-30-initial-chat.md](docs/chats/2026-04-30-initial-chat.md) | Original claude.ai founding session chat, formatted as markdown (356 turns, 24–30 April 2026) |
+| [tasks/progress.md](tasks/progress.md) | Task queue — what's queued, in-progress, and done |
+| [ROADMAP.md](docs/ROADMAP.md) | Product vision and milestone plan |
+| [TEAM.md](docs/TEAM.md) | Team structure and personas |
+| [envelope_format.md](docs/envelope_format.md) | E2EE envelope format specification |
+| [docs/sessions/](docs/sessions/) | Archived session logs and change notes |
+
+## AI Team
+
+Heirlooms uses a persona-based AI team to coordinate development. Start a new session with:
+
+```
+@personalities/PA.md
+```
+
+This loads the PA persona — your personal assistant who reads the task queue, dispatches specialist agents (Developer, SecurityManager, TestManager, OpsManager, TechnicalArchitect), and reports back. See `personalities/PERSONAS.md` for the full team structure.
 
 ---
 

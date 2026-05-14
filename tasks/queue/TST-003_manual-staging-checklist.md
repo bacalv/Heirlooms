@@ -6,6 +6,7 @@ priority: High
 status: queued
 depends_on: [TST-002]
 touches: []
+assigned_to: TestManager
 estimated: 30-60 minutes (manual)
 ---
 

@@ -6,6 +6,7 @@ priority: High
 status: queued
 depends_on: []
 touches: [HeirloomsiOS/Sources/HeirloomsApp/Views/ActivateView.swift]
+assigned_to: Developer
 estimated: 2-3 hours (agent)
 ---
 

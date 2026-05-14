@@ -6,6 +6,7 @@ priority: Medium
 status: queued
 depends_on: [IOS-001]
 touches: [HeirloomsiOS/]
+assigned_to: Developer
 estimated: 3-4 hours (agent + manual Xcode steps)
 ---
 

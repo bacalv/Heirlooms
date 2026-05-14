@@ -10,6 +10,7 @@ touches:
   - HeirloomsServer/src/main/kotlin/digital/heirlooms/server/crypto/
   - HeirloomsServer/src/main/kotlin/digital/heirlooms/server/routes/auth/
   - HeirloomsTest/
+assigned_to: SecurityManager
 estimated: 2-3 days (agent)
 ---
 

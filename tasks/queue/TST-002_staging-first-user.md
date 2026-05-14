@@ -6,6 +6,7 @@ priority: High
 status: queued
 depends_on: []
 touches: []
+assigned_to: CTO
 estimated: 5 minutes (manual)
 ---
 

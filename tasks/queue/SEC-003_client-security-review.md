@@ -6,6 +6,7 @@ priority: Medium
 status: queued
 depends_on: [SEC-001]
 touches: [HeirloomsApp/, HeirloomsWeb/, HeirloomsiOS/]
+assigned_to: SecurityManager
 estimated: 1-2 days (research + agent)
 ---
 

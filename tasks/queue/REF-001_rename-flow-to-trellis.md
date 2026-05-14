@@ -15,6 +15,7 @@ touches:
   - HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/flows/
   - HeirloomsApp/app/src/main/kotlin/digital/heirlooms/api/
   - HeirloomsWeb/src/
+assigned_to: Developer
 estimated: 4-6 hours (agent, coordinated release)
 ---
 

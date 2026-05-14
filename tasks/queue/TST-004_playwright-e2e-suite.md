@@ -6,6 +6,7 @@ priority: Medium
 status: queued
 depends_on: [TST-003]
 touches: [HeirloomsWeb/]
+assigned_to: Developer
 estimated: 1-2 days (agent)
 ---
 

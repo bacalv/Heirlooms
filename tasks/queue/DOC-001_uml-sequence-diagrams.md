@@ -6,6 +6,7 @@ priority: Low
 status: queued
 depends_on: [TST-004, SEC-001]
 touches: [docs/security/, HeirloomsTest/]
+assigned_to: Developer
 estimated: 1 day (agent)
 ---
 

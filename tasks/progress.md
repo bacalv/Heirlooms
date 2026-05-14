@@ -2,33 +2,41 @@
 
 Tasks move through: **queue** → **in-progress** → **done** (or **brainstorming** for ideas not yet actionable).
 
-When running agents in parallel, an agent claims a task by moving its file from `queue/` to `in-progress/` and renaming it with its agent ID prefix (e.g. `in-progress/agent-abc123_TST-003.md`). Before claiming, the agent checks `in-progress/` for any task whose `touches:` overlaps with its target task — if there's a conflict, it picks a different task.
+**Agent coordination:** To claim a task, move its file from `queue/` to `in-progress/` and prefix the filename with your agent ID (e.g. `in-progress/agent-abc123_TST-003.md`). Before claiming, check `in-progress/` for `touches:` conflicts. Each completed task appends `## Completion notes` and moves to `done/`.
 
-Each completed task may append a `## Spawned tasks` section listing new task IDs it created in `queue/`.
+**Persona files:** `personalities/` — PA, Developer, DevManager, TestManager, OpsManager, SecurityManager, TechnicalArchitect.
+
+---
+
+## Currently Running
+
+| Agent ID | Task | Started |
+|----------|------|---------|
+| — | — | — |
 
 ---
 
 ## Queue
 
-| ID | Title | Category | Priority | Depends on |
-|----|-------|----------|----------|------------|
-| [TST-001](queue/TST-001_sanity-test-production.md) | Sanity test production | Testing | High | — |
-| [TST-002](queue/TST-002_staging-first-user.md) | Create first user in staging | Testing | High | — |
-| [TST-003](queue/TST-003_manual-staging-checklist.md) | Manual staging test checklist | Testing | High | TST-002 |
-| [IOS-001](queue/IOS-001_qr-scanner-avfoundation.md) | Complete iOS QRScannerView (AVFoundation) | iOS | High | — |
-| [IOS-002](queue/IOS-002_share-extension.md) | iOS Share Extension target | iOS | Medium | IOS-001 |
-| [REF-001](queue/REF-001_rename-flow-to-trellis.md) | Rename Flow → Trellis across all platforms | Refactoring | Medium | — |
-| [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | TST-003 |
-| [SEC-001](queue/SEC-001_security-hardening.md) | Security hardening + threat model | Security | High | — |
-| [SEC-002](queue/SEC-002_auth-crypto-coverage.md) | 100% coverage plan for auth/crypto paths | Security | High | TST-004 |
-| [SEC-003](queue/SEC-003_client-security-review.md) | Client security flaw testing plan | Security | Medium | SEC-001 |
-| [DOC-001](queue/DOC-001_uml-sequence-diagrams.md) | UML sequence diagrams from test output | Docs | Low | TST-004 |
+| ID | Title | Category | Priority | Assigned to | Depends on |
+|----|-------|----------|----------|-------------|------------|
+| [TST-001](queue/TST-001_sanity-test-production.md) | Sanity test production | Testing | High | CTO | — |
+| [TST-002](queue/TST-002_staging-first-user.md) | Create first user in staging | Testing | High | CTO | — |
+| [TST-003](queue/TST-003_manual-staging-checklist.md) | Manual staging test checklist | Testing | High | TestManager | TST-002 |
+| [IOS-001](queue/IOS-001_qr-scanner-avfoundation.md) | Complete iOS QRScannerView (AVFoundation) | iOS | High | Developer | — |
+| [IOS-002](queue/IOS-002_share-extension.md) | iOS Share Extension target | iOS | Medium | Developer | IOS-001 |
+| [REF-001](queue/REF-001_rename-flow-to-trellis.md) | Rename Flow → Trellis across all platforms | Refactoring | Medium | Developer | — |
+| [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | Developer | TST-003 |
+| [SEC-001](queue/SEC-001_security-hardening.md) | Security hardening + threat model | Security | High | SecurityManager | — |
+| [SEC-002](queue/SEC-002_auth-crypto-coverage.md) | 100% coverage plan for auth/crypto paths | Security | High | SecurityManager | TST-004 |
+| [SEC-003](queue/SEC-003_client-security-review.md) | Client security flaw testing plan | Security | Medium | SecurityManager | SEC-001 |
+| [DOC-001](queue/DOC-001_uml-sequence-diagrams.md) | UML sequence diagrams from test output | Docs | Low | Developer | TST-004 |
 
 ## In Progress
 
-| ID | Title | Category | Claimed by |
-|----|-------|----------|------------|
-| — | — | — | — |
+| ID | Title | Category | Assigned to | Claimed by |
+|----|-------|----------|-------------|------------|
+| — | — | — | — | — |
 
 ## Done
 
