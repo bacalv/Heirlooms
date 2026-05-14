@@ -12,7 +12,9 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | Agent ID | Task | Started |
 |----------|------|---------|
-| — | — | — |
+| developer-1 | [IOS-001](in-progress/IOS-001_qr-scanner-avfoundation.md) | 2026-05-14 |
+| security | [SEC-001](in-progress/SEC-001_security-hardening.md) | 2026-05-14 |
+| architect | [ARCH-001](in-progress/ARCH-001_m10-task-breakdown.md) | 2026-05-14 |
 
 ---
 
@@ -23,11 +25,9 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [TST-001](queue/TST-001_sanity-test-production.md) | Sanity test production | Testing | High | CTO | — |
 | [TST-002](queue/TST-002_staging-first-user.md) | Create first user in staging | Testing | High | CTO | — |
 | [TST-003](queue/TST-003_manual-staging-checklist.md) | Manual staging test checklist | Testing | High | TestManager | TST-002 |
-| [IOS-001](queue/IOS-001_qr-scanner-avfoundation.md) | Complete iOS QRScannerView (AVFoundation) | iOS | High | Developer | — |
 | [IOS-002](queue/IOS-002_share-extension.md) | iOS Share Extension target | iOS | Medium | Developer | IOS-001 |
 | [REF-001](queue/REF-001_rename-flow-to-trellis.md) | Rename Flow → Trellis across all platforms | Refactoring | Medium | Developer | — |
 | [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | Developer | TST-003 |
-| [SEC-001](queue/SEC-001_security-hardening.md) | Security hardening + threat model | Security | High | SecurityManager | — |
 | [SEC-002](queue/SEC-002_auth-crypto-coverage.md) | 100% coverage plan for auth/crypto paths | Security | High | SecurityManager | TST-004 |
 | [SEC-003](queue/SEC-003_client-security-review.md) | Client security flaw testing plan | Security | Medium | SecurityManager | SEC-001 |
 | [DOC-001](queue/DOC-001_uml-sequence-diagrams.md) | UML sequence diagrams from test output | Docs | Low | Developer | TST-004 |
@@ -36,7 +36,9 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Assigned to | Claimed by |
 |----|-------|----------|-------------|------------|
-| — | — | — | — | — |
+| [IOS-001](in-progress/IOS-001_qr-scanner-avfoundation.md) | Complete iOS QRScannerView (AVFoundation) | iOS | Developer | developer-1 |
+| [SEC-001](in-progress/SEC-001_security-hardening.md) | Security hardening + threat model | Security | SecurityManager | security |
+| [ARCH-001](in-progress/ARCH-001_m10-task-breakdown.md) | M10 — produce queue tasks for all four increments | Planning | TechnicalArchitect | architect |
 
 ## Done
 
