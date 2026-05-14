@@ -262,6 +262,7 @@ class FinUploadHandlerTest {
     @Test
     fun `GET uploads id file returns 404 when upload not found`() {
         every { mockDatabase.findUploadByIdForUser(knownId, any()) } returns null
+        every { mockDatabase.findUploadByIdForSharedMember(knownId, any()) } returns null
 
         val response = app(Request(GET, "/api/content/uploads/$knownId/file"))
 
@@ -640,6 +641,7 @@ class FinUploadHandlerTest {
     @Test
     fun `GET uploads id thumb returns 404 when upload not found`() {
         every { mockDatabase.findUploadByIdForUser(knownId, any()) } returns null
+        every { mockDatabase.findUploadByIdForSharedMember(knownId, any()) } returns null
 
         val response = app(Request(GET, "/api/content/uploads/$knownId/thumb"))
 

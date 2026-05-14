@@ -1,9 +1,6 @@
 package digital.heirlooms.server
 
-import digital.heirlooms.server.domain.keys.RecoveryPassphraseRecord
-import digital.heirlooms.server.domain.keys.WrappedKeyRecord
-import digital.heirlooms.server.domain.auth.UserSessionRecord
-import com.fasterxml.jackson.databind.ObjectMapper
+import digital.heirlooms.server.service.auth.AuthService
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import org.http4k.contract.ContractRoute
 import org.http4k.contract.meta
@@ -20,54 +17,12 @@ import org.http4k.core.Status.Companion.NOT_FOUND
 import org.http4k.core.Status.Companion.NO_CONTENT
 import org.http4k.core.Status.Companion.OK
 import org.http4k.core.Status.Companion.UNAUTHORIZED
-import java.security.MessageDigest
-import java.security.SecureRandom
+import com.fasterxml.jackson.databind.ObjectMapper
 import java.time.Instant
 import java.util.Base64
 import java.util.UUID
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 
 private val authMapper = ObjectMapper()
-private val urlEnc: Base64.Encoder = Base64.getUrlEncoder().withoutPadding()
-private val urlDec: Base64.Decoder = Base64.getUrlDecoder()
-private val stdDec: Base64.Decoder = Base64.getDecoder()
-private val authRng = SecureRandom()
-
-private fun sha256(bytes: ByteArray): ByteArray =
-    MessageDigest.getInstance("SHA-256").digest(bytes)
-
-private fun generateRawToken(): ByteArray = ByteArray(32).also { authRng.nextBytes(it) }
-
-private fun issueToken(): Triple<String, ByteArray, ByteArray> {
-    val raw = generateRawToken()
-    val token = urlEnc.encodeToString(raw)
-    val hash = sha256(raw)
-    return Triple(token, raw, hash)
-}
-
-private fun fakeSalt(username: String, serverSecret: ByteArray): ByteArray {
-    val secret = if (serverSecret.isEmpty()) ByteArray(32) else serverSecret
-    val mac = Mac.getInstance("HmacSHA256")
-    mac.init(SecretKeySpec(secret, "HmacSHA256"))
-    return mac.doFinal(username.toByteArray(Charsets.UTF_8)).copyOf(16)
-}
-
-private fun decodeBase64Url(value: String?): ByteArray? =
-    if (value.isNullOrBlank()) null
-    else runCatching { urlDec.decode(value) }.getOrNull()
-        ?: runCatching { stdDec.decode(value) }.getOrNull()
-
-private fun resolveSession(request: Request, database: Database): UserSessionRecord? {
-    val raw = request.header("X-Api-Key") ?: return null
-    val rawBytes = runCatching { urlDec.decode(raw) }.getOrElse {
-        runCatching { stdDec.decode(raw) }.getOrNull()
-    } ?: return null
-    val hash = sha256(rawBytes)
-    val session = database.findSessionByTokenHash(hash) ?: return null
-    if (session.expiresAt.isBefore(Instant.now())) return null
-    return session
-}
 
 private fun sessionTokenJson(token: String, userId: UUID, expiresAt: Instant): String {
     val node = JsonNodeFactory.instance.objectNode()
@@ -77,26 +32,23 @@ private fun sessionTokenJson(token: String, userId: UUID, expiresAt: Instant): S
     return node.toString()
 }
 
-private fun generateNumericCode(): String =
-    (10_000_000 + authRng.nextInt(90_000_000)).toString()
-
-fun authRoutes(database: Database, serverSecret: ByteArray): List<ContractRoute> = listOf(
-    challengeRoute(database, serverSecret),
-    loginRoute(database),
-    setupExistingRoute(database),
-    logoutRoute(database),
-    meRoute(database),
-    getInviteRoute(database),
-    registerRoute(database),
-    pairingInitiateRoute(database),
-    pairingQrRoute(database),
-    pairingCompleteRoute(database),
-    pairingStatusRoute(database),
+fun authRoutes(authService: AuthService): List<ContractRoute> = listOf(
+    challengeRoute(authService),
+    loginRoute(authService),
+    setupExistingRoute(authService),
+    logoutRoute(authService),
+    meRoute(authService),
+    getInviteRoute(authService),
+    registerRoute(authService),
+    pairingInitiateRoute(authService),
+    pairingQrRoute(authService),
+    pairingCompleteRoute(authService),
+    pairingStatusRoute(authService),
 )
 
 // ---- POST /challenge -------------------------------------------------------
 
-private fun challengeRoute(database: Database, serverSecret: ByteArray): ContractRoute =
+private fun challengeRoute(authService: AuthService): ContractRoute =
     "/challenge" meta {
         summary = "Fetch auth salt for a username"
     } bindContract POST to { request: Request ->
@@ -105,13 +57,8 @@ private fun challengeRoute(database: Database, serverSecret: ByteArray): Contrac
             val username = node?.get("username")?.asText()
             if (username.isNullOrBlank())
                 return@to Response(BAD_REQUEST).body("Missing username")
-
-            val user = database.findUserByUsername(username)
-            val salt = if (user?.authSalt != null) {
-                user.authSalt
-            } else {
-                fakeSalt(username, serverSecret)
-            }
+            val salt = authService.getSaltForChallenge(username)
+            val urlEnc = Base64.getUrlEncoder().withoutPadding()
             Response(OK).header("Content-Type", "application/json")
                 .body("""{"auth_salt":"${urlEnc.encodeToString(salt)}"}""")
         } catch (e: Exception) {
@@ -121,7 +68,7 @@ private fun challengeRoute(database: Database, serverSecret: ByteArray): Contrac
 
 // ---- POST /login -----------------------------------------------------------
 
-private fun loginRoute(database: Database): ContractRoute =
+private fun loginRoute(authService: AuthService): ContractRoute =
     "/login" meta {
         summary = "Authenticate with auth_key and receive a session token"
     } bindContract POST to { request: Request ->
@@ -129,26 +76,18 @@ private fun loginRoute(database: Database): ContractRoute =
             val node = authMapper.readTree(request.bodyString())
             val username = node?.get("username")?.asText()
             val authKeyB64 = node?.get("auth_key")?.asText()
-
             if (username.isNullOrBlank() || authKeyB64.isNullOrBlank())
                 return@to Response(BAD_REQUEST).body("Missing username or auth_key")
-
-            val authKey = decodeBase64Url(authKeyB64)
+            val authKey = authService.decodeBase64Url(authKeyB64)
                 ?: return@to Response(BAD_REQUEST).body("auth_key is not valid Base64")
-
-            val user = database.findUserByUsername(username)
-            if (user == null || user.authVerifier == null ||
-                !sha256(authKey).contentEquals(user.authVerifier)
-            ) {
-                return@to Response(UNAUTHORIZED)
-                    .header("Content-Type", "application/json")
-                    .body("""{"error":"Invalid credentials"}""")
+            when (val result = authService.login(username, authKey)) {
+                is AuthService.LoginResult.Success ->
+                    Response(OK).header("Content-Type", "application/json")
+                        .body(sessionTokenJson(result.token, result.userId, result.expiresAt))
+                AuthService.LoginResult.InvalidCredentials ->
+                    Response(UNAUTHORIZED).header("Content-Type", "application/json")
+                        .body("""{"error":"Invalid credentials"}""")
             }
-
-            val (token, _, hash) = issueToken()
-            val session = database.createSession(user.id, hash, "android")
-            Response(OK).header("Content-Type", "application/json")
-                .body(sessionTokenJson(token, user.id, session.expiresAt))
         } catch (e: Exception) {
             Response(INTERNAL_SERVER_ERROR).body("login failed: ${e.message}")
         }
@@ -156,7 +95,7 @@ private fun loginRoute(database: Database): ContractRoute =
 
 // ---- POST /setup-existing --------------------------------------------------
 
-private fun setupExistingRoute(database: Database): ContractRoute =
+private fun setupExistingRoute(authService: AuthService): ContractRoute =
     "/setup-existing" meta {
         summary = "One-time passphrase setup for the founding user"
     } bindContract POST to { request: Request ->
@@ -166,59 +105,31 @@ private fun setupExistingRoute(database: Database): ContractRoute =
             val deviceId = node?.get("device_id")?.asText()
             val authSaltB64 = node?.get("auth_salt")?.asText()
             val authVerifierB64 = node?.get("auth_verifier")?.asText()
-
             if (username.isNullOrBlank() || deviceId.isNullOrBlank() ||
                 authSaltB64.isNullOrBlank() || authVerifierB64.isNullOrBlank()
             ) return@to Response(BAD_REQUEST).body("Missing required fields")
-
-            val authSalt = decodeBase64Url(authSaltB64)
+            val authSalt = authService.decodeBase64Url(authSaltB64)
                 ?: return@to Response(BAD_REQUEST).body("auth_salt is not valid Base64")
-            val authVerifier = decodeBase64Url(authVerifierB64)
+            val authVerifier = authService.decodeBase64Url(authVerifierB64)
                 ?: return@to Response(BAD_REQUEST).body("auth_verifier is not valid Base64")
-
             val wrappedMasterKeyRecoveryB64 = node?.get("wrapped_master_key_recovery")?.asText()
             val wrapFormatRecovery = node?.get("wrap_format_recovery")?.asText()
             val wrappedMasterKeyRecovery = if (!wrappedMasterKeyRecoveryB64.isNullOrBlank())
-                decodeBase64Url(wrappedMasterKeyRecoveryB64) else null
-
-            val user = database.findUserByUsername(username)
-                ?: return@to Response(UNAUTHORIZED)
-                    .header("Content-Type", "application/json")
-                    .body("""{"error":"Invalid credentials"}""")
-
-            if (user.authVerifier != null) {
-                return@to Response(CONFLICT)
-                    .header("Content-Type", "application/json")
-                    .body("""{"error":"Passphrase already set"}""")
+                authService.decodeBase64Url(wrappedMasterKeyRecoveryB64) else null
+            when (val result = authService.setupExisting(username, deviceId, authVerifier, authSalt, wrappedMasterKeyRecovery, wrapFormatRecovery)) {
+                is AuthService.SetupExistingResult.Success ->
+                    Response(OK).header("Content-Type", "application/json")
+                        .body(sessionTokenJson(result.token, result.userId, result.expiresAt))
+                AuthService.SetupExistingResult.InvalidCredentials ->
+                    Response(UNAUTHORIZED).header("Content-Type", "application/json")
+                        .body("""{"error":"Invalid credentials"}""")
+                AuthService.SetupExistingResult.PassphraseAlreadySet ->
+                    Response(CONFLICT).header("Content-Type", "application/json")
+                        .body("""{"error":"Passphrase already set"}""")
+                AuthService.SetupExistingResult.NoDeviceKey ->
+                    Response(UNAUTHORIZED).header("Content-Type", "application/json")
+                        .body("""{"error":"Invalid credentials"}""")
             }
-
-            val keyRecord = database.getWrappedKeyByDeviceIdAndUser(deviceId, user.id)
-            if (keyRecord == null) {
-                return@to Response(UNAUTHORIZED)
-                    .header("Content-Type", "application/json")
-                    .body("""{"error":"Invalid credentials"}""")
-            }
-
-            database.setUserAuth(user.id, authVerifier, authSalt)
-
-            if (wrappedMasterKeyRecovery != null && !wrapFormatRecovery.isNullOrBlank()) {
-                database.upsertRecoveryPassphrase(
-                    RecoveryPassphraseRecord(
-                        wrappedMasterKey = wrappedMasterKeyRecovery,
-                        wrapFormat = wrapFormatRecovery,
-                        argon2Params = "{}",
-                        salt = ByteArray(0),
-                        createdAt = Instant.now(),
-                        updatedAt = Instant.now(),
-                    ),
-                    user.id,
-                )
-            }
-
-            val (token, _, hash) = issueToken()
-            val session = database.createSession(user.id, hash, keyRecord.deviceKind)
-            Response(OK).header("Content-Type", "application/json")
-                .body(sessionTokenJson(token, user.id, session.expiresAt))
         } catch (e: Exception) {
             Response(INTERNAL_SERVER_ERROR).body("setup-existing failed: ${e.message}")
         }
@@ -226,14 +137,14 @@ private fun setupExistingRoute(database: Database): ContractRoute =
 
 // ---- POST /logout ----------------------------------------------------------
 
-private fun logoutRoute(database: Database): ContractRoute =
+private fun logoutRoute(authService: AuthService): ContractRoute =
     "/logout" meta {
         summary = "Invalidate the calling session"
     } bindContract POST to { request: Request ->
         try {
-            val session = resolveSession(request, database)
+            val session = authService.resolveSession(request.header("X-Api-Key"))
                 ?: return@to Response(UNAUTHORIZED).body("Unauthorized")
-            database.deleteSession(session.id)
+            authService.logout(request.header("X-Api-Key"))
             Response(NO_CONTENT)
         } catch (e: Exception) {
             Response(INTERNAL_SERVER_ERROR).body("logout failed: ${e.message}")
@@ -242,16 +153,15 @@ private fun logoutRoute(database: Database): ContractRoute =
 
 // ---- GET /me ---------------------------------------------------------------
 
-private fun meRoute(database: Database): ContractRoute =
+private fun meRoute(authService: AuthService): ContractRoute =
     "/me" meta {
         summary = "Return the authenticated user's profile"
     } bindContract GET to { request: Request ->
         try {
-            val userId = request.authUserId()
-            val user = database.findUserById(userId)
+            val userInfo = authService.getMe(request.authUserId())
                 ?: return@to Response(UNAUTHORIZED)
             Response(OK).header("Content-Type", "application/json")
-                .body("""{"user_id":"${user.id}","username":"${user.username}","display_name":"${user.displayName}"}""")
+                .body("""{"user_id":"${userInfo.id}","username":"${userInfo.username}","display_name":"${userInfo.displayName}"}""")
         } catch (e: Exception) {
             Response(INTERNAL_SERVER_ERROR).body("me failed: ${e.message}")
         }
@@ -259,17 +169,14 @@ private fun meRoute(database: Database): ContractRoute =
 
 // ---- GET /invites ----------------------------------------------------------
 
-private fun getInviteRoute(database: Database): ContractRoute =
+private fun getInviteRoute(authService: AuthService): ContractRoute =
     "/invites" meta {
         summary = "Generate an invite token for the authenticated user"
     } bindContract GET to { request: Request ->
         try {
-            val session = resolveSession(request, database)
+            val session = authService.resolveSession(request.header("X-Api-Key"))
                 ?: return@to Response(UNAUTHORIZED).body("Unauthorized")
-
-            val rawToken = urlEnc.encodeToString(generateRawToken())
-            val invite = database.createInvite(session.userId, rawToken)
-
+            val invite = authService.generateInvite(session.userId)
             val node = JsonNodeFactory.instance.objectNode()
             node.put("token", invite.token)
             node.put("expires_at", invite.expiresAt.toString())
@@ -281,7 +188,7 @@ private fun getInviteRoute(database: Database): ContractRoute =
 
 // ---- POST /register --------------------------------------------------------
 
-private fun registerRoute(database: Database): ContractRoute =
+private fun registerRoute(authService: AuthService): ContractRoute =
     "/register" meta {
         summary = "Redeem an invite token and create a new user account"
     } bindContract POST to { request: Request ->
@@ -307,83 +214,36 @@ private fun registerRoute(database: Database): ContractRoute =
                 deviceId.isNullOrBlank() || deviceLabel.isNullOrBlank() || deviceKind.isNullOrBlank()
             ) return@to Response(BAD_REQUEST).body("Missing required fields")
 
-            val authSalt = decodeBase64Url(authSaltB64)
+            val authSalt = authService.decodeBase64Url(authSaltB64)
                 ?: return@to Response(BAD_REQUEST).body("auth_salt is not valid Base64")
-            val authVerifier = decodeBase64Url(authVerifierB64)
+            val authVerifier = authService.decodeBase64Url(authVerifierB64)
                 ?: return@to Response(BAD_REQUEST).body("auth_verifier is not valid Base64")
-            val wrappedMasterKey = decodeBase64Url(wrappedMasterKeyB64)
+            val wrappedMasterKey = authService.decodeBase64Url(wrappedMasterKeyB64)
                 ?: return@to Response(BAD_REQUEST).body("wrapped_master_key is not valid Base64")
-            val pubkey = decodeBase64Url(pubkeyB64)
+            val pubkey = authService.decodeBase64Url(pubkeyB64)
                 ?: return@to Response(BAD_REQUEST).body("pubkey is not valid Base64")
 
-            // Optional: client-supplied recovery blob (master_key_seed-wrapped master key).
-            // Allows vault recovery after a fresh-browser login without re-pairing.
             val wrappedMasterKeyRecoveryB64 = node?.get("wrapped_master_key_recovery")?.asText()
             val wrapFormatRecovery = node?.get("wrap_format_recovery")?.asText()
             val wrappedMasterKeyRecovery = if (!wrappedMasterKeyRecoveryB64.isNullOrBlank())
-                decodeBase64Url(wrappedMasterKeyRecoveryB64) else null
+                authService.decodeBase64Url(wrappedMasterKeyRecoveryB64) else null
 
-            val invite = database.findInviteByToken(inviteToken)
-            if (invite == null || invite.usedAt != null || invite.expiresAt.isBefore(Instant.now())) {
-                return@to Response(GONE)
-                    .header("Content-Type", "application/json")
-                    .body("""{"error":"Invite token is invalid, expired, or already used"}""")
+            when (val result = authService.register(
+                inviteToken, username, displayName, authVerifier, authSalt,
+                wrappedMasterKey, wrapFormat, pubkeyFormat, pubkey,
+                deviceId, deviceLabel, deviceKind,
+                wrappedMasterKeyRecovery, wrapFormatRecovery,
+            )) {
+                is AuthService.RegisterResult.Success ->
+                    Response(CREATED).header("Content-Type", "application/json")
+                        .body(sessionTokenJson(result.token, result.userId, result.expiresAt))
+                AuthService.RegisterResult.InvalidInvite ->
+                    Response(GONE).header("Content-Type", "application/json")
+                        .body("""{"error":"Invite token is invalid, expired, or already used"}""")
+                AuthService.RegisterResult.UsernameTaken ->
+                    Response(CONFLICT).header("Content-Type", "application/json")
+                        .body("""{"error":"Username already taken"}""")
             }
-
-            if (database.findUserByUsername(username) != null) {
-                return@to Response(CONFLICT)
-                    .header("Content-Type", "application/json")
-                    .body("""{"error":"Username already taken"}""")
-            }
-
-            val newUser = database.createUser(
-                username = username,
-                displayName = displayName,
-                authVerifier = authVerifier,
-                authSalt = authSalt,
-            )
-            database.createSystemPlot(newUser.id)
-
-            if (wrappedMasterKeyRecovery != null && !wrapFormatRecovery.isNullOrBlank()) {
-                database.upsertRecoveryPassphrase(
-                    RecoveryPassphraseRecord(
-                        wrappedMasterKey = wrappedMasterKeyRecovery,
-                        wrapFormat = wrapFormatRecovery,
-                        argon2Params = "{}",
-                        salt = ByteArray(0),
-                        createdAt = Instant.now(),
-                        updatedAt = Instant.now(),
-                    ),
-                    newUser.id,
-                )
-            }
-
-            val now = Instant.now()
-            database.insertWrappedKey(
-                WrappedKeyRecord(
-                    id = UUID.randomUUID(),
-                    deviceId = deviceId,
-                    deviceLabel = deviceLabel,
-                    deviceKind = deviceKind,
-                    pubkeyFormat = pubkeyFormat,
-                    pubkey = pubkey,
-                    wrappedMasterKey = wrappedMasterKey,
-                    wrapFormat = wrapFormat,
-                    createdAt = now,
-                    lastUsedAt = now,
-                    retiredAt = null,
-                ),
-                userId = newUser.id,
-            )
-
-            database.markInviteUsed(invite.id, newUser.id)
-            database.createFriendship(invite.createdBy, newUser.id)
-
-            val (token, _, hash) = issueToken()
-            val session = database.createSession(newUser.id, hash, deviceKind)
-
-            Response(CREATED).header("Content-Type", "application/json")
-                .body(sessionTokenJson(token, newUser.id, session.expiresAt))
         } catch (e: Exception) {
             Response(INTERNAL_SERVER_ERROR).body("register failed: ${e.message}")
         }
@@ -391,17 +251,14 @@ private fun registerRoute(database: Database): ContractRoute =
 
 // ---- POST /pairing/initiate ------------------------------------------------
 
-private fun pairingInitiateRoute(database: Database): ContractRoute =
+private fun pairingInitiateRoute(authService: AuthService): ContractRoute =
     "/pairing/initiate" meta {
         summary = "Generate a numeric pairing code (Android → web)"
     } bindContract POST to { request: Request ->
         try {
-            val session = resolveSession(request, database)
+            val session = authService.resolveSession(request.header("X-Api-Key"))
                 ?: return@to Response(UNAUTHORIZED).body("Unauthorized")
-
-            val code = generateNumericCode()
-            val link = database.createPairingLink(session.userId, code)
-
+            val link = authService.initiatePairing(session.userId)
             val node = JsonNodeFactory.instance.objectNode()
             node.put("code", link.oneTimeCode)
             node.put("expires_at", link.expiresAt.toString())
@@ -413,7 +270,7 @@ private fun pairingInitiateRoute(database: Database): ContractRoute =
 
 // ---- POST /pairing/qr ------------------------------------------------------
 
-private fun pairingQrRoute(database: Database): ContractRoute =
+private fun pairingQrRoute(authService: AuthService): ContractRoute =
     "/pairing/qr" meta {
         summary = "Validate pairing code and return a session_id for QR display"
     } bindContract POST to { request: Request ->
@@ -422,19 +279,14 @@ private fun pairingQrRoute(database: Database): ContractRoute =
             val code = node?.get("code")?.asText()
             if (code.isNullOrBlank())
                 return@to Response(BAD_REQUEST).body("Missing code")
-
-            val link = database.getPendingDeviceLinkByCode(code)
-            if (link == null || link.state != "initiated" || link.expiresAt.isBefore(Instant.now())) {
-                return@to Response(NOT_FOUND)
-                    .header("Content-Type", "application/json")
-                    .body("""{"error":"Code not found or expired"}""")
+            when (val result = authService.pairingQr(code)) {
+                is AuthService.PairingQrResult.Ok ->
+                    Response(OK).header("Content-Type", "application/json")
+                        .body("""{"session_id":"${result.sessionId}"}""")
+                AuthService.PairingQrResult.NotFound ->
+                    Response(NOT_FOUND).header("Content-Type", "application/json")
+                        .body("""{"error":"Code not found or expired"}""")
             }
-
-            val sessionId = UUID.randomUUID().toString()
-            database.setPairingWebSession(link.id, sessionId)
-
-            Response(OK).header("Content-Type", "application/json")
-                .body("""{"session_id":"$sessionId"}""")
         } catch (e: Exception) {
             Response(INTERNAL_SERVER_ERROR).body("pairing/qr failed: ${e.message}")
         }
@@ -442,47 +294,33 @@ private fun pairingQrRoute(database: Database): ContractRoute =
 
 // ---- POST /pairing/complete ------------------------------------------------
 
-private fun pairingCompleteRoute(database: Database): ContractRoute =
+private fun pairingCompleteRoute(authService: AuthService): ContractRoute =
     "/pairing/complete" meta {
         summary = "Android posts wrapped key for web session (completes pairing)"
     } bindContract POST to { request: Request ->
         try {
-            val androidSession = resolveSession(request, database)
+            val androidSession = authService.resolveSession(request.header("X-Api-Key"))
                 ?: return@to Response(UNAUTHORIZED).body("Unauthorized")
-
             val node = authMapper.readTree(request.bodyString())
             val sessionId = node?.get("session_id")?.asText()
             val wrappedMasterKeyB64 = node?.get("wrapped_master_key")?.asText()
             val wrapFormat = node?.get("wrap_format")?.asText()
-
             if (sessionId.isNullOrBlank() || wrappedMasterKeyB64.isNullOrBlank() || wrapFormat.isNullOrBlank())
                 return@to Response(BAD_REQUEST).body("Missing required fields")
-
-            val wrappedMasterKey = decodeBase64Url(wrappedMasterKeyB64)
+            val wrappedMasterKey = authService.decodeBase64Url(wrappedMasterKeyB64)
                 ?: return@to Response(BAD_REQUEST).body("wrapped_master_key is not valid Base64")
-
-            val link = database.getPendingDeviceLinkByWebSessionId(sessionId)
-            if (link == null || link.expiresAt.isBefore(Instant.now())) {
-                return@to Response(NOT_FOUND)
-                    .header("Content-Type", "application/json")
-                    .body("""{"error":"Session not found or expired"}""")
+            when (authService.completePairing(androidSession, sessionId, wrappedMasterKey, wrapFormat)) {
+                AuthService.PairingCompleteResult.Ok ->
+                    Response(OK).header("Content-Type", "application/json").body("""{"ok":true}""")
+                AuthService.PairingCompleteResult.Unauthorized ->
+                    Response(UNAUTHORIZED).body("Unauthorized")
+                AuthService.PairingCompleteResult.NotFound ->
+                    Response(NOT_FOUND).header("Content-Type", "application/json")
+                        .body("""{"error":"Session not found or expired"}""")
+                AuthService.PairingCompleteResult.WrongState ->
+                    Response(CONFLICT).header("Content-Type", "application/json")
+                        .body("""{"error":"Pairing not in expected state"}""")
             }
-            if (link.state != "device_registered") {
-                return@to Response(CONFLICT)
-                    .header("Content-Type", "application/json")
-                    .body("""{"error":"Pairing not in expected state"}""")
-            }
-            if (link.userId != androidSession.userId) {
-                return@to Response(NOT_FOUND)
-                    .header("Content-Type", "application/json")
-                    .body("""{"error":"Session not found or expired"}""")
-            }
-
-            val (rawToken, _, hash) = issueToken()
-            val webSession = database.createSession(androidSession.userId, hash, "web")
-            database.completePairingLink(link.id, wrappedMasterKey, wrapFormat, rawToken, webSession)
-
-            Response(OK).header("Content-Type", "application/json").body("""{"ok":true}""")
         } catch (e: Exception) {
             Response(INTERNAL_SERVER_ERROR).body("pairing/complete failed: ${e.message}")
         }
@@ -490,7 +328,7 @@ private fun pairingCompleteRoute(database: Database): ContractRoute =
 
 // ---- GET /pairing/status ---------------------------------------------------
 
-private fun pairingStatusRoute(database: Database): ContractRoute =
+private fun pairingStatusRoute(authService: AuthService): ContractRoute =
     "/pairing/status" meta {
         summary = "Web polls for pairing completion"
     } bindContract GET to { request: Request ->
@@ -498,33 +336,26 @@ private fun pairingStatusRoute(database: Database): ContractRoute =
             val sessionId = request.query("session_id")
             if (sessionId.isNullOrBlank())
                 return@to Response(BAD_REQUEST).body("Missing session_id")
-
-            val link = database.getPendingDeviceLinkByWebSessionId(sessionId)
-            if (link == null) {
-                return@to Response(NOT_FOUND)
-                    .header("Content-Type", "application/json")
-                    .body("""{"error":"Session not found"}""")
+            val urlEnc = Base64.getUrlEncoder().withoutPadding()
+            when (val result = authService.pairingStatus(sessionId)) {
+                AuthService.PairingStatusResult.Pending ->
+                    Response(OK).header("Content-Type", "application/json").body("""{"state":"pending"}""")
+                is AuthService.PairingStatusResult.Complete -> {
+                    val node = JsonNodeFactory.instance.objectNode()
+                    node.put("state", "complete")
+                    node.put("session_token", result.sessionToken)
+                    node.put("wrapped_master_key", urlEnc.encodeToString(result.wrappedMasterKey))
+                    node.put("wrap_format", result.wrapFormat)
+                    node.put("expires_at", result.expiresAt?.toString())
+                    Response(OK).header("Content-Type", "application/json").body(node.toString())
+                }
+                AuthService.PairingStatusResult.NotFound ->
+                    Response(NOT_FOUND).header("Content-Type", "application/json")
+                        .body("""{"error":"Session not found"}""")
+                AuthService.PairingStatusResult.Expired ->
+                    Response(NOT_FOUND).header("Content-Type", "application/json")
+                        .body("""{"error":"Session expired"}""")
             }
-
-            if (link.state != "wrap_complete" && link.expiresAt.isBefore(Instant.now())) {
-                return@to Response(NOT_FOUND)
-                    .header("Content-Type", "application/json")
-                    .body("""{"error":"Session expired"}""")
-            }
-
-            if (link.state != "wrap_complete") {
-                return@to Response(OK)
-                    .header("Content-Type", "application/json")
-                    .body("""{"state":"pending"}""")
-            }
-
-            val node = JsonNodeFactory.instance.objectNode()
-            node.put("state", "complete")
-            node.put("session_token", link.rawSessionToken)
-            node.put("wrapped_master_key", urlEnc.encodeToString(link.wrappedMasterKey))
-            node.put("wrap_format", link.wrapFormat)
-            node.put("expires_at", link.sessionExpiresAt?.toString())
-            Response(OK).header("Content-Type", "application/json").body(node.toString())
         } catch (e: Exception) {
             Response(INTERNAL_SERVER_ERROR).body("pairing/status failed: ${e.message}")
         }

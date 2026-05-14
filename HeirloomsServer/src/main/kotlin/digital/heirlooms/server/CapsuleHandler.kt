@@ -5,6 +5,7 @@ import digital.heirlooms.server.domain.capsule.CapsuleShape
 import digital.heirlooms.server.domain.capsule.CapsuleState
 import digital.heirlooms.server.domain.capsule.CapsuleSummary
 import digital.heirlooms.server.repository.capsule.CapsuleRepository
+import digital.heirlooms.server.service.capsule.CapsuleService
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.http4k.contract.ContractRoute
 import org.http4k.contract.div
@@ -28,7 +29,6 @@ import java.time.format.DateTimeParseException
 import java.util.UUID
 
 internal const val MESSAGE_MAX_BYTES = 50_000
-private const val RECIPIENT_MAX_LENGTH = 200
 private val mapper = ObjectMapper()
 
 data class CreateCapsuleRequest(
@@ -46,78 +46,114 @@ data class PatchCapsuleRequest(
     val message: String? = null,
 )
 
-fun capsuleRoutes(database: Database): List<ContractRoute> = listOf(
-    createCapsuleRoute(database),
-    listCapsulesRoute(database),
-    getCapsuleRoute(database),
-    patchCapsuleRoute(database),
-    sealCapsuleRoute(database),
-    cancelCapsuleRoute(database),
+fun capsuleRoutes(capsuleService: CapsuleService): List<ContractRoute> = listOf(
+    createCapsuleRoute(capsuleService),
+    listCapsulesRoute(capsuleService),
+    getCapsuleRoute(capsuleService),
+    patchCapsuleRoute(capsuleService),
+    sealCapsuleRoute(capsuleService),
+    cancelCapsuleRoute(capsuleService),
 )
 
-private fun createCapsuleRoute(database: Database): ContractRoute =
+private fun createCapsuleRoute(capsuleService: CapsuleService): ContractRoute =
     "/capsules" meta {
         summary = "Create a capsule"
         description = "Creates a new time capsule. Shape must be 'open' or 'sealed'. Sealed capsules require at least one upload."
-    } bindContract POST to createCapsuleHandler(database)
+    } bindContract POST to createCapsuleHandler(capsuleService)
 
-private fun listCapsulesRoute(database: Database): ContractRoute =
+private fun listCapsulesRoute(capsuleService: CapsuleService): ContractRoute =
     "/capsules" meta {
         summary = "List capsules"
-        description = "Returns capsules matching the given state filter. Defaults to open and sealed (excludes cancelled and delivered). Order by 'updated_at' (default) or 'unlock_at'."
-    } bindContract GET to listCapsulesHandler(database)
+        description = "Returns capsules matching the given state filter."
+    } bindContract GET to listCapsulesHandler(capsuleService)
 
-private fun getCapsuleRoute(database: Database): ContractRoute {
+private fun getCapsuleRoute(capsuleService: CapsuleService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/capsules" / id meta {
         summary = "Get capsule"
         description = "Returns the full detail for a capsule including all uploads, recipients, and current message."
     } bindContract GET to { capsuleId: UUID ->
-        { request: Request -> getCapsuleHandler(database, capsuleId, request.authUserId()) }
+        { request: Request ->
+            val detail = capsuleService.getCapsule(capsuleId, request.authUserId())
+            if (detail == null) Response(NOT_FOUND)
+            else Response(OK).header("Content-Type", "application/json").body(detail.toDetailJson())
+        }
     }
 }
 
-private fun patchCapsuleRoute(database: Database): ContractRoute {
+private fun patchCapsuleRoute(capsuleService: CapsuleService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/capsules" / id meta {
         summary = "Update capsule"
-        description = "Updates editable fields on a capsule. All fields optional. Sealed capsules reject upload_ids. Terminal-state capsules reject all changes."
+        description = "Updates editable fields on a capsule."
     } bindContract PATCH to { capsuleId: UUID ->
-        { request: Request -> patchCapsuleHandler(database, capsuleId, request) }
+        { request: Request -> patchCapsuleHandler(capsuleService, capsuleId, request) }
     }
 }
 
-private fun sealCapsuleRoute(database: Database): ContractRoute {
+private fun sealCapsuleRoute(capsuleService: CapsuleService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/capsules" / id / "seal" meta {
         summary = "Seal a capsule"
         description = "Seals an open-shape capsule in state 'open'. The capsule must have at least one upload."
     } bindContract POST to { capsuleId: UUID, _: String ->
-        { request: Request -> sealCapsuleHandler(database, capsuleId, request.authUserId()) }
+        { request: Request ->
+            when (val result = capsuleService.sealCapsule(capsuleId, request.authUserId())) {
+                is CapsuleRepository.SealResult.Success ->
+                    Response(OK).header("Content-Type", "application/json").body(result.detail.toDetailJson())
+                CapsuleRepository.SealResult.NotFound -> Response(NOT_FOUND)
+                CapsuleRepository.SealResult.WrongState ->
+                    Response(CONFLICT).body("""{"error":"capsule cannot be sealed in its current state"}""")
+                CapsuleRepository.SealResult.Empty ->
+                    Response(UNPROCESSABLE_ENTITY).body("""{"error":"Cannot seal an empty capsule"}""")
+            }
+        }
     }
 }
 
-private fun cancelCapsuleRoute(database: Database): ContractRoute {
+private fun cancelCapsuleRoute(capsuleService: CapsuleService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/capsules" / id / "cancel" meta {
         summary = "Cancel a capsule"
-        description = "Cancels a capsule in state 'open' or 'sealed'. Sets state to 'cancelled' and records cancelled_at."
+        description = "Cancels a capsule in state 'open' or 'sealed'."
     } bindContract POST to { capsuleId: UUID, _: String ->
-        { request: Request -> cancelCapsuleHandler(database, capsuleId, request.authUserId()) }
+        { request: Request ->
+            when (val result = capsuleService.cancelCapsule(capsuleId, request.authUserId())) {
+                is CapsuleRepository.CancelResult.Success ->
+                    Response(OK).header("Content-Type", "application/json").body(result.detail.toDetailJson())
+                CapsuleRepository.CancelResult.NotFound -> Response(NOT_FOUND)
+                CapsuleRepository.CancelResult.WrongState ->
+                    Response(CONFLICT).body("""{"error":"capsule is already in a terminal state"}""")
+            }
+        }
     }
 }
 
-internal fun capsuleReverseLookupRoute(database: Database): ContractRoute {
+internal fun capsuleReverseLookupRoute(capsuleService: CapsuleService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id / "capsules" meta {
         summary = "Capsules containing an upload"
-        description = "Returns active (open + sealed) capsules that contain the given upload. Returns 404 if the upload does not exist."
+        description = "Returns active (open + sealed) capsules that contain the given upload."
     } bindContract GET to { uploadId: UUID, _: String ->
-        { request: Request -> capsuleReverseLookupHandler(database, uploadId, request.authUserId()) }
+        { request: Request ->
+            val capsules = capsuleService.getCapsulesForUpload(uploadId, request.authUserId())
+            if (capsules == null) Response(NOT_FOUND)
+            else {
+                val json = buildString {
+                    append("""{"capsules":[""")
+                    capsules.forEachIndexed { i, s ->
+                        if (i > 0) append(",")
+                        append(s.toReverseLookupJson())
+                    }
+                    append("]}")
+                }
+                Response(OK).header("Content-Type", "application/json").body(json)
+            }
+        }
     }
 }
 
-private fun createCapsuleHandler(database: Database): HttpHandler = { request ->
+private fun createCapsuleHandler(capsuleService: CapsuleService): HttpHandler = { request ->
     val node = try { mapper.readTree(request.bodyString()) } catch (_: Exception) { null }
     if (node == null) {
         Response(BAD_REQUEST).body("Malformed JSON")
@@ -131,7 +167,6 @@ private fun createCapsuleHandler(database: Database): HttpHandler = { request ->
         val shape = when (shapeStr?.lowercase()) {
             "open" -> CapsuleShape.OPEN
             "sealed" -> CapsuleShape.SEALED
-            null -> null
             else -> null
         }
 
@@ -156,45 +191,25 @@ private fun createCapsuleHandler(database: Database): HttpHandler = { request ->
             unlockAt == null -> Response(BAD_REQUEST).body("unlock_at must be a valid ISO-8601 timestamp with timezone")
             recipientsNode == null -> Response(UNPROCESSABLE_ENTITY).body("""{"error":"recipients is required and must be non-empty"}""")
             recipients == null -> Response(BAD_REQUEST).body("recipients must be an array")
-            recipients.isEmpty() -> Response(UNPROCESSABLE_ENTITY).body("""{"error":"recipients must not be empty"}""")
-            recipients.any { it.isBlank() } -> Response(UNPROCESSABLE_ENTITY).body("""{"error":"recipients must not contain blank strings"}""")
-            recipients.any { it.length > RECIPIENT_MAX_LENGTH } -> Response(UNPROCESSABLE_ENTITY).body("""{"error":"each recipient must be $RECIPIENT_MAX_LENGTH characters or fewer"}""")
             uploadIds == null -> Response(BAD_REQUEST).body("upload_ids must be an array of UUIDs")
-            messageStr.toByteArray().size > MESSAGE_MAX_BYTES -> Response(UNPROCESSABLE_ENTITY).body("""{"error":"message exceeds maximum size of $MESSAGE_MAX_BYTES bytes"}""")
             else -> {
-                // Validate upload IDs exist
                 val userId = request.authUserId()
-                val unknownId = uploadIds.firstOrNull { !database.uploadExists(it, userId) }
-                if (unknownId != null) {
-                    Response(BAD_REQUEST).body("""{"error":"unknown upload_id","id":"$unknownId"}""")
-                } else if (shape == CapsuleShape.SEALED && uploadIds.isEmpty()) {
-                    Response(UNPROCESSABLE_ENTITY).body("""{"error":"sealed capsules must have at least one upload"}""")
-                } else {
-                    val initialState = if (shape == CapsuleShape.SEALED) CapsuleState.SEALED else CapsuleState.OPEN
-                    val detail = database.createCapsule(
-                        id = UUID.randomUUID(),
-                        createdByUser = "api-user",
-                        shape = shape,
-                        state = initialState,
-                        unlockAt = unlockAt,
-                        recipients = recipients,
-                        uploadIds = uploadIds,
-                        message = messageStr,
-                        userId = userId,
-                    )
-                    Response(CREATED)
-                        .header("Content-Type", "application/json")
-                        .body(detail.toDetailJson())
+                when (val result = capsuleService.createCapsule(shape, unlockAt, recipients, uploadIds, messageStr, userId)) {
+                    is CapsuleService.CreateResult.Created ->
+                        Response(CREATED).header("Content-Type", "application/json").body(result.detail.toDetailJson())
+                    is CapsuleService.CreateResult.Invalid ->
+                        Response(UNPROCESSABLE_ENTITY).body("""{"error":"${result.message}"}""")
+                    is CapsuleService.CreateResult.UnknownUpload ->
+                        Response(BAD_REQUEST).body("""{"error":"unknown upload_id","id":"${result.id}"}""")
                 }
             }
         }
     }
 }
 
-private fun listCapsulesHandler(database: Database): HttpHandler = { request ->
+private fun listCapsulesHandler(capsuleService: CapsuleService): HttpHandler = { request ->
     val stateParam = request.query("state") ?: "open,sealed"
     val orderParam = request.query("order") ?: "updated_at"
-
     val states = stateParam.split(",").mapNotNull { s ->
         when (s.trim().lowercase()) {
             "open" -> CapsuleState.OPEN
@@ -204,9 +219,8 @@ private fun listCapsulesHandler(database: Database): HttpHandler = { request ->
             else -> null
         }
     }
-
     val orderBy = if (orderParam == "unlock_at") "unlock_at" else "updated_at"
-    val summaries = database.listCapsules(states, orderBy, request.authUserId())
+    val summaries = capsuleService.listCapsules(states, orderBy, request.authUserId())
     val json = buildString {
         append("""{"capsules":[""")
         summaries.forEachIndexed { i, s ->
@@ -218,13 +232,7 @@ private fun listCapsulesHandler(database: Database): HttpHandler = { request ->
     Response(OK).header("Content-Type", "application/json").body(json)
 }
 
-private fun getCapsuleHandler(database: Database, capsuleId: UUID, userId: java.util.UUID): Response {
-    val detail = database.getCapsuleById(capsuleId, userId)
-        ?: return Response(NOT_FOUND)
-    return Response(OK).header("Content-Type", "application/json").body(detail.toDetailJson())
-}
-
-private fun patchCapsuleHandler(database: Database, capsuleId: UUID, request: Request): Response {
+private fun patchCapsuleHandler(capsuleService: CapsuleService, capsuleId: UUID, request: Request): Response {
     val node = try { mapper.readTree(request.bodyString()) } catch (_: Exception) { null }
         ?: return Response(BAD_REQUEST).body("Malformed JSON")
 
@@ -239,11 +247,7 @@ private fun patchCapsuleHandler(database: Database, capsuleId: UUID, request: Re
     val recipients = if (node.has("recipients")) {
         val arr = node.get("recipients")
         if (!arr.isArray) return Response(BAD_REQUEST).body("recipients must be an array")
-        val list = (0 until arr.size()).map { arr[it].asText() }
-        if (list.isEmpty()) return Response(UNPROCESSABLE_ENTITY).body("""{"error":"recipients must not be empty"}""")
-        if (list.any { it.isBlank() }) return Response(UNPROCESSABLE_ENTITY).body("""{"error":"recipients must not contain blank strings"}""")
-        if (list.any { it.length > RECIPIENT_MAX_LENGTH }) return Response(UNPROCESSABLE_ENTITY).body("""{"error":"each recipient must be $RECIPIENT_MAX_LENGTH characters or fewer"}""")
-        list
+        (0 until arr.size()).map { arr[it].asText() }
     } else null
 
     val uploadIds = if (node.has("upload_ids")) {
@@ -255,11 +259,7 @@ private fun patchCapsuleHandler(database: Database, capsuleId: UUID, request: Re
 
     val message = if (node.has("message")) node.get("message").asText() else null
 
-    if (message != null && message.toByteArray().size > MESSAGE_MAX_BYTES) {
-        return Response(UNPROCESSABLE_ENTITY).body("""{"error":"message exceeds maximum size of $MESSAGE_MAX_BYTES bytes"}""")
-    }
-
-    return when (val result = database.updateCapsule(capsuleId, request.authUserId(), unlockAt, recipients, uploadIds, message)) {
+    return when (val result = capsuleService.updateCapsule(capsuleId, request.authUserId(), unlockAt, recipients, uploadIds, message)) {
         is CapsuleRepository.UpdateResult.Success ->
             Response(OK).header("Content-Type", "application/json").body(result.detail.toDetailJson())
         CapsuleRepository.UpdateResult.NotFound -> Response(NOT_FOUND)
@@ -276,46 +276,7 @@ private fun patchCapsuleHandler(database: Database, capsuleId: UUID, request: Re
     }
 }
 
-private fun sealCapsuleHandler(database: Database, capsuleId: UUID, userId: java.util.UUID): Response =
-    when (val result = database.sealCapsule(capsuleId, userId)) {
-        is CapsuleRepository.SealResult.Success ->
-            Response(OK).header("Content-Type", "application/json").body(result.detail.toDetailJson())
-        CapsuleRepository.SealResult.NotFound -> Response(NOT_FOUND)
-        CapsuleRepository.SealResult.WrongState ->
-            Response(CONFLICT).body("""{"error":"capsule cannot be sealed in its current state"}""")
-        CapsuleRepository.SealResult.Empty ->
-            Response(UNPROCESSABLE_ENTITY).body("""{"error":"Cannot seal an empty capsule"}""")
-    }
-
-private fun cancelCapsuleHandler(database: Database, capsuleId: UUID, userId: java.util.UUID): Response =
-    when (val result = database.cancelCapsule(capsuleId, userId)) {
-        is CapsuleRepository.CancelResult.Success ->
-            Response(OK).header("Content-Type", "application/json").body(result.detail.toDetailJson())
-        CapsuleRepository.CancelResult.NotFound -> Response(NOT_FOUND)
-        CapsuleRepository.CancelResult.WrongState ->
-            Response(CONFLICT).body("""{"error":"capsule is already in a terminal state"}""")
-    }
-
-internal fun capsuleReverseLookupHandler(database: Database, uploadId: UUID, userId: java.util.UUID): Response {
-    val capsules = database.getCapsulesForUpload(uploadId, userId)
-        ?: return Response(NOT_FOUND)
-    val json = buildString {
-        append("""{"capsules":[""")
-        capsules.forEachIndexed { i, s ->
-            if (i > 0) append(",")
-            append(s.toReverseLookupJson())
-        }
-        append("]}")
-    }
-    return Response(OK).header("Content-Type", "application/json").body(json)
-}
-
-// ---- JSON serialisation helpers -----------------------------------------
-//
-// All three functions use Jackson's ObjectNode API rather than string
-// interpolation. Manual string building is fragile (triple-quoted string
-// quoting rules are easy to get wrong) and requires hand-rolled escaping.
-// Jackson handles both correctly and is already a compile dependency.
+// ---- JSON serialisation helpers ----------------------------------------
 
 internal fun CapsuleDetail.toDetailJson(): String {
     val r = record

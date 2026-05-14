@@ -4,6 +4,7 @@ import digital.heirlooms.server.domain.upload.UploadPage
 import digital.heirlooms.server.domain.upload.UploadRecord
 import digital.heirlooms.server.domain.upload.UploadSort
 import digital.heirlooms.server.repository.upload.UploadRepository
+import digital.heirlooms.server.service.upload.UploadService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
@@ -44,7 +45,6 @@ import org.http4k.routing.bind
 import org.http4k.routing.routes
 import org.http4k.routing.static
 import java.io.ByteArrayInputStream
-import java.security.MessageDigest
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -60,13 +60,6 @@ private fun UploadPage.toJson(): String {
     items.forEach { arr.add(mapper.readTree(it.toJson())) }
     if (nextCursor != null) node.put("next_cursor", nextCursor) else node.putNull("next_cursor")
     return node.toString()
-}
-
-private val PROCESSING_SUPPORTED_MIME_TYPES = THUMBNAIL_SUPPORTED_MIME_TYPES + METADATA_SUPPORTED_MIME_TYPES
-
-private fun sha256Hex(bytes: ByteArray): String {
-    val digest = MessageDigest.getInstance("SHA-256")
-    return digest.digest(bytes).joinToString("") { "%02x".format(it) }
 }
 
 private val swaggerInitializerJs = """
@@ -94,21 +87,31 @@ fun buildApp(
 ): HttpHandler {
     val directUpload = storage as? DirectUploadSupport
 
+    // Construct service instances
+    val uploadService = UploadService(database, storage, thumbnailGenerator, metadataExtractor)
+    val authService = digital.heirlooms.server.service.auth.AuthService(database, authSecret)
+    val capsuleService = digital.heirlooms.server.service.capsule.CapsuleService(database)
+    val plotService = digital.heirlooms.server.service.plot.PlotService(database)
+    val flowService = digital.heirlooms.server.service.plot.FlowService(database)
+    val sharedPlotService = digital.heirlooms.server.service.plot.SharedPlotService(database)
+    val keyService = digital.heirlooms.server.service.keys.KeyService(database)
+    val socialService = digital.heirlooms.server.service.social.SocialService(database)
+
     val contentContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
         descriptionPath = "/openapi.json"
         routes += listOf(
-            uploadContractRoute(storage, database, thumbnailGenerator, metadataExtractor),
-            listUploadsContractRoute(storage, database),
+            uploadContractRoute(uploadService),
+            listUploadsContractRoute(uploadService, database),
             listTagsContractRoute(database),
             checkContentHashContractRoute(database),
             listCompostedUploadsContractRoute(database),
             getUploadByIdContractRoute(database),
-            prepareUploadContractRoute(directUpload),
-            initiateUploadContractRoute(directUpload, database),
-            resumableUploadContractRoute(directUpload),
-            confirmUploadContractRoute(storage, database, thumbnailGenerator, metadataExtractor),
-            migrateUploadContractRoute(storage, database),
+            prepareUploadContractRoute(uploadService),
+            initiateUploadContractRoute(uploadService),
+            resumableUploadContractRoute(uploadService),
+            confirmUploadContractRoute(uploadService),
+            migrateUploadContractRoute(uploadService, database),
             fileProxyContractRoute(storage, database),
             thumbProxyContractRoute(storage, database),
             previewProxyContractRoute(storage, database),
@@ -116,35 +119,35 @@ fun buildApp(
             rotationContractRoute(database),
             tagsContractRoute(database),
             viewUploadContractRoute(database),
-            capsuleReverseLookupRoute(database),
+            capsuleReverseLookupRoute(capsuleService),
             compostUploadContractRoute(database),
             restoreUploadContractRoute(database),
-            shareUploadContractRoute(database),
+            shareUploadContractRoute(uploadService),
         )
     }
 
     val capsuleContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
         descriptionPath = "/openapi.json"
-        routes += capsuleRoutes(database) + plotRoutes(database) + flowRoutes(database) + plotItemRoutes(database) + sharedPlotRoutes(database)
+        routes += capsuleRoutes(capsuleService) + plotRoutes(plotService) + flowRoutes(flowService) + plotItemRoutes(flowService) + sharedPlotRoutes(sharedPlotService)
     }
 
     val keysContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
         descriptionPath = "/openapi.json"
-        routes += keysRoutes(database) + sharingKeyRoutes(database)
+        routes += keysRoutes(keyService) + sharingKeyRoutes(socialService)
     }
 
     val socialContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
         descriptionPath = "/openapi.json"
-        routes += friendsRoutes(database)
+        routes += friendsRoutes(socialService)
     }
 
     val authContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
         descriptionPath = "/openapi.json"
-        routes += authRoutes(database, authSecret)
+        routes += authRoutes(authService)
     }
 
     val diagContract = contract {
@@ -216,7 +219,6 @@ private fun mergedSpecWithApiKeyAuth(
         keysContract(Request(GET, "/openapi.json")).bodyString()
     ) as? ObjectNode ?: return Response(INTERNAL_SERVER_ERROR).body("Failed to generate keys spec")
 
-    // Merge paths: prefix content paths with /api/content, capsule paths with /api, keys with /api/keys
     val mergedPaths = factory.objectNode()
     (contentSpec.get("paths") as? ObjectNode)?.fields()?.forEach { (path, item) ->
         mergedPaths.set<ObjectNode>("/api/content$path", item)
@@ -229,7 +231,6 @@ private fun mergedSpecWithApiKeyAuth(
     }
     contentSpec.set<ObjectNode>("paths", mergedPaths)
 
-    // Merge component schemas
     val contentComponents = contentSpec.get("components") as? ObjectNode ?: factory.objectNode()
     val contentSchemas = contentComponents.get("schemas") as? ObjectNode ?: factory.objectNode()
     (capsuleSpec.get("components") as? ObjectNode)?.get("schemas")?.fields()?.forEach { (name, schema) ->
@@ -256,7 +257,6 @@ private fun mergedSpecWithApiKeyAuth(
         factory.objectNode().apply { put("url", "/") }
     ))
 
-    // Remove per-operation "security": [] entries — empty array overrides global security block.
     (contentSpec.get("paths") as? ObjectNode)?.fields()?.forEach { (_, pathItem) ->
         (pathItem as? ObjectNode)?.fields()?.forEach { (_, operation) ->
             (operation as? ObjectNode)?.remove("security")
@@ -266,12 +266,7 @@ private fun mergedSpecWithApiKeyAuth(
     return Response(OK).header("Content-Type", "application/json").body(contentSpec.toString())
 }
 
-private fun uploadContractRoute(
-    storage: FileStore,
-    database: Database,
-    thumbnailGenerator: (ByteArray, String) -> ByteArray?,
-    metadataExtractor: (ByteArray, String) -> MediaMetadata,
-): ContractRoute =
+private fun uploadContractRoute(uploadService: UploadService): ContractRoute =
     "/upload" meta {
         summary = "Upload a file"
         description = "Upload an image or video. Content-Type header should reflect the file's MIME type (e.g. image/jpeg, video/mp4)."
@@ -290,13 +285,30 @@ private fun uploadContractRoute(
         receiving(Body.binary(ContentType("video/3gpp")).toLens())
         receiving(Body.binary(ContentType("video/mpeg")).toLens())
         receiving(Body.binary(ContentType("application/octet-stream")).toLens())
-    } bindContract POST to uploadHandler(storage, database, thumbnailGenerator, metadataExtractor)
+    } bindContract POST to { request: Request ->
+        val body = request.body.payload.array()
+        val mimeType = request.header("Content-Type")
+            ?.substringBefore(";")?.trim()?.takeIf { it.isNotEmpty() }
+            ?: "application/octet-stream"
+        val userId = request.authUserId()
+        when (val result = uploadService.handleUpload(body, mimeType, userId)) {
+            is UploadService.UploadResult.Created ->
+                Response(CREATED).header("Content-Type", "application/json").body(result.record.toJson())
+            is UploadService.UploadResult.Duplicate ->
+                Response(CONFLICT).header("Content-Type", "application/json")
+                    .body("""{"storageKey":"${result.storageKey}"}""")
+            is UploadService.UploadResult.Invalid ->
+                Response(BAD_REQUEST).body(result.message)
+            is UploadService.UploadResult.Failed ->
+                Response(INTERNAL_SERVER_ERROR).body(result.message)
+        }
+    }
 
-private fun listUploadsContractRoute(storage: FileStore, database: Database): ContractRoute =
+private fun listUploadsContractRoute(uploadService: UploadService, database: Database): ContractRoute =
     "/uploads" meta {
         summary = "List uploads"
-        description = "Returns uploads as a cursor-paginated JSON object. Query params: `cursor`, `limit` (1–200, default 50), `tag` (comma-separated, any-match), `exclude_tag`, `from_date` (ISO date, inclusive), `to_date` (ISO date, inclusive), `in_capsule` (true|false), `include_composted` (true), `has_location` (true|false), `sort` (upload_newest|upload_oldest|taken_newest|taken_oldest), `just_arrived` (true)."
-    } bindContract GET to listUploadsHandler(storage, database)
+        description = "Returns uploads as a cursor-paginated JSON object."
+    } bindContract GET to listUploadsHandler(uploadService, database)
 
 private fun listTagsContractRoute(database: Database): ContractRoute =
     "/uploads/tags" meta {
@@ -348,67 +360,10 @@ private fun checkContentHashContractRoute(database: Database): ContractRoute {
 private fun listCompostedUploadsContractRoute(database: Database): ContractRoute =
     "/uploads/composted" meta {
         summary = "List composted uploads"
-        description = "Returns composted uploads as a cursor-paginated JSON object. Query params: `cursor`, `limit` (1–200, default 50)."
+        description = "Returns composted uploads as a cursor-paginated JSON object."
     } bindContract GET to listCompostedUploadsHandler(database)
 
-private fun uploadHandler(
-    storage: FileStore,
-    database: Database,
-    thumbnailGenerator: (ByteArray, String) -> ByteArray?,
-    metadataExtractor: (ByteArray, String) -> MediaMetadata,
-): HttpHandler = { request: Request ->
-    val body = request.body.payload.array()
-
-    if (body.isEmpty()) {
-        Response(BAD_REQUEST).body("Request body is empty")
-    } else {
-        val mimeType = request.header("Content-Type")
-            ?.substringBefore(";")
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-            ?: "application/octet-stream"
-
-        val userId = request.authUserId()
-        val hash = sha256Hex(body)
-        val existing = database.findByContentHash(hash, userId)
-        if (existing != null) {
-            Response(CONFLICT)
-                .header("Content-Type", "application/json")
-                .body("""{"storageKey":"${existing.storageKey}"}""")
-        } else {
-            try {
-                val id = UUID.randomUUID()
-                val uploadedAt = Instant.now()
-                val key = storage.save(body, mimeType)
-                val thumbKey = tryStoreThumbnail(body, mimeType, key, storage, thumbnailGenerator)
-                val metadata = try { metadataExtractor(body, mimeType) } catch (_: Exception) { MediaMetadata() }
-                val record = UploadRecord(
-                    id = id,
-                    storageKey = key.value,
-                    mimeType = mimeType,
-                    fileSize = body.size.toLong(),
-                    uploadedAt = uploadedAt,
-                    contentHash = hash,
-                    thumbnailKey = thumbKey?.value,
-                    takenAt = metadata.takenAt,
-                    latitude = metadata.latitude,
-                    longitude = metadata.longitude,
-                    altitude = metadata.altitude,
-                    deviceMake = metadata.deviceMake,
-                    deviceModel = metadata.deviceModel,
-                )
-                database.recordUpload(record, userId)
-                Response(CREATED)
-                    .header("Content-Type", "application/json")
-                    .body(record.toJson())
-            } catch (e: Exception) {
-                Response(INTERNAL_SERVER_ERROR).body("Failed to store file: ${e.message}")
-            }
-        }
-    }
-}
-
-private fun listUploadsHandler(storage: FileStore, database: Database): HttpHandler = handler@{ request ->
+private fun listUploadsHandler(uploadService: UploadService, database: Database): HttpHandler = handler@{ request ->
     try {
         val cursor = request.query("cursor")?.takeIf { it.isNotBlank() }
         val limit = request.query("limit")?.toIntOrNull()?.coerceIn(1, 200) ?: 50
@@ -452,7 +407,7 @@ private fun listUploadsHandler(storage: FileStore, database: Database): HttpHand
             return@handler Response(NOT_FOUND).body(e.message ?: "Plot not found")
         }
         val response = Response(OK).header("Content-Type", "application/json").body(page.toJson())
-        launchCompostCleanup(storage, database)
+        uploadService.launchCompostCleanup()
         response
     } catch (e: Exception) {
         Response(INTERNAL_SERVER_ERROR).body("Failed to list uploads: ${e.message}")
@@ -478,53 +433,6 @@ private fun listCompostedUploadsHandler(database: Database): HttpHandler = { req
     } catch (e: Exception) {
         Response(INTERNAL_SERVER_ERROR).body("Failed to list composted uploads: ${e.message}")
     }
-}
-
-private fun launchCompostCleanup(storage: FileStore, database: Database) {
-    Thread {
-        try {
-            val expired = database.fetchExpiredCompostedUploads()
-            for (record in expired) {
-                try {
-                    val hasLiveRef = database.hasLiveSharedReference(record.storageKey, record.id)
-                    if (!hasLiveRef) {
-                        storage.delete(StorageKey(record.storageKey))
-                        if (record.thumbnailKey != null) {
-                            try { storage.delete(StorageKey(record.thumbnailKey)) } catch (e: Exception) {
-                                println("[compost-cleanup] WARNING: failed to delete thumbnail ${record.thumbnailKey}: ${e.message}")
-                            }
-                        }
-                        if (record.thumbnailStorageKey != null) {
-                            try { storage.delete(StorageKey(record.thumbnailStorageKey)) } catch (e: Exception) {
-                                println("[compost-cleanup] WARNING: failed to delete encrypted thumbnail ${record.thumbnailStorageKey}: ${e.message}")
-                            }
-                        }
-                    } else {
-                        println("[compost-cleanup] INFO: skipping GCS delete for upload ${record.id} — live shared reference exists")
-                    }
-                    database.hardDeleteUpload(record.id)
-                    println("[compost-cleanup] INFO: hard-deleted upload ${record.id} (composted ${record.compostedAt})")
-                } catch (e: Exception) {
-                    println("[compost-cleanup] WARNING: failed to hard-delete upload ${record.id}: ${e.message}")
-                }
-            }
-        } catch (e: Exception) {
-            println("[compost-cleanup] ERROR: cleanup failed: ${e.message}")
-        }
-        try {
-            val expiredPlots = database.fetchExpiredTombstonedPlots()
-            for (plotId in expiredPlots) {
-                try {
-                    database.hardDeletePlot(plotId)
-                    println("[compost-cleanup] INFO: hard-deleted tombstoned plot $plotId")
-                } catch (e: Exception) {
-                    println("[compost-cleanup] WARNING: failed to hard-delete plot $plotId: ${e.message}")
-                }
-            }
-        } catch (e: Exception) {
-            println("[compost-cleanup] ERROR: tombstone plot cleanup failed: ${e.message}")
-        }
-    }.also { it.isDaemon = true }.start()
 }
 
 private fun compostUploadContractRoute(database: Database): ContractRoute {
@@ -578,45 +486,37 @@ private fun restoreUploadContractRoute(database: Database): ContractRoute {
     }
 }
 
-private fun shareUploadContractRoute(database: Database): ContractRoute {
+private fun shareUploadContractRoute(uploadService: UploadService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id / "share" meta {
         summary = "Share an upload with a friend"
-        description = "Creates a recipient upload record with a re-wrapped DEK. Requester must own the upload and be friends with the recipient."
+        description = "Creates a recipient upload record with a re-wrapped DEK."
     } bindContract POST to { uploadId: UUID, _: String ->
-        { request: Request -> handleShareUpload(uploadId, request, database) }
+        { request: Request -> handleShareUpload(uploadId, request, uploadService) }
     }
 }
 
-private fun handleShareUpload(uploadId: UUID, request: Request, database: Database): Response {
-    return try {
-        val requesterId = request.authUserId()
-            ?: return Response(FORBIDDEN)
-        val record = database.findUploadByIdForUser(uploadId, requesterId)
-            ?: return Response(NOT_FOUND)
-        val node = ObjectMapper().readTree(request.bodyString())
-        val toUserIdStr = node?.get("toUserId")?.asText()
-        val wrappedDekB64 = node?.get("wrappedDek")?.asText()
-        val wrappedThumbnailDekB64 = node?.get("wrappedThumbnailDek")?.asText()
-        val dekFormat = node?.get("dekFormat")?.asText()
-        if (toUserIdStr.isNullOrBlank() || wrappedDekB64.isNullOrBlank() || dekFormat.isNullOrBlank())
-            return Response(BAD_REQUEST).body("Missing required fields")
-        val toUserId = runCatching { UUID.fromString(toUserIdStr) }.getOrNull()
-            ?: return Response(BAD_REQUEST).body("Invalid toUserId")
-        if (!database.areFriends(requesterId, toUserId))
-            return Response(FORBIDDEN).body("Not friends")
-        if (database.userAlreadyHasStorageKey(toUserId, record.storageKey))
-            return Response(CONFLICT).body("Recipient already has this item")
-        val dec = Base64.getDecoder()
-        val wrappedDek = runCatching { dec.decode(wrappedDekB64) }.getOrNull()
-            ?: return Response(BAD_REQUEST).body("wrappedDek is not valid Base64")
-        val wrappedThumbnailDek = if (!wrappedThumbnailDekB64.isNullOrBlank())
-            runCatching { dec.decode(wrappedThumbnailDekB64) }.getOrNull() else null
-        val rotationOverride = node?.get("rotation")?.asInt()
-        val shared = database.createSharedUpload(record, requesterId, toUserId, wrappedDek, wrappedThumbnailDek, dekFormat, rotationOverride)
-        Response(CREATED).header("Content-Type", "application/json").body(shared.toJson())
-    } catch (e: Exception) {
-        Response(INTERNAL_SERVER_ERROR).body("shareUpload failed: ${e.message}")
+private fun handleShareUpload(uploadId: UUID, request: Request, uploadService: UploadService): Response {
+    val requesterId = request.authUserId() ?: return Response(FORBIDDEN)
+    val node = ObjectMapper().readTree(request.bodyString())
+    return when (val result = uploadService.shareUpload(
+        uploadId = uploadId,
+        requesterId = requesterId,
+        toUserIdStr = node?.get("toUserId")?.asText(),
+        wrappedDekB64 = node?.get("wrappedDek")?.asText(),
+        wrappedThumbnailDekB64 = node?.get("wrappedThumbnailDek")?.asText(),
+        dekFormat = node?.get("dekFormat")?.asText(),
+        rotationOverride = node?.get("rotation")?.asInt(),
+    )) {
+        is UploadService.ShareResult.Shared ->
+            Response(CREATED).header("Content-Type", "application/json").body(result.record.toJson())
+        is UploadService.ShareResult.NotFound -> Response(NOT_FOUND)
+        is UploadService.ShareResult.NotFriends ->
+            Response(FORBIDDEN).body("Not friends")
+        is UploadService.ShareResult.AlreadyHasItem ->
+            Response(CONFLICT).body("Recipient already has this item")
+        is UploadService.ShareResult.Invalid ->
+            Response(BAD_REQUEST).body(result.message)
     }
 }
 
@@ -734,7 +634,7 @@ private fun readUrlContractRoute(directUpload: DirectUploadSupport?, database: D
     val id = Path.uuid().of("id")
     return "/uploads" / id / "url" meta {
         summary = "Get signed read URL"
-        description = "Returns a 1-hour signed GCS URL for the given upload ID. Use directly as a video src for streaming."
+        description = "Returns a 1-hour signed GCS URL for the given upload ID."
     } bindContract GET to { uploadId: UUID, _: String ->
         { request: Request ->
             if (directUpload == null) {
@@ -746,9 +646,7 @@ private fun readUrlContractRoute(directUpload: DirectUploadSupport?, database: D
                 } else {
                     try {
                         val url = directUpload.generateReadUrl(StorageKey(record.storageKey))
-                        Response(OK)
-                            .header("Content-Type", "application/json")
-                            .body("""{"url":"$url"}""")
+                        Response(OK).header("Content-Type", "application/json").body("""{"url":"$url"}""")
                     } catch (e: Exception) {
                         Response(INTERNAL_SERVER_ERROR).body("Failed to generate URL: ${e.message}")
                     }
@@ -758,249 +656,143 @@ private fun readUrlContractRoute(directUpload: DirectUploadSupport?, database: D
     }
 }
 
-private fun prepareUploadContractRoute(directUpload: DirectUploadSupport?): ContractRoute =
+private fun prepareUploadContractRoute(uploadService: UploadService): ContractRoute =
     "/uploads/prepare" meta {
         summary = "Prepare a direct upload"
-        description = "Returns a signed GCS URL the client can PUT the file to directly, bypassing the 32 MB Cloud Run limit. Body: {\"mimeType\":\"video/mp4\"}."
-    } bindContract POST to prepareUploadHandler(directUpload)
+        description = "Returns a signed GCS URL the client can PUT the file to directly."
+    } bindContract POST to { request: Request ->
+        val mimeType = try {
+            ObjectMapper().readTree(request.bodyString())?.get("mimeType")?.asText()
+        } catch (_: Exception) { null }
+        if (mimeType.isNullOrBlank()) {
+            Response(BAD_REQUEST).body("Missing or invalid mimeType in request body")
+        } else {
+            when (val result = uploadService.prepareUpload(mimeType)) {
+                is UploadService.PrepareResult.Ok ->
+                    Response(OK).header("Content-Type", "application/json")
+                        .body("""{"storageKey":"${result.storageKey}","uploadUrl":"${result.uploadUrl}"}""")
+                UploadService.PrepareResult.NotSupported ->
+                    Response(NOT_IMPLEMENTED).body("Direct upload not supported by the current storage backend")
+            }
+        }
+    }
 
-private fun initiateUploadContractRoute(directUpload: DirectUploadSupport?, database: Database): ContractRoute =
+private fun initiateUploadContractRoute(uploadService: UploadService): ContractRoute =
     "/uploads/initiate" meta {
         summary = "Initiate an upload (E2EE-aware)"
-        description = "Returns signed upload URL(s). For encrypted: two URLs (content + thumbnail). For legacy: one URL. Body: {\"mimeType\":\"...\",\"storage_class\":\"encrypted\"} or {\"mimeType\":\"...\"}."
-    } bindContract POST to initiateUploadHandler(directUpload, database)
+        description = "Returns signed upload URL(s)."
+    } bindContract POST to { request: Request ->
+        try {
+            val node = ObjectMapper().readTree(request.bodyString())
+            val mimeType = node?.get("mimeType")?.asText() ?: ""
+            val storageClassRaw = node?.get("storage_class")?.asText()
+            when (val result = uploadService.initiateUpload(mimeType, storageClassRaw)) {
+                is UploadService.InitiateResult.Encrypted ->
+                    Response(OK).header("Content-Type", "application/json")
+                        .body("""{"storageKey":"${result.storageKey}","uploadUrl":"${result.uploadUrl}","thumbnailStorageKey":"${result.thumbnailStorageKey}","thumbnailUploadUrl":"${result.thumbnailUploadUrl}"}""")
+                is UploadService.InitiateResult.Public ->
+                    Response(OK).header("Content-Type", "application/json")
+                        .body("""{"storageKey":"${result.storageKey}","uploadUrl":"${result.uploadUrl}"}""")
+                is UploadService.InitiateResult.Invalid ->
+                    Response(BAD_REQUEST).body(result.message)
+                UploadService.InitiateResult.NotSupported ->
+                    Response(NOT_IMPLEMENTED).body("Direct upload not supported by the current storage backend")
+            }
+        } catch (e: Exception) {
+            Response(INTERNAL_SERVER_ERROR).body("Failed to initiate upload: ${e.message}")
+        }
+    }
 
-private fun resumableUploadContractRoute(directUpload: DirectUploadSupport?): ContractRoute =
+private fun resumableUploadContractRoute(uploadService: UploadService): ContractRoute =
     "/uploads/resumable" meta {
         summary = "Initiate a resumable (chunked) upload"
-        description = "Creates a GCS resumable upload session and returns the session URI. Body: {\"storageKey\":\"...\",\"totalBytes\":...,\"contentType\":\"...\"}. The client PUTs ciphertext chunks directly to the returned URI."
-    } bindContract POST to resumableUploadHandler(directUpload)
-
-private fun resumableUploadHandler(directUpload: DirectUploadSupport?): HttpHandler = { request ->
-    if (directUpload == null) {
-        Response(NOT_IMPLEMENTED).body("Resumable uploads not supported by the current storage backend")
-    } else {
+        description = "Creates a GCS resumable upload session and returns the session URI."
+    } bindContract POST to { request: Request ->
         try {
             val node = ObjectMapper().readTree(request.bodyString())
             val storageKey = node?.get("storageKey")?.asText()
             val totalBytes = node?.get("totalBytes")?.asLong()
             val contentType = node?.get("contentType")?.asText()
-
             when {
                 storageKey.isNullOrBlank() || totalBytes == null || contentType.isNullOrBlank() ->
                     Response(BAD_REQUEST).body("Missing storageKey, totalBytes, or contentType in request body")
-                totalBytes <= 0 ->
-                    Response(BAD_REQUEST).body("totalBytes must be positive")
-                else -> {
-                    val resumableUri = directUpload.initiateResumableUpload(StorageKey(storageKey), totalBytes, contentType)
-                    Response(OK)
-                        .header("Content-Type", "application/json")
-                        .body("""{"resumableUri":"$resumableUri"}""")
+                else -> when (val result = uploadService.initiateResumableUpload(storageKey, totalBytes, contentType)) {
+                    is UploadService.ResumableResult.Ok ->
+                        Response(OK).header("Content-Type", "application/json")
+                            .body("""{"resumableUri":"${result.resumableUri}"}""")
+                    is UploadService.ResumableResult.Invalid ->
+                        Response(BAD_REQUEST).body(result.message)
+                    UploadService.ResumableResult.NotSupported ->
+                        Response(NOT_IMPLEMENTED).body("Resumable uploads not supported by the current storage backend")
                 }
             }
         } catch (e: Exception) {
             Response(INTERNAL_SERVER_ERROR).body("Failed to initiate resumable upload: ${e.message}")
         }
     }
-}
 
-private fun migrateUploadContractRoute(storage: FileStore, database: Database): ContractRoute {
+private fun migrateUploadContractRoute(uploadService: UploadService, database: Database): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id / "migrate" meta {
         summary = "Migrate a legacy upload to encrypted"
-        description = "Atomically replaces a public upload's bytes with an encrypted envelope. Returns 409 if already encrypted. Returns 410 if the record was concurrently migrated."
+        description = "Atomically replaces a public upload's bytes with an encrypted envelope."
     } bindContract POST to { uploadId: UUID, _: String ->
         { request: Request ->
-            migrateUploadHandler(uploadId, request, storage, database)
-        }
-    }
-}
-
-private fun initiateUploadHandler(directUpload: DirectUploadSupport?, database: Database): HttpHandler = { request ->
-    if (directUpload == null) {
-        Response(NOT_IMPLEMENTED).body("Direct upload not supported by the current storage backend")
-    } else {
-        try {
-            val node = ObjectMapper().readTree(request.bodyString())
-            val mimeType = node?.get("mimeType")?.asText()
-            val storageClassRaw = node?.get("storage_class")?.asText()
-
-            when {
-                mimeType.isNullOrBlank() ->
-                    Response(BAD_REQUEST).body("Missing or invalid mimeType in request body")
-                storageClassRaw == "public" ->
-                    Response(BAD_REQUEST).body("Cannot use public storage class — omit storage_class or use encrypted")
-                storageClassRaw == "encrypted" -> {
-                    val content = directUpload.prepareUpload(mimeType)
-                    val thumb = directUpload.prepareUpload("application/octet-stream")
-                    database.insertPendingBlob(content.storageKey.value)
-                    database.insertPendingBlob(thumb.storageKey.value)
-                    val json = """{"storageKey":"${content.storageKey}","uploadUrl":"${content.uploadUrl}","thumbnailStorageKey":"${thumb.storageKey}","thumbnailUploadUrl":"${thumb.uploadUrl}"}"""
-                    Response(OK).header("Content-Type", "application/json").body(json)
+            val node = try { ObjectMapper().readTree(request.bodyString()) } catch (_: Exception) { null }
+            val newStorageKey = node?.get("newStorageKey")?.asText()
+            val envelopeVersion = node?.get("envelopeVersion")?.asInt()
+            val wrappedDekB64 = node?.get("wrappedDek")?.asText()
+            val dekFormat = node?.get("dekFormat")?.asText()
+            if (newStorageKey.isNullOrBlank() || wrappedDekB64.isNullOrBlank() || dekFormat.isNullOrBlank() || envelopeVersion == null) {
+                Response(BAD_REQUEST).body("Missing required fields: newStorageKey, envelopeVersion, wrappedDek, dekFormat")
+            } else {
+                when (val result = uploadService.migrateToEncrypted(
+                    uploadId = uploadId,
+                    userId = request.authUserId(),
+                    newStorageKey = newStorageKey,
+                    contentHash = node?.get("contentHash")?.asText()?.takeIf { it.isNotBlank() },
+                    envelopeVersion = envelopeVersion,
+                    wrappedDekB64 = wrappedDekB64,
+                    dekFormat = dekFormat,
+                    encryptedMetaB64 = node?.get("encryptedMetadata")?.asText(),
+                    encryptedMetaFormat = node?.get("encryptedMetadataFormat")?.asText(),
+                    thumbStorageKey = node?.get("thumbnailStorageKey")?.asText()?.takeIf { it.isNotBlank() },
+                    wrappedThumbDekB64 = node?.get("wrappedThumbnailDek")?.asText()?.takeIf { it.isNotBlank() },
+                    thumbDekFormat = node?.get("thumbnailDekFormat")?.asText()?.takeIf { it.isNotBlank() },
+                )) {
+                    is UploadService.MigrateResult.Migrated ->
+                        Response(OK).header("Content-Type", "application/json").body(result.record.toJson())
+                    UploadService.MigrateResult.NotFound -> Response(NOT_FOUND)
+                    is UploadService.MigrateResult.WrongStorageClass ->
+                        Response(CONFLICT).header("Content-Type", "application/json")
+                            .body("""{"error":"${result.message}"}""")
+                    is UploadService.MigrateResult.Invalid ->
+                        Response(BAD_REQUEST).body(result.message)
+                    UploadService.MigrateResult.AlreadyMigrated ->
+                        Response(CONFLICT).header("Content-Type", "application/json")
+                            .body("""{"error":"upload was already migrated concurrently"}""")
                 }
-                else -> {
-                    // Public shape: no storage_class or unrecognised value — server-assigned
-                    val prepared = directUpload.prepareUpload(mimeType)
-                    database.insertPendingBlob(prepared.storageKey.value)
-                    val json = """{"storageKey":"${prepared.storageKey}","uploadUrl":"${prepared.uploadUrl}"}"""
-                    Response(OK).header("Content-Type", "application/json").body(json)
-                }
             }
-        } catch (e: Exception) {
-            Response(INTERNAL_SERVER_ERROR).body("Failed to initiate upload: ${e.message}")
         }
     }
 }
 
-private fun migrateUploadHandler(uploadId: UUID, request: Request, storage: FileStore, database: Database): Response {
-    return try {
-        val existing = database.findUploadByIdForUser(uploadId, request.authUserId())
-            ?: return Response(NOT_FOUND)
-        if (existing.storageClass != "public")
-            return Response(CONFLICT).header("Content-Type", "application/json")
-                .body("""{"error":"upload is already migrated or wrong storage class"}""")
-
-        val node = ObjectMapper().readTree(request.bodyString())
-        val newStorageKey = node?.get("newStorageKey")?.asText()
-        val contentHash = node?.get("contentHash")?.asText()?.takeIf { it.isNotBlank() }
-        val envelopeVersion = node?.get("envelopeVersion")?.asInt()
-        val wrappedDekB64 = node?.get("wrappedDek")?.asText()
-        val dekFormat = node?.get("dekFormat")?.asText()
-        val encryptedMetaB64 = node?.get("encryptedMetadata")?.asText()
-        val encryptedMetaFormat = node?.get("encryptedMetadataFormat")?.asText()
-        val thumbStorageKey = node?.get("thumbnailStorageKey")?.asText()?.takeIf { it.isNotBlank() }
-        val wrappedThumbDekB64 = node?.get("wrappedThumbnailDek")?.asText()?.takeIf { it.isNotBlank() }
-        val thumbDekFormat = node?.get("thumbnailDekFormat")?.asText()?.takeIf { it.isNotBlank() }
-
-        if (newStorageKey.isNullOrBlank() || wrappedDekB64.isNullOrBlank() || dekFormat.isNullOrBlank() || envelopeVersion == null)
-            return Response(BAD_REQUEST).body("Missing required fields: newStorageKey, envelopeVersion, wrappedDek, dekFormat")
-
-        val dec = Base64.getDecoder()
-        val wrappedDek = try { dec.decode(wrappedDekB64) } catch (_: Exception) {
-            return Response(BAD_REQUEST).body("wrappedDek is not valid Base64")
-        }
-        val encryptedMeta = encryptedMetaB64?.let {
-            try { dec.decode(it) } catch (_: Exception) {
-                return Response(BAD_REQUEST).body("encryptedMetadata is not valid Base64")
-            }
-        }
-        val wrappedThumbDek = wrappedThumbDekB64?.let {
-            try { dec.decode(it) } catch (_: Exception) {
-                return Response(BAD_REQUEST).body("wrappedThumbnailDek is not valid Base64")
-            }
-        }
-
-        try { EnvelopeFormat.validateSymmetric(wrappedDek, dekFormat) } catch (e: EnvelopeFormatException) {
-            return Response(BAD_REQUEST).body("wrappedDek envelope invalid: ${e.message}")
-        }
-        if (encryptedMeta != null && encryptedMetaFormat != null) {
-            try { EnvelopeFormat.validateSymmetric(encryptedMeta, encryptedMetaFormat) } catch (e: EnvelopeFormatException) {
-                return Response(BAD_REQUEST).body("encryptedMetadata envelope invalid: ${e.message}")
-            }
-        }
-        if (wrappedThumbDek != null && thumbDekFormat != null) {
-            try { EnvelopeFormat.validateSymmetric(wrappedThumbDek, thumbDekFormat) } catch (e: EnvelopeFormatException) {
-                return Response(BAD_REQUEST).body("wrappedThumbnailDek envelope invalid: ${e.message}")
-            }
-        }
-
-        val oldStorageKey = existing.storageKey
-        val oldThumbnailKey = existing.thumbnailKey
-
-        val migrated = database.migrateUploadToEncrypted(
-            id = uploadId,
-            newStorageKey = newStorageKey,
-            newContentHash = contentHash,
-            envelopeVersion = envelopeVersion,
-            wrappedDek = wrappedDek,
-            dekFormat = dekFormat,
-            encryptedMetadata = encryptedMeta,
-            encryptedMetadataFormat = encryptedMetaFormat,
-            thumbnailStorageKey = thumbStorageKey,
-            wrappedThumbnailDek = wrappedThumbDek,
-            thumbnailDekFormat = thumbDekFormat,
-        )
-        if (!migrated)
-            return Response(CONFLICT).header("Content-Type", "application/json")
-                .body("""{"error":"upload was already migrated concurrently"}""")
-
-        // Delete old plaintext blobs (best effort — GCS failure does not roll back the DB update)
-        try { storage.delete(StorageKey(oldStorageKey)) } catch (e: Exception) {
-            println("[migrate] WARNING: failed to delete old blob $oldStorageKey: ${e.message}")
-        }
-        if (oldThumbnailKey != null) {
-            try { storage.delete(StorageKey(oldThumbnailKey)) } catch (e: Exception) {
-                println("[migrate] WARNING: failed to delete old thumbnail $oldThumbnailKey: ${e.message}")
-            }
-        }
-
-        // Clean up pending_blobs entries for the new ciphertext keys
-        try { database.deletePendingBlob(newStorageKey) } catch (_: Exception) {}
-        if (thumbStorageKey != null) {
-            try { database.deletePendingBlob(thumbStorageKey) } catch (_: Exception) {}
-        }
-
-        val updated = database.findUploadByIdForUser(uploadId, request.authUserId())
-            ?: return Response(NOT_FOUND)
-        Response(OK).header("Content-Type", "application/json").body(updated.toJson())
-    } catch (e: Exception) {
-        Response(INTERNAL_SERVER_ERROR).body("Failed to migrate upload: ${e.message}")
-    }
-}
-
-private fun confirmUploadContractRoute(
-    storage: FileStore,
-    database: Database,
-    thumbnailGenerator: (ByteArray, String) -> ByteArray?,
-    metadataExtractor: (ByteArray, String) -> MediaMetadata,
-): ContractRoute =
+private fun confirmUploadContractRoute(uploadService: UploadService): ContractRoute =
     "/uploads/confirm" meta {
         summary = "Confirm a direct upload"
-        description = "Records upload metadata after the client has PUT the file directly to GCS. Body: {\"storageKey\":\"...\",\"mimeType\":\"...\",\"fileSize\":...,\"contentHash\":\"<sha256-hex>\"}. If contentHash matches an existing upload, returns 409 with the existing storageKey."
-    } bindContract POST to confirmUploadHandler(storage, database, thumbnailGenerator, metadataExtractor)
-
-private fun prepareUploadHandler(directUpload: DirectUploadSupport?): HttpHandler = { request: Request ->
-    if (directUpload == null) {
-        Response(NOT_IMPLEMENTED).body("Direct upload not supported by the current storage backend")
-    } else {
-        val mimeType = try {
-            ObjectMapper().readTree(request.bodyString())?.get("mimeType")?.asText()
-        } catch (_: Exception) { null }
-
-        if (mimeType.isNullOrBlank()) {
-            Response(BAD_REQUEST).body("Missing or invalid mimeType in request body")
-        } else {
-            try {
-                val prepared = directUpload.prepareUpload(mimeType)
-                val json = """{"storageKey":"${prepared.storageKey}","uploadUrl":"${prepared.uploadUrl}"}"""
-                Response(OK).header("Content-Type", "application/json").body(json)
-            } catch (e: Exception) {
-                Response(INTERNAL_SERVER_ERROR).body("Failed to prepare upload: ${e.message}")
-            }
+        description = "Records upload metadata after the client has PUT the file directly to GCS."
+    } bindContract POST to { request: Request ->
+        try {
+            handleConfirmUpload(request, request.authUserId(), uploadService)
+        } catch (e: Exception) {
+            Response(INTERNAL_SERVER_ERROR).body("Failed to confirm upload: ${e.message}")
         }
     }
-}
 
-private fun confirmUploadHandler(
-    storage: FileStore,
-    database: Database,
-    thumbnailGenerator: (ByteArray, String) -> ByteArray?,
-    metadataExtractor: (ByteArray, String) -> MediaMetadata,
-): HttpHandler = { request: Request ->
-    try {
-        confirmUpload(request, request.authUserId(), storage, database, thumbnailGenerator, metadataExtractor)
-    } catch (e: Exception) {
-        Response(INTERNAL_SERVER_ERROR).body("Failed to confirm upload: ${e.message}")
-    }
-}
-
-private fun confirmUpload(
+private fun handleConfirmUpload(
     request: Request,
-    userId: java.util.UUID,
-    storage: FileStore,
-    database: Database,
-    thumbnailGenerator: (ByteArray, String) -> ByteArray?,
-    metadataExtractor: (ByteArray, String) -> MediaMetadata,
+    userId: UUID,
+    uploadService: UploadService,
 ): Response {
     val node = ObjectMapper().readTree(request.bodyString())
     val storageKey = node?.get("storageKey")?.asText()
@@ -1009,9 +801,7 @@ private fun confirmUpload(
     val contentHash = node?.get("contentHash")?.asText()?.takeIf { it.isNotBlank() }
     val storageClassRaw = node?.get("storage_class")?.asText()
     val tags = node?.get("tags")?.takeIf { it.isArray }
-        ?.map { it.asText() }
-        ?.filter { it.isNotBlank() }
-        ?: emptyList()
+        ?.map { it.asText() }?.filter { it.isNotBlank() } ?: emptyList()
 
     val tagValidation = validateTags(tags)
     if (storageKey.isNullOrBlank() || mimeType.isNullOrBlank() || fileSize == null)
@@ -1021,178 +811,44 @@ private fun confirmUpload(
             .body("""{"error":"invalid tag","tag":"${tagValidation.tag}","reason":"${tagValidation.reason}"}""")
 
     return if (storageClassRaw == "encrypted") {
-        confirmEncryptedUpload(node, storageKey, mimeType, fileSize, contentHash, tags, database, userId)
+        val envelopeVersion = node?.get("envelopeVersion")?.asInt()
+        val wrappedDekB64 = node?.get("wrappedDek")?.asText()
+        val dekFormat = node?.get("dekFormat")?.asText()
+        val encryptedMetaB64 = node?.get("encryptedMetadata")?.takeIf { !it.isNull }?.asText()?.takeIf { it.isNotBlank() }
+        val encryptedMetaFormat = node?.get("encryptedMetadataFormat")?.takeIf { !it.isNull }?.asText()?.takeIf { it.isNotBlank() }
+        val thumbStorageKey = node?.get("thumbnailStorageKey")?.takeIf { !it.isNull }?.asText()?.takeIf { it.isNotBlank() }
+        val wrappedThumbDekB64 = node?.get("wrappedThumbnailDek")?.takeIf { !it.isNull }?.asText()?.takeIf { it.isNotBlank() }
+        val thumbDekFormat = node?.get("thumbnailDekFormat")?.takeIf { !it.isNull }?.asText()?.takeIf { it.isNotBlank() }
+        val previewStorageKey = node?.get("previewStorageKey")?.takeIf { !it.isNull }?.asText()?.takeIf { it.isNotBlank() }
+        val wrappedPreviewDekB64 = node?.get("wrappedPreviewDek")?.takeIf { !it.isNull }?.asText()?.takeIf { it.isNotBlank() }
+        val previewDekFormat = node?.get("previewDekFormat")?.takeIf { !it.isNull }?.asText()?.takeIf { it.isNotBlank() }
+        val plainChunkSize = node?.get("plainChunkSize")?.asInt()?.takeIf { it > 0 }
+        val durationSeconds = node?.get("durationSeconds")?.asInt()?.takeIf { it > 0 }
+        val takenAt = node?.get("takenAt")?.asText()?.takeIf { it.isNotBlank() }
+            ?.let { runCatching { Instant.parse(it) }.getOrNull() }
+        when (val result = uploadService.confirmEncryptedUpload(
+            storageKey, mimeType, fileSize, contentHash, tags,
+            envelopeVersion, wrappedDekB64, dekFormat,
+            encryptedMetaB64, encryptedMetaFormat,
+            thumbStorageKey, wrappedThumbDekB64, thumbDekFormat,
+            previewStorageKey, wrappedPreviewDekB64, previewDekFormat,
+            plainChunkSize, durationSeconds, takenAt, userId,
+        )) {
+            UploadService.ConfirmResult.Created -> Response(CREATED)
+            is UploadService.ConfirmResult.Duplicate ->
+                Response(CONFLICT).header("Content-Type", "application/json")
+                    .body("""{"storageKey":"${result.storageKey}"}""")
+            is UploadService.ConfirmResult.Invalid -> Response(BAD_REQUEST).body(result.message)
+        }
     } else {
-        confirmLegacyUpload(storageKey, mimeType, fileSize, contentHash, tags, storage, database, thumbnailGenerator, metadataExtractor, userId)
-    }
-}
-
-private fun confirmEncryptedUpload(
-    node: com.fasterxml.jackson.databind.JsonNode?,
-    storageKey: String,
-    mimeType: String,
-    fileSize: Long,
-    contentHash: String?,
-    tags: List<String>,
-    database: Database,
-    userId: java.util.UUID,
-): Response {
-    val dec = Base64.getDecoder()
-    val envelopeVersion = node?.get("envelopeVersion")?.asInt()
-    val wrappedDekB64 = node?.get("wrappedDek")?.asText()
-    val dekFormat = node?.get("dekFormat")?.asText()
-    val encryptedMetaB64 = node?.get("encryptedMetadata")?.takeIf { !it.isNull }?.asText()?.takeIf { it.isNotBlank() }
-    val encryptedMetaFormat = node?.get("encryptedMetadataFormat")?.takeIf { !it.isNull }?.asText()?.takeIf { it.isNotBlank() }
-    val thumbStorageKey = node?.get("thumbnailStorageKey")?.takeIf { !it.isNull }?.asText()?.takeIf { it.isNotBlank() }
-    val wrappedThumbDekB64 = node?.get("wrappedThumbnailDek")?.takeIf { !it.isNull }?.asText()?.takeIf { it.isNotBlank() }
-    val thumbDekFormat = node?.get("thumbnailDekFormat")?.takeIf { !it.isNull }?.asText()?.takeIf { it.isNotBlank() }
-    val previewStorageKey = node?.get("previewStorageKey")?.takeIf { !it.isNull }?.asText()?.takeIf { it.isNotBlank() }
-    val wrappedPreviewDekB64 = node?.get("wrappedPreviewDek")?.takeIf { !it.isNull }?.asText()?.takeIf { it.isNotBlank() }
-    val previewDekFormat = node?.get("previewDekFormat")?.takeIf { !it.isNull }?.asText()?.takeIf { it.isNotBlank() }
-    val plainChunkSize = node?.get("plainChunkSize")?.asInt()?.takeIf { it > 0 }
-    val durationSeconds = node?.get("durationSeconds")?.asInt()?.takeIf { it > 0 }
-    val takenAt = node?.get("takenAt")?.asText()?.takeIf { it.isNotBlank() }
-        ?.let { runCatching { Instant.parse(it) }.getOrNull() }
-
-    if (envelopeVersion == null || wrappedDekB64.isNullOrBlank() || dekFormat.isNullOrBlank())
-        return Response(BAD_REQUEST).body("Encrypted confirm requires envelopeVersion, wrappedDek, and dekFormat")
-
-    val wrappedDek = runCatching { dec.decode(wrappedDekB64) }.getOrNull()
-        ?: return Response(BAD_REQUEST).body("wrappedDek is not valid Base64")
-    val encryptedMeta = encryptedMetaB64?.let {
-        runCatching { dec.decode(it) }.getOrNull()
-            ?: return Response(BAD_REQUEST).body("encryptedMetadata is not valid Base64")
-    }
-    val wrappedThumbDek = wrappedThumbDekB64?.let {
-        runCatching { dec.decode(it) }.getOrNull()
-            ?: return Response(BAD_REQUEST).body("wrappedThumbnailDek is not valid Base64")
-    }
-    val wrappedPreviewDek = wrappedPreviewDekB64?.let {
-        runCatching { dec.decode(it) }.getOrNull()
-            ?: return Response(BAD_REQUEST).body("wrappedPreviewDek is not valid Base64")
-    }
-
-    runCatching { EnvelopeFormat.validateSymmetric(wrappedDek, dekFormat) }.onFailure { e ->
-        return Response(BAD_REQUEST).body("wrappedDek envelope invalid: ${e.message}")
-    }
-    if (encryptedMeta != null && encryptedMetaFormat != null) {
-        runCatching { EnvelopeFormat.validateSymmetric(encryptedMeta, encryptedMetaFormat) }.onFailure { e ->
-            return Response(BAD_REQUEST).body("encryptedMetadata envelope invalid: ${e.message}")
+        when (val result = uploadService.confirmLegacyUpload(storageKey, mimeType, fileSize, contentHash, tags, userId)) {
+            UploadService.ConfirmResult.Created -> Response(CREATED)
+            is UploadService.ConfirmResult.Duplicate ->
+                Response(CONFLICT).header("Content-Type", "application/json")
+                    .body("""{"storageKey":"${result.storageKey}"}""")
+            is UploadService.ConfirmResult.Invalid -> Response(BAD_REQUEST).body(result.message)
         }
     }
-    if (wrappedThumbDek != null && thumbDekFormat != null) {
-        runCatching { EnvelopeFormat.validateSymmetric(wrappedThumbDek, thumbDekFormat) }.onFailure { e ->
-            return Response(BAD_REQUEST).body("wrappedThumbnailDek envelope invalid: ${e.message}")
-        }
-    }
-    if (wrappedPreviewDek != null && previewDekFormat != null) {
-        runCatching { EnvelopeFormat.validateSymmetric(wrappedPreviewDek, previewDekFormat) }.onFailure { e ->
-            return Response(BAD_REQUEST).body("wrappedPreviewDek envelope invalid: ${e.message}")
-        }
-    }
-
-    val id = UUID.randomUUID()
-    database.recordUpload(
-        UploadRecord(
-            id = id,
-            storageKey = storageKey,
-            mimeType = mimeType,
-            fileSize = fileSize,
-            contentHash = contentHash,
-            takenAt = takenAt,
-            storageClass = "encrypted",
-            envelopeVersion = envelopeVersion,
-            wrappedDek = wrappedDek,
-            dekFormat = dekFormat,
-            encryptedMetadata = encryptedMeta,
-            encryptedMetadataFormat = encryptedMetaFormat,
-            thumbnailStorageKey = thumbStorageKey,
-            wrappedThumbnailDek = wrappedThumbDek,
-            thumbnailDekFormat = thumbDekFormat,
-            previewStorageKey = previewStorageKey,
-            wrappedPreviewDek = wrappedPreviewDek,
-            previewDekFormat = previewDekFormat,
-            plainChunkSize = plainChunkSize,
-            durationSeconds = durationSeconds,
-        ),
-        userId,
-    )
-    if (tags.isNotEmpty()) database.updateTags(id, tags, userId)
-    runCatching { database.deletePendingBlob(storageKey) }
-    if (thumbStorageKey != null) runCatching { database.deletePendingBlob(thumbStorageKey) }
-    if (previewStorageKey != null) runCatching { database.deletePendingBlob(previewStorageKey) }
-    return Response(CREATED)
-}
-
-private fun confirmLegacyUpload(
-    storageKey: String,
-    mimeType: String,
-    fileSize: Long,
-    contentHash: String?,
-    tags: List<String>,
-    storage: FileStore,
-    database: Database,
-    thumbnailGenerator: (ByteArray, String) -> ByteArray?,
-    metadataExtractor: (ByteArray, String) -> MediaMetadata,
-    userId: java.util.UUID,
-): Response {
-    val existing = if (contentHash != null) database.findByContentHash(contentHash, userId) else null
-    if (existing != null)
-        return Response(CONFLICT).header("Content-Type", "application/json")
-            .body("""{"storageKey":"${existing.storageKey}"}""")
-
-    val bytes = fetchBytesIfNeeded(storageKey, mimeType, storage)
-    val thumbKey = if (bytes != null) tryStoreThumbnail(bytes, mimeType, StorageKey(storageKey), storage, thumbnailGenerator) else null
-    val metaBytes = fetchHeaderForMetadata(storageKey, mimeType, storage)
-    val metadata = if (metaBytes != null) {
-        runCatching { metadataExtractor(metaBytes, mimeType) }.getOrDefault(MediaMetadata())
-    } else MediaMetadata()
-    val normalizedMime = mimeType.substringBefore(";").trim().lowercase()
-    val durationSeconds = if (bytes != null && normalizedMime.startsWith("video/"))
-        runCatching { extractVideoDuration(bytes, mimeType) }.getOrNull()
-    else null
-    val id = UUID.randomUUID()
-    database.recordUpload(
-        UploadRecord(
-            id = id,
-            storageKey = storageKey,
-            mimeType = mimeType,
-            fileSize = fileSize,
-            contentHash = contentHash,
-            thumbnailKey = thumbKey?.value,
-            takenAt = metadata.takenAt,
-            latitude = metadata.latitude,
-            longitude = metadata.longitude,
-            altitude = metadata.altitude,
-            deviceMake = metadata.deviceMake,
-            deviceModel = metadata.deviceModel,
-            durationSeconds = durationSeconds,
-        ),
-        userId,
-    )
-    if (tags.isNotEmpty()) database.updateTags(id, tags, userId)
-    runCatching { database.deletePendingBlob(storageKey) }
-    return Response(CREATED)
-}
-
-private const val EXIF_HEADER_BYTES = 65_536 // JPEG EXIF lives in APP1, always within first 64 KB
-
-private fun fetchBytesIfNeeded(storageKey: String, mimeType: String, storage: FileStore): ByteArray? {
-    val normalized = mimeType.substringBefore(";").trim().lowercase()
-    if (normalized !in PROCESSING_SUPPORTED_MIME_TYPES) return null
-    return try { storage.get(StorageKey(storageKey)) } catch (_: Exception) { null }
-}
-
-private fun fetchHeaderForMetadata(storageKey: String, mimeType: String, storage: FileStore): ByteArray? {
-    val normalized = mimeType.substringBefore(";").trim().lowercase()
-    if (normalized !in METADATA_SUPPORTED_MIME_TYPES) return null
-    return try {
-        if (normalized in METADATA_IMAGE_MIME_TYPES) {
-            storage.getFirst(StorageKey(storageKey), EXIF_HEADER_BYTES)
-        } else {
-            storage.get(StorageKey(storageKey)) // videos still need the full file for ffprobe
-        }
-    } catch (_: Exception) { null }
 }
 
 data class RotationRequest(val rotation: Int)
@@ -1234,7 +890,7 @@ private fun viewUploadContractRoute(database: Database): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id / "view" meta {
         summary = "Record a detail view"
-        description = "Sets last_viewed_at on the upload, removing it from the Just arrived plot. Idempotent — subsequent calls on an already-viewed item are no-ops."
+        description = "Sets last_viewed_at on the upload, removing it from the Just arrived plot."
     } bindContract POST to { uploadId: UUID, _: String ->
         { request: Request ->
             val viewed = database.recordView(uploadId, request.authUserId())
@@ -1247,7 +903,7 @@ private fun tagsContractRoute(database: Database): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id / "tags" meta {
         summary = "Set tags"
-        description = "Replaces all tags on an upload. Tags must be kebab-case (lowercase letters, numbers, hyphens, max 50 chars)."
+        description = "Replaces all tags on an upload."
         receiving(tagsRequestLens to TagsRequest(tags = listOf("family", "2026-summer")))
     } bindContract PATCH to { uploadId: UUID, _: String ->
         { request: Request ->
@@ -1279,19 +935,4 @@ private fun tagsContractRoute(database: Database): ContractRoute {
             }
         }
     }
-}
-
-private fun tryStoreThumbnail(
-    bytes: ByteArray,
-    mimeType: String,
-    originalKey: StorageKey,
-    storage: FileStore,
-    thumbnailGenerator: (ByteArray, String) -> ByteArray?,
-): StorageKey? {
-    return try {
-        val thumbBytes = thumbnailGenerator(bytes, mimeType) ?: return null
-        val thumbKeyValue = "${originalKey.value.substringBeforeLast(".")}-thumb.jpg"
-        storage.saveWithKey(thumbBytes, StorageKey(thumbKeyValue), "image/jpeg")
-        StorageKey(thumbKeyValue)
-    } catch (_: Exception) { null }
 }

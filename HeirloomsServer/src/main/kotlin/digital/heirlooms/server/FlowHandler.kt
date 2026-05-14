@@ -2,8 +2,8 @@ package digital.heirlooms.server
 
 import digital.heirlooms.server.domain.plot.FlowRecord
 import digital.heirlooms.server.domain.plot.PlotItemWithUpload
-import digital.heirlooms.server.repository.plot.FlowRepository
 import digital.heirlooms.server.repository.plot.PlotItemRepository
+import digital.heirlooms.server.service.plot.FlowService
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
@@ -29,43 +29,42 @@ import java.util.UUID
 
 private val flowMapper = ObjectMapper()
 
-fun flowRoutes(database: Database): List<ContractRoute> = listOf(
-    listFlowsRoute(database),
-    createFlowRoute(database),
-    updateFlowRoute(database),
-    deleteFlowRoute(database),
-    getFlowStagingRoute(database),
+fun flowRoutes(flowService: FlowService): List<ContractRoute> = listOf(
+    listFlowsRoute(flowService),
+    createFlowRoute(flowService),
+    updateFlowRoute(flowService),
+    deleteFlowRoute(flowService),
+    getFlowStagingRoute(flowService),
 )
 
-fun plotItemRoutes(database: Database): List<ContractRoute> = listOf(
-    getPlotStagingRoute(database),
-    approveStagingRoute(database),
-    rejectStagingRoute(database),
-    deleteDecisionRoute(database),
-    getRejectedRoute(database),
-    getPlotItemsRoute(database),
-    addPlotItemRoute(database),
-    removePlotItemRoute(database),
+fun plotItemRoutes(flowService: FlowService): List<ContractRoute> = listOf(
+    getPlotStagingRoute(flowService),
+    approveStagingRoute(flowService),
+    rejectStagingRoute(flowService),
+    deleteDecisionRoute(flowService),
+    getRejectedRoute(flowService),
+    getPlotItemsRoute(flowService),
+    addPlotItemRoute(flowService),
+    removePlotItemRoute(flowService),
 )
 
 // ---- Flow CRUD ------------------------------------------------------------
 
-private fun listFlowsRoute(database: Database): ContractRoute =
+private fun listFlowsRoute(flowService: FlowService): ContractRoute =
     "/flows" meta { summary = "List flows" } bindContract GET to { request: Request ->
-        val flows = database.listFlows(request.authUserId())
+        val flows = flowService.listFlows(request.authUserId())
         val json = "[${flows.joinToString(",") { it.toJson() }}]"
         Response(OK).header("Content-Type", "application/json").body(json)
     }
 
-private fun createFlowRoute(database: Database): ContractRoute =
+private fun createFlowRoute(flowService: FlowService): ContractRoute =
     "/flows" meta { summary = "Create a flow" } bindContract POST to { request: Request ->
-        handleCreateFlow(request, database)
+        handleCreateFlow(request, flowService)
     }
 
-private fun handleCreateFlow(request: Request, database: Database): Response {
+private fun handleCreateFlow(request: Request, flowService: FlowService): Response {
     val node = try { flowMapper.readTree(request.bodyString()) } catch (_: Exception) { null }
         ?: return Response(BAD_REQUEST).body("Invalid JSON")
-
     val name = node.get("name")?.asText()?.takeIf { it.isNotBlank() }
         ?: return Response(BAD_REQUEST).body("name is required")
     val criteriaNode = node.get("criteria")?.takeIf { !it.isNull }
@@ -79,63 +78,42 @@ private fun handleCreateFlow(request: Request, database: Database): Response {
         ?: node.get("requires_staging")?.asBoolean()
         ?: true
 
-    val criteriaJson = try {
-        database.withCriteriaValidation(criteriaNode, request.authUserId())
-        criteriaNode.toString()
-    } catch (e: CriteriaValidationException) {
-        return Response(BAD_REQUEST).body(e.message ?: "Invalid criteria")
-    } catch (e: CriteriaCycleException) {
-        return Response(BAD_REQUEST).body(e.message ?: "Circular plot_ref detected")
-    }
-
-    return when (val result = database.createFlow(name, criteriaJson, targetPlotId, requiresStaging, request.authUserId())) {
-        is FlowRepository.FlowCreateResult.Success ->
+    return when (val result = flowService.createFlow(name, criteriaNode, targetPlotId, requiresStaging, request.authUserId())) {
+        is FlowService.CreateFlowResult.Created ->
             Response(CREATED).header("Content-Type", "application/json").body(result.flow.toJson())
-        is FlowRepository.FlowCreateResult.Error ->
+        is FlowService.CreateFlowResult.Invalid ->
             Response(BAD_REQUEST).body(result.message)
     }
 }
 
-private fun updateFlowRoute(database: Database): ContractRoute {
+private fun updateFlowRoute(flowService: FlowService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/flows" / id meta { summary = "Update a flow" } bindContract PUT to { flowId: UUID ->
-        { request: Request -> handleUpdateFlow(flowId, request, database) }
+        { request: Request -> handleUpdateFlow(flowId, request, flowService) }
     }
 }
 
-private fun handleUpdateFlow(flowId: UUID, request: Request, database: Database): Response {
+private fun handleUpdateFlow(flowId: UUID, request: Request, flowService: FlowService): Response {
     val node = try { flowMapper.readTree(request.bodyString()) } catch (_: Exception) { null }
         ?: return Response(BAD_REQUEST).body("Invalid JSON")
-
     val name = node.get("name")?.asText()?.takeIf { it.isNotBlank() }
     val requiresStaging = node.get("requiresStaging")?.asBoolean()
         ?: node.get("requires_staging")?.asBoolean()
     val criteriaNode = node.get("criteria")?.takeIf { !it.isNull }
 
-    val criteriaJson: String? = if (criteriaNode != null) {
-        try {
-            database.withCriteriaValidation(criteriaNode, request.authUserId())
-            criteriaNode.toString()
-        } catch (e: CriteriaValidationException) {
-            return Response(BAD_REQUEST).body(e.message ?: "Invalid criteria")
-        } catch (e: CriteriaCycleException) {
-            return Response(BAD_REQUEST).body(e.message ?: "Circular plot_ref detected")
-        }
-    } else null
-
-    return when (database.updateFlow(flowId, name, criteriaJson, requiresStaging, request.authUserId())) {
-        is FlowRepository.FlowUpdateResult.Success ->
-            Response(OK).header("Content-Type", "application/json")
-                .body((database.getFlowById(flowId, request.authUserId()) ?: return Response(NOT_FOUND)).toJson())
-        FlowRepository.FlowUpdateResult.NotFound -> Response(NOT_FOUND)
+    return when (val result = flowService.updateFlow(flowId, name, criteriaNode, requiresStaging, request.authUserId())) {
+        is FlowService.UpdateFlowResult.Updated ->
+            Response(OK).header("Content-Type", "application/json").body(result.flow.toJson())
+        FlowService.UpdateFlowResult.NotFound -> Response(NOT_FOUND)
+        is FlowService.UpdateFlowResult.Invalid -> Response(BAD_REQUEST).body(result.message)
     }
 }
 
-private fun deleteFlowRoute(database: Database): ContractRoute {
+private fun deleteFlowRoute(flowService: FlowService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/flows" / id meta { summary = "Delete a flow" } bindContract DELETE to { flowId: UUID ->
         { request: Request ->
-            if (database.deleteFlow(flowId, request.authUserId())) Response(NO_CONTENT)
+            if (flowService.deleteFlow(flowId, request.authUserId())) Response(NO_CONTENT)
             else Response(NOT_FOUND)
         }
     }
@@ -143,13 +121,13 @@ private fun deleteFlowRoute(database: Database): ContractRoute {
 
 // ---- Staging: flow-level --------------------------------------------------
 
-private fun getFlowStagingRoute(database: Database): ContractRoute {
+private fun getFlowStagingRoute(flowService: FlowService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/flows" / id / "staging" meta {
         summary = "Get staging items for a flow"
     } bindContract GET to { flowId: UUID, _: String ->
         { request: Request ->
-            val items = database.getStagingItems(flowId, request.authUserId())
+            val items = flowService.getStagingItems(flowId, request.authUserId())
             val json = "[${items.joinToString(",") { it.toJson() }}]"
             Response(OK).header("Content-Type", "application/json").body(json)
         }
@@ -158,109 +136,91 @@ private fun getFlowStagingRoute(database: Database): ContractRoute {
 
 // ---- Staging: plot-level --------------------------------------------------
 
-private fun getPlotStagingRoute(database: Database): ContractRoute {
+private fun getPlotStagingRoute(flowService: FlowService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id / "staging" meta {
         summary = "Get all pending staging items for a plot"
     } bindContract GET to { plotId: UUID, _: String ->
         { request: Request ->
-            val items = database.getStagingItemsForPlot(plotId, request.authUserId())
+            val items = flowService.getStagingItemsForPlot(plotId, request.authUserId())
             val json = "[${items.joinToString(",") { it.toJson() }}]"
             Response(OK).header("Content-Type", "application/json").body(json)
         }
     }
 }
 
-private fun approveStagingRoute(database: Database): ContractRoute {
+private fun approveStagingRoute(flowService: FlowService): ContractRoute {
     val plotId = Path.uuid().of("id")
     val uploadId = Path.uuid().of("uploadId")
     return "/plots" / plotId / "staging" / uploadId / "approve" meta {
         summary = "Approve a staging item"
     } bindContract POST to { pId: UUID, _s1: String, uId: UUID, _s2: String ->
-        { request: Request -> handleApproveStagingItem(pId, uId, request, database) }
-    }
-}
-
-private fun handleApproveStagingItem(plotId: UUID, uploadId: UUID, request: Request, database: Database): Response {
-    val node = try { flowMapper.readTree(request.bodyString()) } catch (_: Exception) { null }
-    val sourceFlowId = try { node?.get("sourceFlowId")?.asText()?.let { UUID.fromString(it) } } catch (_: Exception) { null }
-
-    val plot = database.getPlotById(plotId)
-    var dekBytes: ByteArray? = null
-    var dekFormat: String? = null
-    var thumbBytes: ByteArray? = null
-    var thumbFormat: String? = null
-
-    if (plot?.visibility == "shared") {
-        val wrappedItemDek = node?.get("wrappedItemDek")?.asText()
-        if (wrappedItemDek != null) {
-            // Encrypted item: accept re-wrapped DEK
-            dekFormat = node?.get("itemDekFormat")?.asText()
-                ?: return Response(BAD_REQUEST).body("itemDekFormat required when wrappedItemDek is provided")
-            dekBytes = try { java.util.Base64.getDecoder().decode(wrappedItemDek) }
-                catch (_: Exception) { return Response(BAD_REQUEST).body("wrappedItemDek is not valid base64") }
-            val wrappedThumb = node?.get("wrappedThumbnailDek")?.asText()
-            thumbFormat = node?.get("thumbnailDekFormat")?.asText()
-            thumbBytes = wrappedThumb?.let {
-                try { java.util.Base64.getDecoder().decode(it) } catch (_: Exception) { null }
+        { request: Request ->
+            val node = try { flowMapper.readTree(request.bodyString()) } catch (_: Exception) { null }
+            val sourceFlowId = try { node?.get("sourceFlowId")?.asText()?.let { UUID.fromString(it) } } catch (_: Exception) { null }
+            when (val result = flowService.approveStagingItem(
+                plotId = pId,
+                uploadId = uId,
+                sourceFlowId = sourceFlowId,
+                userId = request.authUserId(),
+                wrappedItemDekB64 = node?.get("wrappedItemDek")?.asText(),
+                itemDekFormatRaw = node?.get("itemDekFormat")?.asText(),
+                wrappedThumbnailDekB64 = node?.get("wrappedThumbnailDek")?.asText(),
+                thumbnailDekFormatRaw = node?.get("thumbnailDekFormat")?.asText(),
+            )) {
+                FlowService.ApproveStagingResult.Success          -> Response(NO_CONTENT)
+                FlowService.ApproveStagingResult.DuplicateContent -> Response(NO_CONTENT)
+                FlowService.ApproveStagingResult.AlreadyApproved  -> Response(CONFLICT).body("Item is already in the collection")
+                FlowService.ApproveStagingResult.NotFound         -> Response(NOT_FOUND)
+                FlowService.ApproveStagingResult.PlotNotOwned     -> Response(NOT_FOUND)
+                FlowService.ApproveStagingResult.PlotClosed       -> Response(FORBIDDEN).body("Plot is closed")
+                is FlowService.ApproveStagingResult.Invalid       -> Response(BAD_REQUEST).body(result.message)
             }
         }
-        // Unencrypted (public) items have no DEK to wrap — allow through without DEK fields
-    }
-
-    return when (database.approveStagingItem(plotId, uploadId, sourceFlowId, request.authUserId(), dekBytes, dekFormat, thumbBytes, thumbFormat)) {
-        PlotItemRepository.ApproveResult.Success          -> Response(NO_CONTENT)
-        PlotItemRepository.ApproveResult.DuplicateContent -> Response(NO_CONTENT)
-        PlotItemRepository.ApproveResult.AlreadyApproved  -> Response(CONFLICT).body("Item is already in the collection")
-        PlotItemRepository.ApproveResult.NotFound         -> Response(NOT_FOUND)
-        PlotItemRepository.ApproveResult.PlotNotOwned     -> Response(NOT_FOUND)
-        PlotItemRepository.ApproveResult.PlotClosed       -> Response(FORBIDDEN).body("Plot is closed")
     }
 }
 
-private fun rejectStagingRoute(database: Database): ContractRoute {
+private fun rejectStagingRoute(flowService: FlowService): ContractRoute {
     val plotId = Path.uuid().of("id")
     val uploadId = Path.uuid().of("uploadId")
     return "/plots" / plotId / "staging" / uploadId / "reject" meta {
         summary = "Reject a staging item"
     } bindContract POST to { pId: UUID, _s1: String, uId: UUID, _s2: String ->
-        { request: Request -> handleRejectStagingItem(pId, uId, request, database) }
+        { request: Request ->
+            val sourceFlowId = try {
+                flowMapper.readTree(request.bodyString())?.get("sourceFlowId")?.asText()
+                    ?.let { UUID.fromString(it) }
+            } catch (_: Exception) { null }
+            when (flowService.rejectStagingItem(pId, uId, sourceFlowId, request.authUserId())) {
+                PlotItemRepository.RejectResult.Success         -> Response(NO_CONTENT)
+                PlotItemRepository.RejectResult.AlreadyApproved -> Response(CONFLICT).body("Item is already approved — remove it from the collection first")
+                PlotItemRepository.RejectResult.NotFound        -> Response(NOT_FOUND)
+                PlotItemRepository.RejectResult.PlotNotOwned    -> Response(NOT_FOUND)
+            }
+        }
     }
 }
 
-private fun handleRejectStagingItem(plotId: UUID, uploadId: UUID, request: Request, database: Database): Response {
-    val sourceFlowId = try {
-        flowMapper.readTree(request.bodyString())?.get("sourceFlowId")?.asText()
-            ?.let { UUID.fromString(it) }
-    } catch (_: Exception) { null }
-    return when (database.rejectStagingItem(plotId, uploadId, sourceFlowId, request.authUserId())) {
-        PlotItemRepository.RejectResult.Success         -> Response(NO_CONTENT)
-        PlotItemRepository.RejectResult.AlreadyApproved -> Response(CONFLICT).body("Item is already approved — remove it from the collection first")
-        PlotItemRepository.RejectResult.NotFound        -> Response(NOT_FOUND)
-        PlotItemRepository.RejectResult.PlotNotOwned    -> Response(NOT_FOUND)
-    }
-}
-
-private fun deleteDecisionRoute(database: Database): ContractRoute {
+private fun deleteDecisionRoute(flowService: FlowService): ContractRoute {
     val plotId = Path.uuid().of("id")
     val uploadId = Path.uuid().of("uploadId")
     return "/plots" / plotId / "staging" / uploadId / "decision" meta {
         summary = "Remove a staging decision (un-reject)"
     } bindContract DELETE to { pId: UUID, _s1: String, uId: UUID, _s2: String ->
         { request: Request ->
-            if (database.deleteDecision(pId, uId, request.authUserId())) Response(NO_CONTENT)
+            if (flowService.deleteDecision(pId, uId, request.authUserId())) Response(NO_CONTENT)
             else Response(NOT_FOUND)
         }
     }
 }
 
-private fun getRejectedRoute(database: Database): ContractRoute {
+private fun getRejectedRoute(flowService: FlowService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id / "staging" / "rejected" meta {
         summary = "List rejected staging items for a plot"
     } bindContract GET to { plotId: UUID, _s1: String, _s2: String ->
         { request: Request ->
-            val items = database.getRejectedItems(plotId, request.authUserId())
+            val items = flowService.getRejectedItems(plotId, request.authUserId())
             val json = "[${items.joinToString(",") { it.toJson() }}]"
             Response(OK).header("Content-Type", "application/json").body(json)
         }
@@ -269,13 +229,13 @@ private fun getRejectedRoute(database: Database): ContractRoute {
 
 // ---- Collection plot items ------------------------------------------------
 
-private fun getPlotItemsRoute(database: Database): ContractRoute {
+private fun getPlotItemsRoute(flowService: FlowService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id / "items" meta {
         summary = "List items in a collection plot"
     } bindContract GET to { plotId: UUID, _: String ->
         { request: Request ->
-            val items = database.getPlotItems(plotId, request.authUserId())
+            val items = flowService.getPlotItems(plotId, request.authUserId())
             val json = "[${items.joinToString(",") { it.toJson() }}]"
             Response(OK).header("Content-Type", "application/json").body(json)
         }
@@ -283,7 +243,6 @@ private fun getPlotItemsRoute(database: Database): ContractRoute {
 }
 
 private fun PlotItemWithUpload.toJson(): String {
-    val factory = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance
     val node = flowMapper.readTree(upload.toJson()).deepCopy<com.fasterxml.jackson.databind.node.ObjectNode>()
     node.put("added_by", addedBy.toString())
     if (wrappedItemDek != null) node.put("wrapped_item_dek", java.util.Base64.getEncoder().encodeToString(wrappedItemDek))
@@ -293,16 +252,16 @@ private fun PlotItemWithUpload.toJson(): String {
     return node.toString()
 }
 
-private fun addPlotItemRoute(database: Database): ContractRoute {
+private fun addPlotItemRoute(flowService: FlowService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id / "items" meta {
         summary = "Manually add an item to a collection plot"
     } bindContract POST to { plotId: UUID, _: String ->
-        { request: Request -> handleAddPlotItem(plotId, request, database) }
+        { request: Request -> handleAddPlotItem(plotId, request, flowService) }
     }
 }
 
-private fun handleAddPlotItem(plotId: UUID, request: Request, database: Database): Response {
+private fun handleAddPlotItem(plotId: UUID, request: Request, flowService: FlowService): Response {
     val node = try { flowMapper.readTree(request.bodyString()) } catch (_: Exception) { null }
         ?: return Response(BAD_REQUEST).body("Invalid JSON")
     val uploadIdStr = node.get("uploadId")?.asText() ?: node.get("upload_id")?.asText()
@@ -310,47 +269,32 @@ private fun handleAddPlotItem(plotId: UUID, request: Request, database: Database
     val uploadId = try { UUID.fromString(uploadIdStr) }
         catch (_: Exception) { return Response(BAD_REQUEST).body("uploadId is not a valid UUID") }
 
-    val plot = database.getPlotById(plotId)
-    if (plot?.visibility == "shared") {
-        val wrappedItemDek = node.get("wrappedItemDek")?.asText()
-            ?: return Response(BAD_REQUEST).body("wrappedItemDek required for shared plots")
-        val itemDekFormat = node.get("itemDekFormat")?.asText()
-            ?: return Response(BAD_REQUEST).body("itemDekFormat required for shared plots")
-        val wrappedThumbnailDek = node.get("wrappedThumbnailDek")?.asText()
-        val thumbnailDekFormat = node.get("thumbnailDekFormat")?.asText()
-        val dekBytes = try { java.util.Base64.getDecoder().decode(wrappedItemDek) }
-            catch (_: Exception) { return Response(BAD_REQUEST).body("wrappedItemDek is not valid base64") }
-        val thumbBytes = wrappedThumbnailDek?.let {
-            try { java.util.Base64.getDecoder().decode(it) } catch (_: Exception) { null }
-        }
-        return when (database.addPlotItem(plotId, uploadId, request.authUserId(), dekBytes, itemDekFormat, thumbBytes, thumbnailDekFormat)) {
-            PlotItemRepository.AddItemResult.Success        -> Response(CREATED)
-            PlotItemRepository.AddItemResult.AlreadyPresent -> Response(CONFLICT).body("Item already in collection")
-            PlotItemRepository.AddItemResult.PlotNotOwned   -> Response(NOT_FOUND)
-            PlotItemRepository.AddItemResult.UploadNotOwned -> Response(NOT_FOUND)
-            PlotItemRepository.AddItemResult.PlotClosed     -> Response(FORBIDDEN).body("Plot is closed")
-            is PlotItemRepository.AddItemResult.Error       -> Response(BAD_REQUEST).body("Cannot add item")
-        }
-    }
-
-    return when (database.addPlotItem(plotId, uploadId, request.authUserId())) {
-        PlotItemRepository.AddItemResult.Success        -> Response(CREATED)
-        PlotItemRepository.AddItemResult.AlreadyPresent -> Response(CONFLICT).body("Item already in collection")
-        PlotItemRepository.AddItemResult.PlotNotOwned   -> Response(NOT_FOUND)
-        PlotItemRepository.AddItemResult.UploadNotOwned -> Response(NOT_FOUND)
-        PlotItemRepository.AddItemResult.PlotClosed     -> Response(FORBIDDEN).body("Plot is closed")
-        is PlotItemRepository.AddItemResult.Error       -> Response(BAD_REQUEST).body("Cannot add item")
+    return when (val result = flowService.addPlotItem(
+        plotId = plotId,
+        uploadId = uploadId,
+        userId = request.authUserId(),
+        wrappedItemDekB64 = node.get("wrappedItemDek")?.asText(),
+        itemDekFormatRaw = node.get("itemDekFormat")?.asText(),
+        wrappedThumbnailDekB64 = node.get("wrappedThumbnailDek")?.asText(),
+        thumbnailDekFormatRaw = node.get("thumbnailDekFormat")?.asText(),
+    )) {
+        FlowService.AddPlotItemResult.Success        -> Response(CREATED)
+        FlowService.AddPlotItemResult.AlreadyPresent -> Response(CONFLICT).body("Item already in collection")
+        FlowService.AddPlotItemResult.PlotNotOwned   -> Response(NOT_FOUND)
+        FlowService.AddPlotItemResult.UploadNotOwned -> Response(NOT_FOUND)
+        FlowService.AddPlotItemResult.PlotClosed     -> Response(FORBIDDEN).body("Plot is closed")
+        is FlowService.AddPlotItemResult.Invalid     -> Response(BAD_REQUEST).body(result.message)
     }
 }
 
-private fun removePlotItemRoute(database: Database): ContractRoute {
+private fun removePlotItemRoute(flowService: FlowService): ContractRoute {
     val plotId = Path.uuid().of("id")
     val uploadId = Path.uuid().of("uploadId")
     return "/plots" / plotId / "items" / uploadId meta {
         summary = "Remove an item from a collection plot"
     } bindContract DELETE to { pId: UUID, _: String, uId: UUID ->
         { request: Request ->
-            when (database.removePlotItem(pId, uId, request.authUserId())) {
+            when (flowService.removePlotItem(pId, uId, request.authUserId())) {
                 PlotItemRepository.RemoveItemResult.Success   -> Response(NO_CONTENT)
                 PlotItemRepository.RemoveItemResult.NotFound  -> Response(NOT_FOUND)
                 PlotItemRepository.RemoveItemResult.Forbidden -> Response(FORBIDDEN)

@@ -1,6 +1,7 @@
 package digital.heirlooms.server
 
 import digital.heirlooms.server.repository.plot.PlotMemberRepository
+import digital.heirlooms.server.service.plot.SharedPlotService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import org.http4k.contract.ContractRoute
@@ -27,85 +28,86 @@ import java.util.UUID
 
 private val sharedMapper = ObjectMapper()
 
-fun sharedPlotRoutes(database: Database): List<ContractRoute> = listOf(
-    getPlotKeyRoute(database),
-    listMembersRoute(database),
-    addMemberRoute(database),
-    leavePlotRoute(database),
-    leavePlotPostRoute(database),
-    acceptInviteRoute(database),
-    rejoinPlotRoute(database),
-    restorePlotRoute(database),
-    transferOwnershipRoute(database),
-    setPlotStatusRoute(database),
-    listSharedMembershipsRoute(database),
-    createInviteRoute(database),
-    joinInfoRoute(database),
-    joinRoute(database),
-    listPendingInvitesRoute(database),
-    confirmInviteRoute(database),
+fun sharedPlotRoutes(sharedPlotService: SharedPlotService): List<ContractRoute> = listOf(
+    getPlotKeyRoute(sharedPlotService),
+    listMembersRoute(sharedPlotService),
+    addMemberRoute(sharedPlotService),
+    leavePlotRoute(sharedPlotService),
+    leavePlotPostRoute(sharedPlotService),
+    acceptInviteRoute(sharedPlotService),
+    rejoinPlotRoute(sharedPlotService),
+    restorePlotRoute(sharedPlotService),
+    transferOwnershipRoute(sharedPlotService),
+    setPlotStatusRoute(sharedPlotService),
+    listSharedMembershipsRoute(sharedPlotService),
+    createInviteRoute(sharedPlotService),
+    joinInfoRoute(sharedPlotService),
+    joinRoute(sharedPlotService),
+    listPendingInvitesRoute(sharedPlotService),
+    confirmInviteRoute(sharedPlotService),
 )
 
 // ---- Plot key ---------------------------------------------------------------
 
-private fun getPlotKeyRoute(database: Database): ContractRoute {
+private fun getPlotKeyRoute(sharedPlotService: SharedPlotService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id / "plot-key" meta {
         summary = "Get own wrapped plot key"
     } bindContract GET to { plotId: UUID, _: String ->
-        { request: Request -> handleGetPlotKey(plotId, request, database) }
+        { request: Request ->
+            val pair = sharedPlotService.getPlotKey(plotId, request.authUserId())
+            if (pair == null) {
+                Response(NOT_FOUND)
+            } else {
+                val (keyBytes, fmt) = pair
+                val node = JsonNodeFactory.instance.objectNode()
+                node.put("wrappedPlotKey", Base64.getEncoder().encodeToString(keyBytes))
+                node.put("plotKeyFormat", fmt)
+                Response(OK).header("Content-Type", "application/json").body(node.toString())
+            }
+        }
     }
-}
-
-private fun handleGetPlotKey(plotId: UUID, request: Request, database: Database): Response {
-    val plot = database.getPlotById(plotId) ?: return Response(NOT_FOUND)
-    if (plot.visibility != "shared") return Response(FORBIDDEN).body("Plot is not a shared plot")
-    val (keyBytes, fmt) = database.getPlotKey(plotId, request.authUserId())
-        ?: return Response(NOT_FOUND)
-    val node = JsonNodeFactory.instance.objectNode()
-    node.put("wrappedPlotKey", Base64.getEncoder().encodeToString(keyBytes))
-    node.put("plotKeyFormat", fmt)
-    return Response(OK).header("Content-Type", "application/json").body(node.toString())
 }
 
 // ---- Members ----------------------------------------------------------------
 
-private fun listMembersRoute(database: Database): ContractRoute {
+private fun listMembersRoute(sharedPlotService: SharedPlotService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id / "members" meta {
         summary = "List members of a shared plot"
     } bindContract GET to { plotId: UUID, _: String ->
-        { request: Request -> handleListMembers(plotId, request, database) }
+        { request: Request ->
+            val members = sharedPlotService.listMembers(plotId, request.authUserId())
+            if (members == null) {
+                Response(NOT_FOUND)
+            } else {
+                val json = "[${members.joinToString(",") { m ->
+                    val node = JsonNodeFactory.instance.objectNode()
+                    node.put("userId", m.userId.toString())
+                    node.put("displayName", m.displayName)
+                    node.put("username", m.username)
+                    node.put("role", m.role)
+                    node.put("status", m.status)
+                    if (m.localName != null) node.put("localName", m.localName) else node.putNull("localName")
+                    node.put("joinedAt", m.joinedAt.toString())
+                    node.toString()
+                }}]"
+                Response(OK).header("Content-Type", "application/json").body(json)
+            }
+        }
     }
 }
 
-private fun handleListMembers(plotId: UUID, request: Request, database: Database): Response {
-    val members = database.listMembers(plotId, request.authUserId())
-        ?: return Response(NOT_FOUND)
-    val json = "[${members.joinToString(",") { m ->
-        val node = JsonNodeFactory.instance.objectNode()
-        node.put("userId", m.userId.toString())
-        node.put("displayName", m.displayName)
-        node.put("username", m.username)
-        node.put("role", m.role)
-        node.put("status", m.status)
-        if (m.localName != null) node.put("localName", m.localName) else node.putNull("localName")
-        node.put("joinedAt", m.joinedAt.toString())
-        node.toString()
-    }}]"
-    return Response(OK).header("Content-Type", "application/json").body(json)
-}
-
-private fun addMemberRoute(database: Database): ContractRoute {
+private fun addMemberRoute(sharedPlotService: SharedPlotService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id / "members" meta {
         summary = "Invite a friend to a shared plot"
     } bindContract POST to { plotId: UUID, _: String ->
-        { request: Request -> handleAddMember(plotId, request, database) }
+        { request: Request -> handleAddMember(plotId, request, sharedPlotService) }
     }
 }
 
-private fun handleAddMember(plotId: UUID, request: Request, database: Database): Response {
+private fun handleAddMember(plotId: UUID, request: Request, sharedPlotService: SharedPlotService): Response {
     val node = try { sharedMapper.readTree(request.bodyString()) } catch (_: Exception) { null }
         ?: return Response(BAD_REQUEST).body("Invalid JSON")
     val userIdStr = node.get("userId")?.asText()
@@ -118,8 +120,7 @@ private fun handleAddMember(plotId: UUID, request: Request, database: Database):
         ?: return Response(BAD_REQUEST).body("plotKeyFormat is required")
     val keyBytes = try { Base64.getDecoder().decode(wrappedKey) }
         catch (_: Exception) { return Response(BAD_REQUEST).body("wrappedPlotKey is not valid base64") }
-
-    return when (database.addMember(plotId, newUserId, keyBytes, plotKeyFormat, request.authUserId())) {
+    return when (sharedPlotService.addMember(plotId, newUserId, keyBytes, plotKeyFormat, request.authUserId())) {
         PlotMemberRepository.AddMemberResult.Success       -> Response(CREATED)
         PlotMemberRepository.AddMemberResult.NotMember     -> Response(NOT_FOUND)
         PlotMemberRepository.AddMemberResult.NotFriends    -> Response(BAD_REQUEST).body("You can only invite friends")
@@ -129,54 +130,60 @@ private fun handleAddMember(plotId: UUID, request: Request, database: Database):
 
 // ---- Invite link flow -------------------------------------------------------
 
-private fun createInviteRoute(database: Database): ContractRoute {
+private fun createInviteRoute(sharedPlotService: SharedPlotService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id / "invites" meta {
         summary = "Generate a 48-hour invite token for a shared plot"
     } bindContract POST to { plotId: UUID, _: String ->
-        { request: Request -> handleCreateInvite(plotId, request, database) }
+        { request: Request ->
+            val invite = sharedPlotService.createInvite(plotId, request.authUserId())
+            if (invite == null) {
+                Response(NOT_FOUND)
+            } else {
+                val node = JsonNodeFactory.instance.objectNode()
+                node.put("token", invite.token)
+                node.put("expiresAt", invite.expiresAt.toString())
+                Response(CREATED).header("Content-Type", "application/json").body(node.toString())
+            }
+        }
     }
 }
 
-private fun handleCreateInvite(plotId: UUID, request: Request, database: Database): Response {
-    val invite = database.createInvite(plotId, request.authUserId())
-        ?: return Response(NOT_FOUND)
-    val node = JsonNodeFactory.instance.objectNode()
-    node.put("token", invite.token)
-    node.put("expiresAt", invite.expiresAt.toString())
-    return Response(CREATED).header("Content-Type", "application/json").body(node.toString())
-}
-
-private fun joinInfoRoute(database: Database): ContractRoute =
+private fun joinInfoRoute(sharedPlotService: SharedPlotService): ContractRoute =
     "/plots/join-info" meta {
         summary = "Get plot info for an invite token"
     } bindContract GET to { request: Request ->
         val token = request.query("token")?.takeIf { it.isNotBlank() }
-            ?: return@to Response(BAD_REQUEST).body("token query param required")
-        val info = database.getInviteInfo(token)
-            ?: return@to Response(NOT_FOUND).body("Invite not found or expired")
-        val node = JsonNodeFactory.instance.objectNode()
-        node.put("plotId", info.plotId.toString())
-        node.put("plotName", info.plotName)
-        node.put("inviterDisplayName", info.inviterDisplayName)
-        node.put("inviterUserId", info.inviterUserId.toString())
-        Response(OK).header("Content-Type", "application/json").body(node.toString())
+        if (token == null) {
+            Response(BAD_REQUEST).body("token query param required")
+        } else {
+            val info = sharedPlotService.getInviteInfo(token)
+            if (info == null) {
+                Response(NOT_FOUND).body("Invite not found or expired")
+            } else {
+                val node = JsonNodeFactory.instance.objectNode()
+                node.put("plotId", info.plotId.toString())
+                node.put("plotName", info.plotName)
+                node.put("inviterDisplayName", info.inviterDisplayName)
+                node.put("inviterUserId", info.inviterUserId.toString())
+                Response(OK).header("Content-Type", "application/json").body(node.toString())
+            }
+        }
     }
 
-private fun joinRoute(database: Database): ContractRoute =
+private fun joinRoute(sharedPlotService: SharedPlotService): ContractRoute =
     "/plots/join" meta {
         summary = "Redeem an invite token (step 1: register recipient pubkey)"
-    } bindContract POST to { request: Request -> handleJoin(request, database) }
+    } bindContract POST to { request: Request -> handleJoin(request, sharedPlotService) }
 
-private fun handleJoin(request: Request, database: Database): Response {
+private fun handleJoin(request: Request, sharedPlotService: SharedPlotService): Response {
     val node = try { sharedMapper.readTree(request.bodyString()) } catch (_: Exception) { null }
         ?: return Response(BAD_REQUEST).body("Invalid JSON")
     val token = node.get("token")?.asText()?.takeIf { it.isNotBlank() }
         ?: return Response(BAD_REQUEST).body("token is required")
     val recipientPubkey = node.get("recipientSharingPubkey")?.asText()?.takeIf { it.isNotBlank() }
         ?: return Response(BAD_REQUEST).body("recipientSharingPubkey is required")
-
-    return when (val result = database.redeemInvite(token, request.authUserId(), recipientPubkey)) {
+    return when (val result = sharedPlotService.redeemInvite(token, request.authUserId(), recipientPubkey)) {
         is PlotMemberRepository.RedeemInviteResult.Pending -> {
             val resp = JsonNodeFactory.instance.objectNode()
             resp.put("status", "pending")
@@ -191,30 +198,30 @@ private fun handleJoin(request: Request, database: Database): Response {
     }
 }
 
-private fun listPendingInvitesRoute(database: Database): ContractRoute {
+private fun listPendingInvitesRoute(sharedPlotService: SharedPlotService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id / "members" / "pending" meta {
         summary = "List pending joins awaiting key wrap confirmation"
     } bindContract GET to { plotId: UUID, _s1: String, _s2: String ->
         { request: Request ->
-            val pending = database.listPendingInvites(plotId, request.authUserId())
+            val pending = sharedPlotService.listPendingInvites(plotId, request.authUserId())
             val arr = sharedMapper.writeValueAsString(pending)
             Response(OK).header("Content-Type", "application/json").body(arr)
         }
     }
 }
 
-private fun confirmInviteRoute(database: Database): ContractRoute {
+private fun confirmInviteRoute(sharedPlotService: SharedPlotService): ContractRoute {
     val plotId = Path.uuid().of("id")
     val inviteId = Path.uuid().of("inviteId")
     return "/plots" / plotId / "members" / "pending" / inviteId / "confirm" meta {
         summary = "Confirm a pending join by supplying the wrapped plot key for the recipient"
     } bindContract POST to { pId: UUID, _s1: String, _s2: String, iId: UUID, _s3: String ->
-        { request: Request -> handleConfirmInvite(pId, iId, request, database) }
+        { request: Request -> handleConfirmInvite(pId, iId, request, sharedPlotService) }
     }
 }
 
-private fun handleConfirmInvite(plotId: UUID, inviteId: UUID, request: Request, database: Database): Response {
+private fun handleConfirmInvite(plotId: UUID, inviteId: UUID, request: Request, sharedPlotService: SharedPlotService): Response {
     val node = try { sharedMapper.readTree(request.bodyString()) } catch (_: Exception) { null }
         ?: return Response(BAD_REQUEST).body("Invalid JSON")
     val wrappedKey = node.get("wrappedPlotKey")?.asText()
@@ -223,8 +230,7 @@ private fun handleConfirmInvite(plotId: UUID, inviteId: UUID, request: Request, 
         ?: return Response(BAD_REQUEST).body("plotKeyFormat is required")
     val keyBytes = try { Base64.getDecoder().decode(wrappedKey) }
         catch (_: Exception) { return Response(BAD_REQUEST).body("wrappedPlotKey is not valid base64") }
-
-    return if (database.confirmInvite(inviteId, plotId, keyBytes, plotKeyFormat, request.authUserId()))
+    return if (sharedPlotService.confirmInvite(inviteId, plotId, keyBytes, plotKeyFormat, request.authUserId()))
         Response(NO_CONTENT)
     else
         Response(NOT_FOUND)
@@ -232,51 +238,50 @@ private fun handleConfirmInvite(plotId: UUID, inviteId: UUID, request: Request, 
 
 // ---- Leave plot -------------------------------------------------------------
 
-private fun leavePlotHandler(plotId: UUID, request: Request, database: Database): Response =
-    when (database.leavePlot(plotId, request.authUserId())) {
+private fun leavePlotHandler(plotId: UUID, request: Request, sharedPlotService: SharedPlotService): Response =
+    when (sharedPlotService.leavePlot(plotId, request.authUserId())) {
         PlotMemberRepository.LeavePlotResult.Success           -> Response(NO_CONTENT)
         PlotMemberRepository.LeavePlotResult.MustTransferFirst ->
             Response(FORBIDDEN).body("Owner must transfer ownership before leaving")
         PlotMemberRepository.LeavePlotResult.NotFound          -> Response(NOT_FOUND)
     }
 
-private fun leavePlotRoute(database: Database): ContractRoute {
+private fun leavePlotRoute(sharedPlotService: SharedPlotService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id / "members" / "me" meta {
         summary = "Leave a shared plot (backward-compat DELETE alias)"
     } bindContract DELETE to { plotId: UUID, _s1: String, _s2: String ->
-        { request: Request -> leavePlotHandler(plotId, request, database) }
+        { request: Request -> leavePlotHandler(plotId, request, sharedPlotService) }
     }
 }
 
-private fun leavePlotPostRoute(database: Database): ContractRoute {
+private fun leavePlotPostRoute(sharedPlotService: SharedPlotService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id / "leave" meta {
         summary = "Leave a shared plot"
     } bindContract POST to { plotId: UUID, _: String ->
-        { request: Request -> leavePlotHandler(plotId, request, database) }
+        { request: Request -> leavePlotHandler(plotId, request, sharedPlotService) }
     }
 }
 
 // ---- Accept invitation -------------------------------------------------------
 
-private fun acceptInviteRoute(database: Database): ContractRoute {
+private fun acceptInviteRoute(sharedPlotService: SharedPlotService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id / "accept" meta {
-        summary = "Accept a plot invitation; body: {\"localName\": \"...\"}"
+        summary = "Accept a plot invitation"
     } bindContract POST to { plotId: UUID, _: String ->
-        { request: Request -> handleAcceptInvite(plotId, request, database) }
+        { request: Request -> handleAcceptInvite(plotId, request, sharedPlotService) }
     }
 }
 
-private fun handleAcceptInvite(plotId: UUID, request: Request, database: Database): Response {
+private fun handleAcceptInvite(plotId: UUID, request: Request, sharedPlotService: SharedPlotService): Response {
     val node = try { sharedMapper.readTree(request.bodyString()) } catch (_: Exception) { null }
         ?: return Response(BAD_REQUEST).body("Invalid JSON")
     val localName = node.get("localName")?.takeIf { !it.isNull }?.asText()?.trim()
         ?: return Response(BAD_REQUEST).body("localName is required")
     if (localName.isBlank()) return Response(BAD_REQUEST).body("localName must not be blank")
-
-    return when (database.acceptInvite(plotId, request.authUserId(), localName)) {
+    return when (sharedPlotService.acceptInvite(plotId, request.authUserId(), localName)) {
         PlotMemberRepository.AcceptInviteResult.Success      -> Response(NO_CONTENT)
         PlotMemberRepository.AcceptInviteResult.NotInvited   -> Response(NOT_FOUND).body("No pending invitation for this plot")
         PlotMemberRepository.AcceptInviteResult.AlreadyJoined -> Response(CONFLICT).body("Already a member of this plot")
@@ -285,35 +290,32 @@ private fun handleAcceptInvite(plotId: UUID, request: Request, database: Databas
 
 // ---- Rejoin plot -------------------------------------------------------------
 
-private fun rejoinPlotRoute(database: Database): ContractRoute {
+private fun rejoinPlotRoute(sharedPlotService: SharedPlotService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id / "rejoin" meta {
-        summary = "Rejoin a plot after leaving; body: {\"localName\": \"...\"} (optional)"
+        summary = "Rejoin a plot after leaving"
     } bindContract POST to { plotId: UUID, _: String ->
-        { request: Request -> handleRejoin(plotId, request, database) }
-    }
-}
-
-private fun handleRejoin(plotId: UUID, request: Request, database: Database): Response {
-    val node = try { sharedMapper.readTree(request.bodyString()) } catch (_: Exception) { null }
-    val localName = node?.get("localName")?.takeIf { !it.isNull }?.asText()?.trim()
-
-    return when (database.rejoinPlot(plotId, request.authUserId(), localName)) {
-        PlotMemberRepository.RejoinResult.Success       -> Response(NO_CONTENT)
-        PlotMemberRepository.RejoinResult.NotLeft       -> Response(NOT_FOUND).body("No prior membership in this plot")
-        PlotMemberRepository.RejoinResult.PlotTombstoned -> Response(GONE).body("Plot has been removed")
+        { request: Request ->
+            val node = try { sharedMapper.readTree(request.bodyString()) } catch (_: Exception) { null }
+            val localName = node?.get("localName")?.takeIf { !it.isNull }?.asText()?.trim()
+            when (sharedPlotService.rejoinPlot(plotId, request.authUserId(), localName)) {
+                PlotMemberRepository.RejoinResult.Success        -> Response(NO_CONTENT)
+                PlotMemberRepository.RejoinResult.NotLeft        -> Response(NOT_FOUND).body("No prior membership in this plot")
+                PlotMemberRepository.RejoinResult.PlotTombstoned -> Response(GONE).body("Plot has been removed")
+            }
+        }
     }
 }
 
 // ---- Restore tombstoned plot ------------------------------------------------
 
-private fun restorePlotRoute(database: Database): ContractRoute {
+private fun restorePlotRoute(sharedPlotService: SharedPlotService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id / "restore" meta {
-        summary = "Restore a tombstoned plot (only for the member who triggered the tombstone)"
+        summary = "Restore a tombstoned plot"
     } bindContract POST to { plotId: UUID, _: String ->
         { request: Request ->
-            when (database.restorePlot(plotId, request.authUserId())) {
+            when (sharedPlotService.restorePlot(plotId, request.authUserId())) {
                 PlotMemberRepository.RestorePlotResult.Success       -> Response(NO_CONTENT)
                 PlotMemberRepository.RestorePlotResult.NotTombstoned -> Response(NOT_FOUND).body("Plot is not tombstoned")
                 PlotMemberRepository.RestorePlotResult.NotAuthorized -> Response(FORBIDDEN).body("Only the member who triggered removal can restore")
@@ -325,24 +327,23 @@ private fun restorePlotRoute(database: Database): ContractRoute {
 
 // ---- Transfer ownership ------------------------------------------------------
 
-private fun transferOwnershipRoute(database: Database): ContractRoute {
+private fun transferOwnershipRoute(sharedPlotService: SharedPlotService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id / "transfer" meta {
-        summary = "Transfer ownership to another member; body: {\"newOwnerId\": \"uuid\"}"
+        summary = "Transfer ownership to another member"
     } bindContract POST to { plotId: UUID, _: String ->
-        { request: Request -> handleTransferOwnership(plotId, request, database) }
+        { request: Request -> handleTransferOwnership(plotId, request, sharedPlotService) }
     }
 }
 
-private fun handleTransferOwnership(plotId: UUID, request: Request, database: Database): Response {
+private fun handleTransferOwnership(plotId: UUID, request: Request, sharedPlotService: SharedPlotService): Response {
     val node = try { sharedMapper.readTree(request.bodyString()) } catch (_: Exception) { null }
         ?: return Response(BAD_REQUEST).body("Invalid JSON")
     val newOwnerIdStr = node.get("newOwnerId")?.asText()
         ?: return Response(BAD_REQUEST).body("newOwnerId is required")
     val newOwnerId = try { UUID.fromString(newOwnerIdStr) }
         catch (_: Exception) { return Response(BAD_REQUEST).body("newOwnerId is not a valid UUID") }
-
-    return when (database.transferOwnership(plotId, newOwnerId, request.authUserId())) {
+    return when (sharedPlotService.transferOwnership(plotId, newOwnerId, request.authUserId())) {
         PlotMemberRepository.TransferOwnershipResult.Success        -> Response(NO_CONTENT)
         PlotMemberRepository.TransferOwnershipResult.NotOwner       -> Response(FORBIDDEN).body("Only the owner can transfer ownership")
         PlotMemberRepository.TransferOwnershipResult.TargetNotMember -> Response(BAD_REQUEST).body("Target user is not an active member")
@@ -352,22 +353,21 @@ private fun handleTransferOwnership(plotId: UUID, request: Request, database: Da
 
 // ---- Open / close plot ------------------------------------------------------
 
-private fun setPlotStatusRoute(database: Database): ContractRoute {
+private fun setPlotStatusRoute(sharedPlotService: SharedPlotService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id / "status" meta {
-        summary = "Set plot open/closed; body: {\"status\": \"open\"|\"closed\"}"
+        summary = "Set plot open/closed"
     } bindContract PATCH to { plotId: UUID, _: String ->
-        { request: Request -> handleSetPlotStatus(plotId, request, database) }
+        { request: Request -> handleSetPlotStatus(plotId, request, sharedPlotService) }
     }
 }
 
-private fun handleSetPlotStatus(plotId: UUID, request: Request, database: Database): Response {
+private fun handleSetPlotStatus(plotId: UUID, request: Request, sharedPlotService: SharedPlotService): Response {
     val node = try { sharedMapper.readTree(request.bodyString()) } catch (_: Exception) { null }
         ?: return Response(BAD_REQUEST).body("Invalid JSON")
     val status = node.get("status")?.asText()
         ?: return Response(BAD_REQUEST).body("status is required")
-
-    return when (val result = database.setPlotStatus(plotId, status, request.authUserId())) {
+    return when (val result = sharedPlotService.setPlotStatus(plotId, status, request.authUserId())) {
         PlotMemberRepository.SetPlotStatusResult.Success              -> Response(NO_CONTENT)
         PlotMemberRepository.SetPlotStatusResult.NotOwner             -> Response(FORBIDDEN).body("Only the owner can change plot status")
         PlotMemberRepository.SetPlotStatusResult.NotFound             -> Response(NOT_FOUND)
@@ -377,11 +377,11 @@ private fun handleSetPlotStatus(plotId: UUID, request: Request, database: Databa
 
 // ---- List all shared memberships for current user ---------------------------
 
-private fun listSharedMembershipsRoute(database: Database): ContractRoute =
+private fun listSharedMembershipsRoute(sharedPlotService: SharedPlotService): ContractRoute =
     "/plots/shared" meta {
         summary = "List all shared plot memberships for current user (all statuses)"
     } bindContract GET to { request: Request ->
-        val memberships = database.listSharedMemberships(request.authUserId())
+        val memberships = sharedPlotService.listSharedMemberships(request.authUserId())
         val factory = JsonNodeFactory.instance
         val arr = factory.arrayNode()
         memberships.forEach { m ->

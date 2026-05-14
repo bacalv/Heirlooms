@@ -2,6 +2,16 @@
 
 ---
 
+## v0.53.0 — Server refactor phase 5: service layer (14 May 2026)
+
+Pure code reorganisation — no behaviour or API changes.
+
+Eight service classes created under `service/` sub-packages: `UploadService`, `AuthService`, `CapsuleService`, `PlotService`, `FlowService`, `SharedPlotService`, `KeyService`, `SocialService`. All business logic (dedup checks, envelope validation, token generation, fake salt, staging DEK decoding, criteria validation, code generation, share-upload friend checks) moved from handlers into services. Handlers now contain only: parse HTTP request → validate inputs → call service → format response.
+
+`buildApp()` constructs service instances from `Database` + `FileStore` and passes them to route builders. `Main.kt` unchanged.
+
+---
+
 ## v0.52.0 — Web upload UX, Android shared-plot shortcuts, iOS scaffold (14 May 2026)
 
 Multi-platform feature release. No server changes.

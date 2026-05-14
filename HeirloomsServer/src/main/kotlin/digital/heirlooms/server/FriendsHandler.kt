@@ -1,29 +1,28 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.service.social.SocialService
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.http4k.contract.ContractRoute
 import org.http4k.contract.meta
 import org.http4k.core.Method.GET
 import org.http4k.core.Request
 import org.http4k.core.Response
-import org.http4k.core.Status.Companion.FORBIDDEN
 import org.http4k.core.Status.Companion.INTERNAL_SERVER_ERROR
 import org.http4k.core.Status.Companion.OK
 
 private val friendsMapper = ObjectMapper()
 
-fun friendsRoutes(database: Database): List<ContractRoute> = listOf(
-    listFriendsRoute(database),
+fun friendsRoutes(socialService: SocialService): List<ContractRoute> = listOf(
+    listFriendsRoute(socialService),
 )
 
-private fun listFriendsRoute(database: Database): ContractRoute =
+private fun listFriendsRoute(socialService: SocialService): ContractRoute =
     "/friends" meta {
         summary = "List friends of the authenticated user"
     } bindContract GET to { request: Request ->
         try {
             val userId = request.authUserId()
-                ?: return@to Response(FORBIDDEN)
-            val friends = database.listFriends(userId)
+            val friends = socialService.listFriends(userId)
             val arr = friendsMapper.createArrayNode()
             friends.forEach { f ->
                 val node = friendsMapper.createObjectNode()

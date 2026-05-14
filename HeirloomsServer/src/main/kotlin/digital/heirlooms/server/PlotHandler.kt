@@ -2,6 +2,7 @@ package digital.heirlooms.server
 
 import digital.heirlooms.server.domain.plot.PlotRecord
 import digital.heirlooms.server.repository.plot.PlotRepository
+import digital.heirlooms.server.service.plot.PlotService
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
@@ -28,21 +29,21 @@ import java.util.UUID
 
 private val plotMapper = ObjectMapper()
 
-fun plotRoutes(database: Database): List<ContractRoute> = listOf(
-    listPlotsRoute(database),
-    createPlotRoute(database),
-    updatePlotRoute(database),
-    deletePlotRoute(database),
-    batchReorderPlotsRoute(database),
+fun plotRoutes(plotService: PlotService): List<ContractRoute> = listOf(
+    listPlotsRoute(plotService),
+    createPlotRoute(plotService),
+    updatePlotRoute(plotService),
+    deletePlotRoute(plotService),
+    batchReorderPlotsRoute(plotService),
 )
 
-private fun listPlotsRoute(database: Database): ContractRoute =
+private fun listPlotsRoute(plotService: PlotService): ContractRoute =
     "/plots" meta {
         summary = "List plots"
         description = "Returns all plots for the current user ordered by sort_order."
     } bindContract GET to { request: Request ->
         val userId = request.authUserId()
-        val plots = database.listPlots(userId)
+        val plots = plotService.listPlots(userId)
         val json = buildString {
             append("[")
             plots.forEachIndexed { i, p -> if (i > 0) append(","); append(p.toJson(userId)) }
@@ -51,10 +52,10 @@ private fun listPlotsRoute(database: Database): ContractRoute =
         Response(OK).header("Content-Type", "application/json").body(json)
     }
 
-private fun createPlotRoute(database: Database): ContractRoute =
+private fun createPlotRoute(plotService: PlotService): ContractRoute =
     "/plots" meta {
         summary = "Create a plot"
-        description = "Creates a user-defined plot. Body: {\"name\": \"...\", \"criteria\": {...}, \"showInGarden\": true}."
+        description = "Creates a user-defined plot."
     } bindContract POST to { request: Request ->
         val body = parsePlotBody(request)
         when {
@@ -62,40 +63,35 @@ private fun createPlotRoute(database: Database): ContractRoute =
             body.name.isNullOrBlank() -> Response(BAD_REQUEST).body("name is required")
             else -> {
                 val vis = body.visibility ?: "private"
-                if (vis == "shared") {
-                    if (body.wrappedPlotKey.isNullOrBlank())
-                        return@to Response(BAD_REQUEST).body("wrappedPlotKey required for shared plots")
-                    if (body.plotKeyFormat.isNullOrBlank())
-                        return@to Response(BAD_REQUEST).body("plotKeyFormat required for shared plots")
-                }
-                val criteriaJson = body.criteriaNode?.let { validateAndSerializeCriteria(it, request.authUserId(), database) }
-                if (criteriaJson is CriteriaSerializeResult.Error)
-                    return@to Response(BAD_REQUEST).body(criteriaJson.message)
-                val plot = database.createPlot(
+                when (val result = plotService.createPlot(
                     name = body.name,
-                    criteria = (criteriaJson as? CriteriaSerializeResult.Ok)?.json,
+                    criteriaNode = body.criteriaNode,
                     showInGarden = body.showInGarden ?: true,
                     visibility = vis,
-                    wrappedPlotKeyB64 = body.wrappedPlotKey,
+                    wrappedPlotKey = body.wrappedPlotKey,
                     plotKeyFormat = body.plotKeyFormat,
                     userId = request.authUserId(),
-                )
-                Response(CREATED).header("Content-Type", "application/json").body(plot.toJson())
+                )) {
+                    is PlotService.CreateResult.Created ->
+                        Response(CREATED).header("Content-Type", "application/json").body(result.plot.toJson())
+                    is PlotService.CreateResult.Invalid ->
+                        Response(BAD_REQUEST).body(result.message)
+                }
             }
         }
     }
 
-private fun updatePlotRoute(database: Database): ContractRoute {
+private fun updatePlotRoute(plotService: PlotService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id meta {
         summary = "Update a plot"
-        description = "Updates name, sort_order, criteria, or showInGarden. Cannot modify system-defined plots."
+        description = "Updates name, sort_order, criteria, or showInGarden."
     } bindContract PUT to { plotId: UUID ->
-        { request: Request -> handleUpdatePlot(plotId, request, database) }
+        { request: Request -> handleUpdatePlot(plotId, request, plotService) }
     }
 }
 
-private fun handleUpdatePlot(plotId: UUID, request: Request, database: Database): Response {
+private fun handleUpdatePlot(plotId: UUID, request: Request, plotService: PlotService): Response {
     val node = try { plotMapper.readTree(request.bodyString()) } catch (_: Exception) { null }
         ?: return Response(BAD_REQUEST).body("Invalid JSON")
 
@@ -105,33 +101,29 @@ private fun handleUpdatePlot(plotId: UUID, request: Request, database: Database)
         ?: node.get("showInGarden")?.asBoolean()
     val criteriaNode = node.get("criteria")?.takeIf { !it.isNull }
 
-    val criteriaJson: String? = if (criteriaNode != null) {
-        val result = validateAndSerializeCriteria(criteriaNode, request.authUserId(), database)
-        if (result is CriteriaSerializeResult.Error)
-            return Response(BAD_REQUEST).body(result.message)
-        (result as CriteriaSerializeResult.Ok).json
-    } else null
-
-    return when (val result = database.updatePlot(
-        plotId, name, sortOrder, criteriaJson, showInGarden, request.authUserId()
-    )) {
+    val (result, validationError) = plotService.updatePlotWithValidation(
+        plotId, name, sortOrder, criteriaNode, showInGarden, request.authUserId()
+    )
+    if (validationError != null) return Response(BAD_REQUEST).body(validationError)
+    return when (result) {
         is PlotRepository.PlotUpdateResult.Success ->
             Response(OK).header("Content-Type", "application/json").body(result.plot.toJson())
         is PlotRepository.PlotUpdateResult.NotFound -> Response(NOT_FOUND)
         is PlotRepository.PlotUpdateResult.SystemDefined ->
             Response(FORBIDDEN).header("Content-Type", "application/json")
                 .body("""{"error":"Cannot modify a system-defined plot"}""")
+        null -> Response(NOT_FOUND)
     }
 }
 
-private fun deletePlotRoute(database: Database): ContractRoute {
+private fun deletePlotRoute(plotService: PlotService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id meta {
         summary = "Delete a plot"
-        description = "Deletes a user-defined plot. Cannot delete system-defined plots."
+        description = "Deletes a user-defined plot."
     } bindContract DELETE to { plotId: UUID ->
         { request: Request ->
-            when (database.deletePlot(plotId, request.authUserId())) {
+            when (plotService.deletePlot(plotId, request.authUserId())) {
                 is PlotRepository.PlotDeleteResult.Success -> Response(NO_CONTENT)
                 is PlotRepository.PlotDeleteResult.NotFound -> Response(NOT_FOUND)
                 is PlotRepository.PlotDeleteResult.SystemDefined ->
@@ -142,10 +134,10 @@ private fun deletePlotRoute(database: Database): ContractRoute {
     }
 }
 
-private fun batchReorderPlotsRoute(database: Database): ContractRoute =
+private fun batchReorderPlotsRoute(plotService: PlotService): ContractRoute =
     "/plots" meta {
         summary = "Batch reorder plots"
-        description = "Updates sort_order for multiple user-defined plots atomically. Body: [{\"id\":\"uuid\",\"sort_order\":0},...]."
+        description = "Updates sort_order for multiple user-defined plots atomically."
     } bindContract PATCH to { request: Request ->
         val node = try { plotMapper.readTree(request.bodyString()) } catch (_: Exception) { null }
         if (node == null || !node.isArray) {
@@ -163,7 +155,7 @@ private fun batchReorderPlotsRoute(database: Database): ContractRoute =
                 Response(BAD_REQUEST).body("No valid {id, sort_order} entries found")
             } else {
                 try {
-                    when (database.batchReorderPlots(updates, request.authUserId())) {
+                    when (plotService.batchReorderPlots(updates, request.authUserId())) {
                         is PlotRepository.BatchReorderResult.Success -> Response(NO_CONTENT)
                         is PlotRepository.BatchReorderResult.SystemDefined ->
                             Response(FORBIDDEN).header("Content-Type", "application/json")
@@ -200,28 +192,6 @@ private fun parsePlotBody(request: Request): PlotBodyParsed {
         PlotBodyParsed(name, criteriaNode, showInGarden, visibility, wrappedPlotKey, plotKeyFormat, null)
     } catch (_: Exception) {
         PlotBodyParsed(null, null, null, null, null, null, "Invalid JSON")
-    }
-}
-
-private sealed class CriteriaSerializeResult {
-    data class Ok(val json: String) : CriteriaSerializeResult()
-    data class Error(val message: String) : CriteriaSerializeResult()
-}
-
-private fun validateAndSerializeCriteria(
-    node: JsonNode,
-    userId: UUID,
-    database: Database,
-): CriteriaSerializeResult {
-    return try {
-        database.withCriteriaValidation(node, userId)
-        CriteriaSerializeResult.Ok(node.toString())
-    } catch (e: CriteriaValidationException) {
-        CriteriaSerializeResult.Error(e.message ?: "Invalid criteria")
-    } catch (e: CriteriaCycleException) {
-        CriteriaSerializeResult.Error(e.message ?: "Circular plot_ref detected")
-    } catch (e: Exception) {
-        CriteriaSerializeResult.Error("Criteria validation failed: ${e.message}")
     }
 }
 

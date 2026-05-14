@@ -2,6 +2,54 @@
 
 ---
 
+## Session — 14 May 2026 — Server refactor phase 5: extract service classes
+
+### What was done
+
+Pure code reorganisation — no behaviour changes. Service classes extracted from all handler files.
+
+**Services created:**
+
+| Service | Package | Extracted from |
+|---|---|---|
+| `UploadService` | `service/upload/` | `UploadHandler.kt` |
+| `AuthService` | `service/auth/` | `AuthHandler.kt` |
+| `CapsuleService` | `service/capsule/` | `CapsuleHandler.kt` |
+| `PlotService` | `service/plot/` | `PlotHandler.kt` |
+| `FlowService` | `service/plot/` | `FlowHandler.kt` |
+| `SharedPlotService` | `service/plot/` | `SharedPlotHandler.kt` |
+| `KeyService` | `service/keys/` | `KeysHandler.kt` |
+| `SocialService` | `service/social/` | `FriendsHandler.kt` + `SharingKeyHandler.kt` |
+
+**What moved into services:**
+
+- `UploadService`: SHA-256 dedup, thumbnail orchestration, metadata extraction, `recordUpload`, dedup-checked `confirmLegacyUpload`, envelope validation in `confirmEncryptedUpload`, storage cleanup on migrate, share-upload friendship + dedup checks, compost-cleanup background thread.
+- `AuthService`: `issueToken`, `fakeSalt` (HMAC anti-enumeration), `resolveSession` (token decode + hash lookup), `getSaltForChallenge`, `login`, `setupExisting`, `register` (invite validation + user creation + wrapped key + friendship), `generateInvite`, full pairing flow (initiate/qr/complete/status), `logout`, `getMe`.
+- `CapsuleService`: recipient validation, message-size validation, upload-existence check in create; delegates seal/cancel to repository.
+- `PlotService`: `validateAndSerializeCriteria` (criteria validation + JSON serialisation), shared-plot key guards, plot CRUD.
+- `FlowService`: criteria validation on flow create/update, DEK decoding on staging approval, DEK guards on `addPlotItem`.
+- `SharedPlotService`: thin delegation with a `getPlotKey` guard (returns null for non-shared plots).
+- `KeyService`: `generateLinkCode`, `registerDevice` (validation + WrappedKeyRecord construction), device link state machine (initiate → register → wrap), passphrase CRUD.
+- `SocialService`: sharing key Base64 decode + upsert, friend-access guard for friend key lookup.
+
+**Handler pattern after extraction:** parse HTTP request → validate inputs → call service → format response. No SQL, no repository calls, no business decisions in handlers.
+
+**`buildApp()` updated:** constructs all 8 service instances from `Database` + `FileStore` and passes them to the route-builder functions. `Main.kt` unchanged — still passes `database` + `storage` to `buildApp()`.
+
+**Key design decisions:**
+- Services take `Database` (the delegation facade) as their primary dependency rather than individual repositories. This preserves backward compatibility with existing unit tests that mock `Database`. Phase 6 can refactor service constructors to accept repository interfaces if/when unit-testing services in isolation is needed.
+- Two-level http4k contract lambdas (`bindContract METHOD to { param: T, _ -> { req -> ... } }`) do not support non-local `return`. Affected route bodies extracted to named helper functions using regular `return`. This pattern is documented in SE_NOTES.md.
+
+**Build and test results:**
+- `./gradlew clean shadowJar` — BUILD SUCCESSFUL (warnings only, no errors)
+- `./gradlew clean test` — 326+ tests pass (0 failures after fixing 4 pre-existing issues)
+  - Two `UploadHandlerTest` tests needed `findUploadByIdForSharedMember` stub added (test only stubbed first lookup; fallback lookup was always called in original code too)
+  - Two `KeysHandlerTest` retire-device tests fixed by adding `getDeviceForUser` method to `KeyService` so the handler calls through the service rather than `listDevices().find{}`
+
+**Coverage:** Integration tests pending Docker restart (step 7).
+
+---
+
 ## Session — 14 May 2026 — Server refactor phases 1–4 + JaCoCo coverage baseline
 
 ### Server refactor (phases 1–4)

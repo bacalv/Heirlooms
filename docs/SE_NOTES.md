@@ -68,7 +68,21 @@ Three Gradle subprojects under `/Users/bac/IdeaProjects/Heirlooms/`:
   content type and the signature will verify correctly.
 - In http4k two-level contract lambdas (`bindContract METHOD to { param: T, _ -> { req -> ... } }`),
   `return` from the inner lambda does not compile as non-local. Extract the inner body
-  to a named function and use regular `return` — see `KeysHandler.kt`.
+  to a named function (e.g. `handleRegisterOnLink(...)`) and use regular `return`.
+  One-level lambdas (`bindContract METHOD to { req -> ... }`) support `return@to` correctly.
+  See `KeysHandler.kt`, `SharedPlotHandler.kt`. (v0.53.0)
+
+- **Service construction pattern (v0.53.0):** Service classes live in `service/<domain>/` and
+  take `Database` (the delegation facade) as their primary constructor parameter, not individual
+  repositories. This keeps existing `mockk<Database>()` unit tests intact. Route builder functions
+  (`fun plotRoutes(plotService: PlotService): List<ContractRoute>`) receive service instances rather
+  than `Database`. `buildApp()` constructs all service instances from `Database` + `FileStore`
+  and passes them through. `Main.kt` remains unchanged.
+
+- **MockK strict mode + two-step lookups:** `mockk<Database>()` is strict by default. If a handler
+  calls `findUploadByIdForUser(...)` and then `findUploadByIdForSharedMember(...)` (fallback), a
+  test that only stubs the first call will fail with `MockKException: no answer found`. Stub both
+  calls whenever a test exercises a 404 path for these endpoints. (v0.53.0)
 - **`catch (_: Exception)` does not catch `OutOfMemoryError` (v0.43.0):** `OutOfMemoryError` is a
   subclass of `Error`, not `Exception`. Any "best-effort, swallow all failures" block in Android code
   must use `catch (_: Throwable)`, not `catch (_: Exception)`, or an OOM will escape and crash the
