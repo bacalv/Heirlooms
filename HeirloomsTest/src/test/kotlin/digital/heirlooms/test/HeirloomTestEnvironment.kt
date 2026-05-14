@@ -1,12 +1,13 @@
 package digital.heirlooms.test
 
-import digital.heirlooms.server.AppConfig
 import digital.heirlooms.server.Database
-import digital.heirlooms.server.S3FileStore
-import digital.heirlooms.server.StorageBackend
+import digital.heirlooms.server.config.AppConfig
+import digital.heirlooms.server.config.StorageBackend
+import digital.heirlooms.server.filters.corsFilter
+import digital.heirlooms.server.filters.sessionAuthFilter
+import digital.heirlooms.server.repository.auth.PostgresAuthRepository
 import digital.heirlooms.server.routes.buildApp
-import digital.heirlooms.server.corsFilter
-import digital.heirlooms.server.sessionAuthFilter
+import digital.heirlooms.server.storage.S3FileStore
 import okhttp3.OkHttpClient
 import org.http4k.core.then
 import org.http4k.server.Http4kServer
@@ -205,7 +206,7 @@ class HeirloomsTestEnvironment : BeforeAllCallback, ExtensionContext.Store.Close
 
         // --- In-process server ---
         val server = corsFilter()
-            .then(sessionAuthFilter(database, config.apiKey)
+            .then(sessionAuthFilter(PostgresAuthRepository(database.dataSource), config.apiKey)
             .then(buildApp(storage, database, previewDurationSeconds = config.previewDurationSeconds)))
             .asServer(Netty(config.serverPort))
         server.start()
