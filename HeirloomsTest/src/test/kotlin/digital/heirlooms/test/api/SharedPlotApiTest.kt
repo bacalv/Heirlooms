@@ -6,6 +6,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.assertj.core.api.Assertions.assertThat
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.jupiter.api.Test
 import java.util.Base64
@@ -463,6 +464,89 @@ class SharedPlotApiTest {
             assertThat(approveResp.code).isEqualTo(400)
         } finally {
             client.newCall(Request.Builder().url("$base/api/flows/${flow.getString("id")}").delete().build()).execute()
+            deletePlot(plot.getString("id"))
+        }
+    }
+
+    @Test
+    fun `second staging approval with duplicate content hash is silently skipped`() {
+        val sharedHash = "a".repeat(64)
+        val tag = "dedup-hash-${System.nanoTime()}"
+        val plot = createSharedPlot("dedup-content-test")
+        val rng = SecureRandom()
+
+        fun validEnvelope(): String {
+            val algId = "aes256gcm-v1".toByteArray(Charsets.UTF_8)
+            val bytes = byteArrayOf(0x01, algId.size.toByte()) +
+                algId +
+                ByteArray(12).also { rng.nextBytes(it) } +
+                ByteArray(16).also { rng.nextBytes(it) }
+            return Base64.getEncoder().encodeToString(bytes)
+        }
+
+        fun confirmWithHash(storageKey: String): Int {
+            val body = JSONObject()
+                .put("storageKey", storageKey)
+                .put("mimeType", "image/jpeg")
+                .put("fileSize", 1000)
+                .put("storage_class", "encrypted")
+                .put("envelopeVersion", 1)
+                .put("wrappedDek", validEnvelope())
+                .put("dekFormat", "aes256gcm-v1")
+                .put("contentHash", sharedHash)
+                .put("tags", JSONArray().put(tag))
+            val resp = client.newCall(
+                Request.Builder().url("$base/api/content/uploads/confirm")
+                    .post(body.toString().toRequestBody("application/json".toMediaType())).build()
+            ).execute()
+            resp.body?.close()
+            return resp.code
+        }
+
+        try {
+            assertThat(confirmWithHash("sk-dedup-a-${System.nanoTime()}")).isEqualTo(201)
+            assertThat(confirmWithHash("sk-dedup-b-${System.nanoTime()}")).isEqualTo(201)
+
+            val flowBody = JSONObject()
+                .put("name", "dedup-flow-${System.nanoTime()}")
+                .put("criteria", JSONObject().put("type", "tag").put("tag", tag))
+                .put("targetPlotId", plot.getString("id"))
+                .put("requiresStaging", true)
+            val flowResp = client.newCall(
+                Request.Builder().url("$base/api/flows")
+                    .post(flowBody.toString().toRequestBody("application/json".toMediaType())).build()
+            ).execute()
+            val flow = JSONObject(flowResp.body!!.string())
+
+            val stagingResp = client.newCall(
+                Request.Builder().url("$base/api/plots/${plot.getString("id")}/staging").build()
+            ).execute()
+            val stagingItems = JSONArray(stagingResp.body!!.string())
+            assertThat(stagingItems.length()).isEqualTo(2)
+
+            fun approve(uploadId: String): Int {
+                val body = JSONObject()
+                    .put("wrappedItemDek", randomB64(80))
+                    .put("itemDekFormat", "plot-aes256gcm-v1")
+                val resp = client.newCall(
+                    Request.Builder().url("$base/api/plots/${plot.getString("id")}/staging/$uploadId/approve")
+                        .post(body.toString().toRequestBody("application/json".toMediaType())).build()
+                ).execute()
+                resp.body?.close()
+                return resp.code
+            }
+
+            assertThat(approve(stagingItems.getJSONObject(0).getString("id"))).isEqualTo(204)
+            assertThat(approve(stagingItems.getJSONObject(1).getString("id"))).isEqualTo(204)
+
+            val itemsResp = client.newCall(
+                Request.Builder().url("$base/api/plots/${plot.getString("id")}/items").build()
+            ).execute()
+            val items = JSONArray(itemsResp.body!!.string())
+            assertThat(items.length()).isEqualTo(1)
+
+            client.newCall(Request.Builder().url("$base/api/flows/${flow.getString("id")}").delete().build()).execute()
+        } finally {
             deletePlot(plot.getString("id"))
         }
     }

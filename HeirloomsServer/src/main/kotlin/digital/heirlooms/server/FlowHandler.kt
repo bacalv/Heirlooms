@@ -205,11 +205,12 @@ private fun handleApproveStagingItem(plotId: UUID, uploadId: UUID, request: Requ
     }
 
     return when (database.approveStagingItem(plotId, uploadId, sourceFlowId, request.authUserId(), dekBytes, dekFormat, thumbBytes, thumbFormat)) {
-        Database.ApproveResult.Success         -> Response(NO_CONTENT)
-        Database.ApproveResult.AlreadyApproved -> Response(CONFLICT).body("Item is already in the collection")
-        Database.ApproveResult.NotFound        -> Response(NOT_FOUND)
-        Database.ApproveResult.PlotNotOwned    -> Response(NOT_FOUND)
-        Database.ApproveResult.PlotClosed      -> Response(FORBIDDEN).body("Plot is closed")
+        Database.ApproveResult.Success          -> Response(NO_CONTENT)
+        Database.ApproveResult.DuplicateContent -> Response(NO_CONTENT)
+        Database.ApproveResult.AlreadyApproved  -> Response(CONFLICT).body("Item is already in the collection")
+        Database.ApproveResult.NotFound         -> Response(NOT_FOUND)
+        Database.ApproveResult.PlotNotOwned     -> Response(NOT_FOUND)
+        Database.ApproveResult.PlotClosed       -> Response(FORBIDDEN).body("Plot is closed")
     }
 }
 

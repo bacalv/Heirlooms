@@ -24,7 +24,7 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.50.4 (13 May 2026) — Client-side dedup for encrypted uploads (server + Android + web).
+- Current version: v0.51.5 (14 May 2026) — Shared plot dedup guard (server only).
   All four increments shipped: E1 predicate/criteria, E2 flows+staging, E3 shared plots E2EE,
   E4 Android (VaultCrypto plot key helpers, FlowsScreen, StagingScreen, plot key caching).
 - Active milestone: none — M10 complete. M11 TBD (strong sealing + social recovery).

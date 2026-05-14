@@ -2,6 +2,41 @@
 
 ---
 
+## Session — 14 May 2026 — Shared plot dedup guard (v0.51.5)
+
+Server-only change. Prevents duplicate items appearing in a shared plot when two
+members independently upload the same file.
+
+**Design decisions (from Q&A session):**
+- Check fires at approval time (the only real write point — staging is dynamic, not table-backed)
+- Shared plots only (personal plots are protected at upload time)
+- Check against approved items only (`plot_items`), not the pending staging queue
+- Response is 204 in all cases — client never knows it was a duplicate
+- Null-hash items (checkpoint-resumed uploads) pass through silently — documented gap
+
+**What was built:**
+- `Database.approveStagingItem`: after the existing `AlreadyApproved` guard, added a
+  content-hash dedup check for shared plots. Queries `plot_items` JOIN `uploads` for
+  a matching `content_hash`. If found, writes the `plot_staging_decisions` 'approved'
+  row (so the item leaves the staging queue) but skips the `plot_items` INSERT.
+  Returns new `ApproveResult.DuplicateContent`.
+- `FlowHandler.handleApproveStagingItem`: maps `DuplicateContent → NO_CONTENT` (204),
+  same as `Success`.
+- `SharedPlotApiTest`: new test confirms two encrypted uploads with the same
+  `contentHash` both return 204 on approval but only one `plot_items` row is created.
+  Uses the encrypted confirm path to create uploads with a controlled `contentHash`
+  (encrypted uploads bypass personal-garden dedup).
+
+**Null-hash closure path (future, not in scope):**
+At confirm time for checkpoint-resumed uploads, the Android client still has the
+source file in `cacheDir` and could compute and include `contentHash` in the confirm
+body. The server already stores it when present. Small Android-only change for a
+future increment.
+
+Brief: `docs/briefs/shared_plot_dedup.md`
+
+---
+
 ## Session — 14 May 2026 — Shared plots: deploy, test, harden (v0.51.3–v0.51.4)
 
 Deployed v0.51.x (server, web, Android) and ran first real multi-device test with Bret's

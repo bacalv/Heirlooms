@@ -2130,6 +2130,7 @@ class Database(private val dataSource: DataSource) {
         object AlreadyApproved : ApproveResult()
         object PlotNotOwned : ApproveResult()
         object PlotClosed : ApproveResult()
+        object DuplicateContent : ApproveResult()
     }
 
     fun approveStagingItem(
@@ -2156,6 +2157,31 @@ class Database(private val dataSource: DataSource) {
                 stmt.executeQuery().next()
             }
             if (exists) return ApproveResult.AlreadyApproved
+
+            if (plot.visibility == "shared") {
+                val isDuplicate = conn.prepareStatement(
+                    """SELECT 1 FROM plot_items pi
+                       JOIN uploads u ON pi.upload_id = u.id
+                       WHERE pi.plot_id = ?
+                         AND u.content_hash IS NOT NULL
+                         AND u.content_hash = (SELECT content_hash FROM uploads WHERE id = ? AND content_hash IS NOT NULL)
+                       LIMIT 1"""
+                ).use { stmt ->
+                    stmt.setObject(1, plotId); stmt.setObject(2, uploadId)
+                    stmt.executeQuery().next()
+                }
+                if (isDuplicate) {
+                    conn.prepareStatement(
+                        """INSERT INTO plot_staging_decisions (plot_id, upload_id, decision, source_flow_id)
+                           VALUES (?, ?, 'approved', ?)
+                           ON CONFLICT (plot_id, upload_id) DO UPDATE SET decision = 'approved', decided_at = NOW()"""
+                    ).use { stmt ->
+                        stmt.setObject(1, plotId); stmt.setObject(2, uploadId); stmt.setObject(3, sourceFlowId)
+                        stmt.executeUpdate()
+                    }
+                    return ApproveResult.DuplicateContent
+                }
+            }
 
             conn.prepareStatement(
                 """INSERT INTO plot_items (plot_id, upload_id, added_by, source_flow_id,
