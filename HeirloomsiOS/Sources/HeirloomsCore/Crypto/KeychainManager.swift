@@ -20,6 +20,7 @@ public final class KeychainManager {
     private static let sessionTokenAccount = "session_token"
     private static let plotKeyAccount = "plot_key"
     private static let plotIdAccount = "plot_id"
+    private static let userIdAccount = "user_id"
     private static let service = "digital.heirlooms.ios"
 
     // MARK: - Sharing keypair
@@ -174,6 +175,29 @@ public final class KeychainManager {
     /// Deletes the plot key (e.g. on "Reset shared plot").
     public static func deletePlotKey() {
         deleteGenericPassword(account: plotKeyAccount)
+    }
+
+    // MARK: - User ID
+
+    /// Stores the server-assigned user UUID string.
+    public static func saveUserId(_ userId: String) throws {
+        let data = Data(userId.utf8)
+        try saveGenericPassword(data: data, account: userIdAccount)
+    }
+
+    /// Retrieves the stored user UUID string.
+    /// - Throws: `HeirloomsError.keychainNotFound` if not yet stored.
+    public static func getUserId() throws -> String {
+        let data = try getGenericPassword(account: userIdAccount)
+        guard let id = String(data: data, encoding: .utf8) else {
+            throw HeirloomsError.keychainRead(errSecDecode)
+        }
+        return id
+    }
+
+    /// Deletes the stored user ID.
+    public static func deleteUserId() {
+        deleteGenericPassword(account: userIdAccount)
     }
 
     // MARK: - Plot ID

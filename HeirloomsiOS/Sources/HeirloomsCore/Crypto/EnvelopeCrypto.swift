@@ -23,6 +23,8 @@ public enum EnvelopeCrypto {
     public static let algSymmetric      = "aes256gcm-v1"
     /// DEK wrap under master key.
     public static let algMasterSymmetric = "master-aes256gcm-v1"
+    /// DEK wrap under shared plot key.
+    public static let algPlotSymmetric  = "plot-aes256gcm-v1"
     /// Master key / DEK wrap to device pubkey via P-256 ECDH.
     public static let algAsymmetric     = "p256-ecdh-hkdf-aes256gcm-v1"
 
@@ -129,7 +131,7 @@ public enum EnvelopeCrypto {
         if let expected = expectedAlgorithmID, algID != expected {
             throw HeirloomsError.unknownAlgorithmID(algID)
         }
-        guard algID == algSymmetric || algID == algMasterSymmetric else {
+        guard algID == algSymmetric || algID == algMasterSymmetric || algID == algPlotSymmetric else {
             throw HeirloomsError.unknownAlgorithmID(algID)
         }
 

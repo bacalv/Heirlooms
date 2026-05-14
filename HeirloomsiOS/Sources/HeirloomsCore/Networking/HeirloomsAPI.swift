@@ -76,14 +76,16 @@ public final class HeirloomsAPI {
     /// Calls `POST /api/content/uploads/confirm`.
     ///
     /// - Parameters:
-    ///   - uploadId: Ignored — the server uses `storageKey` as the primary key here.
     ///   - storageKey: From the `UploadTicket`.
     ///   - thumbnailStorageKey: From the `UploadTicket`.
     ///   - mimeType: Original MIME type.
     ///   - fileSize: Total byte count of the *encrypted* content blob.
-    ///   - wrappedDEK: Base64-encoded symmetric envelope (master-aes256gcm-v1).
-    ///   - wrappedThumbDEK: Base64-encoded symmetric envelope for thumbnail DEK (may be nil).
-    ///   - contentType: Alias for `mimeType` for callers using the interface name from the task spec.
+    ///   - wrappedDEK: Binary symmetric envelope wrapping the content DEK.
+    ///   - wrappedThumbDEK: Binary symmetric envelope wrapping the thumbnail DEK (may be nil).
+    ///   - dekFormat: Algorithm ID used to wrap the DEK. Defaults to `algMasterSymmetric`.
+    ///   - thumbDekFormat: Algorithm ID used to wrap the thumbnail DEK. Defaults to `dekFormat`.
+    ///   - contentHash: Optional SHA-256 hex digest of the plaintext.
+    ///   - takenAt: Optional capture timestamp.
     public func confirmUpload(
         storageKey: String,
         thumbnailStorageKey: String?,
@@ -91,9 +93,12 @@ public final class HeirloomsAPI {
         fileSize: Int64,
         wrappedDEK: Data,
         wrappedThumbDEK: Data?,
+        dekFormat: String = EnvelopeCrypto.algMasterSymmetric,
+        thumbDekFormat: String? = nil,
         contentHash: String? = nil,
         takenAt: Date? = nil
     ) async throws {
+        let resolvedThumbDekFormat = thumbDekFormat ?? dekFormat
         var body: [String: Any] = [
             "storageKey": storageKey,
             "mimeType": mimeType,
@@ -101,14 +106,14 @@ public final class HeirloomsAPI {
             "storage_class": "encrypted",
             "envelopeVersion": 1,
             "wrappedDek": wrappedDEK.base64EncodedString(),
-            "dekFormat": EnvelopeCrypto.algMasterSymmetric,
+            "dekFormat": dekFormat,
         ]
         if let thumbnailStorageKey {
             body["thumbnailStorageKey"] = thumbnailStorageKey
         }
         if let wrappedThumbDEK {
             body["wrappedThumbnailDek"] = wrappedThumbDEK.base64EncodedString()
-            body["thumbnailDekFormat"] = EnvelopeCrypto.algMasterSymmetric
+            body["thumbnailDekFormat"] = resolvedThumbDekFormat
         }
         if let contentHash {
             body["contentHash"] = contentHash

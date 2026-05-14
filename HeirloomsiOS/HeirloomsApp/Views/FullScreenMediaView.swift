@@ -91,17 +91,33 @@ struct FullScreenMediaView: View {
         do {
             let encryptedContent = try await api.fetchItem(uploadId: item.id)
 
-            // Unwrap DEK from the symmetric envelope.
+            // Unwrap content DEK using the declared format.
             guard let wrappedDekB64 = item.wrappedDek,
                   let wrappedDekData = Data(base64Encoded: wrappedDekB64) else {
                 throw HeirloomsError.decodingError("Missing or invalid wrappedDek on item")
             }
-            let dekBytes = try EnvelopeCrypto.unwrapSymmetric(
-                envelope: wrappedDekData,
-                unwrappingKey: plotKey,
-                expectedAlgorithmID: EnvelopeCrypto.algMasterSymmetric
-            )
-            let dek = SymmetricKey(data: dekBytes)
+            let dekFormat = item.dekFormat ?? EnvelopeCrypto.algMasterSymmetric
+            let dek: SymmetricKey
+            switch dekFormat {
+            case "plot-aes256gcm-v1", EnvelopeCrypto.algSymmetric, EnvelopeCrypto.algMasterSymmetric:
+                let dekBytes = try EnvelopeCrypto.unwrapSymmetric(
+                    envelope: wrappedDekData,
+                    unwrappingKey: plotKey
+                )
+                dek = SymmetricKey(data: dekBytes)
+            case EnvelopeCrypto.algAsymmetric:
+                let privateKey = try KeychainManager.getSharingPrivateKey()
+                dek = try EnvelopeCrypto.unwrapDEK(
+                    wrappedKey: wrappedDekData,
+                    recipientPrivateKey: privateKey
+                )
+            default:
+                let dekBytes = try EnvelopeCrypto.unwrapSymmetric(
+                    envelope: wrappedDekData,
+                    unwrappingKey: plotKey
+                )
+                dek = SymmetricKey(data: dekBytes)
+            }
 
             // Decrypt content.
             let plaintext = try EnvelopeCrypto.decryptContent(envelope: encryptedContent, dek: dek)

@@ -1,6 +1,29 @@
 import SwiftUI
 import PhotosUI
+import AVFoundation
+import UniformTypeIdentifiers
 import HeirloomsCore
+
+// MARK: - MovieTransferable
+
+/// Transferable wrapper that surfaces the file URL of a video picked from the
+/// Photos library, enabling AVAssetExportSession to stream it from disk without
+/// loading the full video bytes into memory.
+struct MovieTransferable: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(contentType: .movie) { movie in
+            SentTransferredFile(movie.url)
+        } importing: { received in
+            let copy = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+                .appendingPathExtension("mov")
+            try FileManager.default.copyItem(at: received.file, to: copy)
+            return MovieTransferable(url: copy)
+        }
+    }
+}
 
 /// Main screen — two-tab grid of shared plot items.
 ///
@@ -22,8 +45,7 @@ struct HomeView: View {
 
     // The current user's ID (needed to split "Shared with you" vs "You shared").
     private var myUserId: String? {
-        // In the full implementation, store userId in Keychain at registration.
-        UserDefaults.standard.string(forKey: "heirlooms.myUserId")
+        try? KeychainManager.getUserId()
     }
 
     var sharedWithYou: [PlotItem] {
@@ -153,57 +175,163 @@ struct HomeView: View {
     }
 
     private func uploadSingleItem(_ pickerItem: PhotosPickerItem, plotKey: SymmetricKey) async {
-        // Load the raw data from the picker item.
-        // In production: load as a file URL and stream to avoid RAM spikes.
-        guard let data = try? await pickerItem.loadTransferable(type: Data.self) else {
-            print("[HomeView] Failed to load picker item data")
-            return
-        }
-
         let contentType = pickerItem.supportedContentTypes.first?.preferredMIMEType ?? "application/octet-stream"
+        let isVideo = contentType.hasPrefix("video/")
 
         do {
-            // Generate DEK.
-            let dek = EnvelopeCrypto.generateDEK()
+            // --- Acquire plaintext bytes (stream video from disk; load images in memory) ---
+            let plaintextURL: URL
+            if isVideo {
+                // Load video as a file URL using AVAsset export to avoid loading full bytes into RAM.
+                guard let avAsset = try? await loadVideoAsset(from: pickerItem) else {
+                    print("[HomeView] Failed to load video asset")
+                    return
+                }
+                let exportURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString)
+                    .appendingPathExtension("mp4")
+                guard let exportedURL = try? await exportVideo(asset: avAsset, to: exportURL) else {
+                    print("[HomeView] Video export failed")
+                    return
+                }
+                plaintextURL = exportedURL
+            } else {
+                guard let data = try? await pickerItem.loadTransferable(type: Data.self) else {
+                    print("[HomeView] Failed to load image data")
+                    return
+                }
+                let tempURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString)
+                try data.write(to: tempURL)
+                plaintextURL = tempURL
+            }
+            defer { try? FileManager.default.removeItem(at: plaintextURL) }
 
-            // Encrypt content.
-            let encryptedContent = try EnvelopeCrypto.encryptContent(plaintext: data, dek: dek)
+            let plaintextData = try Data(contentsOf: plaintextURL)
 
-            // Wrap DEK under plot key (symmetric wrap).
-            let dekBytes = dek.withUnsafeBytes { Data($0) }
-            let wrappedDek = try EnvelopeCrypto.wrapSymmetric(
-                plaintext: dekBytes,
+            // --- Generate DEKs ---
+            let contentDek = EnvelopeCrypto.generateDEK()
+            let thumbDek   = EnvelopeCrypto.generateDEK()
+
+            // --- Encrypt content ---
+            let encryptedContent = try EnvelopeCrypto.encryptContent(plaintext: plaintextData, dek: contentDek)
+
+            // --- Generate & encrypt thumbnail (images only) ---
+            var encryptedThumb: Data?
+            if !isVideo, let uiImage = UIImage(data: plaintextData),
+               let resized = resizeThumbnail(uiImage, maxSide: 320),
+               let jpegData = resized.jpegData(compressionQuality: 0.7) {
+                encryptedThumb = try EnvelopeCrypto.encryptContent(plaintext: jpegData, dek: thumbDek)
+            }
+
+            // --- Wrap DEKs under plot key ---
+            let plotAlgID = "plot-aes256gcm-v1"
+            let contentDekBytes = contentDek.withUnsafeBytes { Data($0) }
+            let wrappedContentDek = try EnvelopeCrypto.wrapSymmetric(
+                plaintext: contentDekBytes,
                 wrappingKey: plotKey,
-                algorithmID: EnvelopeCrypto.algMasterSymmetric
+                algorithmID: plotAlgID
+            )
+            let thumbDekBytes = thumbDek.withUnsafeBytes { Data($0) }
+            let wrappedThumbDek = try EnvelopeCrypto.wrapSymmetric(
+                plaintext: thumbDekBytes,
+                wrappingKey: plotKey,
+                algorithmID: plotAlgID
             )
 
-            // Initiate upload.
+            // --- Initiate upload ---
             let ticket = try await api.initiateUpload(
                 filename: "upload",
                 contentType: contentType,
                 plotId: plotId
             )
 
-            // Write encrypted content to a temp file for background upload.
-            let tempURL = FileManager.default.temporaryDirectory
+            // --- Write encrypted content to temp file and PUT to presigned URL ---
+            let encryptedContentURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString)
-            try encryptedContent.write(to: tempURL)
+            try encryptedContent.write(to: encryptedContentURL)
+            defer { try? FileManager.default.removeItem(at: encryptedContentURL) }
 
-            // Enqueue background upload.
-            BackgroundUploadManager.shared.enqueueUpload(localURL: tempURL, ticket: ticket)
+            try await putToPresignedURL(localURL: encryptedContentURL, uploadURL: ticket.uploadUrl)
 
-            // Confirm upload (this can also be done after the background task completes
-            // via a completion notification in the full implementation).
+            // --- PUT thumbnail if available ---
+            if let thumb = encryptedThumb,
+               let thumbUploadURL = ticket.thumbnailUploadUrl {
+                let encryptedThumbURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString)
+                try thumb.write(to: encryptedThumbURL)
+                defer { try? FileManager.default.removeItem(at: encryptedThumbURL) }
+                try await putToPresignedURL(localURL: encryptedThumbURL, uploadURL: thumbUploadURL)
+            }
+
+            // --- Confirm upload ---
             try await api.confirmUpload(
                 storageKey: ticket.storageKey,
-                thumbnailStorageKey: ticket.thumbnailStorageKey,
+                thumbnailStorageKey: encryptedThumb != nil ? ticket.thumbnailStorageKey : nil,
                 mimeType: contentType,
                 fileSize: Int64(encryptedContent.count),
-                wrappedDEK: wrappedDek,
-                wrappedThumbDEK: nil
+                wrappedDEK: wrappedContentDek,
+                wrappedThumbDEK: encryptedThumb != nil ? wrappedThumbDek : nil,
+                dekFormat: plotAlgID
             )
         } catch {
             print("[HomeView] Upload failed: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Upload helpers
+
+    /// Streams encrypted bytes from a local file directly to a presigned GCS URL via PUT.
+    private func putToPresignedURL(localURL: URL, uploadURL: String) async throws {
+        guard let url = URL(string: uploadURL) else {
+            throw HeirloomsError.networkError(0, "Invalid presigned URL")
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        let (_, response) = try await URLSession.shared.upload(for: request, fromFile: localURL)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            throw HeirloomsError.networkError(code, "PUT to presigned URL failed")
+        }
+    }
+
+    /// Loads a video asset from a PhotosPickerItem using AVFoundation.
+    private func loadVideoAsset(from pickerItem: PhotosPickerItem) async throws -> AVAsset? {
+        guard let movieTransferable = try? await pickerItem.loadTransferable(type: MovieTransferable.self) else {
+            return nil
+        }
+        return AVURLAsset(url: movieTransferable.url)
+    }
+
+    /// Exports a video asset to a temp file at `destination` in MP4 format.
+    private func exportVideo(asset: AVAsset, to destination: URL) async throws -> URL? {
+        guard let exportSession = AVAssetExportSession(
+            asset: asset,
+            presetName: AVAssetExportPresetPassthrough
+        ) else { return nil }
+
+        exportSession.outputURL = destination
+        exportSession.outputFileType = .mp4
+        exportSession.shouldOptimizeForNetworkUse = true
+
+        await exportSession.export()
+
+        guard exportSession.status == .completed else {
+            print("[HomeView] Export failed: \(exportSession.error?.localizedDescription ?? "unknown")")
+            return nil
+        }
+        return destination
+    }
+
+    /// Scales a UIImage so the longer side does not exceed `maxSide`.
+    private func resizeThumbnail(_ image: UIImage, maxSide: CGFloat) -> UIImage? {
+        let size = image.size
+        let scale = min(maxSide / size.width, maxSide / size.height, 1.0)
+        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: newSize))
         }
     }
 
@@ -247,7 +375,8 @@ struct ThumbnailCell: View {
     private func loadThumbnail() async {
         guard let thumbStorageKey = item.thumbnailStorageKey,
               !thumbStorageKey.isEmpty,
-              let wrappedDek = item.wrappedThumbnailDek,
+              let wrappedDekB64 = item.wrappedThumbnailDek,
+              let wrappedDekData = Data(base64Encoded: wrappedDekB64),
               let plotKeyData = try? KeychainManager.getPlotKey(),
               plotKeyData.count == 32
         else { return }
@@ -257,13 +386,37 @@ struct ThumbnailCell: View {
 
         do {
             let encryptedThumb = try await api.fetchThumbnail(uploadId: item.id)
-            let wrappedDekData = Data(base64Encoded: wrappedDek) ?? Data()
-            let dekBytes = try EnvelopeCrypto.unwrapSymmetric(
-                envelope: wrappedDekData,
-                unwrappingKey: plotKey,
-                expectedAlgorithmID: EnvelopeCrypto.algMasterSymmetric
-            )
-            let thumbDek = SymmetricKey(data: dekBytes)
+
+            // Unwrap the thumbnail DEK using the format declared on the item.
+            let dekFormat = item.thumbnailDekFormat ?? EnvelopeCrypto.algMasterSymmetric
+            let thumbDek: SymmetricKey
+
+            switch dekFormat {
+            case "plot-aes256gcm-v1", EnvelopeCrypto.algSymmetric, EnvelopeCrypto.algMasterSymmetric:
+                // Symmetric wrap: DEK is wrapped under the plot key.
+                let dekBytes = try EnvelopeCrypto.unwrapSymmetric(
+                    envelope: wrappedDekData,
+                    unwrappingKey: plotKey
+                )
+                thumbDek = SymmetricKey(data: dekBytes)
+
+            case EnvelopeCrypto.algAsymmetric:
+                // Asymmetric wrap: DEK is wrapped to our sharing keypair.
+                let privateKey = try KeychainManager.getSharingPrivateKey()
+                thumbDek = try EnvelopeCrypto.unwrapDEK(
+                    wrappedKey: wrappedDekData,
+                    recipientPrivateKey: privateKey
+                )
+
+            default:
+                // Unknown format — try symmetric as a fallback.
+                let dekBytes = try EnvelopeCrypto.unwrapSymmetric(
+                    envelope: wrappedDekData,
+                    unwrappingKey: plotKey
+                )
+                thumbDek = SymmetricKey(data: dekBytes)
+            }
+
             let plaintextThumb = try EnvelopeCrypto.decryptContent(envelope: encryptedThumb, dek: thumbDek)
             thumbnail = UIImage(data: plaintextThumb)
         } catch {
