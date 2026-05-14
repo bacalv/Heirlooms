@@ -1,6 +1,7 @@
 package digital.heirlooms.server
 
 import digital.heirlooms.server.domain.plot.PlotRecord
+import digital.heirlooms.server.repository.plot.PlotRepository
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
@@ -114,10 +115,10 @@ private fun handleUpdatePlot(plotId: UUID, request: Request, database: Database)
     return when (val result = database.updatePlot(
         plotId, name, sortOrder, criteriaJson, showInGarden, request.authUserId()
     )) {
-        is Database.PlotUpdateResult.Success ->
+        is PlotRepository.PlotUpdateResult.Success ->
             Response(OK).header("Content-Type", "application/json").body(result.plot.toJson())
-        is Database.PlotUpdateResult.NotFound -> Response(NOT_FOUND)
-        is Database.PlotUpdateResult.SystemDefined ->
+        is PlotRepository.PlotUpdateResult.NotFound -> Response(NOT_FOUND)
+        is PlotRepository.PlotUpdateResult.SystemDefined ->
             Response(FORBIDDEN).header("Content-Type", "application/json")
                 .body("""{"error":"Cannot modify a system-defined plot"}""")
     }
@@ -131,9 +132,9 @@ private fun deletePlotRoute(database: Database): ContractRoute {
     } bindContract DELETE to { plotId: UUID ->
         { request: Request ->
             when (database.deletePlot(plotId, request.authUserId())) {
-                is Database.PlotDeleteResult.Success -> Response(NO_CONTENT)
-                is Database.PlotDeleteResult.NotFound -> Response(NOT_FOUND)
-                is Database.PlotDeleteResult.SystemDefined ->
+                is PlotRepository.PlotDeleteResult.Success -> Response(NO_CONTENT)
+                is PlotRepository.PlotDeleteResult.NotFound -> Response(NOT_FOUND)
+                is PlotRepository.PlotDeleteResult.SystemDefined ->
                     Response(FORBIDDEN).header("Content-Type", "application/json")
                         .body("""{"error":"Cannot delete a system-defined plot"}""")
             }
@@ -163,11 +164,11 @@ private fun batchReorderPlotsRoute(database: Database): ContractRoute =
             } else {
                 try {
                     when (database.batchReorderPlots(updates, request.authUserId())) {
-                        is Database.BatchReorderResult.Success -> Response(NO_CONTENT)
-                        is Database.BatchReorderResult.SystemDefined ->
+                        is PlotRepository.BatchReorderResult.Success -> Response(NO_CONTENT)
+                        is PlotRepository.BatchReorderResult.SystemDefined ->
                             Response(FORBIDDEN).header("Content-Type", "application/json")
                                 .body("""{"error":"Cannot reorder system-defined plots"}""")
-                        is Database.BatchReorderResult.NotFound -> Response(NOT_FOUND)
+                        is PlotRepository.BatchReorderResult.NotFound -> Response(NOT_FOUND)
                     }
                 } catch (e: Exception) {
                     Response(INTERNAL_SERVER_ERROR).body("Failed to reorder plots: ${e.message}")

@@ -4,6 +4,7 @@ import digital.heirlooms.server.domain.capsule.CapsuleDetail
 import digital.heirlooms.server.domain.capsule.CapsuleShape
 import digital.heirlooms.server.domain.capsule.CapsuleState
 import digital.heirlooms.server.domain.capsule.CapsuleSummary
+import digital.heirlooms.server.repository.capsule.CapsuleRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.http4k.contract.ContractRoute
 import org.http4k.contract.div
@@ -259,39 +260,39 @@ private fun patchCapsuleHandler(database: Database, capsuleId: UUID, request: Re
     }
 
     return when (val result = database.updateCapsule(capsuleId, request.authUserId(), unlockAt, recipients, uploadIds, message)) {
-        is Database.UpdateResult.Success ->
+        is CapsuleRepository.UpdateResult.Success ->
             Response(OK).header("Content-Type", "application/json").body(result.detail.toDetailJson())
-        Database.UpdateResult.NotFound -> Response(NOT_FOUND)
-        Database.UpdateResult.TerminalState ->
+        CapsuleRepository.UpdateResult.NotFound -> Response(NOT_FOUND)
+        CapsuleRepository.UpdateResult.TerminalState ->
             Response(CONFLICT).body("""{"error":"capsule is in a terminal state and cannot be modified"}""")
-        Database.UpdateResult.SealedContents ->
+        CapsuleRepository.UpdateResult.SealedContents ->
             Response(CONFLICT).body("""{"error":"cannot edit upload contents of a sealed capsule"}""")
-        Database.UpdateResult.UnknownUpload ->
+        CapsuleRepository.UpdateResult.UnknownUpload ->
             Response(BAD_REQUEST).body("""{"error":"one or more upload_ids do not exist"}""")
-        is Database.UpdateResult.InvalidRecipients ->
+        is CapsuleRepository.UpdateResult.InvalidRecipients ->
             Response(UNPROCESSABLE_ENTITY).body("""{"error":"${result.reason}"}""")
-        is Database.UpdateResult.MessageTooLong ->
+        is CapsuleRepository.UpdateResult.MessageTooLong ->
             Response(UNPROCESSABLE_ENTITY).body("""{"error":"message exceeds maximum size of ${result.limit} bytes"}""")
     }
 }
 
 private fun sealCapsuleHandler(database: Database, capsuleId: UUID, userId: java.util.UUID): Response =
     when (val result = database.sealCapsule(capsuleId, userId)) {
-        is Database.SealResult.Success ->
+        is CapsuleRepository.SealResult.Success ->
             Response(OK).header("Content-Type", "application/json").body(result.detail.toDetailJson())
-        Database.SealResult.NotFound -> Response(NOT_FOUND)
-        Database.SealResult.WrongState ->
+        CapsuleRepository.SealResult.NotFound -> Response(NOT_FOUND)
+        CapsuleRepository.SealResult.WrongState ->
             Response(CONFLICT).body("""{"error":"capsule cannot be sealed in its current state"}""")
-        Database.SealResult.Empty ->
+        CapsuleRepository.SealResult.Empty ->
             Response(UNPROCESSABLE_ENTITY).body("""{"error":"Cannot seal an empty capsule"}""")
     }
 
 private fun cancelCapsuleHandler(database: Database, capsuleId: UUID, userId: java.util.UUID): Response =
     when (val result = database.cancelCapsule(capsuleId, userId)) {
-        is Database.CancelResult.Success ->
+        is CapsuleRepository.CancelResult.Success ->
             Response(OK).header("Content-Type", "application/json").body(result.detail.toDetailJson())
-        Database.CancelResult.NotFound -> Response(NOT_FOUND)
-        Database.CancelResult.WrongState ->
+        CapsuleRepository.CancelResult.NotFound -> Response(NOT_FOUND)
+        CapsuleRepository.CancelResult.WrongState ->
             Response(CONFLICT).body("""{"error":"capsule is already in a terminal state"}""")
     }
 

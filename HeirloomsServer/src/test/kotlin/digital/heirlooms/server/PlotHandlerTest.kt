@@ -1,6 +1,7 @@
 package digital.heirlooms.server
 
 import digital.heirlooms.server.domain.plot.PlotRecord
+import digital.heirlooms.server.repository.plot.PlotRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.mockk.every
 import io.mockk.justRun
@@ -143,7 +144,7 @@ class PlotHandlerTest {
     @Test
     fun `PUT plots updates and returns 200`() {
         every { mockDatabase.updatePlot(plotId, any(), any(), any(), any(), any()) } returns
-            Database.PlotUpdateResult.Success(plot(name = "Winter"))
+            PlotRepository.PlotUpdateResult.Success(plot(name = "Winter"))
 
         val response = app(
             Request(PUT, "/api/plots/$plotId").body("""{"name":"Winter"}""")
@@ -157,7 +158,7 @@ class PlotHandlerTest {
     @Test
     fun `PUT system-defined plot returns 403`() {
         every { mockDatabase.updatePlot(systemPlotId, any(), any(), any(), any(), any()) } returns
-            Database.PlotUpdateResult.SystemDefined
+            PlotRepository.PlotUpdateResult.SystemDefined
 
         val response = app(
             Request(PUT, "/api/plots/$systemPlotId").body("""{"name":"New name"}""")
@@ -169,7 +170,7 @@ class PlotHandlerTest {
     @Test
     fun `PUT unknown plot returns 404`() {
         every { mockDatabase.updatePlot(plotId, any(), any(), any(), any(), any()) } returns
-            Database.PlotUpdateResult.NotFound
+            PlotRepository.PlotUpdateResult.NotFound
 
         val response = app(Request(PUT, "/api/plots/$plotId").body("""{"name":"X"}"""))
         assertEquals(NOT_FOUND, response.status)
@@ -185,7 +186,7 @@ class PlotHandlerTest {
 
     @Test
     fun `DELETE plot returns 204`() {
-        every { mockDatabase.deletePlot(plotId) } returns Database.PlotDeleteResult.Success
+        every { mockDatabase.deletePlot(plotId) } returns PlotRepository.PlotDeleteResult.Success
 
         val response = app(Request(DELETE, "/api/plots/$plotId"))
         assertEquals(NO_CONTENT, response.status)
@@ -193,7 +194,7 @@ class PlotHandlerTest {
 
     @Test
     fun `DELETE system-defined plot returns 403`() {
-        every { mockDatabase.deletePlot(systemPlotId) } returns Database.PlotDeleteResult.SystemDefined
+        every { mockDatabase.deletePlot(systemPlotId) } returns PlotRepository.PlotDeleteResult.SystemDefined
 
         val response = app(Request(DELETE, "/api/plots/$systemPlotId"))
         assertEquals(FORBIDDEN, response.status)
@@ -201,7 +202,7 @@ class PlotHandlerTest {
 
     @Test
     fun `DELETE unknown plot returns 404`() {
-        every { mockDatabase.deletePlot(plotId) } returns Database.PlotDeleteResult.NotFound
+        every { mockDatabase.deletePlot(plotId) } returns PlotRepository.PlotDeleteResult.NotFound
 
         val response = app(Request(DELETE, "/api/plots/$plotId"))
         assertEquals(NOT_FOUND, response.status)

@@ -3,6 +3,7 @@ package digital.heirlooms.server
 import digital.heirlooms.server.domain.upload.UploadPage
 import digital.heirlooms.server.domain.upload.UploadRecord
 import digital.heirlooms.server.domain.upload.UploadSort
+import digital.heirlooms.server.repository.upload.UploadRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
@@ -535,14 +536,14 @@ private fun compostUploadContractRoute(database: Database): ContractRoute {
         { request: Request ->
             try {
                 when (val result = database.compostUpload(uploadId, request.authUserId())) {
-                    is Database.CompostResult.Success ->
+                    is UploadRepository.CompostResult.Success ->
                         Response(OK).header("Content-Type", "application/json").body(result.record.toJson())
-                    is Database.CompostResult.NotFound ->
+                    is UploadRepository.CompostResult.NotFound ->
                         Response(NOT_FOUND)
-                    is Database.CompostResult.AlreadyComposted ->
+                    is UploadRepository.CompostResult.AlreadyComposted ->
                         Response(CONFLICT).header("Content-Type", "application/json")
                             .body("""{"error":"Upload is already composted"}""")
-                    is Database.CompostResult.PreconditionFailed ->
+                    is UploadRepository.CompostResult.PreconditionFailed ->
                         Response(UNPROCESSABLE_ENTITY).header("Content-Type", "application/json")
                             .body("""{"error":"Cannot compost: upload has tags or is in active capsules"}""")
                 }
@@ -562,11 +563,11 @@ private fun restoreUploadContractRoute(database: Database): ContractRoute {
         { request: Request ->
             try {
                 when (val result = database.restoreUpload(uploadId, request.authUserId())) {
-                    is Database.RestoreResult.Success ->
+                    is UploadRepository.RestoreResult.Success ->
                         Response(OK).header("Content-Type", "application/json").body(result.record.toJson())
-                    is Database.RestoreResult.NotFound ->
+                    is UploadRepository.RestoreResult.NotFound ->
                         Response(NOT_FOUND)
-                    is Database.RestoreResult.NotComposted ->
+                    is UploadRepository.RestoreResult.NotComposted ->
                         Response(CONFLICT).header("Content-Type", "application/json")
                             .body("""{"error":"Upload is not composted"}""")
                 }

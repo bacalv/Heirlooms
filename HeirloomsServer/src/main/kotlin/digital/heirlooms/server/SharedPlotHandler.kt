@@ -1,5 +1,6 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.repository.plot.PlotMemberRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import org.http4k.contract.ContractRoute
@@ -119,10 +120,10 @@ private fun handleAddMember(plotId: UUID, request: Request, database: Database):
         catch (_: Exception) { return Response(BAD_REQUEST).body("wrappedPlotKey is not valid base64") }
 
     return when (database.addMember(plotId, newUserId, keyBytes, plotKeyFormat, request.authUserId())) {
-        Database.AddMemberResult.Success       -> Response(CREATED)
-        Database.AddMemberResult.NotMember     -> Response(NOT_FOUND)
-        Database.AddMemberResult.NotFriends    -> Response(BAD_REQUEST).body("You can only invite friends")
-        Database.AddMemberResult.AlreadyMember -> Response(CONFLICT).body("User is already a member")
+        PlotMemberRepository.AddMemberResult.Success       -> Response(CREATED)
+        PlotMemberRepository.AddMemberResult.NotMember     -> Response(NOT_FOUND)
+        PlotMemberRepository.AddMemberResult.NotFriends    -> Response(BAD_REQUEST).body("You can only invite friends")
+        PlotMemberRepository.AddMemberResult.AlreadyMember -> Response(CONFLICT).body("User is already a member")
     }
 }
 
@@ -176,16 +177,16 @@ private fun handleJoin(request: Request, database: Database): Response {
         ?: return Response(BAD_REQUEST).body("recipientSharingPubkey is required")
 
     return when (val result = database.redeemInvite(token, request.authUserId(), recipientPubkey)) {
-        is Database.RedeemInviteResult.Pending -> {
+        is PlotMemberRepository.RedeemInviteResult.Pending -> {
             val resp = JsonNodeFactory.instance.objectNode()
             resp.put("status", "pending")
             resp.put("inviteId", result.inviteId.toString())
             resp.put("inviterDisplayName", result.inviterDisplayName)
             Response(OK).header("Content-Type", "application/json").body(resp.toString())
         }
-        Database.RedeemInviteResult.AlreadyMember ->
+        PlotMemberRepository.RedeemInviteResult.AlreadyMember ->
             Response(CONFLICT).body("You are already a member of this plot")
-        Database.RedeemInviteResult.Invalid ->
+        PlotMemberRepository.RedeemInviteResult.Invalid ->
             Response(NOT_FOUND).body("Invite not found, expired, or already used")
     }
 }
@@ -233,10 +234,10 @@ private fun handleConfirmInvite(plotId: UUID, inviteId: UUID, request: Request, 
 
 private fun leavePlotHandler(plotId: UUID, request: Request, database: Database): Response =
     when (database.leavePlot(plotId, request.authUserId())) {
-        Database.LeavePlotResult.Success           -> Response(NO_CONTENT)
-        Database.LeavePlotResult.MustTransferFirst ->
+        PlotMemberRepository.LeavePlotResult.Success           -> Response(NO_CONTENT)
+        PlotMemberRepository.LeavePlotResult.MustTransferFirst ->
             Response(FORBIDDEN).body("Owner must transfer ownership before leaving")
-        Database.LeavePlotResult.NotFound          -> Response(NOT_FOUND)
+        PlotMemberRepository.LeavePlotResult.NotFound          -> Response(NOT_FOUND)
     }
 
 private fun leavePlotRoute(database: Database): ContractRoute {
@@ -276,9 +277,9 @@ private fun handleAcceptInvite(plotId: UUID, request: Request, database: Databas
     if (localName.isBlank()) return Response(BAD_REQUEST).body("localName must not be blank")
 
     return when (database.acceptInvite(plotId, request.authUserId(), localName)) {
-        Database.AcceptInviteResult.Success      -> Response(NO_CONTENT)
-        Database.AcceptInviteResult.NotInvited   -> Response(NOT_FOUND).body("No pending invitation for this plot")
-        Database.AcceptInviteResult.AlreadyJoined -> Response(CONFLICT).body("Already a member of this plot")
+        PlotMemberRepository.AcceptInviteResult.Success      -> Response(NO_CONTENT)
+        PlotMemberRepository.AcceptInviteResult.NotInvited   -> Response(NOT_FOUND).body("No pending invitation for this plot")
+        PlotMemberRepository.AcceptInviteResult.AlreadyJoined -> Response(CONFLICT).body("Already a member of this plot")
     }
 }
 
@@ -298,9 +299,9 @@ private fun handleRejoin(plotId: UUID, request: Request, database: Database): Re
     val localName = node?.get("localName")?.takeIf { !it.isNull }?.asText()?.trim()
 
     return when (database.rejoinPlot(plotId, request.authUserId(), localName)) {
-        Database.RejoinResult.Success       -> Response(NO_CONTENT)
-        Database.RejoinResult.NotLeft       -> Response(NOT_FOUND).body("No prior membership in this plot")
-        Database.RejoinResult.PlotTombstoned -> Response(GONE).body("Plot has been removed")
+        PlotMemberRepository.RejoinResult.Success       -> Response(NO_CONTENT)
+        PlotMemberRepository.RejoinResult.NotLeft       -> Response(NOT_FOUND).body("No prior membership in this plot")
+        PlotMemberRepository.RejoinResult.PlotTombstoned -> Response(GONE).body("Plot has been removed")
     }
 }
 
@@ -313,10 +314,10 @@ private fun restorePlotRoute(database: Database): ContractRoute {
     } bindContract POST to { plotId: UUID, _: String ->
         { request: Request ->
             when (database.restorePlot(plotId, request.authUserId())) {
-                Database.RestorePlotResult.Success       -> Response(NO_CONTENT)
-                Database.RestorePlotResult.NotTombstoned -> Response(NOT_FOUND).body("Plot is not tombstoned")
-                Database.RestorePlotResult.NotAuthorized -> Response(FORBIDDEN).body("Only the member who triggered removal can restore")
-                Database.RestorePlotResult.WindowExpired -> Response(GONE).body("Restore window has expired")
+                PlotMemberRepository.RestorePlotResult.Success       -> Response(NO_CONTENT)
+                PlotMemberRepository.RestorePlotResult.NotTombstoned -> Response(NOT_FOUND).body("Plot is not tombstoned")
+                PlotMemberRepository.RestorePlotResult.NotAuthorized -> Response(FORBIDDEN).body("Only the member who triggered removal can restore")
+                PlotMemberRepository.RestorePlotResult.WindowExpired -> Response(GONE).body("Restore window has expired")
             }
         }
     }
@@ -342,10 +343,10 @@ private fun handleTransferOwnership(plotId: UUID, request: Request, database: Da
         catch (_: Exception) { return Response(BAD_REQUEST).body("newOwnerId is not a valid UUID") }
 
     return when (database.transferOwnership(plotId, newOwnerId, request.authUserId())) {
-        Database.TransferOwnershipResult.Success        -> Response(NO_CONTENT)
-        Database.TransferOwnershipResult.NotOwner       -> Response(FORBIDDEN).body("Only the owner can transfer ownership")
-        Database.TransferOwnershipResult.TargetNotMember -> Response(BAD_REQUEST).body("Target user is not an active member")
-        Database.TransferOwnershipResult.NotFound       -> Response(NOT_FOUND)
+        PlotMemberRepository.TransferOwnershipResult.Success        -> Response(NO_CONTENT)
+        PlotMemberRepository.TransferOwnershipResult.NotOwner       -> Response(FORBIDDEN).body("Only the owner can transfer ownership")
+        PlotMemberRepository.TransferOwnershipResult.TargetNotMember -> Response(BAD_REQUEST).body("Target user is not an active member")
+        PlotMemberRepository.TransferOwnershipResult.NotFound       -> Response(NOT_FOUND)
     }
 }
 
@@ -367,10 +368,10 @@ private fun handleSetPlotStatus(plotId: UUID, request: Request, database: Databa
         ?: return Response(BAD_REQUEST).body("status is required")
 
     return when (val result = database.setPlotStatus(plotId, status, request.authUserId())) {
-        Database.SetPlotStatusResult.Success              -> Response(NO_CONTENT)
-        Database.SetPlotStatusResult.NotOwner             -> Response(FORBIDDEN).body("Only the owner can change plot status")
-        Database.SetPlotStatusResult.NotFound             -> Response(NOT_FOUND)
-        is Database.SetPlotStatusResult.InvalidStatus     -> Response(BAD_REQUEST).body("Invalid status: ${result.status}")
+        PlotMemberRepository.SetPlotStatusResult.Success              -> Response(NO_CONTENT)
+        PlotMemberRepository.SetPlotStatusResult.NotOwner             -> Response(FORBIDDEN).body("Only the owner can change plot status")
+        PlotMemberRepository.SetPlotStatusResult.NotFound             -> Response(NOT_FOUND)
+        is PlotMemberRepository.SetPlotStatusResult.InvalidStatus     -> Response(BAD_REQUEST).body("Invalid status: ${result.status}")
     }
 }
 

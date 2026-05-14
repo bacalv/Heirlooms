@@ -2,6 +2,8 @@ package digital.heirlooms.server
 
 import digital.heirlooms.server.domain.plot.FlowRecord
 import digital.heirlooms.server.domain.plot.PlotItemWithUpload
+import digital.heirlooms.server.repository.plot.FlowRepository
+import digital.heirlooms.server.repository.plot.PlotItemRepository
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
@@ -87,9 +89,9 @@ private fun handleCreateFlow(request: Request, database: Database): Response {
     }
 
     return when (val result = database.createFlow(name, criteriaJson, targetPlotId, requiresStaging, request.authUserId())) {
-        is Database.FlowCreateResult.Success ->
+        is FlowRepository.FlowCreateResult.Success ->
             Response(CREATED).header("Content-Type", "application/json").body(result.flow.toJson())
-        is Database.FlowCreateResult.Error ->
+        is FlowRepository.FlowCreateResult.Error ->
             Response(BAD_REQUEST).body(result.message)
     }
 }
@@ -122,10 +124,10 @@ private fun handleUpdateFlow(flowId: UUID, request: Request, database: Database)
     } else null
 
     return when (database.updateFlow(flowId, name, criteriaJson, requiresStaging, request.authUserId())) {
-        is Database.FlowUpdateResult.Success ->
+        is FlowRepository.FlowUpdateResult.Success ->
             Response(OK).header("Content-Type", "application/json")
                 .body((database.getFlowById(flowId, request.authUserId()) ?: return Response(NOT_FOUND)).toJson())
-        Database.FlowUpdateResult.NotFound -> Response(NOT_FOUND)
+        FlowRepository.FlowUpdateResult.NotFound -> Response(NOT_FOUND)
     }
 }
 
@@ -207,12 +209,12 @@ private fun handleApproveStagingItem(plotId: UUID, uploadId: UUID, request: Requ
     }
 
     return when (database.approveStagingItem(plotId, uploadId, sourceFlowId, request.authUserId(), dekBytes, dekFormat, thumbBytes, thumbFormat)) {
-        Database.ApproveResult.Success          -> Response(NO_CONTENT)
-        Database.ApproveResult.DuplicateContent -> Response(NO_CONTENT)
-        Database.ApproveResult.AlreadyApproved  -> Response(CONFLICT).body("Item is already in the collection")
-        Database.ApproveResult.NotFound         -> Response(NOT_FOUND)
-        Database.ApproveResult.PlotNotOwned     -> Response(NOT_FOUND)
-        Database.ApproveResult.PlotClosed       -> Response(FORBIDDEN).body("Plot is closed")
+        PlotItemRepository.ApproveResult.Success          -> Response(NO_CONTENT)
+        PlotItemRepository.ApproveResult.DuplicateContent -> Response(NO_CONTENT)
+        PlotItemRepository.ApproveResult.AlreadyApproved  -> Response(CONFLICT).body("Item is already in the collection")
+        PlotItemRepository.ApproveResult.NotFound         -> Response(NOT_FOUND)
+        PlotItemRepository.ApproveResult.PlotNotOwned     -> Response(NOT_FOUND)
+        PlotItemRepository.ApproveResult.PlotClosed       -> Response(FORBIDDEN).body("Plot is closed")
     }
 }
 
@@ -232,10 +234,10 @@ private fun handleRejectStagingItem(plotId: UUID, uploadId: UUID, request: Reque
             ?.let { UUID.fromString(it) }
     } catch (_: Exception) { null }
     return when (database.rejectStagingItem(plotId, uploadId, sourceFlowId, request.authUserId())) {
-        Database.RejectResult.Success         -> Response(NO_CONTENT)
-        Database.RejectResult.AlreadyApproved -> Response(CONFLICT).body("Item is already approved — remove it from the collection first")
-        Database.RejectResult.NotFound        -> Response(NOT_FOUND)
-        Database.RejectResult.PlotNotOwned    -> Response(NOT_FOUND)
+        PlotItemRepository.RejectResult.Success         -> Response(NO_CONTENT)
+        PlotItemRepository.RejectResult.AlreadyApproved -> Response(CONFLICT).body("Item is already approved — remove it from the collection first")
+        PlotItemRepository.RejectResult.NotFound        -> Response(NOT_FOUND)
+        PlotItemRepository.RejectResult.PlotNotOwned    -> Response(NOT_FOUND)
     }
 }
 
@@ -322,22 +324,22 @@ private fun handleAddPlotItem(plotId: UUID, request: Request, database: Database
             try { java.util.Base64.getDecoder().decode(it) } catch (_: Exception) { null }
         }
         return when (database.addPlotItem(plotId, uploadId, request.authUserId(), dekBytes, itemDekFormat, thumbBytes, thumbnailDekFormat)) {
-            Database.AddItemResult.Success        -> Response(CREATED)
-            Database.AddItemResult.AlreadyPresent -> Response(CONFLICT).body("Item already in collection")
-            Database.AddItemResult.PlotNotOwned   -> Response(NOT_FOUND)
-            Database.AddItemResult.UploadNotOwned -> Response(NOT_FOUND)
-            Database.AddItemResult.PlotClosed     -> Response(FORBIDDEN).body("Plot is closed")
-            is Database.AddItemResult.Error       -> Response(BAD_REQUEST).body("Cannot add item")
+            PlotItemRepository.AddItemResult.Success        -> Response(CREATED)
+            PlotItemRepository.AddItemResult.AlreadyPresent -> Response(CONFLICT).body("Item already in collection")
+            PlotItemRepository.AddItemResult.PlotNotOwned   -> Response(NOT_FOUND)
+            PlotItemRepository.AddItemResult.UploadNotOwned -> Response(NOT_FOUND)
+            PlotItemRepository.AddItemResult.PlotClosed     -> Response(FORBIDDEN).body("Plot is closed")
+            is PlotItemRepository.AddItemResult.Error       -> Response(BAD_REQUEST).body("Cannot add item")
         }
     }
 
     return when (database.addPlotItem(plotId, uploadId, request.authUserId())) {
-        Database.AddItemResult.Success        -> Response(CREATED)
-        Database.AddItemResult.AlreadyPresent -> Response(CONFLICT).body("Item already in collection")
-        Database.AddItemResult.PlotNotOwned   -> Response(NOT_FOUND)
-        Database.AddItemResult.UploadNotOwned -> Response(NOT_FOUND)
-        Database.AddItemResult.PlotClosed     -> Response(FORBIDDEN).body("Plot is closed")
-        is Database.AddItemResult.Error       -> Response(BAD_REQUEST).body("Cannot add item")
+        PlotItemRepository.AddItemResult.Success        -> Response(CREATED)
+        PlotItemRepository.AddItemResult.AlreadyPresent -> Response(CONFLICT).body("Item already in collection")
+        PlotItemRepository.AddItemResult.PlotNotOwned   -> Response(NOT_FOUND)
+        PlotItemRepository.AddItemResult.UploadNotOwned -> Response(NOT_FOUND)
+        PlotItemRepository.AddItemResult.PlotClosed     -> Response(FORBIDDEN).body("Plot is closed")
+        is PlotItemRepository.AddItemResult.Error       -> Response(BAD_REQUEST).body("Cannot add item")
     }
 }
 
@@ -349,9 +351,9 @@ private fun removePlotItemRoute(database: Database): ContractRoute {
     } bindContract DELETE to { pId: UUID, _: String, uId: UUID ->
         { request: Request ->
             when (database.removePlotItem(pId, uId, request.authUserId())) {
-                Database.RemoveItemResult.Success   -> Response(NO_CONTENT)
-                Database.RemoveItemResult.NotFound  -> Response(NOT_FOUND)
-                Database.RemoveItemResult.Forbidden -> Response(FORBIDDEN)
+                PlotItemRepository.RemoveItemResult.Success   -> Response(NO_CONTENT)
+                PlotItemRepository.RemoveItemResult.NotFound  -> Response(NOT_FOUND)
+                PlotItemRepository.RemoveItemResult.Forbidden -> Response(FORBIDDEN)
             }
         }
     }
