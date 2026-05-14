@@ -1,6 +1,7 @@
 package digital.heirlooms.server
 
 import digital.heirlooms.server.routes.buildApp
+import digital.heirlooms.server.storage.FileStore
 import digital.heirlooms.server.domain.plot.PlotRecord
 import digital.heirlooms.server.repository.plot.PlotRepository
 import digital.heirlooms.server.repository.auth.AuthRepository

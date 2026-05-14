@@ -1,4 +1,4 @@
-package digital.heirlooms.server
+package digital.heirlooms.server.service.upload
 
 import com.drew.imaging.ImageMetadataReader
 import com.drew.metadata.exif.ExifDirectoryBase

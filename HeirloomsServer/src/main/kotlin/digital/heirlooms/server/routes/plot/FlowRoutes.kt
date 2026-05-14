@@ -1,6 +1,6 @@
 package digital.heirlooms.server.routes.plot
 
-import digital.heirlooms.server.authUserId
+import digital.heirlooms.server.filters.authUserId
 import digital.heirlooms.server.repository.plot.PlotItemRepository
 import digital.heirlooms.server.representation.plot.toJson
 import digital.heirlooms.server.representation.upload.toJson

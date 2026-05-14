@@ -1,7 +1,5 @@
 package digital.heirlooms.server.service.plot
 
-import digital.heirlooms.server.CriteriaCycleException
-import digital.heirlooms.server.CriteriaValidationException
 import digital.heirlooms.server.domain.plot.PlotRecord
 import digital.heirlooms.server.repository.plot.PlotRepository
 import com.fasterxml.jackson.databind.JsonNode

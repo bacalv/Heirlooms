@@ -1,5 +1,7 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.storage.LocalFileStore
+import digital.heirlooms.server.storage.StorageKey
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue

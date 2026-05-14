@@ -1,6 +1,6 @@
 package digital.heirlooms.server.routes.social
 
-import digital.heirlooms.server.authUserId
+import digital.heirlooms.server.filters.authUserId
 import digital.heirlooms.server.representation.social.toFriendsJson
 import digital.heirlooms.server.service.social.SocialService
 import org.http4k.contract.ContractRoute

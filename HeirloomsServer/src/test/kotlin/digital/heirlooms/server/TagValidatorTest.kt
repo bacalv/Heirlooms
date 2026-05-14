@@ -1,5 +1,7 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.domain.upload.TagValidationResult
+import digital.heirlooms.server.domain.upload.validateTags
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test

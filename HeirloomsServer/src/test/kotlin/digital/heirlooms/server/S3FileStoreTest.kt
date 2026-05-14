@@ -1,5 +1,7 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.storage.S3FileStore
+import digital.heirlooms.server.storage.StorageKey
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot

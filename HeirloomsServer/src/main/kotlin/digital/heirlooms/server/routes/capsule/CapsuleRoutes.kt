@@ -1,6 +1,6 @@
 package digital.heirlooms.server.routes.capsule
 
-import digital.heirlooms.server.authUserId
+import digital.heirlooms.server.filters.authUserId
 import digital.heirlooms.server.domain.capsule.CapsuleShape
 import digital.heirlooms.server.domain.capsule.CapsuleState
 import digital.heirlooms.server.repository.capsule.CapsuleRepository

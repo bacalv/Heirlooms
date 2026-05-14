@@ -1,4 +1,4 @@
-package digital.heirlooms.server
+package digital.heirlooms.server.storage
 
 /**
  * Maps a MIME type string to a file extension (without the leading dot).

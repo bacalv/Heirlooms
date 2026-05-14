@@ -1,4 +1,4 @@
-package digital.heirlooms.server
+package digital.heirlooms.server.storage
 
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider

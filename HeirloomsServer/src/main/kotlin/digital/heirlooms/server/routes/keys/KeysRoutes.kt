@@ -1,6 +1,6 @@
 package digital.heirlooms.server.routes.keys
 
-import digital.heirlooms.server.authUserId
+import digital.heirlooms.server.filters.authUserId
 import digital.heirlooms.server.representation.keys.toJson
 import digital.heirlooms.server.service.keys.KeyService
 import com.fasterxml.jackson.databind.ObjectMapper

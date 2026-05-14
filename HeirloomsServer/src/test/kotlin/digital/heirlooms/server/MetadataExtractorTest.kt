@@ -1,5 +1,7 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.service.upload.MediaMetadata
+import digital.heirlooms.server.service.upload.MetadataExtractor
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test

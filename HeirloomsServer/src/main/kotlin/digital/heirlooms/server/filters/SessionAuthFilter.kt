@@ -1,5 +1,7 @@
-package digital.heirlooms.server
+package digital.heirlooms.server.filters
 
+import digital.heirlooms.server.Database
+import digital.heirlooms.server.FOUNDING_USER_ID
 import org.http4k.core.Filter
 import org.http4k.core.Request
 import org.http4k.core.Response

@@ -1,4 +1,4 @@
-package digital.heirlooms.server
+package digital.heirlooms.server.storage
 
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.auth.oauth2.ServiceAccountCredentials

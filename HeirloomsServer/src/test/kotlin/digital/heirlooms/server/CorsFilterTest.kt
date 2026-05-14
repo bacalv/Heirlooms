@@ -1,5 +1,6 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.filters.corsFilter
 import org.http4k.core.Method.GET
 import org.http4k.core.Method.OPTIONS
 import org.http4k.core.Request

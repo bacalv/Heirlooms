@@ -1,4 +1,4 @@
-package digital.heirlooms.server
+package digital.heirlooms.server.storage
 
 /**
  * Represents the key under which a file was stored.

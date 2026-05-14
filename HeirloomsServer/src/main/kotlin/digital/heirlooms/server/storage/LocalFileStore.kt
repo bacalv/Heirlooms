@@ -1,4 +1,4 @@
-package digital.heirlooms.server
+package digital.heirlooms.server.storage
 
 import java.nio.file.Files
 import java.nio.file.Path

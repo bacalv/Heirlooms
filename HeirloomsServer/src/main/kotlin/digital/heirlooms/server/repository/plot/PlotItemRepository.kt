@@ -1,7 +1,7 @@
 package digital.heirlooms.server.repository.plot
 
-import digital.heirlooms.server.CriteriaEvaluator
-import digital.heirlooms.server.CriteriaValidationException
+import digital.heirlooms.server.service.plot.CriteriaEvaluator
+import digital.heirlooms.server.service.plot.CriteriaValidationException
 import digital.heirlooms.server.domain.auth.FOUNDING_USER_ID
 import digital.heirlooms.server.domain.plot.PlotItemWithUpload
 import digital.heirlooms.server.domain.plot.PlotRecord

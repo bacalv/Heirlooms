@@ -1,4 +1,4 @@
-package digital.heirlooms.server
+package digital.heirlooms.server.storage
 
 data class PreparedUpload(
     val storageKey: StorageKey,

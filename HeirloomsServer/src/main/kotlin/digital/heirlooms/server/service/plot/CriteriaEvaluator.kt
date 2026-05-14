@@ -1,4 +1,4 @@
-package digital.heirlooms.server
+package digital.heirlooms.server.service.plot
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper

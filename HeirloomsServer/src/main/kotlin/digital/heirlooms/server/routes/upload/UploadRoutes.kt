@@ -1,16 +1,16 @@
 package digital.heirlooms.server.routes.upload
 
 import digital.heirlooms.server.Database
-import digital.heirlooms.server.DirectUploadSupport
-import digital.heirlooms.server.FileStore
-import digital.heirlooms.server.StorageKey
-import digital.heirlooms.server.TagValidationResult
-import digital.heirlooms.server.authUserId
+import digital.heirlooms.server.domain.upload.TagValidationResult
 import digital.heirlooms.server.domain.upload.UploadSort
+import digital.heirlooms.server.domain.upload.validateTags
+import digital.heirlooms.server.filters.authUserId
 import digital.heirlooms.server.repository.upload.UploadRepository
 import digital.heirlooms.server.representation.upload.toJson
 import digital.heirlooms.server.service.upload.UploadService
-import digital.heirlooms.server.validateTags
+import digital.heirlooms.server.storage.DirectUploadSupport
+import digital.heirlooms.server.storage.FileStore
+import digital.heirlooms.server.storage.StorageKey
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.http4k.contract.ContractRoute
 import org.http4k.contract.div
