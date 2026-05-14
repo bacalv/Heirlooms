@@ -1,6 +1,8 @@
 package digital.heirlooms.server.service.cleanup
 
-import digital.heirlooms.server.Database
+import digital.heirlooms.server.repository.auth.AuthRepository
+import digital.heirlooms.server.repository.keys.KeyRepository
+import digital.heirlooms.server.repository.storage.BlobRepository
 import digital.heirlooms.server.storage.FileStore
 import digital.heirlooms.server.storage.StorageKey
 import kotlinx.coroutines.CoroutineScope
@@ -12,7 +14,9 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 class PendingBlobsCleanupService(
-    private val database: Database,
+    private val blobRepository: BlobRepository,
+    private val authRepository: AuthRepository,
+    private val keyRepository: KeyRepository,
     private val storage: FileStore,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
 ) {
@@ -45,7 +49,7 @@ class PendingBlobsCleanupService(
     private fun runBlobCleanup() {
         try {
             val olderThan = Instant.now().minus(blobTtlHours, ChronoUnit.HOURS)
-            val staleKeys = database.deleteStalePendingBlobs(olderThan)
+            val staleKeys = blobRepository.deleteStalePendingBlobs(olderThan)
             for (key in staleKeys) {
                 try {
                     storage.delete(StorageKey(key))
@@ -64,7 +68,7 @@ class PendingBlobsCleanupService(
 
     private fun runSessionCleanup() {
         try {
-            database.deleteExpiredSessions()
+            authRepository.deleteExpiredSessions()
         } catch (e: Exception) {
             println("[session-cleanup] ERROR: ${e.message}")
         }
@@ -73,7 +77,7 @@ class PendingBlobsCleanupService(
     private fun runDevicePruning() {
         try {
             val dormantBefore = Instant.now().minus(dormantDeviceDays, ChronoUnit.DAYS)
-            val count = database.retireDormantWrappedKeys(dormantBefore)
+            val count = keyRepository.retireDormantWrappedKeys(dormantBefore)
             if (count > 0) {
                 println("[device-pruning] INFO: retired $count dormant device(s) (last used before $dormantBefore)")
             }

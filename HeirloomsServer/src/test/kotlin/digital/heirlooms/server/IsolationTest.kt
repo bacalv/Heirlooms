@@ -1,6 +1,8 @@
 package digital.heirlooms.server
 
 import digital.heirlooms.server.filters.sessionAuthFilter
+import digital.heirlooms.server.repository.auth.PostgresAuthRepository
+import digital.heirlooms.server.repository.keys.PostgresKeyRepository
 import digital.heirlooms.server.routes.buildApp
 import digital.heirlooms.server.storage.FileStore
 import digital.heirlooms.server.storage.StorageKey
@@ -54,6 +56,8 @@ class IsolationTest {
 
         private lateinit var dataSource: DataSource
         private lateinit var database: Database
+        private lateinit var authRepo: PostgresAuthRepository
+        private lateinit var keyRepo: PostgresKeyRepository
         private lateinit var app: org.http4k.core.HttpHandler
 
         private lateinit var inviterToken: String
@@ -79,13 +83,15 @@ class IsolationTest {
             })
             Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate()
             database = Database(dataSource)
+            authRepo = PostgresAuthRepository(dataSource)
+            keyRepo = PostgresKeyRepository(dataSource)
 
             val serverSecret = ByteArray(32) { it.toByte() }
             val mockStorage = mockk<FileStore>(relaxed = true).also {
                 every { it.save(any(), any()) } answers { StorageKey("upload-${UUID.randomUUID()}") }
             }
             val rawApp = buildApp(mockStorage, database, authSecret = serverSecret)
-            app = sessionAuthFilter(database).then(rawApp)
+            app = sessionAuthFilter(authRepo).then(rawApp)
 
             inviterToken = getInviterToken()
             val invite1 = generateInvite(inviterToken)
@@ -113,11 +119,11 @@ class IsolationTest {
                 .header("X-Api-Key", token).body(body))
 
         private fun getInviterToken(): String {
-            database.resetUserAuth(FOUNDING_USER_ID)
+            authRepo.resetUserAuth(FOUNDING_USER_ID)
             val deviceId = "inviter-iso-${UUID.randomUUID()}"
             val authKey = ByteArray(32) { 99 }
             val authSalt = ByteArray(16) { 11 }
-            database.insertWrappedKey(
+            keyRepo.insertWrappedKey(
                 WrappedKeyRecord(UUID.randomUUID(), deviceId, "Owner's Phone", "android",
                     "p256-spki", ByteArray(65) { 7 }, ByteArray(64) { 8 },
                     "p256-ecdh-hkdf-aes256gcm-v1", java.time.Instant.now(), java.time.Instant.now(), null),
@@ -340,7 +346,7 @@ class IsolationTest {
         val aliceTokenBytes = runCatching { Base64.getUrlDecoder().decode(sessionToken) }
             .getOrElse { Base64.getDecoder().decode(sessionToken) }
         val hash = sha256(aliceTokenBytes)
-        val session = database.findSessionByTokenHash(hash)
+        val session = authRepo.findSessionByTokenHash(hash)
         if (session != null) {
             dataSource.connection.use { conn ->
                 conn.prepareStatement(
@@ -369,9 +375,9 @@ class IsolationTest {
         val aliceTokenBytes = runCatching { Base64.getUrlDecoder().decode(aliceToken) }
             .getOrElse { Base64.getDecoder().decode(aliceToken) }
         val hash = sha256(aliceTokenBytes)
-        val before = database.findSessionByTokenHash(hash)?.lastUsedAt
+        val before = authRepo.findSessionByTokenHash(hash)?.lastUsedAt
         get("/api/content/uploads", aliceToken)
-        val after = database.findSessionByTokenHash(hash)?.lastUsedAt
+        val after = authRepo.findSessionByTokenHash(hash)?.lastUsedAt
         if (before != null && after != null) {
             assertTrue(!after.isBefore(before), "last_used_at should be refreshed after authenticated request")
         }
@@ -408,16 +414,16 @@ class IsolationTest {
 
     @Test
     fun `Bob GET Alice device by ID returns 404`() {
-        val aliceUser = database.findUserByUsername("alice_iso")!!
-        val aliceDevice = database.listWrappedKeys(aliceUser.id).firstOrNull() ?: return
+        val aliceUser = authRepo.findUserByUsername("alice_iso")!!
+        val aliceDevice = keyRepo.listWrappedKeys(aliceUser.id).firstOrNull() ?: return
         val resp = get("/api/keys/devices/${aliceDevice.deviceId}", bobToken)
         assertEquals(NOT_FOUND, resp.status)
     }
 
     @Test
     fun `Bob GET devices list does not include Alice device`() {
-        val aliceUser = database.findUserByUsername("alice_iso")!!
-        val aliceDevice = database.listWrappedKeys(aliceUser.id).firstOrNull() ?: return
+        val aliceUser = authRepo.findUserByUsername("alice_iso")!!
+        val aliceDevice = keyRepo.listWrappedKeys(aliceUser.id).firstOrNull() ?: return
         val resp = get("/api/keys/devices", bobToken)
         assertEquals(OK, resp.status)
         assertFalse(resp.bodyString().contains(aliceDevice.deviceId), "Bob should not see Alice's device")
@@ -425,8 +431,8 @@ class IsolationTest {
 
     @Test
     fun `Bob DELETE Alice device returns 404`() {
-        val aliceUser = database.findUserByUsername("alice_iso")!!
-        val aliceDevice = database.listWrappedKeys(aliceUser.id).firstOrNull() ?: return
+        val aliceUser = authRepo.findUserByUsername("alice_iso")!!
+        val aliceDevice = keyRepo.listWrappedKeys(aliceUser.id).firstOrNull() ?: return
         val resp = app(
             Request(DELETE, "/api/keys/devices/${aliceDevice.deviceId}")
                 .header("X-Api-Key", bobToken)
@@ -438,10 +444,10 @@ class IsolationTest {
 
     @Test
     fun `Bob GET recovery passphrase returns Bob data not Alice data`() {
-        val aliceUser = database.findUserByUsername("alice_iso")!!
-        val bobUser = database.findUserByUsername("bob_iso")!!
+        val aliceUser = authRepo.findUserByUsername("alice_iso")!!
+        val bobUser = authRepo.findUserByUsername("bob_iso")!!
         // Set up distinct passphrase records for Alice and Bob
-        database.upsertRecoveryPassphrase(
+        keyRepo.upsertRecoveryPassphrase(
             RecoveryPassphraseRecord(
                 wrappedMasterKey = ByteArray(64) { 11 },
                 wrapFormat = "master-aes256gcm-v1",
@@ -452,7 +458,7 @@ class IsolationTest {
             ),
             aliceUser.id,
         )
-        database.upsertRecoveryPassphrase(
+        keyRepo.upsertRecoveryPassphrase(
             RecoveryPassphraseRecord(
                 wrappedMasterKey = ByteArray(64) { 22 },
                 wrapFormat = "master-aes256gcm-v1",

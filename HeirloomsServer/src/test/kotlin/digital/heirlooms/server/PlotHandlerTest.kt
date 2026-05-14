@@ -41,7 +41,6 @@ import java.util.UUID
 class PlotHandlerTest {
 
     private val mockStorage = mockk<FileStore>()
-    private val mockDatabase = mockk<Database>(relaxed = true)
     private val mockPlotRepo = mockk<PlotRepository>(relaxed = true)
     private val mockUploadRepo = mockk<UploadRepository>(relaxed = true)
     private val mockAuthRepo = mockk<AuthRepository>(relaxed = true)
@@ -56,7 +55,6 @@ class PlotHandlerTest {
 
     private val app = buildApp(
         storage = mockStorage,
-        database = mockDatabase,
         uploadRepo = mockUploadRepo,
         authRepo = mockAuthRepo,
         capsuleRepo = mockCapsuleRepo,

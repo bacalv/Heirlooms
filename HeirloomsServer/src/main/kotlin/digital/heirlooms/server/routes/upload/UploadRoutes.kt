@@ -1,6 +1,5 @@
 package digital.heirlooms.server.routes.upload
 
-import digital.heirlooms.server.Database
 import digital.heirlooms.server.domain.upload.TagValidationResult
 import digital.heirlooms.server.domain.upload.UploadSort
 import digital.heirlooms.server.domain.upload.validateTags
@@ -82,20 +81,20 @@ fun uploadContractRoute(uploadService: UploadService): ContractRoute =
         }
     }
 
-fun listUploadsContractRoute(uploadService: UploadService, database: Database): ContractRoute =
+fun listUploadsContractRoute(uploadService: UploadService): ContractRoute =
     "/uploads" meta {
         summary = "List uploads"
         description = "Returns uploads as a cursor-paginated JSON object."
-    } bindContract GET to listUploadsHandler(uploadService, database)
+    } bindContract GET to listUploadsHandler(uploadService)
 
-fun listTagsContractRoute(database: Database): ContractRoute =
+fun listTagsContractRoute(uploadService: UploadService): ContractRoute =
     "/uploads/tags" meta {
         summary = "List all tags"
         description = "Returns all distinct tags used across non-composted uploads, sorted alphabetically."
     } bindContract GET to { request: Request ->
         try {
             val userId = request.authUserId()
-            val tags = database.listAllTags(userId)
+            val tags = uploadService.listAllTags(userId)
             val json = com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(tags)
             Response(OK).header("Content-Type", "application/json").body(json)
         } catch (e: Exception) {
@@ -103,7 +102,7 @@ fun listTagsContractRoute(database: Database): ContractRoute =
         }
     }
 
-fun getUploadByIdContractRoute(database: Database): ContractRoute {
+fun getUploadByIdContractRoute(uploadService: UploadService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id meta {
         summary = "Get upload by ID"
@@ -111,15 +110,14 @@ fun getUploadByIdContractRoute(database: Database): ContractRoute {
     } bindContract GET to { uploadId: UUID ->
         { request: Request ->
             val userId = request.authUserId()
-            val record = database.findUploadByIdForUser(uploadId, userId)
-                ?: database.findUploadByIdForSharedMember(uploadId, userId)
+            val record = uploadService.findUploadForUser(uploadId, userId)
             if (record == null) Response(NOT_FOUND)
             else Response(OK).header("Content-Type", "application/json").body(record.toJson())
         }
     }
 }
 
-fun checkContentHashContractRoute(database: Database): ContractRoute {
+fun checkContentHashContractRoute(uploadService: UploadService): ContractRoute {
     val hash = Path.of("hash")
     return "/uploads/hash" / hash meta {
         summary = "Check if a content hash exists"
@@ -127,7 +125,7 @@ fun checkContentHashContractRoute(database: Database): ContractRoute {
     } bindContract GET to { h: String ->
         { request: Request ->
             val userId = request.authUserId()
-            if (database.existsByContentHash(h, userId))
+            if (uploadService.existsByContentHash(h, userId))
                 Response(OK).header("Content-Type", "application/json").body("""{"exists":true}""")
             else
                 Response(NOT_FOUND)
@@ -135,13 +133,13 @@ fun checkContentHashContractRoute(database: Database): ContractRoute {
     }
 }
 
-fun listCompostedUploadsContractRoute(database: Database): ContractRoute =
+fun listCompostedUploadsContractRoute(uploadService: UploadService): ContractRoute =
     "/uploads/composted" meta {
         summary = "List composted uploads"
         description = "Returns composted uploads as a cursor-paginated JSON object."
-    } bindContract GET to listCompostedUploadsHandler(database)
+    } bindContract GET to listCompostedUploadsHandler(uploadService)
 
-fun listUploadsHandler(uploadService: UploadService, database: Database): HttpHandler = handler@{ request ->
+fun listUploadsHandler(uploadService: UploadService): HttpHandler = handler@{ request ->
     try {
         val cursor = request.query("cursor")?.takeIf { it.isNotBlank() }
         val limit = request.query("limit")?.toIntOrNull()?.coerceIn(1, 200) ?: 50
@@ -173,7 +171,7 @@ fun listUploadsHandler(uploadService: UploadService, database: Database): HttpHa
         }
 
         val page = try {
-            database.listUploadsPaginated(
+            uploadService.listUploadsPaginated(
                 cursor = cursor, limit = limit, tags = tags, excludeTag = excludeTag,
                 fromDate = fromDate, toDate = toDate, inCapsule = inCapsule,
                 includeComposted = includeComposted, hasLocation = hasLocation,
@@ -202,18 +200,18 @@ private fun tryParseDate(s: String, endOfDay: Boolean = false): Instant? = try {
     } catch (_: Exception) { null }
 }
 
-private fun listCompostedUploadsHandler(database: Database): HttpHandler = { request ->
+private fun listCompostedUploadsHandler(uploadService: UploadService): HttpHandler = { request ->
     try {
         val cursor = request.query("cursor")?.takeIf { it.isNotBlank() }
         val limit = request.query("limit")?.toIntOrNull()?.coerceIn(1, 200) ?: 50
-        val page = database.listCompostedUploadsPaginated(cursor = cursor, limit = limit, userId = request.authUserId())
+        val page = uploadService.listCompostedUploadsPaginated(cursor = cursor, limit = limit, userId = request.authUserId())
         Response(OK).header("Content-Type", "application/json").body(page.toJson())
     } catch (e: Exception) {
         Response(INTERNAL_SERVER_ERROR).body("Failed to list composted uploads: ${e.message}")
     }
 }
 
-fun compostUploadContractRoute(database: Database): ContractRoute {
+fun compostUploadContractRoute(uploadService: UploadService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id / "compost" meta {
         summary = "Compost an upload"
@@ -221,7 +219,7 @@ fun compostUploadContractRoute(database: Database): ContractRoute {
     } bindContract POST to { uploadId: UUID, _: String ->
         { request: Request ->
             try {
-                when (val result = database.compostUpload(uploadId, request.authUserId())) {
+                when (val result = uploadService.compostUpload(uploadId, request.authUserId())) {
                     is UploadRepository.CompostResult.Success ->
                         Response(OK).header("Content-Type", "application/json").body(result.record.toJson())
                     is UploadRepository.CompostResult.NotFound ->
@@ -240,7 +238,7 @@ fun compostUploadContractRoute(database: Database): ContractRoute {
     }
 }
 
-fun restoreUploadContractRoute(database: Database): ContractRoute {
+fun restoreUploadContractRoute(uploadService: UploadService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id / "restore" meta {
         summary = "Restore a composted upload"
@@ -248,7 +246,7 @@ fun restoreUploadContractRoute(database: Database): ContractRoute {
     } bindContract POST to { uploadId: UUID, _: String ->
         { request: Request ->
             try {
-                when (val result = database.restoreUpload(uploadId, request.authUserId())) {
+                when (val result = uploadService.restoreUpload(uploadId, request.authUserId())) {
                     is UploadRepository.RestoreResult.Success ->
                         Response(OK).header("Content-Type", "application/json").body(result.record.toJson())
                     is UploadRepository.RestoreResult.NotFound ->
@@ -298,7 +296,7 @@ private fun handleShareUpload(uploadId: UUID, request: Request, uploadService: U
     }
 }
 
-fun fileProxyContractRoute(storage: FileStore, database: Database): ContractRoute {
+fun fileProxyContractRoute(storage: FileStore, uploadService: UploadService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id / "file" meta {
         summary = "Get file"
@@ -306,8 +304,7 @@ fun fileProxyContractRoute(storage: FileStore, database: Database): ContractRout
     } bindContract GET to { uploadId: UUID, _: String ->
         { request: Request ->
             val userId = request.authUserId()
-            val record = database.findUploadByIdForUser(uploadId, userId)
-                ?: database.findUploadByIdForSharedMember(uploadId, userId)
+            val record = uploadService.findUploadForUser(uploadId, userId)
             if (record == null) {
                 Response(NOT_FOUND)
             } else {
@@ -344,7 +341,7 @@ fun fileProxyContractRoute(storage: FileStore, database: Database): ContractRout
     }
 }
 
-fun thumbProxyContractRoute(storage: FileStore, database: Database): ContractRoute {
+fun thumbProxyContractRoute(storage: FileStore, uploadService: UploadService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id / "thumb" meta {
         summary = "Get thumbnail"
@@ -352,8 +349,7 @@ fun thumbProxyContractRoute(storage: FileStore, database: Database): ContractRou
     } bindContract GET to { uploadId: UUID, _: String ->
         { request: Request ->
             val userId = request.authUserId()
-            val record = database.findUploadByIdForUser(uploadId, userId)
-                ?: database.findUploadByIdForSharedMember(uploadId, userId)
+            val record = uploadService.findUploadForUser(uploadId, userId)
             if (record == null) {
                 Response(NOT_FOUND)
             } else {
@@ -382,7 +378,7 @@ fun thumbProxyContractRoute(storage: FileStore, database: Database): ContractRou
     }
 }
 
-fun previewProxyContractRoute(storage: FileStore, database: Database): ContractRoute {
+fun previewProxyContractRoute(storage: FileStore, uploadService: UploadService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id / "preview" meta {
         summary = "Get encrypted preview clip"
@@ -390,8 +386,7 @@ fun previewProxyContractRoute(storage: FileStore, database: Database): ContractR
     } bindContract GET to { uploadId: UUID, _: String ->
         { request: Request ->
             val userId = request.authUserId()
-            val record = database.findUploadByIdForUser(uploadId, userId)
-                ?: database.findUploadByIdForSharedMember(uploadId, userId)
+            val record = uploadService.findUploadForUser(uploadId, userId)
             when {
                 record == null -> Response(NOT_FOUND)
                 record.previewStorageKey == null -> Response(NOT_FOUND)
@@ -408,7 +403,7 @@ fun previewProxyContractRoute(storage: FileStore, database: Database): ContractR
     }
 }
 
-fun readUrlContractRoute(directUpload: DirectUploadSupport?, database: Database): ContractRoute {
+fun readUrlContractRoute(directUpload: DirectUploadSupport?, uploadService: UploadService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id / "url" meta {
         summary = "Get signed read URL"
@@ -418,7 +413,7 @@ fun readUrlContractRoute(directUpload: DirectUploadSupport?, database: Database)
             if (directUpload == null) {
                 Response(NOT_IMPLEMENTED).body("Signed URLs not supported by the current storage backend")
             } else {
-                val record = database.findUploadByIdForUser(uploadId, request.authUserId())
+                val record = uploadService.findUploadForUser(uploadId, request.authUserId())
                 if (record == null) {
                     Response(NOT_FOUND)
                 } else {
@@ -509,7 +504,7 @@ fun resumableUploadContractRoute(uploadService: UploadService): ContractRoute =
         }
     }
 
-fun migrateUploadContractRoute(uploadService: UploadService, database: Database): ContractRoute {
+fun migrateUploadContractRoute(uploadService: UploadService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id / "migrate" meta {
         summary = "Migrate a legacy upload to encrypted"
@@ -637,7 +632,7 @@ private val tagsRequestLens = Body.auto<TagsRequest>().toLens()
 
 private val VALID_ROTATIONS = setOf(0, 90, 180, 270)
 
-fun rotationContractRoute(database: Database): ContractRoute {
+fun rotationContractRoute(uploadService: UploadService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id / "rotation" meta {
         summary = "Set image rotation"
@@ -652,7 +647,7 @@ fun rotationContractRoute(database: Database): ContractRoute {
                         Response(BAD_REQUEST).body("Malformed JSON")
                     body.rotation !in VALID_ROTATIONS ->
                         Response(BAD_REQUEST).body("rotation must be 0, 90, 180, or 270")
-                    !database.updateRotation(uploadId, body.rotation, request.authUserId()) ->
+                    !uploadService.updateRotation(uploadId, body.rotation, request.authUserId()) ->
                         Response(NOT_FOUND)
                     else ->
                         Response(OK)
@@ -664,20 +659,20 @@ fun rotationContractRoute(database: Database): ContractRoute {
     }
 }
 
-fun viewUploadContractRoute(database: Database): ContractRoute {
+fun viewUploadContractRoute(uploadService: UploadService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id / "view" meta {
         summary = "Record a detail view"
         description = "Sets last_viewed_at on the upload, removing it from the Just arrived plot."
     } bindContract POST to { uploadId: UUID, _: String ->
         { request: Request ->
-            val viewed = database.recordView(uploadId, request.authUserId())
+            val viewed = uploadService.recordView(uploadId, request.authUserId())
             if (!viewed) Response(NOT_FOUND) else Response(NO_CONTENT)
         }
     }
 }
 
-fun tagsContractRoute(database: Database): ContractRoute {
+fun tagsContractRoute(uploadService: UploadService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id / "tags" meta {
         summary = "Set tags"
@@ -697,10 +692,10 @@ fun tagsContractRoute(database: Database): ContractRoute {
                                 .body("""{"error":"invalid tag","tag":"${result.tag}","reason":"${result.reason}"}""")
                         is TagValidationResult.Valid -> {
                             val userId = request.authUserId()
-                            if (!database.updateTags(uploadId, body.tags, userId)) {
+                            if (!uploadService.updateTags(uploadId, body.tags, userId)) {
                                 Response(NOT_FOUND)
                             } else {
-                                val record = database.findUploadByIdForUser(uploadId, userId)!!
+                                val record = uploadService.findUploadForUser(uploadId, userId)!!
                                 Response(OK)
                                     .header("Content-Type", "application/json")
                                     .body(record.toJson())

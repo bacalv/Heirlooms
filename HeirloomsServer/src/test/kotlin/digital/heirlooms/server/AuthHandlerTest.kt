@@ -1,8 +1,9 @@
 package digital.heirlooms.server
 
 import digital.heirlooms.server.filters.sessionAuthFilter
+import digital.heirlooms.server.repository.auth.PostgresAuthRepository
+import digital.heirlooms.server.repository.keys.PostgresKeyRepository
 import digital.heirlooms.server.routes.buildApp
-import digital.heirlooms.server.storage.FileStore
 import digital.heirlooms.server.domain.keys.WrappedKeyRecord
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.zaxxer.hikari.HikariConfig
@@ -53,6 +54,8 @@ class AuthHandlerTest {
 
         private lateinit var dataSource: DataSource
         private lateinit var database: Database
+        private lateinit var authRepo: PostgresAuthRepository
+        private lateinit var keyRepo: PostgresKeyRepository
         private lateinit var app: org.http4k.core.HttpHandler
 
         @BeforeAll
@@ -79,9 +82,11 @@ class AuthHandlerTest {
                 .migrate()
 
             database = Database(dataSource)
+            authRepo = PostgresAuthRepository(dataSource)
+            keyRepo = PostgresKeyRepository(dataSource)
             val serverSecret = ByteArray(32) { it.toByte() }
             val rawApp = buildApp(mockk(relaxed = true), database, authSecret = serverSecret)
-            app = sessionAuthFilter(database).then(rawApp)
+            app = sessionAuthFilter(authRepo).then(rawApp)
         }
 
         private fun post(path: String, body: String, token: String? = null): org.http4k.core.Response {
@@ -136,7 +141,7 @@ class AuthHandlerTest {
          * Resets the founding user's auth state first for test isolation. Returns the raw session token.
          */
         private fun setupInviterSession(deviceId: String = "inviter-device-${UUID.randomUUID()}"): String {
-            database.resetUserAuth(FOUNDING_USER_ID)
+            authRepo.resetUserAuth(FOUNDING_USER_ID)
             // Register the founding user's wrapped_keys row
             val authKey = ByteArray(32) { 99 }
             val authSalt = ByteArray(16) { 11 }
@@ -144,7 +149,7 @@ class AuthHandlerTest {
             val pubkey = ByteArray(65) { 7 }
             val wrappedMasterKey = ByteArray(64) { 8 }
 
-            database.insertWrappedKey(
+            keyRepo.insertWrappedKey(
                 WrappedKeyRecord(
                     id = UUID.randomUUID(),
                     deviceId = deviceId,
@@ -280,7 +285,7 @@ class AuthHandlerTest {
 
     @Test
     fun `setup-existing rejected if device_id not in wrapped_keys`() {
-        database.resetUserAuth(FOUNDING_USER_ID)
+        authRepo.resetUserAuth(FOUNDING_USER_ID)
         val body = """
             {
               "username": "bret",
@@ -325,7 +330,7 @@ class AuthHandlerTest {
         assertNotNull(token)
         assertTrue(token.isNotBlank())
         // Verify user was created
-        val user = database.findUserByUsername(username)
+        val user = authRepo.findUserByUsername(username)
         assertNotNull(user)
     }
 
@@ -336,7 +341,7 @@ class AuthHandlerTest {
         // Create an invite and manually expire it
         val inviterToken = setupInviterSession("inviter-exp-${UUID.randomUUID()}")
         val inviteToken = generateInvite(inviterToken)
-        val invite = database.findInviteByToken(inviteToken)!!
+        val invite = authRepo.findInviteByToken(inviteToken)!!
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "UPDATE invites SET expires_at = NOW() - INTERVAL '1 hour' WHERE id = ?"
@@ -536,7 +541,7 @@ class AuthHandlerTest {
         val tokenBytes = runCatching { Base64.getUrlDecoder().decode(sessionToken) }
             .getOrElse { Base64.getDecoder().decode(sessionToken) }
         val hash = sha256(tokenBytes)
-        val session = database.findSessionByTokenHash(hash)
+        val session = authRepo.findSessionByTokenHash(hash)
         if (session != null) {
             dataSource.connection.use { conn ->
                 conn.prepareStatement(

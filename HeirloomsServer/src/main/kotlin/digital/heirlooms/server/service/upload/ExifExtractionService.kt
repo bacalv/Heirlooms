@@ -1,7 +1,7 @@
 package digital.heirlooms.server.service.upload
 
-import digital.heirlooms.server.Database
 import digital.heirlooms.server.domain.upload.UploadRecord
+import digital.heirlooms.server.repository.upload.UploadRepository
 import digital.heirlooms.server.storage.FileStore
 import digital.heirlooms.server.storage.StorageKey
 import kotlinx.coroutines.CoroutineScope
@@ -13,14 +13,14 @@ import java.util.UUID
 private const val EXIF_PARTIAL_BYTES = 65_536
 
 class ExifExtractionService(
-    private val database: Database,
+    private val uploadRepository: UploadRepository,
     private val storage: FileStore,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
 ) {
     private val extractor = MetadataExtractor()
 
     fun recoverPending() {
-        val ids = database.listPendingExifIds()
+        val ids = uploadRepository.listPendingExifIds()
         if (ids.isEmpty()) return
         println("[exif] recovering ${ids.size} pending row(s)")
         ids.forEach { id -> scope.launch { processOne(id) } }
@@ -28,13 +28,13 @@ class ExifExtractionService(
 
     private fun processOne(id: UUID) {
         try {
-            val record = database.getUploadById(id) ?: return
+            val record = uploadRepository.getUploadById(id) ?: return
             if (record.exifProcessedAt != null) return
 
             val bytes = fetchBytes(record)
             val meta = try { extractor.extract(bytes, record.mimeType) } catch (_: Exception) { MediaMetadata() }
 
-            database.updateExif(
+            uploadRepository.updateExif(
                 id,
                 takenAt  = meta.takenAt,
                 latitude    = meta.latitude,
@@ -47,7 +47,7 @@ class ExifExtractionService(
             println("[exif] WARNING: failed to process $id: ${e.message}")
             // Mark processed anyway to prevent infinite retry on a permanently broken row.
             try {
-                database.updateExif(id, null, null, null, null, null, null)
+                uploadRepository.updateExif(id, null, null, null, null, null, null)
             } catch (_: Exception) {}
         }
     }
