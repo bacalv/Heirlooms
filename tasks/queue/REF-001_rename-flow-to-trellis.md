@@ -71,3 +71,5 @@ Reasons:
 
 This is a **coordinated release** — server and clients must ship together or the server must keep the old path alive briefly. Plan the release window carefully.
 Do NOT do this while IOS-001 or other tasks touching the same files are in-progress.
+
+**Timing (CTO decision 2026-05-14):** REF-001 may be scheduled after M10-E1 and M10-E2 have merged to main and shipped to production, but before M10-E3 starts. It must not overlap with any M10 increment — E2 and E4 touch the same flow files.

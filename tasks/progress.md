@@ -14,7 +14,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 |----------|------|---------|
 | developer-1 | [IOS-001](in-progress/IOS-001_qr-scanner-avfoundation.md) | 2026-05-14 |
 | security | [SEC-001](in-progress/SEC-001_security-hardening.md) | 2026-05-14 |
-| architect | [ARCH-001](in-progress/ARCH-001_m10-task-breakdown.md) | 2026-05-14 |
 
 ---
 
@@ -22,9 +21,8 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |----|-------|----------|----------|-------------|------------|
-| [TST-001](queue/TST-001_sanity-test-production.md) | Sanity test production | Testing | High | CTO | — |
-| [TST-002](queue/TST-002_staging-first-user.md) | Create first user in staging | Testing | High | CTO | — |
-| [TST-003](queue/TST-003_manual-staging-checklist.md) | Manual staging test checklist | Testing | High | TestManager | TST-002 |
+| [TST-003](queue/TST-003_manual-staging-checklist.md) | Manual staging test checklist | Testing | High | TestManager | — |
+| [DOC-002](queue/DOC-002_doc-cleanup-history-backfill.md) | Doc cleanup + history backfill from git | Docs | Medium | TechnicalArchitect | — |
 | [IOS-002](queue/IOS-002_share-extension.md) | iOS Share Extension target | iOS | Medium | Developer | IOS-001 |
 | [REF-001](queue/REF-001_rename-flow-to-trellis.md) | Rename Flow → Trellis across all platforms | Refactoring | Medium | Developer | — |
 | [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | Developer | TST-003 |
@@ -38,7 +36,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 |----|-------|----------|-------------|------------|
 | [IOS-001](in-progress/IOS-001_qr-scanner-avfoundation.md) | Complete iOS QRScannerView (AVFoundation) | iOS | Developer | developer-1 |
 | [SEC-001](in-progress/SEC-001_security-hardening.md) | Security hardening + threat model | Security | SecurityManager | security |
-| [ARCH-001](in-progress/ARCH-001_m10-task-breakdown.md) | M10 — produce queue tasks for all four increments | Planning | TechnicalArchitect | architect |
 
 ## Done
 
@@ -49,6 +46,9 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [DONE-003](done/DONE-003_json-dto-serialisation.md) | Replace hand-rolled JSON with DTOs | Code Quality | 2026-05-14 |
 | [DONE-004](done/DONE-004_staging-environment.md) | Staging environment (test server, DB, domains, Android flavor) | Infrastructure | 2026-05-14 |
 | [DONE-005](done/DONE-005_founding-user-seed.md) | Founding user seed + auth route fixes | Bug Fix | 2026-05-14 |
+| [ARCH-001](done/ARCH-001_m10-task-breakdown.md) | M10 — produce queue tasks for all four increments | Planning | 2026-05-14 |
+| [TST-001](done/TST-001_sanity-test-production.md) | Sanity test production | Testing | 2026-05-14 |
+| [TST-002](done/TST-002_staging-first-user.md) | Create first user in staging | Testing | 2026-05-14 |
 
 ## Brainstorming
 

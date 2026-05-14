@@ -55,6 +55,14 @@ The intent: wake him once for urgent things (e.g. 2am access request), then back
 - **iOS**: Swift/SwiftUI, CryptoKit. Scaffold exists; QRScannerView is a stub (IOS-001 in queue)
 - **E2EE**: `p256-ecdh-hkdf-aes256gcm-v1` envelope — see `docs/envelope_format.md`
 
+## M10 design decisions (retrospectively confirmed 2026-05-14 — M10 shipped v0.47.0–v0.50.0)
+
+These decisions were made during M10 implementation and confirmed by reviewing the codebase:
+- V28 columns (`status`, `local_name`, `plot_status`, `tombstoned_at`, etc.) are E3 scope — implemented and tested
+- `FlowService.createFlow()` returns 400 if target plot has `criteria IS NOT NULL`
+- Shared plot invite join: async `pending_plot_key_requests` design (not synchronous)
+- **REF-001 window:** M10 is fully shipped — REF-001 may now be scheduled before M11 starts
+
 ## Key decisions
 
 - Flow → Trellis rename approved — see `tasks/brainstorming/IDEA-001_trellis-naming.md`, task REF-001 queued

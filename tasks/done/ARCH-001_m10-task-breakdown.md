@@ -55,3 +55,35 @@ Dependency chain: E2 depends on E1, E3 depends on E2, E4 depends on E3.
 
 Update `tasks/progress.md` to include all four new tasks in the Queue table.
 Append `## Completion notes` to this file and move it to `tasks/done/`.
+
+## Completion notes
+
+**Completed:** 2026-05-14
+
+**Files produced:**
+- `tasks/queue/M10-E1_predicate-criteria-system.md`
+- `tasks/queue/M10-E2_flows-and-staging.md`
+- `tasks/queue/M10-E3_shared-plots-e2ee.md`
+- `tasks/queue/M10-E4_android-adoption.md`
+
+**Key finding — codebase is ahead of the briefs:**
+The repo already has migrations V24–V28 (the briefs describe V24 and V25 as "new"),
+and the server already has `CriteriaEvaluator.kt`, `FlowRoutes.kt`,
+`SharedPlotRoutes.kt`, plus `CriteriaEvaluatorTest.kt` (~284 lines) and
+`PlotHandlerTest.kt` (~273 lines). The Android app already has `FlowsScreen.kt`,
+`StagingScreen.kt`, `PlotBulkStagingScreen.kt`, `SharedPlotsScreen.kt`. The web
+already has `StagingPanel.jsx`, `InviteMemberModal.jsx`, `SharedPlotsPage.jsx`.
+
+This means the E1–E4 tasks are completion + test-writing work on top of significant
+existing scaffolding, not greenfield builds. The task Notes sections call this out
+explicitly so the implementer knows to audit before writing new code.
+
+**Notable schema divergence (V28):**
+Migration V28 (`shared_plot_membership`) adds `status`, `local_name`, `left_at` to
+`plot_members` and `plot_status`, `tombstoned_at`, `tombstoned_by`, `created_by` to
+`plots`. The E3 brief does not mention this — it is a schema evolution that happened
+during scaffolding. The E3 task Notes section flags this for the implementer.
+
+**REF-001 conflict noted:**
+The Flow → Trellis rename task (REF-001) is queued and touches many of the same files.
+E4 and REF-001 must not be claimed simultaneously. The E4 Notes section calls this out.
