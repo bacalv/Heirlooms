@@ -6,10 +6,13 @@ import org.http4k.core.Filter
 import org.http4k.core.Request
 import org.http4k.core.Response
 import org.http4k.core.Status.Companion.UNAUTHORIZED
+import org.slf4j.LoggerFactory
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.Base64
 import java.util.UUID
+
+private val authFilterLogger = LoggerFactory.getLogger("digital.heirlooms.server.filters.SessionAuth")
 
 private val UNAUTHENTICATED_PATHS = setOf(
     "/api/auth/challenge",
@@ -57,6 +60,30 @@ fun sessionAuthFilter(authRepository: AuthRepository, staticApiKey: String = "")
     }
 }
 
-fun Request.authUserId(): UUID =
-    header("X-Auth-User-Id")?.let { runCatching { UUID.fromString(it) }.getOrNull() }
-        ?: FOUNDING_USER_ID
+/**
+ * Returns the authenticated user's UUID from the internal X-Auth-User-Id header that
+ * [sessionAuthFilter] stamps onto every verified request.
+ *
+ * The header is always set by the filter for any authenticated path. If the header is
+ * absent or malformed it means the request bypassed the filter (a configuration bug in
+ * tests or a new unauthenticated path that accidentally calls this). We log a security
+ * warning and fall back to FOUNDING_USER_ID rather than throwing, so existing handler
+ * tests that build [buildApp] directly (without the filter) continue to work.
+ *
+ * Note: the actual security gate is [sessionAuthFilter], which returns 401 before
+ * reaching any route handler when authentication is required. This fallback is a
+ * convenience for test infrastructure only.
+ */
+fun Request.authUserId(): UUID {
+    val raw = header("X-Auth-User-Id")
+    val parsed = raw?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+    if (parsed == null) {
+        authFilterLogger.warn(
+            "SECURITY: X-Auth-User-Id header missing or invalid on request to '{}' — falling back to FOUNDING_USER_ID. " +
+            "This must not occur in production; ensure all authenticated routes pass through sessionAuthFilter.",
+            uri.path
+        )
+        return FOUNDING_USER_ID
+    }
+    return parsed
+}

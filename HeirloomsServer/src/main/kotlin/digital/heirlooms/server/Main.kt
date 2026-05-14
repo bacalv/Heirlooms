@@ -78,13 +78,34 @@ fun main() {
     cleanupService.startPeriodicCleanup()
     logger.info("PendingBlobsCleanupService started")
 
-    val authSecret = if (config.authSecret.isNotEmpty())
-        runCatching { Base64.getUrlDecoder().decode(config.authSecret) }.getOrElse { ByteArray(32) }
-    else
+    val authSecret = if (config.authSecret.isNotEmpty()) {
+        runCatching { Base64.getUrlDecoder().decode(config.authSecret) }.getOrElse {
+            logger.error("SECURITY: AUTH_SECRET env var is set but is not valid Base64 — falling back to all-zeros key. Set AUTH_SECRET to a securely-generated 32-byte base64url value.")
+            ByteArray(32)
+        }
+    } else {
+        logger.error("SECURITY: AUTH_SECRET env var is not set. The fake-salt HMAC key is all zeros. This is a HIGH security finding — generate a random secret and set AUTH_SECRET before production use.")
         ByteArray(32)
+    }
+
+    // Parse allowed CORS origins from CORS_ALLOWED_ORIGINS (comma-separated).
+    // If empty/unset, the filter falls back to Access-Control-Allow-Origin: * (dev only).
+    val corsAllowedOrigins: Set<String> = System.getenv("CORS_ALLOWED_ORIGINS")
+        ?.takeIf { it.isNotBlank() }
+        ?.split(",")
+        ?.map { it.trim() }
+        ?.filter { it.isNotBlank() }
+        ?.toSet()
+        ?: emptySet()
+    if (corsAllowedOrigins.isEmpty()) {
+        logger.warn("SECURITY: CORS_ALLOWED_ORIGINS is not set — using Access-Control-Allow-Origin: * (development mode). Set this env var to lock CORS in production.")
+    } else {
+        logger.info("CORS allowed origins: {}", corsAllowedOrigins)
+    }
+
     val app = buildApp(storage, database, previewDurationSeconds = config.previewDurationSeconds, authSecret = authSecret)
     if (config.apiKey.isNotEmpty()) logger.info("Static API key auth enabled (development/test mode)")
-    val server = corsFilter().then(
+    val server = corsFilter(corsAllowedOrigins).then(
         sessionAuthFilter(PostgresAuthRepository(database.dataSource), config.apiKey).then(app)
     ).asServer(Netty(config.serverPort))
     server.start()

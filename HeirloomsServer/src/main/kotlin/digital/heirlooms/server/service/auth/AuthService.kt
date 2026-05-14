@@ -56,11 +56,19 @@ class AuthService(
     /**
      * Returns a deterministic but unpredictable salt for an unknown username,
      * preventing user-enumeration via timing differences in the challenge flow.
+     *
+     * The HMAC key is [serverSecret] which must be a securely-generated random
+     * byte array (set via AUTH_SECRET env var).  If AUTH_SECRET is not set in
+     * production the secret will be all-zeros, which means an attacker who knows
+     * the algorithm can predict fake salts.  A startup warning is logged in that
+     * case by Main.kt.
+     *
+     * The result is constant-time relative to the HMAC computation itself;
+     * no branching on the username value occurs after the MAC is computed.
      */
     fun fakeSalt(username: String): ByteArray {
-        val secret = if (serverSecret.isEmpty()) ByteArray(32) else serverSecret
         val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(secret, "HmacSHA256"))
+        mac.init(SecretKeySpec(serverSecret, "HmacSHA256"))
         return mac.doFinal(username.toByteArray(Charsets.UTF_8)).copyOf(16)
     }
 

@@ -25,6 +25,7 @@ import org.http4k.core.Status.Companion.UNAUTHORIZED
 import com.fasterxml.jackson.databind.ObjectMapper
 
 private val authMapper = ObjectMapper()
+private val authLogger = org.slf4j.LoggerFactory.getLogger("digital.heirlooms.server.routes.auth")
 
 fun authRoutes(authService: AuthService): List<ContractRoute> = listOf(
     challengeRoute(authService),
@@ -55,7 +56,8 @@ private fun challengeRoute(authService: AuthService): ContractRoute =
             Response(OK).header("Content-Type", "application/json")
                 .body(challengeResponseJson(salt))
         } catch (e: Exception) {
-            Response(INTERNAL_SERVER_ERROR).body("challenge failed: ${e.message}")
+            authLogger.error("challenge error", e)
+            Response(INTERNAL_SERVER_ERROR).body("Internal server error")
         }
     }
 
@@ -82,7 +84,8 @@ private fun loginRoute(authService: AuthService): ContractRoute =
                         .body("""{"error":"Invalid credentials"}""")
             }
         } catch (e: Exception) {
-            Response(INTERNAL_SERVER_ERROR).body("login failed: ${e.message}")
+            authLogger.error("login error", e)
+            Response(INTERNAL_SERVER_ERROR).body("Internal server error")
         }
     }
 
@@ -124,7 +127,8 @@ private fun setupExistingRoute(authService: AuthService): ContractRoute =
                         .body("""{"error":"Invalid credentials"}""")
             }
         } catch (e: Exception) {
-            Response(INTERNAL_SERVER_ERROR).body("setup-existing failed: ${e.message}")
+            authLogger.error("setup-existing error", e)
+            Response(INTERNAL_SERVER_ERROR).body("Internal server error")
         }
     }
 
@@ -140,7 +144,8 @@ private fun logoutRoute(authService: AuthService): ContractRoute =
             authService.logout(request.header("X-Api-Key"))
             Response(NO_CONTENT)
         } catch (e: Exception) {
-            Response(INTERNAL_SERVER_ERROR).body("logout failed: ${e.message}")
+            authLogger.error("logout error", e)
+            Response(INTERNAL_SERVER_ERROR).body("Internal server error")
         }
     }
 
@@ -156,7 +161,8 @@ private fun meRoute(authService: AuthService): ContractRoute =
             Response(OK).header("Content-Type", "application/json")
                 .body("""{"user_id":"${userInfo.id}","username":"${userInfo.username}","display_name":"${userInfo.displayName}"}""")
         } catch (e: Exception) {
-            Response(INTERNAL_SERVER_ERROR).body("me failed: ${e.message}")
+            authLogger.error("me error", e)
+            Response(INTERNAL_SERVER_ERROR).body("Internal server error")
         }
     }
 
@@ -171,7 +177,8 @@ private fun getInviteRoute(authService: AuthService): ContractRoute =
             Response(OK).header("Content-Type", "application/json")
                 .body(inviteResponseJson(invite.token, invite.expiresAt))
         } catch (e: Exception) {
-            Response(INTERNAL_SERVER_ERROR).body("invites failed: ${e.message}")
+            authLogger.error("invites error", e)
+            Response(INTERNAL_SERVER_ERROR).body("Internal server error")
         }
     }
 
@@ -234,7 +241,8 @@ private fun registerRoute(authService: AuthService): ContractRoute =
                         .body("""{"error":"Username already taken"}""")
             }
         } catch (e: Exception) {
-            Response(INTERNAL_SERVER_ERROR).body("register failed: ${e.message}")
+            authLogger.error("register error", e)
+            Response(INTERNAL_SERVER_ERROR).body("Internal server error")
         }
     }
 
@@ -249,7 +257,8 @@ private fun pairingInitiateRoute(authService: AuthService): ContractRoute =
             Response(OK).header("Content-Type", "application/json")
                 .body(pairingInitiateResponseJson(link.oneTimeCode, link.expiresAt))
         } catch (e: Exception) {
-            Response(INTERNAL_SERVER_ERROR).body("pairing/initiate failed: ${e.message}")
+            authLogger.error("pairing/initiate error", e)
+            Response(INTERNAL_SERVER_ERROR).body("Internal server error")
         }
     }
 
@@ -273,7 +282,8 @@ private fun pairingQrRoute(authService: AuthService): ContractRoute =
                         .body("""{"error":"Code not found or expired"}""")
             }
         } catch (e: Exception) {
-            Response(INTERNAL_SERVER_ERROR).body("pairing/qr failed: ${e.message}")
+            authLogger.error("pairing/qr error", e)
+            Response(INTERNAL_SERVER_ERROR).body("Internal server error")
         }
     }
 
@@ -305,7 +315,8 @@ private fun pairingCompleteRoute(authService: AuthService): ContractRoute =
                         .body("""{"error":"Pairing not in expected state"}""")
             }
         } catch (e: Exception) {
-            Response(INTERNAL_SERVER_ERROR).body("pairing/complete failed: ${e.message}")
+            authLogger.error("pairing/complete error", e)
+            Response(INTERNAL_SERVER_ERROR).body("Internal server error")
         }
     }
 
@@ -334,6 +345,7 @@ private fun pairingStatusRoute(authService: AuthService): ContractRoute =
                         .body("""{"error":"Session expired"}""")
             }
         } catch (e: Exception) {
-            Response(INTERNAL_SERVER_ERROR).body("pairing/status failed: ${e.message}")
+            authLogger.error("pairing/status error", e)
+            Response(INTERNAL_SERVER_ERROR).body("Internal server error")
         }
     }
