@@ -154,7 +154,7 @@ private fun approveStagingRoute(flowService: FlowService): ContractRoute {
     val uploadId = Path.uuid().of("uploadId")
     return "/plots" / plotId / "staging" / uploadId / "approve" meta {
         summary = "Approve a staging item"
-    } bindContract POST to { pId: UUID, _s1: String, uId: UUID, _s2: String ->
+    } bindContract POST to { pId: UUID, _: String, uId: UUID, _: String ->
         { request: Request ->
             val node = try { flowMapper.readTree(request.bodyString()) } catch (_: Exception) { null }
             val sourceFlowId = try { node?.get("sourceFlowId")?.asText()?.let { UUID.fromString(it) } } catch (_: Exception) { null }
@@ -185,7 +185,7 @@ private fun rejectStagingRoute(flowService: FlowService): ContractRoute {
     val uploadId = Path.uuid().of("uploadId")
     return "/plots" / plotId / "staging" / uploadId / "reject" meta {
         summary = "Reject a staging item"
-    } bindContract POST to { pId: UUID, _s1: String, uId: UUID, _s2: String ->
+    } bindContract POST to { pId: UUID, _: String, uId: UUID, _: String ->
         { request: Request ->
             val sourceFlowId = try {
                 flowMapper.readTree(request.bodyString())?.get("sourceFlowId")?.asText()
@@ -206,7 +206,7 @@ private fun deleteDecisionRoute(flowService: FlowService): ContractRoute {
     val uploadId = Path.uuid().of("uploadId")
     return "/plots" / plotId / "staging" / uploadId / "decision" meta {
         summary = "Remove a staging decision (un-reject)"
-    } bindContract DELETE to { pId: UUID, _s1: String, uId: UUID, _s2: String ->
+    } bindContract DELETE to { pId: UUID, _: String, uId: UUID, _: String ->
         { request: Request ->
             if (flowService.deleteDecision(pId, uId, request.authUserId())) Response(NO_CONTENT)
             else Response(NOT_FOUND)
@@ -218,7 +218,7 @@ private fun getRejectedRoute(flowService: FlowService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/plots" / id / "staging" / "rejected" meta {
         summary = "List rejected staging items for a plot"
-    } bindContract GET to { plotId: UUID, _s1: String, _s2: String ->
+    } bindContract GET to { plotId: UUID, _: String, _: String ->
         { request: Request ->
             val items = flowService.getRejectedItems(plotId, request.authUserId())
             val json = "[${items.joinToString(",") { it.toJson() }}]"
