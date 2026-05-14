@@ -1,5 +1,9 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.domain.capsule.CapsuleDetail
+import digital.heirlooms.server.domain.capsule.CapsuleShape
+import digital.heirlooms.server.domain.capsule.CapsuleState
+import digital.heirlooms.server.domain.capsule.CapsuleSummary
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.http4k.contract.ContractRoute
 import org.http4k.contract.div

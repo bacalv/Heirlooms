@@ -1,5 +1,7 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.domain.keys.RecoveryPassphraseRecord
+import digital.heirlooms.server.domain.keys.WrappedKeyRecord
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk

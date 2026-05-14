@@ -1,5 +1,7 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.domain.keys.RecoveryPassphraseRecord
+import digital.heirlooms.server.domain.keys.WrappedKeyRecord
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
@@ -436,7 +438,7 @@ class IsolationTest {
         val bobUser = database.findUserByUsername("bob_iso")!!
         // Set up distinct passphrase records for Alice and Bob
         database.upsertRecoveryPassphrase(
-            digital.heirlooms.server.RecoveryPassphraseRecord(
+            RecoveryPassphraseRecord(
                 wrappedMasterKey = ByteArray(64) { 11 },
                 wrapFormat = "master-aes256gcm-v1",
                 argon2Params = "{}",
@@ -447,7 +449,7 @@ class IsolationTest {
             aliceUser.id,
         )
         database.upsertRecoveryPassphrase(
-            digital.heirlooms.server.RecoveryPassphraseRecord(
+            RecoveryPassphraseRecord(
                 wrappedMasterKey = ByteArray(64) { 22 },
                 wrapFormat = "master-aes256gcm-v1",
                 argon2Params = "{}",

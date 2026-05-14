@@ -1,0 +1,48 @@
+package digital.heirlooms.server.domain.upload
+
+import java.time.Instant
+import java.util.UUID
+
+data class UploadRecord(
+    val id: UUID,
+    val storageKey: String,
+    val mimeType: String,
+    val fileSize: Long,
+    val uploadedAt: Instant = Instant.now(),
+    val contentHash: String? = null,
+    val thumbnailKey: String? = null,
+    val takenAt: Instant? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val altitude: Double? = null,
+    val deviceMake: String? = null,
+    val deviceModel: String? = null,
+    val rotation: Int = 0,
+    val tags: List<String> = emptyList(),
+    val compostedAt: Instant? = null,
+    val exifProcessedAt: Instant? = null,
+    val lastViewedAt: Instant? = null,
+    val storageClass: String = "public",
+    val envelopeVersion: Int? = null,
+    val wrappedDek: ByteArray? = null,
+    val dekFormat: String? = null,
+    val encryptedMetadata: ByteArray? = null,
+    val encryptedMetadataFormat: String? = null,
+    val thumbnailStorageKey: String? = null,
+    val wrappedThumbnailDek: ByteArray? = null,
+    val thumbnailDekFormat: String? = null,
+    val previewStorageKey: String? = null,
+    val wrappedPreviewDek: ByteArray? = null,
+    val previewDekFormat: String? = null,
+    val plainChunkSize: Int? = null,
+    val durationSeconds: Int? = null,
+    val sharedFromUploadId: UUID? = null,
+    val sharedFromUserId: UUID? = null,
+)
+
+data class UploadPage(val items: List<UploadRecord>, val nextCursor: String?)
+
+enum class UploadSort { UPLOAD_NEWEST, UPLOAD_OLDEST, TAKEN_NEWEST, TAKEN_OLDEST }
+
+// Internal to the repository layer — exposed here so UploadRepository can use it
+data class DecodedCursor(val sort: UploadSort, val sortKeyMs: Long?, val id: UUID)

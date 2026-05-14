@@ -1,5 +1,8 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.domain.keys.PendingDeviceLinkRecord
+import digital.heirlooms.server.domain.keys.RecoveryPassphraseRecord
+import digital.heirlooms.server.domain.keys.WrappedKeyRecord
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import org.http4k.contract.ContractRoute

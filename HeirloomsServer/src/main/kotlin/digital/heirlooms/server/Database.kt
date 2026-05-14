@@ -2,6 +2,30 @@ package digital.heirlooms.server
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
+import digital.heirlooms.server.domain.auth.InviteRecord
+import digital.heirlooms.server.domain.auth.UserRecord
+import digital.heirlooms.server.domain.auth.UserSessionRecord
+import digital.heirlooms.server.domain.capsule.CapsuleDetail
+import digital.heirlooms.server.domain.capsule.CapsuleRecord
+import digital.heirlooms.server.domain.capsule.CapsuleShape
+import digital.heirlooms.server.domain.capsule.CapsuleState
+import digital.heirlooms.server.domain.capsule.CapsuleSummary
+import digital.heirlooms.server.domain.keys.AccountSharingKeyRecord
+import digital.heirlooms.server.domain.keys.FriendRecord
+import digital.heirlooms.server.domain.keys.PendingDeviceLinkRecord
+import digital.heirlooms.server.domain.keys.RecoveryPassphraseRecord
+import digital.heirlooms.server.domain.keys.WrappedKeyRecord
+import digital.heirlooms.server.domain.plot.FlowRecord
+import digital.heirlooms.server.domain.plot.PlotInviteRecord
+import digital.heirlooms.server.domain.plot.PlotItemRecord
+import digital.heirlooms.server.domain.plot.PlotItemWithUpload
+import digital.heirlooms.server.domain.plot.PlotMemberRecord
+import digital.heirlooms.server.domain.plot.PlotRecord
+import digital.heirlooms.server.domain.plot.SharedMembershipRecord
+import digital.heirlooms.server.domain.upload.DecodedCursor
+import digital.heirlooms.server.domain.upload.UploadPage
+import digital.heirlooms.server.domain.upload.UploadRecord
+import digital.heirlooms.server.domain.upload.UploadSort
 import org.flywaydb.core.Flyway
 import java.sql.Connection
 import java.sql.PreparedStatement
@@ -13,264 +37,8 @@ import java.util.Base64
 import java.util.UUID
 import javax.sql.DataSource
 
-// ---- Auth domain model --------------------------------------------------
-
-val FOUNDING_USER_ID: UUID = UUID.fromString("00000000-0000-0000-0000-000000000001")
-
-data class UserRecord(
-    val id: UUID,
-    val username: String,
-    val displayName: String,
-    val authVerifier: ByteArray?,
-    val authSalt: ByteArray?,
-    val createdAt: java.time.Instant,
-)
-
-data class UserSessionRecord(
-    val id: UUID,
-    val userId: UUID,
-    val tokenHash: ByteArray,
-    val deviceKind: String,
-    val createdAt: java.time.Instant,
-    val lastUsedAt: java.time.Instant,
-    val expiresAt: java.time.Instant,
-)
-
-data class InviteRecord(
-    val id: UUID,
-    val token: String,
-    val createdBy: UUID,
-    val createdAt: java.time.Instant,
-    val expiresAt: java.time.Instant,
-    val usedAt: java.time.Instant?,
-    val usedBy: UUID?,
-)
-
-// ---- Capsule domain model -----------------------------------------------
-
-enum class CapsuleShape { OPEN, SEALED }
-enum class CapsuleState { OPEN, SEALED, DELIVERED, CANCELLED }
-
-data class CapsuleRecord(
-    val id: UUID,
-    val createdAt: Instant,
-    val updatedAt: Instant,
-    val createdByUser: String,
-    val shape: CapsuleShape,
-    val state: CapsuleState,
-    val unlockAt: OffsetDateTime,
-    val cancelledAt: Instant?,
-    val deliveredAt: Instant?,
-)
-
-data class CapsuleSummary(
-    val record: CapsuleRecord,
-    val recipients: List<String>,
-    val uploadCount: Int,
-    val hasMessage: Boolean,
-)
-
-data class CapsuleDetail(
-    val record: CapsuleRecord,
-    val recipients: List<String>,
-    val uploads: List<UploadRecord>,
-    val message: String,
-)
-
-// ---- Upload domain model ------------------------------------------------
-
-data class UploadRecord(
-    val id: UUID,
-    val storageKey: String,
-    val mimeType: String,
-    val fileSize: Long,
-    val uploadedAt: Instant = Instant.now(),
-    val contentHash: String? = null,
-    val thumbnailKey: String? = null,
-    val takenAt: Instant? = null,
-    val latitude: Double? = null,
-    val longitude: Double? = null,
-    val altitude: Double? = null,
-    val deviceMake: String? = null,
-    val deviceModel: String? = null,
-    val rotation: Int = 0,
-    val tags: List<String> = emptyList(),
-    val compostedAt: Instant? = null,
-    val exifProcessedAt: Instant? = null,
-    val lastViewedAt: Instant? = null,
-    val storageClass: String = "public",
-    val envelopeVersion: Int? = null,
-    val wrappedDek: ByteArray? = null,
-    val dekFormat: String? = null,
-    val encryptedMetadata: ByteArray? = null,
-    val encryptedMetadataFormat: String? = null,
-    val thumbnailStorageKey: String? = null,
-    val wrappedThumbnailDek: ByteArray? = null,
-    val thumbnailDekFormat: String? = null,
-    val previewStorageKey: String? = null,
-    val wrappedPreviewDek: ByteArray? = null,
-    val previewDekFormat: String? = null,
-    val plainChunkSize: Int? = null,
-    val durationSeconds: Int? = null,
-    val sharedFromUploadId: UUID? = null,
-    val sharedFromUserId: UUID? = null,
-)
-
-data class UploadPage(val items: List<UploadRecord>, val nextCursor: String?)
-
-data class WrappedKeyRecord(
-    val id: UUID,
-    val deviceId: String,
-    val deviceLabel: String,
-    val deviceKind: String,
-    val pubkeyFormat: String,
-    val pubkey: ByteArray,
-    val wrappedMasterKey: ByteArray,
-    val wrapFormat: String,
-    val createdAt: Instant,
-    val lastUsedAt: Instant,
-    val retiredAt: Instant?,
-)
-
-data class RecoveryPassphraseRecord(
-    val wrappedMasterKey: ByteArray,
-    val wrapFormat: String,
-    val argon2Params: String,
-    val salt: ByteArray,
-    val createdAt: Instant,
-    val updatedAt: Instant,
-)
-
-data class PendingDeviceLinkRecord(
-    val id: UUID,
-    val oneTimeCode: String,
-    val expiresAt: Instant,
-    val state: String,
-    val newDeviceId: String?,
-    val newDeviceLabel: String?,
-    val newDeviceKind: String?,
-    val newPubkeyFormat: String?,
-    val newPubkey: ByteArray?,
-    val wrappedMasterKey: ByteArray?,
-    val wrapFormat: String?,
-    val userId: UUID? = null,
-    val webSessionId: String? = null,
-    val rawSessionToken: String? = null,
-    val sessionExpiresAt: Instant? = null,
-)
-
-// ---- Sort options for uploads -------------------------------------------
-
-enum class UploadSort { UPLOAD_NEWEST, UPLOAD_OLDEST, TAKEN_NEWEST, TAKEN_OLDEST }
-
-private data class DecodedCursor(val sort: UploadSort, val sortKeyMs: Long?, val id: UUID)
-
-// ---- Sharing / social domain model --------------------------------------
-
-data class AccountSharingKeyRecord(
-    val userId: UUID,
-    val pubkey: ByteArray,
-    val wrappedPrivkey: ByteArray,
-    val wrapFormat: String,
-)
-
-data class FriendRecord(
-    val userId: UUID,
-    val username: String,
-    val displayName: String,
-)
-
-// ---- Plot domain model -----------------------------------------------
-
-data class PlotRecord(
-    val id: UUID,
-    val ownerUserId: UUID?,
-    val name: String,
-    val sortOrder: Int,
-    val isSystemDefined: Boolean,
-    val createdAt: Instant,
-    val updatedAt: Instant,
-    val criteria: String?,
-    val showInGarden: Boolean,
-    val visibility: String,
-    val plotStatus: String = "open",
-    val tombstonedAt: Instant? = null,
-    val tombstonedBy: UUID? = null,
-    val createdBy: UUID? = null,
-    val localName: String? = null,
-)
-
-// ---- Flow domain model -----------------------------------------------
-
-data class FlowRecord(
-    val id: UUID,
-    val userId: UUID,
-    val name: String,
-    val criteria: String,
-    val targetPlotId: UUID,
-    val requiresStaging: Boolean,
-    val createdAt: Instant,
-    val updatedAt: Instant,
-)
-
-data class PlotItemRecord(
-    val id: UUID,
-    val plotId: UUID,
-    val uploadId: UUID,
-    val addedBy: UUID,
-    val sourceFlowId: UUID?,
-    val addedAt: Instant,
-)
-
-data class PlotItemWithUpload(
-    val upload: UploadRecord,
-    val addedBy: UUID,
-    val wrappedItemDek: ByteArray?,
-    val itemDekFormat: String?,
-    val wrappedThumbnailDek: ByteArray?,
-    val thumbnailDekFormat: String?,
-)
-
-data class PlotMemberRecord(
-    val plotId: UUID,
-    val userId: UUID,
-    val displayName: String,
-    val username: String,
-    val role: String,
-    val wrappedPlotKey: ByteArray?,
-    val plotKeyFormat: String?,
-    val joinedAt: Instant,
-    val status: String = "joined",
-    val localName: String? = null,
-    val leftAt: Instant? = null,
-)
-
-data class SharedMembershipRecord(
-    val plotId: UUID,
-    val plotName: String,
-    val ownerUserId: UUID?,
-    val ownerDisplayName: String?,
-    val role: String,
-    val status: String,
-    val localName: String?,
-    val joinedAt: Instant,
-    val leftAt: Instant?,
-    val plotStatus: String,
-    val tombstonedAt: Instant?,
-    val tombstonedBy: UUID?,
-)
-
-data class PlotInviteRecord(
-    val id: UUID,
-    val plotId: UUID,
-    val createdBy: UUID,
-    val token: String,
-    val recipientUserId: UUID?,
-    val recipientPubkey: String?,
-    val usedBy: UUID?,
-    val expiresAt: Instant,
-    val createdAt: Instant,
-)
+// Re-export FOUNDING_USER_ID from domain.auth for backwards compatibility
+val FOUNDING_USER_ID: UUID get() = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID
 
 class Database(private val dataSource: DataSource) {
 

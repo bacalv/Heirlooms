@@ -1,5 +1,11 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.domain.capsule.CapsuleDetail
+import digital.heirlooms.server.domain.capsule.CapsuleRecord
+import digital.heirlooms.server.domain.capsule.CapsuleShape
+import digital.heirlooms.server.domain.capsule.CapsuleState
+import digital.heirlooms.server.domain.capsule.CapsuleSummary
+import digital.heirlooms.server.domain.upload.UploadRecord
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue

@@ -1,5 +1,7 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.domain.upload.UploadPage
+import digital.heirlooms.server.domain.upload.UploadRecord
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
