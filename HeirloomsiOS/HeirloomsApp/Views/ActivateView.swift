@@ -192,9 +192,9 @@ struct ActivateView: View {
             try KeychainManager.saveSessionToken(response.sessionToken)
             // Persist userId so HomeView can distinguish "Shared with you" vs "You shared".
             try KeychainManager.saveUserId(response.userId)
-            // Store master key raw bytes for later use.
+            // Store master key in its dedicated Keychain slot.
             let masterKeyData = masterKey.withUnsafeBytes { Data($0) }
-            try KeychainManager.savePlotKey(masterKeyData) // repurposed slot until plot key is set
+            try KeychainManager.saveMasterKey(masterKeyData)
 
             await MainActor.run {
                 appState.refreshPhase()
@@ -277,8 +277,8 @@ struct ActivateView: View {
             // Import SPKI → uncompressed x963 (65 bytes) required by wrapDEK.
             let uncompressed = try P256.KeyAgreement.PublicKey(derRepresentation: spkiData).x963Representation
 
-            // Retrieve master key. Stored in the plot-key Keychain slot at activation time.
-            guard let masterKeyData = try? KeychainManager.getPlotKey(), masterKeyData.count == 32 else {
+            // Retrieve master key from its dedicated Keychain slot.
+            guard let masterKeyData = try? KeychainManager.getMasterKey(), masterKeyData.count == 32 else {
                 throw HeirloomsError.decryptionFailed("Master key not available — please re-activate the app")
             }
 
