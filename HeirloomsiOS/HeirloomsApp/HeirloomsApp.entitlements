@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for the main HeirloomsApp target.
+
+  HOW TO ADD IN XCODE:
+  1. Select the HeirloomsApp target in the project navigator.
+  2. Go to Signing & Capabilities.
+  3. Click "+ Capability" and add:
+       a. "Keychain Sharing" — then add the group: digital.heirlooms.keychain
+       b. "App Groups"       — then add the group: group.digital.heirlooms
+
+  Xcode will create / update the .entitlements file automatically.
+  The values below are what should end up in that file.
+
+  KEYCHAIN GROUP NOTE:
+  For a free developer account, the keychain-access-groups value is prefixed
+  with your Team ID at signing time (e.g. "ABCDE12345.digital.heirlooms.keychain").
+  Xcode handles this substitution via the $(AppIdentifierPrefix) variable when
+  you add the capability through the GUI. If you edit the plist directly, use
+  the literal team-prefixed string or the $(AppIdentifierPrefix) variable.
+-->
+<plist version="1.0">
+<dict>
+    <!-- Keychain Sharing: allows the Share Extension process to read
+         items written by the main app using this access group. -->
+    <key>keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)digital.heirlooms.keychain</string>
+    </array>
+
+    <!-- App Groups: shared UserDefaults / file container between the main
+         app and the Share Extension (used by BackgroundUploadManager). -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.digital.heirlooms</string>
+    </array>
+</dict>
+</plist>
