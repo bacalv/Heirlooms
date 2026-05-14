@@ -294,6 +294,36 @@ public final class HeirloomsAPI {
 
     // MARK: - Pairing
 
+    /// Completes the device-pairing flow by posting the wrapped master key to the web session.
+    ///
+    /// Calls `POST /api/auth/pairing/complete`.
+    ///
+    /// - Parameters:
+    ///   - sessionId: The session UUID obtained by calling `POST /api/auth/pairing/qr`.
+    ///   - wrappedMasterKey: Binary asymmetric envelope containing the master key, wrapped
+    ///     to the web session's ephemeral P-256 public key.
+    ///   - webPubkey: The web session's P-256 public key in base64url SPKI format (as carried
+    ///     in the pairing QR payload).
+    ///   - wrapFormat: Algorithm identifier used to wrap the master key (default: `algAsymmetric`).
+    public func completePairing(
+        sessionId: String,
+        wrappedMasterKey: Data,
+        webPubkey: String,
+        wrapFormat: String = EnvelopeCrypto.algAsymmetric
+    ) async throws {
+        let body: [String: Any] = [
+            "session_id": sessionId,
+            "wrapped_master_key": wrappedMasterKey.base64EncodedString(),
+            "wrap_format": wrapFormat,
+            "web_pubkey": webPubkey,
+            "web_pubkey_format": "p256-spki",
+        ]
+        let url = baseURL.appendingPathComponent("api/auth/pairing/complete")
+        let request = try buildRequest(url: url, method: "POST", body: body)
+        let (data, response) = try await session.data(for: request)
+        try validateResponse(response, data: data, context: "completePairing")
+    }
+
     /// Initiates the device-pairing flow, returning a numeric code for the web to display.
     ///
     /// Calls `POST /api/auth/pairing/initiate`.
