@@ -167,9 +167,7 @@ private fun getInviteRoute(authService: AuthService): ContractRoute =
         summary = "Generate an invite token for the authenticated user"
     } bindContract GET to { request: Request ->
         try {
-            val session = authService.resolveSession(request.header("X-Api-Key"))
-                ?: return@to Response(UNAUTHORIZED).body("Unauthorized")
-            val invite = authService.generateInvite(session.userId)
+            val invite = authService.generateInvite(request.authUserId())
             Response(OK).header("Content-Type", "application/json")
                 .body(inviteResponseJson(invite.token, invite.expiresAt))
         } catch (e: Exception) {
@@ -247,9 +245,7 @@ private fun pairingInitiateRoute(authService: AuthService): ContractRoute =
         summary = "Generate a numeric pairing code (Android → web)"
     } bindContract POST to { request: Request ->
         try {
-            val session = authService.resolveSession(request.header("X-Api-Key"))
-                ?: return@to Response(UNAUTHORIZED).body("Unauthorized")
-            val link = authService.initiatePairing(session.userId)
+            val link = authService.initiatePairing(request.authUserId())
             Response(OK).header("Content-Type", "application/json")
                 .body(pairingInitiateResponseJson(link.oneTimeCode, link.expiresAt))
         } catch (e: Exception) {
@@ -288,8 +284,6 @@ private fun pairingCompleteRoute(authService: AuthService): ContractRoute =
         summary = "Android posts wrapped key for web session (completes pairing)"
     } bindContract POST to { request: Request ->
         try {
-            val androidSession = authService.resolveSession(request.header("X-Api-Key"))
-                ?: return@to Response(UNAUTHORIZED).body("Unauthorized")
             val node = authMapper.readTree(request.bodyString())
             val sessionId = node?.get("session_id")?.asText()
             val wrappedMasterKeyB64 = node?.get("wrapped_master_key")?.asText()
@@ -298,7 +292,7 @@ private fun pairingCompleteRoute(authService: AuthService): ContractRoute =
                 return@to Response(BAD_REQUEST).body("Missing required fields")
             val wrappedMasterKey = authService.decodeBase64Url(wrappedMasterKeyB64)
                 ?: return@to Response(BAD_REQUEST).body("wrapped_master_key is not valid Base64")
-            when (authService.completePairing(androidSession, sessionId, wrappedMasterKey, wrapFormat)) {
+            when (authService.completePairing(request.authUserId(), sessionId, wrappedMasterKey, wrapFormat)) {
                 AuthService.PairingCompleteResult.Ok ->
                     Response(OK).header("Content-Type", "application/json").body("""{"ok":true}""")
                 AuthService.PairingCompleteResult.Unauthorized ->

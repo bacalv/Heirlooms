@@ -274,7 +274,7 @@ class AuthService(
     }
 
     fun completePairing(
-        androidSession: UserSessionRecord,
+        callerUserId: UUID,
         sessionId: String,
         wrappedMasterKey: ByteArray,
         wrapFormat: String,
@@ -282,10 +282,10 @@ class AuthService(
         val link = authRepo.getPendingDeviceLinkByWebSessionId(sessionId)
         if (link == null || link.expiresAt.isBefore(Instant.now())) return PairingCompleteResult.NotFound
         if (link.state != "device_registered") return PairingCompleteResult.WrongState
-        if (link.userId != androidSession.userId) return PairingCompleteResult.NotFound
+        if (link.userId != callerUserId) return PairingCompleteResult.NotFound
 
         val (rawToken, _, hash) = issueToken()
-        val webSession = authRepo.createSession(androidSession.userId, hash, "web")
+        val webSession = authRepo.createSession(callerUserId, hash, "web")
         authRepo.completePairingLink(link.id, wrappedMasterKey, wrapFormat, rawToken, webSession)
         return PairingCompleteResult.Ok
     }
