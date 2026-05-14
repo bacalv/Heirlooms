@@ -14,6 +14,21 @@ Previous notes archived in `docs/sessions/2026-05-14_PA_NOTES_archive.md`.
 - `say "..."` on macOS is useful for async audio alerts on long agent tasks
 - Secrets: only Bret knows production secrets — never ask for them, never log them
 
+## Alert / mute protocol
+
+If any task has been waiting for Bret's input for **more than 30 minutes**, play an audio alert via `say "..."`.
+
+**Mute mode:** After the first alert, enter mute with exponential back-off — alert again after 1h, then 2h, then 4h, then 8h, etc. Bret's next prompt automatically resets mute (he is "off mute" from the moment he types anything). Bret can also say "on mute" explicitly to suppress alerts immediately.
+
+The intent: wake him once for urgent things (e.g. 2am access request), then back off gracefully rather than spamming.
+
+## Docker build / deployment protocol
+
+- There is only **one Docker client** — each build or deployment requires a **manual Docker Desktop restart** by Bret.
+- Never start a docker build or deployment without alerting Bret first and receiving explicit approval.
+- **Always batch same-session work**: if multiple builds or deployments are queuing up in the same session, ask the dev team to merge all compatible changes before triggering a single build/deploy. Minimise the number of Docker restarts.
+- Flag this as a known friction point (manual restart). Bret intends to automate it eventually — do not raise it as a task unless asked.
+
 ## Project facts
 
 - Package: `digital.heirlooms` (not com.heirloom)
