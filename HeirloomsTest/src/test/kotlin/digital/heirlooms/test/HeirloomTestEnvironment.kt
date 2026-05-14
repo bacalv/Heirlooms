@@ -4,7 +4,7 @@ import digital.heirlooms.server.AppConfig
 import digital.heirlooms.server.Database
 import digital.heirlooms.server.S3FileStore
 import digital.heirlooms.server.StorageBackend
-import digital.heirlooms.server.buildApp
+import digital.heirlooms.server.routes.buildApp
 import digital.heirlooms.server.corsFilter
 import digital.heirlooms.server.sessionAuthFilter
 import okhttp3.OkHttpClient

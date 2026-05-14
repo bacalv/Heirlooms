@@ -1,5 +1,6 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.routes.buildApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

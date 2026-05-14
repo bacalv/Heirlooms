@@ -2,6 +2,51 @@
 
 ---
 
+## Session — 14 May 2026 — Server refactor phase 7: move handlers to routes/ sub-packages
+
+### What was done
+
+Pure code reorganisation — no behaviour changes. All nine handler files moved into a `routes/` sub-package tree. `buildApp()` extracted from `UploadHandler.kt` into a new `routes/AppRoutes.kt`.
+
+**New routes files:**
+
+| New file | Package | Old handler |
+|---|---|---|
+| `routes/upload/UploadRoutes.kt` | `routes.upload` | `UploadHandler.kt` |
+| `routes/auth/AuthRoutes.kt` | `routes.auth` | `AuthHandler.kt` |
+| `routes/capsule/CapsuleRoutes.kt` | `routes.capsule` | `CapsuleHandler.kt` |
+| `routes/plot/PlotRoutes.kt` | `routes.plot` | `PlotHandler.kt` |
+| `routes/plot/FlowRoutes.kt` | `routes.plot` | `FlowHandler.kt` |
+| `routes/plot/SharedPlotRoutes.kt` | `routes.plot` | `SharedPlotHandler.kt` |
+| `routes/keys/KeysRoutes.kt` | `routes.keys` | `KeysHandler.kt` |
+| `routes/social/FriendsRoutes.kt` | `routes.social` | `FriendsHandler.kt` |
+| `routes/social/SharingKeyRoutes.kt` | `routes.social` | `SharingKeyHandler.kt` |
+| `routes/AppRoutes.kt` | `routes` | `buildApp()` from `UploadHandler.kt` |
+
+**How `buildApp()` was handled:** `buildApp()` was extracted from `UploadHandler.kt` into `routes/AppRoutes.kt` (`package digital.heirlooms.server.routes`). `Main.kt` was updated to `import digital.heirlooms.server.routes.buildApp`. The old handler files were replaced with stub files containing only the package declaration and a migration comment. Six unit test files and `HeirloomTestEnvironment.kt` had `import digital.heirlooms.server.routes.buildApp` added.
+
+**`authUserId()` extension:** Already in `SessionAuthFilter.kt` in root package (`digital.heirlooms.server`). All new routes files import it as `import digital.heirlooms.server.authUserId`. No `RequestExtensions.kt` was needed.
+
+### Build/test results
+
+- `./gradlew clean shadowJar` — BUILD SUCCESSFUL (warnings only)
+- `./gradlew test` — all 251 tests passed (3 Docker-dependent tests skipped until Docker ready, then all pass)
+- `./gradlew coverageTest` (HeirloomsTest) — BUILD SUCCESSFUL
+
+### Coverage (before / after)
+
+| Metric | Baseline | After |
+|---|---|---|
+| INSTRUCTION | 51.7% | 51.8% |
+| LINE | 56.8% | 56.8% |
+| METHOD | 57.3% | 57.3% |
+| CLASS | 67.0% | 67.0% |
+| BRANCH | 33.8% | 33.8% |
+
+No coverage change — purely structural reorganisation.
+
+---
+
 ## Session — 14 May 2026 — Server refactor phase 6: extract representation layer
 
 ### What was done

@@ -1,5 +1,6 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.routes.buildApp
 import digital.heirlooms.server.domain.plot.PlotRecord
 import digital.heirlooms.server.repository.plot.PlotRepository
 import com.fasterxml.jackson.databind.ObjectMapper

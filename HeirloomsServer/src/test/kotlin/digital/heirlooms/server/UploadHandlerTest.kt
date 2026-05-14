@@ -1,5 +1,6 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.routes.buildApp
 import digital.heirlooms.server.domain.upload.UploadPage
 import digital.heirlooms.server.domain.upload.UploadRecord
 import io.mockk.every

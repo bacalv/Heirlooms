@@ -79,6 +79,8 @@ Three Gradle subprojects under `/Users/bac/IdeaProjects/Heirlooms/`:
   than `Database`. `buildApp()` constructs all service instances from `Database` + `FileStore`
   and passes them through. `Main.kt` remains unchanged.
 
+- **Routes package layout (v0.53.2):** Route files live in `routes/<domain>/` sub-packages (e.g. `routes/upload/UploadRoutes.kt`, `routes/plot/PlotRoutes.kt`). `buildApp()` lives in `routes/AppRoutes.kt` (`package digital.heirlooms.server.routes`). Each routes file imports `authUserId` as `import digital.heirlooms.server.authUserId` (it remains in `SessionAuthFilter.kt` in the root package). Old handler files (`*Handler.kt`) are stub files with just a package declaration and migration comment. Any file that calls `buildApp()` must import `digital.heirlooms.server.routes.buildApp` explicitly.
+
 - **MockK strict mode + two-step lookups:** `mockk<Database>()` is strict by default. If a handler
   calls `findUploadByIdForUser(...)` and then `findUploadByIdForSharedMember(...)` (fallback), a
   test that only stubs the first call will fail with `MockKException: no answer found`. Stub both

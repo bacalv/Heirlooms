@@ -2,6 +2,14 @@
 
 ---
 
+## v0.53.2 — Server refactor phase 7: routes/ sub-packages (14 May 2026)
+
+Pure code reorganisation — no behaviour or API changes.
+
+Nine handler files migrated to a `routes/` sub-package tree: `routes/upload/UploadRoutes.kt`, `routes/auth/AuthRoutes.kt`, `routes/capsule/CapsuleRoutes.kt`, `routes/plot/PlotRoutes.kt`, `routes/plot/FlowRoutes.kt`, `routes/plot/SharedPlotRoutes.kt`, `routes/keys/KeysRoutes.kt`, `routes/social/FriendsRoutes.kt`, `routes/social/SharingKeyRoutes.kt`. `buildApp()` extracted from `UploadHandler.kt` into `routes/AppRoutes.kt`. Old handler files replaced with stub comments. `Main.kt` and test files updated with explicit `routes.buildApp` import. Coverage unchanged.
+
+---
+
 ## v0.53.1 — Server refactor phase 6: representation layer (14 May 2026)
 
 Pure code reorganisation — no behaviour or API changes.
