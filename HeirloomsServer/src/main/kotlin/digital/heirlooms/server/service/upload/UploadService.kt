@@ -13,11 +13,13 @@ import digital.heirlooms.server.repository.plot.PlotRepository
 import digital.heirlooms.server.repository.social.SocialRepository
 import digital.heirlooms.server.repository.storage.BlobRepository
 import digital.heirlooms.server.repository.upload.UploadRepository
+import org.slf4j.LoggerFactory
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.Base64
 import java.util.UUID
 
+private val logger = LoggerFactory.getLogger(UploadService::class.java)
 private val PROCESSING_SUPPORTED_MIME_TYPES = THUMBNAIL_SUPPORTED_MIME_TYPES + METADATA_SUPPORTED_MIME_TYPES
 private const val EXIF_HEADER_BYTES = 65_536
 
@@ -373,11 +375,11 @@ class UploadService(
 
         // Delete old plaintext blobs (best effort)
         try { storage.delete(StorageKey(oldStorageKey)) } catch (e: Exception) {
-            println("[migrate] WARNING: failed to delete old blob $oldStorageKey: ${e.message}")
+            logger.warn("Failed to delete old blob {}: {}", oldStorageKey, e.message)
         }
         if (oldThumbnailKey != null) {
             try { storage.delete(StorageKey(oldThumbnailKey)) } catch (e: Exception) {
-                println("[migrate] WARNING: failed to delete old thumbnail $oldThumbnailKey: ${e.message}")
+                logger.warn("Failed to delete old thumbnail {}: {}", oldThumbnailKey, e.message)
             }
         }
 
@@ -475,38 +477,38 @@ class UploadService(
                             storage.delete(StorageKey(record.storageKey))
                             if (record.thumbnailKey != null) {
                                 try { storage.delete(StorageKey(record.thumbnailKey)) } catch (e: Exception) {
-                                    println("[compost-cleanup] WARNING: failed to delete thumbnail ${record.thumbnailKey}: ${e.message}")
+                                    logger.warn("Failed to delete thumbnail {}: {}", record.thumbnailKey, e.message)
                                 }
                             }
                             if (record.thumbnailStorageKey != null) {
                                 try { storage.delete(StorageKey(record.thumbnailStorageKey)) } catch (e: Exception) {
-                                    println("[compost-cleanup] WARNING: failed to delete encrypted thumbnail ${record.thumbnailStorageKey}: ${e.message}")
+                                    logger.warn("Failed to delete encrypted thumbnail {}: {}", record.thumbnailStorageKey, e.message)
                                 }
                             }
                         } else {
-                            println("[compost-cleanup] INFO: skipping GCS delete for upload ${record.id} — live shared reference exists")
+                            logger.debug("Skipping storage delete for upload {} — live shared reference exists", record.id)
                         }
                         uploadRepo.hardDeleteUpload(record.id)
-                        println("[compost-cleanup] INFO: hard-deleted upload ${record.id} (composted ${record.compostedAt})")
+                        logger.info("Hard-deleted composted upload {} (composted {})", record.id, record.compostedAt)
                     } catch (e: Exception) {
-                        println("[compost-cleanup] WARNING: failed to hard-delete upload ${record.id}: ${e.message}")
+                        logger.warn("Failed to hard-delete upload {}", record.id, e)
                     }
                 }
             } catch (e: Exception) {
-                println("[compost-cleanup] ERROR: cleanup failed: ${e.message}")
+                logger.error("Compost cleanup failed", e)
             }
             try {
                 val expiredPlots = plotRepo.fetchExpiredTombstonedPlots()
                 for (plotId in expiredPlots) {
                     try {
                         plotRepo.hardDeletePlot(plotId)
-                        println("[compost-cleanup] INFO: hard-deleted tombstoned plot $plotId")
+                        logger.info("Hard-deleted tombstoned plot {}", plotId)
                     } catch (e: Exception) {
-                        println("[compost-cleanup] WARNING: failed to hard-delete plot $plotId: ${e.message}")
+                        logger.warn("Failed to hard-delete plot {}", plotId, e)
                     }
                 }
             } catch (e: Exception) {
-                println("[compost-cleanup] ERROR: tombstone plot cleanup failed: ${e.message}")
+                logger.error("Tombstone plot cleanup failed", e)
             }
         }.also { it.isDaemon = true }.start()
     }

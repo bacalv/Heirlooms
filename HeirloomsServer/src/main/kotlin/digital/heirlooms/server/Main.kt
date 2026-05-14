@@ -22,7 +22,10 @@ import kotlinx.coroutines.cancel
 import org.http4k.core.then
 import org.http4k.server.Netty
 import org.http4k.server.asServer
+import org.slf4j.LoggerFactory
 import java.util.Base64
+
+private val logger = LoggerFactory.getLogger("digital.heirlooms.server.Main")
 
 fun main() {
     // Prefer environment variables (used in Docker) over application.properties
@@ -34,11 +37,11 @@ fun main() {
 
     val database = Database.create(config)
     database.runMigrations()
-    println("Database migrations applied")
+    logger.info("Database migrations applied")
 
     val storage: FileStore = when (config.storageBackend) {
         StorageBackend.LOCAL -> {
-            println("Storage: local directory '${config.storageDir}'")
+            logger.info("Storage: local directory '{}'", config.storageDir)
             LocalFileStore.create(config.storageDir)
         }
         StorageBackend.S3 -> {
@@ -47,7 +50,7 @@ fun main() {
             require(config.s3AccessKey.isNotEmpty()) { "s3.access-key must be set" }
             require(config.s3SecretKey.isNotEmpty()) { "s3.secret-key must be set" }
             val endpoint = config.s3EndpointOverride.ifEmpty { "AWS" }
-            println("Storage: S3 bucket '${config.s3Bucket}' via $endpoint")
+            logger.info("Storage: S3 bucket '{}' via {}", config.s3Bucket, endpoint)
             S3FileStore.create(
                 config.s3Bucket, config.s3Region,
                 config.s3AccessKey, config.s3SecretKey,
@@ -57,7 +60,7 @@ fun main() {
         StorageBackend.GCS -> {
             require(config.gcsBucket.isNotEmpty())          { "GCS_BUCKET must be set" }
             require(config.gcsCredentialsJson.isNotEmpty()) { "GCS_CREDENTIALS_JSON must be set" }
-            println("Storage: GCS bucket '${config.gcsBucket}'")
+            logger.info("Storage: GCS bucket '{}'", config.gcsBucket)
             GcsFileStore.create(config.gcsBucket, config.gcsCredentialsJson)
         }
     }
@@ -73,22 +76,22 @@ fun main() {
         storage = storage,
     )
     cleanupService.startPeriodicCleanup()
-    println("PendingBlobsCleanupService started")
+    logger.info("PendingBlobsCleanupService started")
 
     val authSecret = if (config.authSecret.isNotEmpty())
         runCatching { Base64.getUrlDecoder().decode(config.authSecret) }.getOrElse { ByteArray(32) }
     else
         ByteArray(32)
     val app = buildApp(storage, database, previewDurationSeconds = config.previewDurationSeconds, authSecret = authSecret)
-    if (config.apiKey.isNotEmpty()) println("Static API key auth enabled (development/test mode)")
+    if (config.apiKey.isNotEmpty()) logger.info("Static API key auth enabled (development/test mode)")
     val server = corsFilter().then(
         sessionAuthFilter(PostgresAuthRepository(database.dataSource), config.apiKey).then(app)
     ).asServer(Netty(config.serverPort))
     server.start()
-    println("HeirloomsServer running on port ${config.serverPort}")
+    logger.info("HeirloomsServer running on port {}", config.serverPort)
 
     Runtime.getRuntime().addShutdownHook(Thread {
-        println("Shutting down...")
+        logger.info("Shutting down...")
         exifScope.cancel()
         server.stop()
     })

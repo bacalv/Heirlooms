@@ -45,6 +45,8 @@ dependencies {
     implementation("org.flywaydb:flyway-core:10.10.0")
     implementation("org.flywaydb:flyway-database-postgresql:10.10.0")
 
+    implementation("ch.qos.logback:logback-classic:1.5.6")
+
     testImplementation(kotlin("test"))
     testImplementation("org.http4k:http4k-testing-hamkrest:$http4kVersion")
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.1")
@@ -52,7 +54,6 @@ dependencies {
     testImplementation("org.bouncycastle:bcprov-jdk18on:1.79")
     testImplementation("org.testcontainers:testcontainers:2.0.5")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter:2.0.5")
-    testImplementation("org.slf4j:slf4j-simple:2.0.13")
 }
 
 application {

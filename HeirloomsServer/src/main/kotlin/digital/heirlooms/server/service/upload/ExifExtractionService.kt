@@ -8,8 +8,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import org.slf4j.LoggerFactory
 import java.util.UUID
 
+private val logger = LoggerFactory.getLogger(ExifExtractionService::class.java)
 private const val EXIF_PARTIAL_BYTES = 65_536
 
 class ExifExtractionService(
@@ -22,7 +24,7 @@ class ExifExtractionService(
     fun recoverPending() {
         val ids = uploadRepository.listPendingExifIds()
         if (ids.isEmpty()) return
-        println("[exif] recovering ${ids.size} pending row(s)")
+        logger.info("Recovering {} pending EXIF row(s)", ids.size)
         ids.forEach { id -> scope.launch { processOne(id) } }
     }
 
@@ -44,7 +46,7 @@ class ExifExtractionService(
                 deviceModel = meta.deviceModel,
             )
         } catch (e: Exception) {
-            println("[exif] WARNING: failed to process $id: ${e.message}")
+            logger.warn("Failed to process EXIF for upload {}: {}", id, e.message)
             // Mark processed anyway to prevent infinite retry on a permanently broken row.
             try {
                 uploadRepository.updateExif(id, null, null, null, null, null, null)

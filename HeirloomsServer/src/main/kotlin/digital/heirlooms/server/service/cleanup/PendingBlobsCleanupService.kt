@@ -10,8 +10,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+
+private val logger = LoggerFactory.getLogger(PendingBlobsCleanupService::class.java)
 
 class PendingBlobsCleanupService(
     private val blobRepository: BlobRepository,
@@ -53,16 +56,14 @@ class PendingBlobsCleanupService(
             for (key in staleKeys) {
                 try {
                     storage.delete(StorageKey(key))
-                    println("[blob-cleanup] INFO: deleted stale blob $key")
+                    logger.debug("Deleted stale blob {}", key)
                 } catch (e: Exception) {
-                    println("[blob-cleanup] WARNING: failed to delete blob $key: ${e.message}")
+                    logger.warn("Failed to delete stale blob {}: {}", key, e.message)
                 }
             }
-            if (staleKeys.isNotEmpty()) {
-                println("[blob-cleanup] INFO: cleaned up ${staleKeys.size} stale blob(s)")
-            }
+            if (staleKeys.isNotEmpty()) logger.info("Cleaned up {} stale blob(s)", staleKeys.size)
         } catch (e: Exception) {
-            println("[blob-cleanup] ERROR: cleanup failed: ${e.message}")
+            logger.error("Blob cleanup failed", e)
         }
     }
 
@@ -70,7 +71,7 @@ class PendingBlobsCleanupService(
         try {
             authRepository.deleteExpiredSessions()
         } catch (e: Exception) {
-            println("[session-cleanup] ERROR: ${e.message}")
+            logger.error("Session cleanup failed", e)
         }
     }
 
@@ -78,11 +79,9 @@ class PendingBlobsCleanupService(
         try {
             val dormantBefore = Instant.now().minus(dormantDeviceDays, ChronoUnit.DAYS)
             val count = keyRepository.retireDormantWrappedKeys(dormantBefore)
-            if (count > 0) {
-                println("[device-pruning] INFO: retired $count dormant device(s) (last used before $dormantBefore)")
-            }
+            if (count > 0) logger.info("Retired {} dormant device(s) (inactive since {})", count, dormantBefore)
         } catch (e: Exception) {
-            println("[device-pruning] ERROR: pruning failed: ${e.message}")
+            logger.error("Device pruning failed", e)
         }
     }
 }
