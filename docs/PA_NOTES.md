@@ -24,12 +24,9 @@ patterns, pending decisions, and context that doesn't fit neatly into PROMPT_LOG
 - Package name: digital.heirlooms (not com.heirloom — that was the old name)
 - Domain: heirlooms.digital (registered 30 April 2026)
 - GitHub: github.com/bacalv/Heirlooms (capital H)
-- Current version: v0.51.5 (14 May 2026) — Shared plot dedup guard (server only).
-  All four increments shipped: E1 predicate/criteria, E2 flows+staging, E3 shared plots E2EE,
-  E4 Android (VaultCrypto plot key helpers, FlowsScreen, StagingScreen, plot key caching).
+- Current version: v0.52.0 (14 May 2026) — Web drag+drop/paste upload, Android shared-plot shortcuts (new-flow button, bulk staging, auto-approve toggle), iOS HeirloomsiOS scaffold, server refactor design proposal.
 - Active milestone: none — M10 complete. M11 TBD (strong sealing + social recovery).
-  Next planned work: shared plot membership UX overhaul — brief at `docs/briefs/shared_plot_membership.md`.
-  Three increments: E1 server, E2 web, E3 Android.
+  iOS app (M11): HeirloomsiOS scaffold committed; P1 TODOs before first real use: QRScannerView (AVFoundation), Share Extension wiring, confirm-after-background-complete.
   v0.36.0 = Preview clips, 1 MiB chunks, parallel prefetch, download button (server + web + Android).
   v0.35.0 = Web encrypted video playback + MSE streaming (web only).
   v0.34.0 = Web: streaming-format decrypt fix for large encrypted videos.

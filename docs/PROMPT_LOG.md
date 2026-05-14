@@ -2,6 +2,69 @@
 
 ---
 
+## Session — 14 May 2026 — Web upload UX, Android shared-plot shortcuts, iOS scaffold (v0.52.0)
+
+Four parallel workstreams implemented by four concurrent agents.
+
+### 1A — Web drag+drop + paste upload
+
+**Design decisions:**
+- Drag+drop is global (all authenticated pages); paste is scoped to Garden and Shared Plots pages only
+- Both upload to garden default (no plot association, `storageClass = encrypted`) — same path as the Plant button
+- Drag overlay uses a depth counter, not `relatedTarget`, to handle the well-known `dragleave`-on-every-child browser problem
+
+**What was built:**
+- `DragDropProvider.jsx` (new) — window-level drag listeners, depth counter, full-screen overlay, upload-status toast via context
+- `AuthLayout.jsx` wraps layout with `DragDropProvider`; handles drop-triggered uploads
+- `GardenPage.jsx` exports `encryptAndUpload`, splits `handlePlant` → `handlePlantFiles`, adds paste `useEffect`
+- `SharedPlotsPage.jsx` adds paste `useEffect` via `DragDropContext`
+- Fixed two pre-existing stale tests (`compost.test.jsx` mock ordering, `explore.test.jsx` stale assertion)
+
+### 1B — Web auto-approve toggle on flows
+
+No server changes — `FlowHandler.kt` already accepted `requiresStaging` on both `POST /api/flows` and `PUT /api/flows/:id`. Added unconditional toggle to `FlowsPage.jsx` on create and edit; rounds-trips existing server value when editing.
+
+### 2A — Android new-flow button on shared plot card
+
+`CreateFlowDialog` promoted from `private` to `internal`; gained `initialPlotId` parameter. `GardenScreen`'s `PlotRowSection` now shows an `Add` icon on shared plots that opens the dialog pre-selected.
+
+### 2B — Android bulk staging screen
+
+New `PlotBulkStagingViewModel` + `PlotBulkStagingScreen`. `RateReview` badge on shared plot cards shows pending count (polled every 5 s from `GardenViewModel`). Screen: 3-column thumbnail grid, per-item checkmark overlays, "Select all" header, Approve/Reject action bar. DEK re-wrapping matches `StagingViewModel` logic. No server changes — `GET /api/plots/:id/staging`, approve, and reject endpoints were already sufficient. 16 new unit tests in `PlotBulkStagingViewModelTest`.
+
+### 2C — Android auto-approve toggle
+
+`CreateFlowDialog` staging toggle relabelled "Auto-approve" with subtitle "Items skip staging and go straight to the plot". `autoApprove` variable inverts to `requiresStaging` so label reads naturally. No API changes.
+
+### 3 — iOS app scaffold
+
+New `HeirloomsiOS/` Swift Package (Swift 5.9, iOS 16+/macOS 13+).
+
+**`HeirloomsCore` library:**
+- `KeychainManager.swift` — Secure Enclave P-256 keypair with software fallback; session token, plot key, plot ID CRUD
+- `EnvelopeCrypto.swift` — full `p256-ecdh-hkdf-aes256gcm-v1` + `aes256gcm-v1`; binary layout verified against `envelope_format.md`; unknown alg IDs and version mismatches throw loudly
+- `HeirloomsAPI.swift` — async/await URLSession client, `X-Api-Key` from Keychain, all required endpoints
+- `BackgroundUploadManager.swift` — disk-streaming uploads (no RAM load), `allowsCellularAccess` toggle
+- `Models.swift` — `PlotItem`, `UploadTicket`, `UserCredentials`, etc.
+
+**App-level stubs** (must be added to Xcode target per SETUP.md): `ActivateView` (Scan 1 + Scan 2 + polling), `HomeView` (grid + Plant + Settings), `FullScreenMediaView` (pinch-zoom + AVPlayer + ShareSheet, no delete affordance).
+
+**25 unit tests** — envelope round-trips, binary layout assertions, wrong-key/tag throws, unknown alg ID/version mismatch throws, MockURLProtocol API tests.
+
+**P1 TODOs before first real use:** `QRScannerView` (AVFoundation stub), Share Extension (target not yet created in Xcode), confirm-after-background-complete wiring, camera-roll import prompt.
+
+Design doc: `docs/briefs/task3_ios_design.md`. Setup/sideload instructions: `HeirloomsiOS/SETUP.md`.
+
+### 4 — Server refactor design proposal
+
+`docs/briefs/task4_server_refactor_proposal.md` (766 lines). Read-only analysis. Key findings:
+- `Database.kt` (3849 lines) conflates SQL for 11 domains, ResultSet mappers, domain data classes, and business logic
+- Proposed split: `config/`, `domain/`, `repository/` (11 repositories), `service/`, `representation/`, `routes/`, `storage/`, `crypto/`, `filters/`
+- 8-phase migration sequence (safest first: data classes → repositories one-by-one → services → representation)
+- `withTransaction` cross-repository strategy documented; no http4k-specific blockers identified
+
+---
+
 ## Session — 14 May 2026 — Shared plot dedup guard (v0.51.5)
 
 Server-only change. Prevents duplicate items appearing in a shared plot when two

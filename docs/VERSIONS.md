@@ -2,6 +2,36 @@
 
 ---
 
+## v0.52.0 — Web upload UX, Android shared-plot shortcuts, iOS scaffold (14 May 2026)
+
+Multi-platform feature release. No server changes.
+
+**Web (tasks 1A + 1B)**
+- Global drag+drop overlay — drag files over any authenticated page to upload; depth-counter correctly handles `dragleave`-on-child-elements; images + videos only; uploads to garden default
+- Paste-to-upload — CMD+V/CTRL+V on Garden and Shared Plots pages picks up clipboard images and routes through the same encrypted upload flow
+- Auto-approve toggle on flow create + edit — "Auto-approve: items skip staging and go straight to the plot"; rounds-trips existing `requiresStaging` server field (no server change needed)
+- Fixed two pre-existing stale test failures; all 116 web tests pass
+
+**Android (tasks 2A + 2B + 2C)**
+- New-flow shortcut on shared plot cards — `Add` icon button opens `CreateFlowDialog` pre-selecting the plot
+- Bulk staging screen — `RateReview` badge on shared plot cards shows pending count; tapping opens a 3-column grid with checkboxes, "Select all", and Approve/Reject; `PlotBulkStagingViewModel` handles DEK re-wrapping; polled every 5 s from `GardenViewModel`
+- Auto-approve toggle in `CreateFlowDialog` — relabelled "Auto-approve" with subtitle; no API changes needed
+- 16 new unit tests in `PlotBulkStagingViewModelTest`; all 140+ Android tests pass
+- versionCode 57 → 58, versionName 0.51.4 → 0.52.0
+
+**iOS (task 3)**
+- `HeirloomsiOS/` — new Swift Package; `HeirloomsCore` library with `KeychainManager` (Secure Enclave P-256), `EnvelopeCrypto` (full `p256-ecdh-hkdf-aes256gcm-v1` + `aes256gcm-v1`, binary-layout-verified), `HeirloomsAPI`, `BackgroundUploadManager`, models
+- App-level SwiftUI stubs: `ActivateView`, `HomeView`, `FullScreenMediaView`
+- 25 unit tests (envelope round-trips, wrong-key/tag throws, URL construction, auth header, JSON parsing)
+- `SETUP.md` — free-tier sideload-to-iPad instructions
+- Design doc at `docs/briefs/task3_ios_design.md`
+- `QRScannerView` and Share Extension are stubs — P1 before first real use
+
+**Docs (task 4)**
+- Server refactor design proposal at `docs/briefs/task4_server_refactor_proposal.md` — 766-line analysis proposing config/domain/repository/service/representation/routes/storage/crypto sub-packages; 8-phase migration sequence; Database.kt split into 11 repositories
+
+---
+
 ## v0.51.4 — Shared plots: end-to-end hardening (14 May 2026)
 
 Post-deployment shakedown with real devices (Bret's phone, Sadaar's Fire pad, Wighty's phone).
