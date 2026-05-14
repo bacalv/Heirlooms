@@ -39,10 +39,3 @@ data class UploadRecord(
     val sharedFromUploadId: UUID? = null,
     val sharedFromUserId: UUID? = null,
 )
-
-data class UploadPage(val items: List<UploadRecord>, val nextCursor: String?)
-
-enum class UploadSort { UPLOAD_NEWEST, UPLOAD_OLDEST, TAKEN_NEWEST, TAKEN_OLDEST }
-
-// Internal to the repository layer — exposed here so UploadRepository can use it
-data class DecodedCursor(val sort: UploadSort, val sortKeyMs: Long?, val id: UUID)
