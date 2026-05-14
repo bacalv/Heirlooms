@@ -61,6 +61,7 @@ import digital.heirlooms.ui.garden.CompostHeapScreen
 import digital.heirlooms.ui.share.UploadProgressScreen
 import digital.heirlooms.ui.garden.GardenScreen
 import digital.heirlooms.ui.garden.PhotoDetailScreen
+import digital.heirlooms.ui.flows.PlotBulkStagingScreen
 import digital.heirlooms.ui.settings.SettingsScreen
 import digital.heirlooms.ui.shared.SharedPlotsScreen
 import digital.heirlooms.ui.social.FriendsScreen
@@ -89,8 +90,11 @@ internal object Routes {
     const val UPLOAD_PROGRESS = "upload_progress/{sessionTag}"
     const val FLOWS = "flows"
     const val STAGING = "staging/{flowId}/{plotId}/{isSharedPlot}"
+    const val PLOT_BULK_STAGING = "plot_bulk_staging/{plotId}/{plotName}"
     fun uploadProgress(sessionTag: String) = "upload_progress/$sessionTag"
     fun staging(flowId: String, plotId: String, isSharedPlot: Boolean) = "staging/$flowId/$plotId/$isSharedPlot"
+    fun plotBulkStaging(plotId: String, plotName: String) =
+        "plot_bulk_staging/$plotId/${java.net.URLEncoder.encode(plotName, "UTF-8")}"
 
     fun photoDetail(uploadId: String, from: String = "garden") = "photo/$uploadId?from=$from"
     fun capsuleDetail(capsuleId: String) = "capsules/$capsuleId"
@@ -289,6 +293,9 @@ private fun AppNavHost(navController: NavController, apiKey: String, onApiKeyRes
                         else -> navController.navigate(Routes.EXPLORE)
                     }
                 },
+                onBulkStaging = { plotId, plotName ->
+                    navController.navigate(Routes.plotBulkStaging(plotId, plotName))
+                },
             )
         }
         composable(
@@ -388,6 +395,22 @@ private fun AppNavHost(navController: NavController, apiKey: String, onApiKeyRes
                 flowId = flowId,
                 plotId = plotId,
                 isSharedPlot = isSharedPlot,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(
+            route = Routes.PLOT_BULK_STAGING,
+            arguments = listOf(
+                navArgument("plotId") { type = NavType.StringType },
+                navArgument("plotName") { type = NavType.StringType },
+            ),
+        ) { backStack ->
+            val plotId = backStack.arguments?.getString("plotId") ?: return@composable
+            val plotName = backStack.arguments?.getString("plotName")
+                ?.let { java.net.URLDecoder.decode(it, "UTF-8") } ?: ""
+            PlotBulkStagingScreen(
+                plotId = plotId,
+                plotName = plotName,
                 onBack = { navController.popBackStack() },
             )
         }

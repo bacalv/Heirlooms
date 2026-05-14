@@ -100,6 +100,14 @@ import digital.heirlooms.ui.social.ShareSheet
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.RateReview
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import digital.heirlooms.api.isShared
+import digital.heirlooms.api.Plot
+import digital.heirlooms.ui.flows.CreateFlowDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -114,6 +122,7 @@ private const val THUMBNAIL_SIZE_DP = 108
 fun GardenScreen(
     onPhotoTap: (String) -> Unit,
     onNavigateToExplore: (plotId: String?, justArrived: Boolean) -> Unit,
+    onBulkStaging: (plotId: String, plotName: String) -> Unit = { _, _ -> },
     vm: GardenViewModel = viewModel(),
 ) {
     val api = LocalHeirloomsApi.current
@@ -225,14 +234,35 @@ fun GardenScreen(
         while (true) {
             delay(5_000L)
             vm.refreshJustArrived(api)
+            vm.refreshSharedStagingCounts(api)
         }
     }
 
     val newlyArrivedIds by vm.newlyArrivedIds.collectAsStateWithLifecycle()
     val friends by vm.friends.collectAsStateWithLifecycle()
     val ownerNames by vm.ownerNames.collectAsStateWithLifecycle()
+    val sharedStagingCounts by vm.sharedStagingCounts.collectAsStateWithLifecycle()
     val leaveError by vm.leaveError.collectAsStateWithLifecycle()
     var showCreatePlot by remember { mutableStateOf(false) }
+
+    // State for "New flow" shortcut on shared plot cards
+    var newFlowForPlotId by remember { mutableStateOf<String?>(null) }
+    val allNonSystemPlots = (state as? GardenLoadState.Ready)
+        ?.rows?.mapNotNull { it.plot }?.filter { !it.isSystemDefined } ?: emptyList()
+
+    if (newFlowForPlotId != null) {
+        CreateFlowDialog(
+            plots = allNonSystemPlots,
+            initialPlotId = newFlowForPlotId,
+            onDismiss = { newFlowForPlotId = null },
+            onCreate = { name, plotId, requiresStaging, criteria ->
+                newFlowForPlotId = null
+                scope.launch {
+                    try { api.createFlow(name, criteria, plotId, requiresStaging) } catch (_: Exception) {}
+                }
+            },
+        )
+    }
 
     if (leaveError != null) {
         AlertDialog(
@@ -337,6 +367,11 @@ fun GardenScreen(
                                     },
                                     ownerDisplayName = row.plot?.let { ownerNames[it.id] },
                                     emptyLabel = if (isJustArrived) "Nothing waiting." else "Empty",
+                                    pendingStagingCount = row.plot?.id?.let { sharedStagingCounts[it] } ?: 0,
+                                    onNewFlow = { row.plot?.let { newFlowForPlotId = it.id } },
+                                    onBulkStaging = {
+                                        row.plot?.let { onBulkStaging(it.id, rowLabel) }
+                                    },
                                 )
                             }
                             // "+ Add plot" row at the bottom of the garden scroll
@@ -464,6 +499,9 @@ private fun PlotRowSection(
     onDeletePlot: () -> Unit = {},
     ownerDisplayName: String? = null,
     emptyLabel: String,
+    pendingStagingCount: Int = 0,
+    onNewFlow: () -> Unit = {},
+    onBulkStaging: () -> Unit = {},
 ) {
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = savedScrollIndex)
     var showEditPlot by remember { mutableStateOf(false) }
@@ -522,6 +560,38 @@ private fun PlotRowSection(
                         "Shared by $ownerDisplayName",
                         style = MaterialTheme.typography.bodySmall.copy(color = TextMuted, fontSize = 11.sp),
                     )
+                }
+            }
+            // Shared plot quick-action buttons
+            if (plot != null && plot.isShared) {
+                // "New flow" shortcut
+                IconButton(
+                    onClick = onNewFlow,
+                    modifier = Modifier.size(28.dp),
+                    colors = IconButtonDefaults.iconButtonColors(contentColor = Forest.copy(alpha = 0.5f)),
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = "New flow", modifier = Modifier.size(16.dp))
+                }
+                // Bulk staging review badge
+                BadgedBox(
+                    badge = {
+                        if (pendingStagingCount > 0) {
+                            Badge(containerColor = Forest) {
+                                Text("$pendingStagingCount", color = Parchment, style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    },
+                    modifier = Modifier.padding(end = 4.dp),
+                ) {
+                    IconButton(
+                        onClick = onBulkStaging,
+                        modifier = Modifier.size(28.dp),
+                        colors = IconButtonDefaults.iconButtonColors(
+                            contentColor = if (pendingStagingCount > 0) Forest else Forest.copy(alpha = 0.4f)
+                        ),
+                    ) {
+                        Icon(Icons.Filled.RateReview, contentDescription = "Review pending", modifier = Modifier.size(16.dp))
+                    }
                 }
             }
             if (plot != null && !plot.isSystemDefined) {

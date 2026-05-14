@@ -7,6 +7,7 @@ import android.util.Base64
 import digital.heirlooms.api.HeirloomsApi
 import digital.heirlooms.api.Plot
 import digital.heirlooms.api.Upload
+import digital.heirlooms.api.isShared
 import digital.heirlooms.crypto.VaultCrypto
 import digital.heirlooms.crypto.VaultSession
 import kotlinx.coroutines.async
@@ -393,5 +394,27 @@ class GardenViewModel(
             )
         }
         _state.value = GardenLoadState.Ready(rows)
+    }
+
+    // ---- Shared-plot staging counts ----------------------------------------
+
+    private val _sharedStagingCounts = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val sharedStagingCounts: StateFlow<Map<String, Int>> = _sharedStagingCounts.asStateFlow()
+
+    /** Polls the pending staging count for each shared plot visible in the garden. */
+    fun refreshSharedStagingCounts(api: HeirloomsApi) {
+        val current = _state.value as? GardenLoadState.Ready ?: return
+        val sharedPlots = current.rows.mapNotNull { it.plot }.filter { it.isShared }
+        if (sharedPlots.isEmpty()) return
+        viewModelScope.launch {
+            val counts = mutableMapOf<String, Int>()
+            sharedPlots.forEach { plot ->
+                try {
+                    val items = api.getPlotStaging(plot.id)
+                    counts[plot.id] = items.size
+                } catch (_: Exception) {}
+            }
+            _sharedStagingCounts.value = counts
+        }
     }
 }

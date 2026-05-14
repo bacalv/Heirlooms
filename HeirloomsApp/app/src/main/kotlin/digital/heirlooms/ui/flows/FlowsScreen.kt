@@ -197,7 +197,7 @@ private fun FlowCard(
     }
 }
 
-private fun buildCriteria(
+internal fun buildCriteria(
     tags: List<String>, mediaType: String?, fromDate: String, toDate: String,
     hasLocation: Boolean, isReceived: Boolean,
 ): String {
@@ -217,14 +217,21 @@ private fun buildCriteria(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CreateFlowDialog(
+internal fun CreateFlowDialog(
     plots: List<Plot>,
     onDismiss: () -> Unit,
     onCreate: (name: String, plotId: String, requiresStaging: Boolean, criteria: String) -> Unit,
+    initialPlotId: String? = null,
 ) {
     var name by remember { mutableStateOf("") }
-    var selectedPlotIndex by remember { mutableStateOf(0) }
+    var selectedPlotIndex by remember {
+        mutableStateOf(
+            if (initialPlotId != null) plots.indexOfFirst { it.id == initialPlotId }.coerceAtLeast(0) else 0
+        )
+    }
     var requiresStaging by remember { mutableStateOf(true) }
+    // autoApprove is the UI-facing inversion: autoApprove=true means requiresStaging=false
+    var autoApprove by remember { mutableStateOf(false) }
     var tags by remember { mutableStateOf(listOf<String>()) }
     var tagInput by remember { mutableStateOf("") }
     var mediaType by remember { mutableStateOf<String?>(null) }
@@ -349,10 +356,19 @@ private fun CreateFlowDialog(
                     Switch(checked = isReceived, onCheckedChange = { isReceived = it })
                 }
 
-                // Staging toggle
+                // Auto-approve toggle (inverted: autoApprove=true → requiresStaging=false)
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Require approval before adding", style = MaterialTheme.typography.bodySmall, color = Forest)
-                    Switch(checked = requiresStaging, onCheckedChange = { requiresStaging = it })
+                    Column(Modifier.weight(1f)) {
+                        Text("Auto-approve", style = MaterialTheme.typography.bodySmall, color = Forest)
+                        Text(
+                            "Items skip staging and go straight to the plot",
+                            style = MaterialTheme.typography.labelSmall.copy(color = TextMuted),
+                        )
+                    }
+                    Switch(
+                        checked = autoApprove,
+                        onCheckedChange = { autoApprove = it; requiresStaging = !it },
+                    )
                 }
             }
         },
