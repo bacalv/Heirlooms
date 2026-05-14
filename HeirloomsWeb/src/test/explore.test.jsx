@@ -159,7 +159,7 @@ describe('ExplorePage', () => {
     await waitFor(() => expect(screen.getByText(/Save as plot/i)).toBeInTheDocument())
   })
 
-  it('Save as plot sends tag_criteria array including all selected tags', async () => {
+  it('Save as plot sends criteria expression tree including all selected tags', async () => {
     setupFetch()
     render(<Wrapper><ExplorePage /></Wrapper>)
     const input = await waitFor(() => screen.getByPlaceholderText(/filter by tag/i))
@@ -183,8 +183,14 @@ describe('ExplorePage', () => {
       const postCalls = global.fetch.mock.calls.filter((c) => c[1]?.method === 'POST' && c[0].includes('/api/plots'))
       expect(postCalls.length).toBeGreaterThan(0)
       const body = JSON.parse(postCalls[0][1].body)
-      expect(body.tag_criteria).toContain('family')
-      expect(body.tag_criteria).toContain('holiday')
+      // ExplorePage sends a criteria expression tree (not a tag_criteria array)
+      const allTags = body.criteria?.type === 'and'
+        ? body.criteria.operands.filter((o) => o.type === 'tag').map((o) => o.tag)
+        : body.criteria?.type === 'tag'
+          ? [body.criteria.tag]
+          : []
+      expect(allTags).toContain('family')
+      expect(allTags).toContain('holiday')
       expect(body.name).toBe('Family & Holidays')
     })
   })

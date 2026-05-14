@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../AuthContext'
 import { WorkingDots } from '../brand/WorkingDots'
 import { BrandModal } from '../components/BrandModal'
+import { useDragDrop } from '../components/DragDropProvider'
 import {
   listSharedMemberships, listPlotMembers,
   acceptPlotInvite, leaveSharedPlot, rejoinSharedPlot,
@@ -385,6 +386,7 @@ function TombstonedCard({ membership, apiKey, onAction }) {
 
 export function SharedPlotsPage() {
   const { apiKey } = useAuth()
+  const { triggerUpload } = useDragDrop() ?? {}
   const [memberships, setMemberships] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -402,6 +404,21 @@ export function SharedPlotsPage() {
     document.title = 'Shared plots · Heirlooms'
     reload()
   }, [apiKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Paste-to-upload: listen for image pastes on this page.
+  useEffect(() => {
+    if (!triggerUpload) return
+    function handlePaste(e) {
+      const items = Array.from(e.clipboardData?.items ?? [])
+      const imageItem = items.find((i) => i.kind === 'file' && i.type.startsWith('image/'))
+      if (!imageItem) return
+      const file = imageItem.getAsFile()
+      if (!file) return
+      triggerUpload([file])
+    }
+    document.addEventListener('paste', handlePaste)
+    return () => document.removeEventListener('paste', handlePaste)
+  }, [triggerUpload])
 
   function handleAction(action, membership) {
     if (action === 'transfer') { setTransferTarget(membership); return }

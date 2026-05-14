@@ -128,35 +128,36 @@ describe('GardenPage — compost heap link', () => {
   beforeEach(() => { global.fetch = vi.fn() })
   afterEach(() => { vi.restoreAllMocks() })
 
-  it('shows Compost heap link with correct count', async () => {
-    global.fetch
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) }) // plots (empty — no item row fetches)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ items: [mockUpload({ id: 'c1', compostedAt: '2026-05-01T10:00:00Z' })], next_cursor: null }),
-      }) // composted count
-      .mockResolvedValue({ ok: false })
+  function mockGardenFetch({ compostedItems = [] } = {}) {
+    global.fetch.mockImplementation((url) => {
+      const u = typeof url === 'string' ? url : url.toString()
+      if (u.includes('/api/plots/shared')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+      }
+      if (u.includes('/api/plots')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+      }
+      if (u.includes('/api/content/uploads/composted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: compostedItems, next_cursor: null }) })
+      }
+      return Promise.resolve({ ok: false })
+    })
+  }
 
+  it('shows Compost heap link with correct count', async () => {
+    mockGardenFetch({ compostedItems: [mockUpload({ id: 'c1', compostedAt: '2026-05-01T10:00:00Z' })] })
     render(<Wrapper><GardenPage /></Wrapper>)
     await waitFor(() => expect(screen.getByText(/Compost heap \(1\)/)).toBeInTheDocument())
   })
 
   it('shows Compost heap (0) link when heap is empty', async () => {
-    global.fetch
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) }) // plots
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [], next_cursor: null }) }) // composted count
-      .mockResolvedValue({ ok: false })
-
+    mockGardenFetch()
     render(<Wrapper><GardenPage /></Wrapper>)
     await waitFor(() => expect(screen.getByText(/Compost heap \(0\)/)).toBeInTheDocument())
   })
 
   it('shows transient composted message when navigated from compost', async () => {
-    global.fetch
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) }) // plots
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [], next_cursor: null }) }) // composted count
-      .mockResolvedValue({ ok: false })
-
+    mockGardenFetch()
     render(
       <Wrapper initialEntries={[{ pathname: '/', state: { composted: true } }]}>
         <GardenPage />

@@ -861,7 +861,7 @@ async function sha256HexFile(file) {
   return Array.from(h.digest()).map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
-async function encryptAndUpload(file, apiKey, onStatus) {
+export async function encryptAndUpload(file, apiKey, onStatus) {
   // Dedup check before allocating any GCS slots
   onStatus('Checking…')
   const contentHash = await sha256HexFile(file)
@@ -1038,6 +1038,20 @@ export function GardenPage() {
     if (showCompostedMsg || plotSavedMsg) window.history.replaceState({}, document.title, location.pathname)
   }, [showCompostedMsg, plotSavedMsg, location.pathname])
 
+  // Paste-to-upload: listen for image pastes on the Garden page only.
+  useEffect(() => {
+    function handlePaste(e) {
+      const items = Array.from(e.clipboardData?.items ?? [])
+      const imageItem = items.find((i) => i.kind === 'file' && i.type.startsWith('image/'))
+      if (!imageItem) return
+      const file = imageItem.getAsFile()
+      if (!file) return
+      handlePlantFiles([file])
+    }
+    document.addEventListener('paste', handlePaste)
+    return () => document.removeEventListener('paste', handlePaste)
+  }, [apiKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
   function handleDragEnd(event) {
     const { active, over } = event
     if (!over || active.id === over.id) return
@@ -1112,9 +1126,7 @@ export function GardenPage() {
     }
   }
 
-  async function handlePlant(e) {
-    const files = Array.from(e.target.files ?? [])
-    e.target.value = ''
+  async function handlePlantFiles(files) {
     if (!files.length) return
     setUploadError(null)
     for (const file of files) {
@@ -1134,6 +1146,12 @@ export function GardenPage() {
         setTimeout(() => setUploadError(null), 4000)
       }
     }
+  }
+
+  async function handlePlant(e) {
+    const files = Array.from(e.target.files ?? [])
+    e.target.value = ''
+    await handlePlantFiles(files)
   }
 
   async function handleCreateSharedPlot() {

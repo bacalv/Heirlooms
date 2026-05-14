@@ -62,13 +62,15 @@ function FlowForm({ plots, initial, onSave, onCancel, saving, error }) {
         <CriteriaBuilder state={criteriaState} onChange={setCriteriaState} />
       </div>
 
-      {selectedPlot?.visibility === 'shared' && (
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <input type="checkbox" checked={requiresStaging} onChange={(e) => setRequiresStaging(e.target.checked)}
-            className="accent-forest" />
-          <span className="text-forest">Require staging review before items enter the plot</span>
-        </label>
-      )}
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={!requiresStaging}
+          onChange={(e) => setRequiresStaging(!e.target.checked)}
+          className="accent-forest"
+        />
+        <span className="text-forest">Auto-approve — items matching this flow go straight to the plot without staging review</span>
+      </label>
 
       {error && <p className="text-earth text-xs">{error}</p>}
 
