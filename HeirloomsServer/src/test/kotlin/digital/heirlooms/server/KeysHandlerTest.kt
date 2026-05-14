@@ -3,6 +3,17 @@ package digital.heirlooms.server
 import digital.heirlooms.server.routes.buildApp
 import digital.heirlooms.server.domain.keys.RecoveryPassphraseRecord
 import digital.heirlooms.server.domain.keys.WrappedKeyRecord
+import digital.heirlooms.server.repository.auth.AuthRepository
+import digital.heirlooms.server.repository.capsule.CapsuleRepository
+import digital.heirlooms.server.repository.diag.DiagRepository
+import digital.heirlooms.server.repository.keys.KeyRepository
+import digital.heirlooms.server.repository.plot.FlowRepository
+import digital.heirlooms.server.repository.plot.PlotItemRepository
+import digital.heirlooms.server.repository.plot.PlotMemberRepository
+import digital.heirlooms.server.repository.plot.PlotRepository
+import digital.heirlooms.server.repository.social.SocialRepository
+import digital.heirlooms.server.repository.storage.BlobRepository
+import digital.heirlooms.server.repository.upload.UploadRepository
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
@@ -32,8 +43,34 @@ private val enc = Base64.getEncoder()
 
 class KeysHandlerTest {
 
-    private val mockDatabase = mockk<Database>()
-    private val app = buildApp(mockk<FileStore>(relaxed = true), mockDatabase)
+    private val mockDatabase = mockk<Database>(relaxed = true)
+    private val mockKeyRepo = mockk<KeyRepository>()
+    private val mockUploadRepo = mockk<UploadRepository>(relaxed = true)
+    private val mockAuthRepo = mockk<AuthRepository>(relaxed = true)
+    private val mockCapsuleRepo = mockk<CapsuleRepository>(relaxed = true)
+    private val mockDiagRepo = mockk<DiagRepository>(relaxed = true)
+    private val mockPlotRepo = mockk<PlotRepository>(relaxed = true)
+    private val mockFlowRepo = mockk<FlowRepository>(relaxed = true)
+    private val mockItemRepo = mockk<PlotItemRepository>(relaxed = true)
+    private val mockMemberRepo = mockk<PlotMemberRepository>(relaxed = true)
+    private val mockSocialRepo = mockk<SocialRepository>(relaxed = true)
+    private val mockBlobRepo = mockk<BlobRepository>(relaxed = true)
+
+    private val app = buildApp(
+        storage = mockk<FileStore>(relaxed = true),
+        database = mockDatabase,
+        uploadRepo = mockUploadRepo,
+        authRepo = mockAuthRepo,
+        capsuleRepo = mockCapsuleRepo,
+        plotRepo = mockPlotRepo,
+        flowRepo = mockFlowRepo,
+        itemRepo = mockItemRepo,
+        memberRepo = mockMemberRepo,
+        keyRepo = mockKeyRepo,
+        socialRepo = mockSocialRepo,
+        blobRepo = mockBlobRepo,
+        diagRepo = mockDiagRepo,
+    )
 
     private fun makeWrappedKeyRecord(
         deviceId: String = "device-1",
@@ -77,8 +114,8 @@ class KeysHandlerTest {
 
     @Test
     fun `register device returns 201 with record`() {
-        every { mockDatabase.getWrappedKeyByDeviceIdForUser(any(), any()) } returns null
-        every { mockDatabase.insertWrappedKey(any()) } just runs
+        every { mockKeyRepo.getWrappedKeyByDeviceIdForUser(any(), any()) } returns null
+        every { mockKeyRepo.insertWrappedKey(any()) } just runs
 
         val response = app(
             Request(POST, "/api/keys/devices")
@@ -88,12 +125,12 @@ class KeysHandlerTest {
 
         assertEquals(CREATED, response.status)
         assertTrue(response.bodyString().contains("device-1"))
-        verify { mockDatabase.insertWrappedKey(any()) }
+        verify { mockKeyRepo.insertWrappedKey(any()) }
     }
 
     @Test
     fun `register duplicate deviceId returns 409`() {
-        every { mockDatabase.getWrappedKeyByDeviceIdForUser("device-1", any()) } returns makeWrappedKeyRecord("device-1")
+        every { mockKeyRepo.getWrappedKeyByDeviceIdForUser("device-1", any()) } returns makeWrappedKeyRecord("device-1")
 
         val response = app(
             Request(POST, "/api/keys/devices")
@@ -106,7 +143,7 @@ class KeysHandlerTest {
 
     @Test
     fun `register with invalid deviceKind returns 400`() {
-        every { mockDatabase.getWrappedKeyByDeviceIdForUser(any(), any()) } returns null
+        every { mockKeyRepo.getWrappedKeyByDeviceIdForUser(any(), any()) } returns null
 
         val response = app(
             Request(POST, "/api/keys/devices")
@@ -122,7 +159,7 @@ class KeysHandlerTest {
     @Test
     fun `list devices returns active rows only`() {
         val active = makeWrappedKeyRecord("device-active")
-        every { mockDatabase.listWrappedKeys() } returns listOf(active)
+        every { mockKeyRepo.listWrappedKeys() } returns listOf(active)
 
         val response = app(Request(GET, "/api/keys/devices"))
 
@@ -135,18 +172,18 @@ class KeysHandlerTest {
     @Test
     fun `retire device returns 204`() {
         val record = makeWrappedKeyRecord("device-1")
-        every { mockDatabase.getWrappedKeyByDeviceIdForUser("device-1", any()) } returns record
-        every { mockDatabase.retireWrappedKey(record.id, any()) } just runs
+        every { mockKeyRepo.getWrappedKeyByDeviceIdForUser("device-1", any()) } returns record
+        every { mockKeyRepo.retireWrappedKey(record.id, any()) } just runs
 
         val response = app(Request(DELETE, "/api/keys/devices/device-1"))
 
         assertEquals(NO_CONTENT, response.status)
-        verify { mockDatabase.retireWrappedKey(record.id, any()) }
+        verify { mockKeyRepo.retireWrappedKey(record.id, any()) }
     }
 
     @Test
     fun `retire already-retired device returns 409`() {
-        every { mockDatabase.getWrappedKeyByDeviceIdForUser("device-1", any()) } returns makeWrappedKeyRecord("device-1", retired = true)
+        every { mockKeyRepo.getWrappedKeyByDeviceIdForUser("device-1", any()) } returns makeWrappedKeyRecord("device-1", retired = true)
 
         val response = app(Request(DELETE, "/api/keys/devices/device-1"))
 
@@ -158,18 +195,18 @@ class KeysHandlerTest {
     @Test
     fun `touch device returns 204 and updates last_used_at`() {
         val record = makeWrappedKeyRecord("device-1")
-        every { mockDatabase.getWrappedKeyByDeviceIdForUser("device-1", any()) } returns record
-        every { mockDatabase.touchWrappedKey(record.id) } just runs
+        every { mockKeyRepo.getWrappedKeyByDeviceIdForUser("device-1", any()) } returns record
+        every { mockKeyRepo.touchWrappedKey(record.id) } just runs
 
         val response = app(Request(PATCH, "/api/keys/devices/device-1/used"))
 
         assertEquals(NO_CONTENT, response.status)
-        verify { mockDatabase.touchWrappedKey(record.id) }
+        verify { mockKeyRepo.touchWrappedKey(record.id) }
     }
 
     @Test
     fun `touch unknown device returns 404`() {
-        every { mockDatabase.getWrappedKeyByDeviceIdForUser("unknown", any()) } returns null
+        every { mockKeyRepo.getWrappedKeyByDeviceIdForUser("unknown", any()) } returns null
 
         val response = app(Request(PATCH, "/api/keys/devices/unknown/used"))
 
@@ -180,7 +217,7 @@ class KeysHandlerTest {
 
     @Test
     fun `get passphrase returns 200 with record`() {
-        every { mockDatabase.getRecoveryPassphrase() } returns makePassphraseRecord()
+        every { mockKeyRepo.getRecoveryPassphrase() } returns makePassphraseRecord()
 
         val response = app(Request(GET, "/api/keys/passphrase"))
 
@@ -190,7 +227,7 @@ class KeysHandlerTest {
 
     @Test
     fun `get passphrase when none returns 404`() {
-        every { mockDatabase.getRecoveryPassphrase() } returns null
+        every { mockKeyRepo.getRecoveryPassphrase() } returns null
 
         val response = app(Request(GET, "/api/keys/passphrase"))
 
@@ -200,8 +237,8 @@ class KeysHandlerTest {
     @Test
     fun `put passphrase creates record and returns 200`() {
         val capturedRecord = slot<RecoveryPassphraseRecord>()
-        every { mockDatabase.upsertRecoveryPassphrase(capture(capturedRecord)) } just runs
-        every { mockDatabase.getRecoveryPassphrase() } returns makePassphraseRecord()
+        every { mockKeyRepo.upsertRecoveryPassphrase(capture(capturedRecord)) } just runs
+        every { mockKeyRepo.getRecoveryPassphrase() } returns makePassphraseRecord()
 
         val response = app(
             Request(PUT, "/api/keys/passphrase")
@@ -210,15 +247,15 @@ class KeysHandlerTest {
         )
 
         assertEquals(OK, response.status)
-        verify { mockDatabase.upsertRecoveryPassphrase(any()) }
+        verify { mockKeyRepo.upsertRecoveryPassphrase(any()) }
     }
 
     @Test
     fun `put passphrase replace updates record`() {
         val capturedSlot = slot<RecoveryPassphraseRecord>()
-        every { mockDatabase.upsertRecoveryPassphrase(capture(capturedSlot)) } just runs
+        every { mockKeyRepo.upsertRecoveryPassphrase(capture(capturedSlot)) } just runs
         val updatedRecord = makePassphraseRecord().copy(wrapFormat = "argon2id-aes256gcm-v1")
-        every { mockDatabase.getRecoveryPassphrase() } returns updatedRecord
+        every { mockKeyRepo.getRecoveryPassphrase() } returns updatedRecord
 
         val response = app(
             Request(PUT, "/api/keys/passphrase")
@@ -231,7 +268,7 @@ class KeysHandlerTest {
 
     @Test
     fun `delete passphrase returns 204`() {
-        every { mockDatabase.deleteRecoveryPassphrase() } returns true
+        every { mockKeyRepo.deleteRecoveryPassphrase() } returns true
 
         val response = app(Request(DELETE, "/api/keys/passphrase"))
 
@@ -240,7 +277,7 @@ class KeysHandlerTest {
 
     @Test
     fun `delete passphrase when none returns 404`() {
-        every { mockDatabase.deleteRecoveryPassphrase() } returns false
+        every { mockKeyRepo.deleteRecoveryPassphrase() } returns false
 
         val response = app(Request(DELETE, "/api/keys/passphrase"))
 

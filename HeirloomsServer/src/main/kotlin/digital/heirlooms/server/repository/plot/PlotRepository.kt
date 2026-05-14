@@ -10,9 +10,40 @@ import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
 
-class PlotRepository(private val dataSource: DataSource) {
+interface PlotRepository {
+    sealed class PlotUpdateResult {
+        data class Success(val plot: PlotRecord) : PlotUpdateResult()
+        object NotFound : PlotUpdateResult()
+        object SystemDefined : PlotUpdateResult()
+    }
+    sealed class PlotDeleteResult {
+        object Success : PlotDeleteResult()
+        object NotFound : PlotDeleteResult()
+        object SystemDefined : PlotDeleteResult()
+    }
+    sealed class BatchReorderResult {
+        object Success : BatchReorderResult()
+        object NotFound : BatchReorderResult()
+        object SystemDefined : BatchReorderResult()
+    }
 
-    fun listPlots(userId: UUID = FOUNDING_USER_ID): List<PlotRecord> {
+    fun listPlots(userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): List<PlotRecord>
+    fun getPlotById(id: UUID): PlotRecord?
+    fun getPlotByIdForUser(conn: java.sql.Connection, id: UUID, userId: UUID): PlotRecord?
+    fun createPlot(name: String, criteria: String?, showInGarden: Boolean, visibility: String, wrappedPlotKeyB64: String? = null, plotKeyFormat: String? = null, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): PlotRecord
+    fun updatePlot(id: UUID, name: String?, sortOrder: Int?, criteria: String?, showInGarden: Boolean?, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): PlotUpdateResult
+    fun deletePlot(id: UUID, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): PlotDeleteResult
+    fun batchReorderPlots(updates: List<Pair<UUID, Int>>, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): BatchReorderResult
+    fun withCriteriaValidation(node: com.fasterxml.jackson.databind.JsonNode, userId: UUID)
+    fun isMember(plotId: UUID, userId: UUID): Boolean
+    fun fetchExpiredTombstonedPlots(): List<UUID>
+    fun hardDeletePlot(plotId: UUID)
+    fun createSystemPlot(userId: UUID)
+}
+
+class PostgresPlotRepository(private val dataSource: DataSource) : PlotRepository {
+
+    override fun listPlots(userId: UUID): List<PlotRecord> {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """SELECT p.id, p.owner_user_id, p.name, p.sort_order, p.is_system_defined,
@@ -41,7 +72,7 @@ class PlotRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun getPlotById(id: UUID): PlotRecord? {
+    override fun getPlotById(id: UUID): PlotRecord? {
         dataSource.connection.use { conn ->
             return getPlotByIdConn(conn, id)
         }
@@ -59,7 +90,7 @@ class PlotRepository(private val dataSource: DataSource) {
             if (!rs.next()) null else rs.toPlotRecord()
         }
 
-    fun getPlotByIdForUser(conn: Connection, id: UUID, userId: UUID): PlotRecord? {
+    override fun getPlotByIdForUser(conn: Connection, id: UUID, userId: UUID): PlotRecord? {
         val plot = getPlotByIdConn(conn, id) ?: return null
         return when {
             plot.ownerUserId == userId -> plot
@@ -68,14 +99,14 @@ class PlotRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun createPlot(
+    override fun createPlot(
         name: String,
         criteria: String?,
         showInGarden: Boolean,
         visibility: String,
-        wrappedPlotKeyB64: String? = null,
-        plotKeyFormat: String? = null,
-        userId: UUID = FOUNDING_USER_ID,
+        wrappedPlotKeyB64: String?,
+        plotKeyFormat: String?,
+        userId: UUID,
     ): PlotRecord {
         val id = UUID.randomUUID()
         val now = Instant.now()
@@ -113,20 +144,15 @@ class PlotRepository(private val dataSource: DataSource) {
         return getPlotById(id)!!
     }
 
-    sealed class PlotUpdateResult {
-        data class Success(val plot: PlotRecord) : PlotUpdateResult()
-        object NotFound : PlotUpdateResult()
-        object SystemDefined : PlotUpdateResult()
-    }
 
-    fun updatePlot(
+    override fun updatePlot(
         id: UUID,
         name: String?,
         sortOrder: Int?,
         criteria: String?,
         showInGarden: Boolean?,
-        userId: UUID = FOUNDING_USER_ID,
-    ): PlotUpdateResult {
+        userId: UUID,
+    ): PlotRepository.PlotUpdateResult {
         withTransaction { conn ->
             val (isSystemDefined) = conn.prepareStatement(
                 "SELECT is_system_defined FROM plots WHERE id = ? AND owner_user_id = ? FOR UPDATE"
@@ -134,10 +160,10 @@ class PlotRepository(private val dataSource: DataSource) {
                 stmt.setObject(1, id)
                 stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
-                if (!rs.next()) return PlotUpdateResult.NotFound
+                if (!rs.next()) return PlotRepository.PlotUpdateResult.NotFound
                 listOf(rs.getBoolean("is_system_defined"))
             }
-            if (isSystemDefined) return PlotUpdateResult.SystemDefined
+            if (isSystemDefined) return PlotRepository.PlotUpdateResult.SystemDefined
 
             val setClauses = mutableListOf("updated_at = ?")
             if (name != null) setClauses.add("name = ?")
@@ -156,23 +182,18 @@ class PlotRepository(private val dataSource: DataSource) {
                 stmt.executeUpdate()
             }
         }
-        return getPlotById(id)?.let { PlotUpdateResult.Success(it) } ?: PlotUpdateResult.NotFound
+        return getPlotById(id)?.let { PlotRepository.PlotUpdateResult.Success(it) } ?: PlotRepository.PlotUpdateResult.NotFound
     }
 
-    sealed class PlotDeleteResult {
-        object Success : PlotDeleteResult()
-        object NotFound : PlotDeleteResult()
-        object SystemDefined : PlotDeleteResult()
-    }
 
-    fun deletePlot(id: UUID, userId: UUID = FOUNDING_USER_ID): PlotDeleteResult {
+    override fun deletePlot(id: UUID, userId: UUID): PlotRepository.PlotDeleteResult {
         dataSource.connection.use { conn ->
             conn.prepareStatement("SELECT is_system_defined FROM plots WHERE id = ? AND owner_user_id = ?").use { stmt ->
                 stmt.setObject(1, id)
                 stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
-                if (!rs.next()) return PlotDeleteResult.NotFound
-                if (rs.getBoolean("is_system_defined")) return PlotDeleteResult.SystemDefined
+                if (!rs.next()) return PlotRepository.PlotDeleteResult.NotFound
+                if (rs.getBoolean("is_system_defined")) return PlotRepository.PlotDeleteResult.SystemDefined
             }
             conn.prepareStatement("DELETE FROM plots WHERE id = ? AND owner_user_id = ?").use { stmt ->
                 stmt.setObject(1, id)
@@ -180,16 +201,11 @@ class PlotRepository(private val dataSource: DataSource) {
                 stmt.executeUpdate()
             }
         }
-        return PlotDeleteResult.Success
+        return PlotRepository.PlotDeleteResult.Success
     }
 
-    sealed class BatchReorderResult {
-        object Success : BatchReorderResult()
-        object NotFound : BatchReorderResult()
-        object SystemDefined : BatchReorderResult()
-    }
 
-    fun batchReorderPlots(updates: List<Pair<UUID, Int>>, userId: UUID = FOUNDING_USER_ID): BatchReorderResult {
+    override fun batchReorderPlots(updates: List<Pair<UUID, Int>>, userId: UUID): PlotRepository.BatchReorderResult {
         withTransaction { conn ->
             for ((id, _) in updates) {
                 conn.prepareStatement(
@@ -198,8 +214,8 @@ class PlotRepository(private val dataSource: DataSource) {
                     stmt.setObject(1, id)
                     stmt.setObject(2, userId)
                     val rs = stmt.executeQuery()
-                    if (!rs.next()) return BatchReorderResult.NotFound
-                    if (rs.getBoolean("is_system_defined")) return BatchReorderResult.SystemDefined
+                    if (!rs.next()) return PlotRepository.BatchReorderResult.NotFound
+                    if (rs.getBoolean("is_system_defined")) return PlotRepository.BatchReorderResult.SystemDefined
                 }
             }
             val now = Timestamp.from(Instant.now())
@@ -215,16 +231,16 @@ class PlotRepository(private val dataSource: DataSource) {
                 }
             }
         }
-        return BatchReorderResult.Success
+        return PlotRepository.BatchReorderResult.Success
     }
 
-    fun withCriteriaValidation(node: com.fasterxml.jackson.databind.JsonNode, userId: UUID) {
+    override fun withCriteriaValidation(node: com.fasterxml.jackson.databind.JsonNode, userId: UUID) {
         dataSource.connection.use { conn ->
             CriteriaEvaluator.validate(node, userId, conn)
         }
     }
 
-    fun isMember(plotId: UUID, userId: UUID): Boolean {
+    override fun isMember(plotId: UUID, userId: UUID): Boolean {
         dataSource.connection.use { conn -> return isMemberConn(conn, plotId, userId) }
     }
 
@@ -236,7 +252,7 @@ class PlotRepository(private val dataSource: DataSource) {
             stmt.executeQuery().next()
         }
 
-    fun fetchExpiredTombstonedPlots(): List<UUID> {
+    override fun fetchExpiredTombstonedPlots(): List<UUID> {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT id FROM plots WHERE tombstoned_at < NOW() - INTERVAL '90 days'"
@@ -249,7 +265,7 @@ class PlotRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun hardDeletePlot(plotId: UUID) {
+    override fun hardDeletePlot(plotId: UUID) {
         dataSource.connection.use { conn ->
             conn.prepareStatement("DELETE FROM plots WHERE id = ?").use { stmt ->
                 stmt.setObject(1, plotId); stmt.executeUpdate()
@@ -257,7 +273,7 @@ class PlotRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun createSystemPlot(userId: UUID) {
+    override fun createSystemPlot(userId: UUID) {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """INSERT INTO plots (id, owner_user_id, name, sort_order, is_system_defined)

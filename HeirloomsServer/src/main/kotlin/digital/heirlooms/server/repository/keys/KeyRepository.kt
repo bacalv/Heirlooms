@@ -11,11 +11,32 @@ import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
 
-class KeyRepository(private val dataSource: DataSource) {
+interface KeyRepository {
+    fun insertWrappedKey(record: WrappedKeyRecord, userId: UUID = FOUNDING_USER_ID)
+    fun listWrappedKeys(userId: UUID = FOUNDING_USER_ID, includeRetired: Boolean = false): List<WrappedKeyRecord>
+    fun getWrappedKeyByDeviceId(deviceId: String): WrappedKeyRecord?
+    fun getWrappedKeyByDeviceIdForUser(deviceId: String, userId: UUID): WrappedKeyRecord?
+    fun getWrappedKeyByDeviceIdAndUser(deviceId: String, userId: UUID): WrappedKeyRecord?
+    fun retireWrappedKey(id: UUID, retiredAt: Instant = Instant.now())
+    fun touchWrappedKey(id: UUID)
+    fun retireDormantWrappedKeys(dormantBefore: Instant): Int
+    fun getRecoveryPassphrase(userId: UUID = FOUNDING_USER_ID): RecoveryPassphraseRecord?
+    fun upsertRecoveryPassphrase(record: RecoveryPassphraseRecord, userId: UUID = FOUNDING_USER_ID)
+    fun deleteRecoveryPassphrase(userId: UUID = FOUNDING_USER_ID): Boolean
+    fun insertPendingDeviceLink(record: PendingDeviceLinkRecord)
+    fun getPendingDeviceLink(id: UUID): PendingDeviceLinkRecord?
+    fun getPendingDeviceLinkByCode(code: String): PendingDeviceLinkRecord?
+    fun getPendingDeviceLinkByWebSessionId(webSessionId: String): PendingDeviceLinkRecord?
+    fun registerNewDevice(id: UUID, deviceId: String, deviceLabel: String, deviceKind: String, pubkeyFormat: String, pubkey: ByteArray)
+    fun completeDeviceLink(id: UUID, wrappedMasterKey: ByteArray, wrapFormat: String, deviceId: String, deviceLabel: String, deviceKind: String, pubkeyFormat: String, pubkey: ByteArray, userId: UUID = FOUNDING_USER_ID)
+    fun deleteExpiredDeviceLinks(before: Instant): Int
+}
+
+class PostgresKeyRepository(private val dataSource: DataSource) : KeyRepository {
 
     // ── Wrapped keys ──────────────────────────────────────────────────────────
 
-    fun insertWrappedKey(record: WrappedKeyRecord, userId: UUID = FOUNDING_USER_ID) {
+    override fun insertWrappedKey(record: WrappedKeyRecord, userId: UUID) {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """INSERT INTO wrapped_keys (id, device_id, device_label, device_kind, pubkey_format,
@@ -39,7 +60,7 @@ class KeyRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun listWrappedKeys(userId: UUID = FOUNDING_USER_ID, includeRetired: Boolean = false): List<WrappedKeyRecord> {
+    override fun listWrappedKeys(userId: UUID, includeRetired: Boolean): List<WrappedKeyRecord> {
         dataSource.connection.use { conn ->
             val sql = if (includeRetired)
                 "SELECT id, device_id, device_label, device_kind, pubkey_format, pubkey, wrapped_master_key, wrap_format, created_at, last_used_at, retired_at FROM wrapped_keys WHERE user_id = ? ORDER BY created_at DESC"
@@ -55,7 +76,7 @@ class KeyRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun getWrappedKeyByDeviceId(deviceId: String): WrappedKeyRecord? {
+    override fun getWrappedKeyByDeviceId(deviceId: String): WrappedKeyRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT id, device_id, device_label, device_kind, pubkey_format, pubkey, wrapped_master_key, wrap_format, created_at, last_used_at, retired_at FROM wrapped_keys WHERE device_id = ?"
@@ -68,7 +89,7 @@ class KeyRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun getWrappedKeyByDeviceIdForUser(deviceId: String, userId: UUID): WrappedKeyRecord? {
+    override fun getWrappedKeyByDeviceIdForUser(deviceId: String, userId: UUID): WrappedKeyRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT id, device_id, device_label, device_kind, pubkey_format, pubkey, wrapped_master_key, wrap_format, created_at, last_used_at, retired_at FROM wrapped_keys WHERE device_id = ? AND user_id = ?"
@@ -82,7 +103,7 @@ class KeyRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun getWrappedKeyByDeviceIdAndUser(deviceId: String, userId: UUID): WrappedKeyRecord? {
+    override fun getWrappedKeyByDeviceIdAndUser(deviceId: String, userId: UUID): WrappedKeyRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """SELECT id, device_id, device_label, device_kind, pubkey_format, pubkey,
@@ -98,7 +119,7 @@ class KeyRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun retireWrappedKey(id: UUID, retiredAt: Instant = Instant.now()) {
+    override fun retireWrappedKey(id: UUID, retiredAt: Instant) {
         dataSource.connection.use { conn ->
             conn.prepareStatement("UPDATE wrapped_keys SET retired_at = ? WHERE id = ?").use { stmt ->
                 stmt.setTimestamp(1, Timestamp.from(retiredAt))
@@ -108,7 +129,7 @@ class KeyRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun touchWrappedKey(id: UUID) {
+    override fun touchWrappedKey(id: UUID) {
         dataSource.connection.use { conn ->
             conn.prepareStatement("UPDATE wrapped_keys SET last_used_at = NOW() WHERE id = ? AND retired_at IS NULL").use { stmt ->
                 stmt.setObject(1, id)
@@ -117,7 +138,7 @@ class KeyRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun retireDormantWrappedKeys(dormantBefore: Instant): Int {
+    override fun retireDormantWrappedKeys(dormantBefore: Instant): Int {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "UPDATE wrapped_keys SET retired_at = NOW() WHERE retired_at IS NULL AND last_used_at < ?"
@@ -130,7 +151,7 @@ class KeyRepository(private val dataSource: DataSource) {
 
     // ── Recovery passphrase ───────────────────────────────────────────────────
 
-    fun getRecoveryPassphrase(userId: UUID = FOUNDING_USER_ID): RecoveryPassphraseRecord? {
+    override fun getRecoveryPassphrase(userId: UUID): RecoveryPassphraseRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT wrapped_master_key, wrap_format, argon2_params, salt, created_at, updated_at FROM recovery_passphrase WHERE user_id = ?"
@@ -143,7 +164,7 @@ class KeyRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun upsertRecoveryPassphrase(record: RecoveryPassphraseRecord, userId: UUID = FOUNDING_USER_ID) {
+    override fun upsertRecoveryPassphrase(record: RecoveryPassphraseRecord, userId: UUID) {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """INSERT INTO recovery_passphrase (user_id, wrapped_master_key, wrap_format, argon2_params, salt, created_at, updated_at)
@@ -165,7 +186,7 @@ class KeyRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun deleteRecoveryPassphrase(userId: UUID = FOUNDING_USER_ID): Boolean {
+    override fun deleteRecoveryPassphrase(userId: UUID): Boolean {
         dataSource.connection.use { conn ->
             conn.prepareStatement("DELETE FROM recovery_passphrase WHERE user_id = ?").use { stmt ->
                 stmt.setObject(1, userId)
@@ -182,7 +203,7 @@ class KeyRepository(private val dataSource: DataSource) {
         user_id, web_session_id, raw_session_token, session_expires_at
     """.trimIndent()
 
-    fun insertPendingDeviceLink(record: PendingDeviceLinkRecord) {
+    override fun insertPendingDeviceLink(record: PendingDeviceLinkRecord) {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "INSERT INTO pending_device_links (id, one_time_code, expires_at, state) VALUES (?, ?, ?, ?)"
@@ -196,7 +217,7 @@ class KeyRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun getPendingDeviceLink(id: UUID): PendingDeviceLinkRecord? {
+    override fun getPendingDeviceLink(id: UUID): PendingDeviceLinkRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT $pendingLinkColumns FROM pending_device_links WHERE id = ?"
@@ -209,7 +230,7 @@ class KeyRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun getPendingDeviceLinkByCode(code: String): PendingDeviceLinkRecord? {
+    override fun getPendingDeviceLinkByCode(code: String): PendingDeviceLinkRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT $pendingLinkColumns FROM pending_device_links WHERE one_time_code = ?"
@@ -222,7 +243,7 @@ class KeyRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun getPendingDeviceLinkByWebSessionId(webSessionId: String): PendingDeviceLinkRecord? {
+    override fun getPendingDeviceLinkByWebSessionId(webSessionId: String): PendingDeviceLinkRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "SELECT $pendingLinkColumns FROM pending_device_links WHERE web_session_id = ?"
@@ -235,7 +256,7 @@ class KeyRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun registerNewDevice(
+    override fun registerNewDevice(
         id: UUID, deviceId: String, deviceLabel: String,
         deviceKind: String, pubkeyFormat: String, pubkey: ByteArray,
     ) {
@@ -258,11 +279,11 @@ class KeyRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun completeDeviceLink(
+    override fun completeDeviceLink(
         id: UUID, wrappedMasterKey: ByteArray, wrapFormat: String,
         deviceId: String, deviceLabel: String, deviceKind: String,
         pubkeyFormat: String, pubkey: ByteArray,
-        userId: UUID = FOUNDING_USER_ID,
+        userId: UUID,
     ) {
         withTransaction { conn ->
             conn.prepareStatement(
@@ -295,7 +316,7 @@ class KeyRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun deleteExpiredDeviceLinks(before: Instant): Int {
+    override fun deleteExpiredDeviceLinks(before: Instant): Int {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 "DELETE FROM pending_device_links WHERE expires_at < ? AND state != 'wrap_complete'"

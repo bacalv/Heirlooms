@@ -11,9 +11,27 @@ import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
 
-class FlowRepository(private val dataSource: DataSource) {
+interface FlowRepository {
+    sealed class FlowCreateResult {
+        data class Success(val flow: FlowRecord) : FlowCreateResult()
+        data class Error(val message: String) : FlowCreateResult()
+    }
+    sealed class FlowUpdateResult {
+        data class Success(val flow: FlowRecord) : FlowUpdateResult()
+        object NotFound : FlowUpdateResult()
+    }
 
-    fun listFlows(userId: UUID = FOUNDING_USER_ID): List<FlowRecord> {
+    fun listFlows(userId: UUID = FOUNDING_USER_ID): List<FlowRecord>
+    fun getFlowById(id: UUID, userId: UUID = FOUNDING_USER_ID): FlowRecord?
+    fun createFlow(name: String, criteriaJson: String, targetPlotId: UUID, requiresStaging: Boolean, targetPlot: PlotRecord, userId: UUID = FOUNDING_USER_ID): FlowCreateResult
+    fun updateFlow(id: UUID, name: String?, criteriaJson: String?, requiresStaging: Boolean?, targetPlot: PlotRecord?, userId: UUID = FOUNDING_USER_ID): FlowUpdateResult
+    fun deleteFlow(id: UUID, userId: UUID = FOUNDING_USER_ID): Boolean
+    fun runUnstagedFlowsForUpload(conn: java.sql.Connection, uploadId: UUID, userId: UUID)
+}
+
+class PostgresFlowRepository(private val dataSource: DataSource) : FlowRepository {
+
+    override fun listFlows(userId: UUID): List<FlowRecord> {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """SELECT id, user_id, name, criteria, target_plot_id, requires_staging, created_at, updated_at
@@ -28,7 +46,7 @@ class FlowRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun getFlowById(id: UUID, userId: UUID = FOUNDING_USER_ID): FlowRecord? {
+    override fun getFlowById(id: UUID, userId: UUID): FlowRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """SELECT id, user_id, name, criteria, target_plot_id, requires_staging, created_at, updated_at
@@ -43,20 +61,15 @@ class FlowRepository(private val dataSource: DataSource) {
         }
     }
 
-    sealed class FlowCreateResult {
-        data class Success(val flow: FlowRecord) : FlowCreateResult()
-        data class Error(val message: String) : FlowCreateResult()
-    }
-
-    fun createFlow(
+    override fun createFlow(
         name: String,
         criteriaJson: String,
         targetPlotId: UUID,
         requiresStaging: Boolean,
         targetPlot: PlotRecord,
-        userId: UUID = FOUNDING_USER_ID,
-    ): FlowCreateResult {
-        if (targetPlot.criteria != null) return FlowCreateResult.Error("Target plot must be a collection plot (criteria IS NULL)")
+        userId: UUID,
+    ): FlowRepository.FlowCreateResult {
+        if (targetPlot.criteria != null) return FlowRepository.FlowCreateResult.Error("Target plot must be a collection plot (criteria IS NULL)")
 
         // Staging policy: private plots never need staging (your own content);
         // public plots always require staging; shared plots respect the caller's preference.
@@ -85,23 +98,18 @@ class FlowRepository(private val dataSource: DataSource) {
             }
             val flow = getFlowById(id, userId)!!
             if (!effectiveStaging) autoPopulateFlow(conn, flow, userId)
-            return FlowCreateResult.Success(flow)
+            return FlowRepository.FlowCreateResult.Success(flow)
         }
     }
 
-    sealed class FlowUpdateResult {
-        data class Success(val flow: FlowRecord) : FlowUpdateResult()
-        object NotFound : FlowUpdateResult()
-    }
-
-    fun updateFlow(
+    override fun updateFlow(
         id: UUID,
         name: String?,
         criteriaJson: String?,
         requiresStaging: Boolean?,
         targetPlot: PlotRecord?,
-        userId: UUID = FOUNDING_USER_ID,
-    ): FlowUpdateResult {
+        userId: UUID,
+    ): FlowRepository.FlowUpdateResult {
         // Enforce same staging policy as createFlow
         val effectiveStaging = requiresStaging?.let {
             when (targetPlot?.visibility) {
@@ -128,16 +136,16 @@ class FlowRepository(private val dataSource: DataSource) {
                 stmt.setObject(idx++, id)
                 stmt.setObject(idx, userId)
                 val updated = stmt.executeUpdate()
-                if (updated == 0) return FlowUpdateResult.NotFound
+                if (updated == 0) return FlowRepository.FlowUpdateResult.NotFound
             }
-            val updatedFlow = getFlowById(id, userId) ?: return FlowUpdateResult.NotFound
+            val updatedFlow = getFlowById(id, userId) ?: return FlowRepository.FlowUpdateResult.NotFound
             // If flow is now unstaged (newly or due to criteria change), populate missing items
             if (!updatedFlow.requiresStaging) autoPopulateFlow(conn, updatedFlow, userId)
-            return FlowUpdateResult.Success(updatedFlow)
+            return FlowRepository.FlowUpdateResult.Success(updatedFlow)
         }
     }
 
-    fun deleteFlow(id: UUID, userId: UUID = FOUNDING_USER_ID): Boolean {
+    override fun deleteFlow(id: UUID, userId: UUID): Boolean {
         dataSource.connection.use { conn ->
             conn.prepareStatement("DELETE FROM flows WHERE id = ? AND user_id = ?").use { stmt ->
                 stmt.setObject(1, id)
@@ -148,7 +156,7 @@ class FlowRepository(private val dataSource: DataSource) {
     }
 
     // Inserts upload into plot_items for every unstaged flow whose criteria it satisfies.
-    fun runUnstagedFlowsForUpload(conn: Connection, uploadId: UUID, userId: UUID) {
+    override fun runUnstagedFlowsForUpload(conn: Connection, uploadId: UUID, userId: UUID) {
         val flows = listFlows(userId).filter { !it.requiresStaging }
         for (flow in flows) {
             try {

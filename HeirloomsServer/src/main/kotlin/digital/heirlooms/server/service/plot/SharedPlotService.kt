@@ -1,10 +1,10 @@
 package digital.heirlooms.server.service.plot
 
-import digital.heirlooms.server.Database
 import digital.heirlooms.server.domain.plot.PlotInviteRecord
 import digital.heirlooms.server.domain.plot.PlotMemberRecord
 import digital.heirlooms.server.domain.plot.SharedMembershipRecord
 import digital.heirlooms.server.repository.plot.PlotMemberRepository
+import digital.heirlooms.server.repository.plot.PlotRepository
 import java.util.UUID
 
 /**
@@ -13,7 +13,8 @@ import java.util.UUID
  * transfer, and status changes.
  */
 class SharedPlotService(
-    private val database: Database,
+    private val plotRepo: PlotRepository,
+    private val memberRepo: PlotMemberRepository,
 ) {
     // ---- Plot key --------------------------------------------------------------
 
@@ -24,16 +25,16 @@ class SharedPlotService(
     }
 
     fun getPlotKey(plotId: UUID, userId: UUID): GetPlotKeyResult {
-        val plot = database.getPlotById(plotId) ?: return GetPlotKeyResult.NotFound
+        val plot = plotRepo.getPlotById(plotId) ?: return GetPlotKeyResult.NotFound
         if (plot.visibility != "shared") return GetPlotKeyResult.NotShared
-        val pair = database.getPlotKey(plotId, userId) ?: return GetPlotKeyResult.NotFound
+        val pair = memberRepo.getPlotKey(plotId, userId) ?: return GetPlotKeyResult.NotFound
         return GetPlotKeyResult.Success(pair.first, pair.second)
     }
 
     // ---- Members ---------------------------------------------------------------
 
     fun listMembers(plotId: UUID, userId: UUID): List<PlotMemberRecord>? =
-        database.listMembers(plotId, userId)
+        memberRepo.listMembers(plotId, userId)
 
     fun addMember(
         plotId: UUID,
@@ -42,25 +43,25 @@ class SharedPlotService(
         plotKeyFormat: String,
         inviterUserId: UUID,
     ): PlotMemberRepository.AddMemberResult =
-        database.addMember(plotId, newUserId, wrappedPlotKey, plotKeyFormat, inviterUserId)
+        memberRepo.addMember(plotId, newUserId, wrappedPlotKey, plotKeyFormat, inviterUserId)
 
     // ---- Invite link flow ------------------------------------------------------
 
     fun createInvite(plotId: UUID, userId: UUID): PlotInviteRecord? =
-        database.createInvite(plotId, userId)
+        memberRepo.createInvite(plotId, userId)
 
     fun getInviteInfo(token: String): PlotMemberRepository.InviteInfo? =
-        database.getInviteInfo(token)
+        memberRepo.getInviteInfo(token)
 
     fun redeemInvite(
         token: String,
         recipientUserId: UUID,
         recipientPubkey: String,
     ): PlotMemberRepository.RedeemInviteResult =
-        database.redeemInvite(token, recipientUserId, recipientPubkey)
+        memberRepo.redeemInvite(token, recipientUserId, recipientPubkey)
 
     fun listPendingInvites(plotId: UUID, userId: UUID): List<Map<String, String>> =
-        database.listPendingInvites(plotId, userId)
+        memberRepo.listPendingInvites(plotId, userId)
 
     fun confirmInvite(
         inviteId: UUID,
@@ -68,21 +69,21 @@ class SharedPlotService(
         wrappedPlotKey: ByteArray,
         plotKeyFormat: String,
         confirmerUserId: UUID,
-    ): Boolean = database.confirmInvite(inviteId, plotId, wrappedPlotKey, plotKeyFormat, confirmerUserId)
+    ): Boolean = memberRepo.confirmInvite(inviteId, plotId, wrappedPlotKey, plotKeyFormat, confirmerUserId)
 
     // ---- Leave / accept / rejoin / restore ------------------------------------
 
     fun leavePlot(plotId: UUID, userId: UUID): PlotMemberRepository.LeavePlotResult =
-        database.leavePlot(plotId, userId)
+        memberRepo.leavePlot(plotId, userId)
 
     fun acceptInvite(plotId: UUID, userId: UUID, localName: String): PlotMemberRepository.AcceptInviteResult =
-        database.acceptInvite(plotId, userId, localName)
+        memberRepo.acceptInvite(plotId, userId, localName)
 
     fun rejoinPlot(plotId: UUID, userId: UUID, localName: String?): PlotMemberRepository.RejoinResult =
-        database.rejoinPlot(plotId, userId, localName)
+        memberRepo.rejoinPlot(plotId, userId, localName)
 
     fun restorePlot(plotId: UUID, userId: UUID): PlotMemberRepository.RestorePlotResult =
-        database.restorePlot(plotId, userId)
+        memberRepo.restorePlot(plotId, userId)
 
     // ---- Transfer / status ----------------------------------------------------
 
@@ -91,13 +92,13 @@ class SharedPlotService(
         newOwnerId: UUID,
         currentOwnerId: UUID,
     ): PlotMemberRepository.TransferOwnershipResult =
-        database.transferOwnership(plotId, newOwnerId, currentOwnerId)
+        memberRepo.transferOwnership(plotId, newOwnerId, currentOwnerId)
 
     fun setPlotStatus(plotId: UUID, status: String, userId: UUID): PlotMemberRepository.SetPlotStatusResult =
-        database.setPlotStatus(plotId, status, userId)
+        memberRepo.setPlotStatus(plotId, status, userId)
 
     // ---- Memberships ----------------------------------------------------------
 
     fun listSharedMemberships(userId: UUID): List<SharedMembershipRecord> =
-        database.listSharedMemberships(userId)
+        memberRepo.listSharedMemberships(userId)
 }

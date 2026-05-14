@@ -15,9 +15,41 @@ import java.time.OffsetDateTime
 import java.util.UUID
 import javax.sql.DataSource
 
-class CapsuleRepository(private val dataSource: DataSource) {
+interface CapsuleRepository {
+    sealed class UpdateResult {
+        data class Success(val detail: CapsuleDetail) : UpdateResult()
+        object NotFound : UpdateResult()
+        object TerminalState : UpdateResult()
+        object SealedContents : UpdateResult()
+        object UnknownUpload : UpdateResult()
+        data class InvalidRecipients(val reason: String) : UpdateResult()
+        data class MessageTooLong(val limit: Int) : UpdateResult()
+    }
+    sealed class SealResult {
+        data class Success(val detail: CapsuleDetail) : SealResult()
+        object NotFound : SealResult()
+        object WrongState : SealResult()
+        object Empty : SealResult()
+    }
+    sealed class CancelResult {
+        data class Success(val detail: CapsuleDetail) : CancelResult()
+        object NotFound : CancelResult()
+        object WrongState : CancelResult()
+    }
 
-    fun uploadExists(id: UUID, userId: UUID = FOUNDING_USER_ID): Boolean {
+    fun uploadExists(id: UUID, userId: UUID = FOUNDING_USER_ID): Boolean
+    fun createCapsule(id: UUID, createdByUser: String, shape: CapsuleShape, state: CapsuleState, unlockAt: OffsetDateTime, recipients: List<String>, uploadIds: List<UUID>, message: String, userId: UUID = FOUNDING_USER_ID): CapsuleDetail
+    fun getCapsuleById(id: UUID, userId: UUID = FOUNDING_USER_ID): CapsuleDetail?
+    fun listCapsules(states: List<CapsuleState>, orderBy: String, userId: UUID = FOUNDING_USER_ID): List<CapsuleSummary>
+    fun updateCapsule(id: UUID, userId: UUID = FOUNDING_USER_ID, unlockAt: OffsetDateTime?, recipients: List<String>?, uploadIds: List<UUID>?, message: String?): UpdateResult
+    fun sealCapsule(id: UUID, userId: UUID = FOUNDING_USER_ID): SealResult
+    fun cancelCapsule(id: UUID, userId: UUID = FOUNDING_USER_ID): CancelResult
+    fun getCapsulesForUpload(uploadId: UUID, userId: UUID = FOUNDING_USER_ID): List<CapsuleSummary>?
+}
+
+class PostgresCapsuleRepository(private val dataSource: DataSource) : CapsuleRepository {
+
+    override fun uploadExists(id: UUID, userId: UUID): Boolean {
         dataSource.connection.use { conn ->
             conn.prepareStatement("SELECT 1 FROM uploads WHERE id = ? AND user_id = ?").use { stmt ->
                 stmt.setObject(1, id)
@@ -27,7 +59,7 @@ class CapsuleRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun createCapsule(
+    override fun createCapsule(
         id: UUID,
         createdByUser: String,
         shape: CapsuleShape,
@@ -36,7 +68,7 @@ class CapsuleRepository(private val dataSource: DataSource) {
         recipients: List<String>,
         uploadIds: List<UUID>,
         message: String,
-        userId: UUID = FOUNDING_USER_ID,
+        userId: UUID,
     ): CapsuleDetail {
         val now = Instant.now()
         withTransaction { conn ->
@@ -63,7 +95,7 @@ class CapsuleRepository(private val dataSource: DataSource) {
         return getCapsuleById(id, userId)!!
     }
 
-    fun getCapsuleById(id: UUID, userId: UUID = FOUNDING_USER_ID): CapsuleDetail? {
+    override fun getCapsuleById(id: UUID, userId: UUID): CapsuleDetail? {
         dataSource.connection.use { conn ->
             val record = conn.prepareStatement(
                 """SELECT id, created_at, updated_at, created_by_user, shape, state,
@@ -83,7 +115,7 @@ class CapsuleRepository(private val dataSource: DataSource) {
         }
     }
 
-    fun listCapsules(states: List<CapsuleState>, orderBy: String, userId: UUID = FOUNDING_USER_ID): List<CapsuleSummary> {
+    override fun listCapsules(states: List<CapsuleState>, orderBy: String, userId: UUID): List<CapsuleSummary> {
         if (states.isEmpty()) return emptyList()
         dataSource.connection.use { conn ->
             val stateArr = conn.createArrayOf("text", states.map { it.name.lowercase() }.toTypedArray())
@@ -113,24 +145,14 @@ class CapsuleRepository(private val dataSource: DataSource) {
         }
     }
 
-    sealed class UpdateResult {
-        data class Success(val detail: CapsuleDetail) : UpdateResult()
-        object NotFound : UpdateResult()
-        object TerminalState : UpdateResult()
-        object SealedContents : UpdateResult()
-        object UnknownUpload : UpdateResult()
-        data class InvalidRecipients(val reason: String) : UpdateResult()
-        data class MessageTooLong(val limit: Int) : UpdateResult()
-    }
-
-    fun updateCapsule(
+    override fun updateCapsule(
         id: UUID,
-        userId: UUID = FOUNDING_USER_ID,
+        userId: UUID,
         unlockAt: OffsetDateTime?,
         recipients: List<String>?,
         uploadIds: List<UUID>?,
         message: String?,
-    ): UpdateResult {
+    ): CapsuleRepository.UpdateResult {
         withTransaction { conn ->
             val record = conn.prepareStatement(
                 "SELECT id, created_at, updated_at, created_by_user, shape, state, unlock_at, cancelled_at, delivered_at FROM capsules WHERE id = ? AND user_id = ? FOR UPDATE"
@@ -138,15 +160,15 @@ class CapsuleRepository(private val dataSource: DataSource) {
                 stmt.setObject(1, id)
                 stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
-                if (!rs.next()) return UpdateResult.NotFound
+                if (!rs.next()) return CapsuleRepository.UpdateResult.NotFound
                 rs.toCapsuleRecord()
             }
 
             if (record.state == CapsuleState.DELIVERED || record.state == CapsuleState.CANCELLED) {
-                return UpdateResult.TerminalState
+                return CapsuleRepository.UpdateResult.TerminalState
             }
             if (uploadIds != null && record.state == CapsuleState.SEALED) {
-                return UpdateResult.SealedContents
+                return CapsuleRepository.UpdateResult.SealedContents
             }
             if (uploadIds != null) {
                 for (uid in uploadIds) {
@@ -155,7 +177,7 @@ class CapsuleRepository(private val dataSource: DataSource) {
                         stmt.setObject(2, userId)
                         stmt.executeQuery().next()
                     }
-                    if (!exists) return UpdateResult.UnknownUpload
+                    if (!exists) return CapsuleRepository.UpdateResult.UnknownUpload
                 }
             }
 
@@ -210,17 +232,10 @@ class CapsuleRepository(private val dataSource: DataSource) {
                 }
             }
         }
-        return getCapsuleById(id, userId)?.let { UpdateResult.Success(it) } ?: UpdateResult.NotFound
+        return getCapsuleById(id, userId)?.let { CapsuleRepository.UpdateResult.Success(it) } ?: CapsuleRepository.UpdateResult.NotFound
     }
 
-    sealed class SealResult {
-        data class Success(val detail: CapsuleDetail) : SealResult()
-        object NotFound : SealResult()
-        object WrongState : SealResult()
-        object Empty : SealResult()
-    }
-
-    fun sealCapsule(id: UUID, userId: UUID = FOUNDING_USER_ID): SealResult {
+    override fun sealCapsule(id: UUID, userId: UUID): CapsuleRepository.SealResult {
         withTransaction { conn ->
             val record = conn.prepareStatement(
                 "SELECT id, created_at, updated_at, created_by_user, shape, state, unlock_at, cancelled_at, delivered_at FROM capsules WHERE id = ? AND user_id = ? FOR UPDATE"
@@ -228,12 +243,12 @@ class CapsuleRepository(private val dataSource: DataSource) {
                 stmt.setObject(1, id)
                 stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
-                if (!rs.next()) return SealResult.NotFound
+                if (!rs.next()) return CapsuleRepository.SealResult.NotFound
                 rs.toCapsuleRecord()
             }
 
             if (record.shape != CapsuleShape.OPEN || record.state != CapsuleState.OPEN) {
-                return SealResult.WrongState
+                return CapsuleRepository.SealResult.WrongState
             }
 
             val hasContents = conn.prepareStatement(
@@ -243,7 +258,7 @@ class CapsuleRepository(private val dataSource: DataSource) {
                 stmt.executeQuery().let { rs -> rs.next(); rs.getBoolean(1) }
             }
 
-            if (!hasContents) return SealResult.Empty
+            if (!hasContents) return CapsuleRepository.SealResult.Empty
 
             conn.prepareStatement(
                 "UPDATE capsules SET state = 'sealed', updated_at = ? WHERE id = ?"
@@ -253,16 +268,10 @@ class CapsuleRepository(private val dataSource: DataSource) {
                 stmt.executeUpdate()
             }
         }
-        return getCapsuleById(id, userId)?.let { SealResult.Success(it) } ?: SealResult.NotFound
+        return getCapsuleById(id, userId)?.let { CapsuleRepository.SealResult.Success(it) } ?: CapsuleRepository.SealResult.NotFound
     }
 
-    sealed class CancelResult {
-        data class Success(val detail: CapsuleDetail) : CancelResult()
-        object NotFound : CancelResult()
-        object WrongState : CancelResult()
-    }
-
-    fun cancelCapsule(id: UUID, userId: UUID = FOUNDING_USER_ID): CancelResult {
+    override fun cancelCapsule(id: UUID, userId: UUID): CapsuleRepository.CancelResult {
         withTransaction { conn ->
             val record = conn.prepareStatement(
                 "SELECT id, created_at, updated_at, created_by_user, shape, state, unlock_at, cancelled_at, delivered_at FROM capsules WHERE id = ? AND user_id = ? FOR UPDATE"
@@ -270,12 +279,12 @@ class CapsuleRepository(private val dataSource: DataSource) {
                 stmt.setObject(1, id)
                 stmt.setObject(2, userId)
                 val rs = stmt.executeQuery()
-                if (!rs.next()) return CancelResult.NotFound
+                if (!rs.next()) return CapsuleRepository.CancelResult.NotFound
                 rs.toCapsuleRecord()
             }
 
             if (record.state != CapsuleState.OPEN && record.state != CapsuleState.SEALED) {
-                return CancelResult.WrongState
+                return CapsuleRepository.CancelResult.WrongState
             }
 
             val now = Timestamp.from(Instant.now())
@@ -289,10 +298,10 @@ class CapsuleRepository(private val dataSource: DataSource) {
                 stmt.executeUpdate()
             }
         }
-        return getCapsuleById(id, userId)?.let { CancelResult.Success(it) } ?: CancelResult.NotFound
+        return getCapsuleById(id, userId)?.let { CapsuleRepository.CancelResult.Success(it) } ?: CapsuleRepository.CancelResult.NotFound
     }
 
-    fun getCapsulesForUpload(uploadId: UUID, userId: UUID = FOUNDING_USER_ID): List<CapsuleSummary>? {
+    override fun getCapsulesForUpload(uploadId: UUID, userId: UUID): List<CapsuleSummary>? {
         dataSource.connection.use { conn ->
             val uploadExists = conn.prepareStatement("SELECT 1 FROM uploads WHERE id = ? AND user_id = ?").use { stmt ->
                 stmt.setObject(1, uploadId)

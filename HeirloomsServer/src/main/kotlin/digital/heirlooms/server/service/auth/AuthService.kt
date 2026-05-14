@@ -1,12 +1,15 @@
 package digital.heirlooms.server.service.auth
 
-import digital.heirlooms.server.Database
 import digital.heirlooms.server.domain.auth.InviteRecord
 import digital.heirlooms.server.domain.auth.UserRecord
 import digital.heirlooms.server.domain.auth.UserSessionRecord
 import digital.heirlooms.server.domain.keys.PendingDeviceLinkRecord
 import digital.heirlooms.server.domain.keys.RecoveryPassphraseRecord
 import digital.heirlooms.server.domain.keys.WrappedKeyRecord
+import digital.heirlooms.server.repository.auth.AuthRepository
+import digital.heirlooms.server.repository.keys.KeyRepository
+import digital.heirlooms.server.repository.plot.PlotRepository
+import digital.heirlooms.server.repository.social.SocialRepository
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Instant
@@ -21,7 +24,10 @@ import javax.crypto.spec.SecretKeySpec
  * invite and registration orchestration.
  */
 class AuthService(
-    private val database: Database,
+    private val authRepo: AuthRepository,
+    private val keyRepo: KeyRepository,
+    private val socialRepo: SocialRepository,
+    private val plotRepo: PlotRepository,
     private val serverSecret: ByteArray,
 ) {
     private val urlEnc: Base64.Encoder = Base64.getUrlEncoder().withoutPadding()
@@ -65,7 +71,7 @@ class AuthService(
             runCatching { stdDec.decode(raw) }.getOrNull()
         } ?: return null
         val hash = sha256(rawBytes)
-        val session = database.findSessionByTokenHash(hash) ?: return null
+        val session = authRepo.findSessionByTokenHash(hash) ?: return null
         if (session.expiresAt.isBefore(Instant.now())) return null
         return session
     }
@@ -78,17 +84,17 @@ class AuthService(
     // ---- Me / logout -----------------------------------------------------------
 
     fun getMe(userId: UUID): digital.heirlooms.server.domain.auth.UserRecord? =
-        database.findUserById(userId)
+        authRepo.findUserById(userId)
 
     fun logout(apiKey: String?) {
         val session = resolveSession(apiKey) ?: return
-        database.deleteSession(session.id)
+        authRepo.deleteSession(session.id)
     }
 
     // ---- Challenge -------------------------------------------------------------
 
     fun getSaltForChallenge(username: String): ByteArray {
-        val user = database.findUserByUsername(username)
+        val user = authRepo.findUserByUsername(username)
         return if (user?.authSalt != null) user.authSalt else fakeSalt(username)
     }
 
@@ -100,12 +106,12 @@ class AuthService(
     }
 
     fun login(username: String, authKey: ByteArray): LoginResult {
-        val user = database.findUserByUsername(username)
+        val user = authRepo.findUserByUsername(username)
         if (user == null || user.authVerifier == null || !sha256(authKey).contentEquals(user.authVerifier)) {
             return LoginResult.InvalidCredentials
         }
         val (token, _, hash) = issueToken()
-        val session = database.createSession(user.id, hash, "android")
+        val session = authRepo.createSession(user.id, hash, "android")
         return LoginResult.Success(token, user.id, session.expiresAt)
     }
 
@@ -126,13 +132,13 @@ class AuthService(
         wrappedMasterKeyRecovery: ByteArray?,
         wrapFormatRecovery: String?,
     ): SetupExistingResult {
-        val user = database.findUserByUsername(username) ?: return SetupExistingResult.InvalidCredentials
+        val user = authRepo.findUserByUsername(username) ?: return SetupExistingResult.InvalidCredentials
         if (user.authVerifier != null) return SetupExistingResult.PassphraseAlreadySet
-        val keyRecord = database.getWrappedKeyByDeviceIdAndUser(deviceId, user.id)
+        val keyRecord = keyRepo.getWrappedKeyByDeviceIdAndUser(deviceId, user.id)
             ?: return SetupExistingResult.NoDeviceKey
-        database.setUserAuth(user.id, authVerifier, authSalt)
+        authRepo.setUserAuth(user.id, authVerifier, authSalt)
         if (wrappedMasterKeyRecovery != null && !wrapFormatRecovery.isNullOrBlank()) {
-            database.upsertRecoveryPassphrase(
+            keyRepo.upsertRecoveryPassphrase(
                 RecoveryPassphraseRecord(
                     wrappedMasterKey = wrappedMasterKeyRecovery,
                     wrapFormat = wrapFormatRecovery,
@@ -145,7 +151,7 @@ class AuthService(
             )
         }
         val (token, _, hash) = issueToken()
-        val session = database.createSession(user.id, hash, keyRecord.deviceKind)
+        val session = authRepo.createSession(user.id, hash, keyRecord.deviceKind)
         return SetupExistingResult.Success(token, user.id, session.expiresAt)
     }
 
@@ -173,21 +179,21 @@ class AuthService(
         wrappedMasterKeyRecovery: ByteArray?,
         wrapFormatRecovery: String?,
     ): RegisterResult {
-        val invite = database.findInviteByToken(inviteToken)
+        val invite = authRepo.findInviteByToken(inviteToken)
         if (invite == null || invite.usedAt != null || invite.expiresAt.isBefore(Instant.now()))
             return RegisterResult.InvalidInvite
-        if (database.findUserByUsername(username) != null) return RegisterResult.UsernameTaken
+        if (authRepo.findUserByUsername(username) != null) return RegisterResult.UsernameTaken
 
-        val newUser = database.createUser(
+        val newUser = authRepo.createUser(
             username = username,
             displayName = displayName,
             authVerifier = authVerifier,
             authSalt = authSalt,
         )
-        database.createSystemPlot(newUser.id)
+        plotRepo.createSystemPlot(newUser.id)
 
         if (wrappedMasterKeyRecovery != null && !wrapFormatRecovery.isNullOrBlank()) {
-            database.upsertRecoveryPassphrase(
+            keyRepo.upsertRecoveryPassphrase(
                 RecoveryPassphraseRecord(
                     wrappedMasterKey = wrappedMasterKeyRecovery,
                     wrapFormat = wrapFormatRecovery,
@@ -201,7 +207,7 @@ class AuthService(
         }
 
         val now = Instant.now()
-        database.insertWrappedKey(
+        keyRepo.insertWrappedKey(
             WrappedKeyRecord(
                 id = UUID.randomUUID(),
                 deviceId = deviceId,
@@ -218,11 +224,11 @@ class AuthService(
             userId = newUser.id,
         )
 
-        database.markInviteUsed(invite.id, newUser.id)
-        database.createFriendship(invite.createdBy, newUser.id)
+        authRepo.markInviteUsed(invite.id, newUser.id)
+        socialRepo.createFriendship(invite.createdBy, newUser.id)
 
         val (token, _, hash) = issueToken()
-        val session = database.createSession(newUser.id, hash, deviceKind)
+        val session = authRepo.createSession(newUser.id, hash, deviceKind)
         return RegisterResult.Success(token, newUser.id, session.expiresAt)
     }
 
@@ -232,7 +238,7 @@ class AuthService(
 
     fun generateInvite(userId: UUID): InviteDetails {
         val rawToken = urlEnc.encodeToString(generateRawToken())
-        val invite = database.createInvite(userId, rawToken)
+        val invite = authRepo.createInvite(userId, rawToken)
         return InviteDetails(invite.token, invite.expiresAt)
     }
 
@@ -242,7 +248,7 @@ class AuthService(
 
     fun initiatePairing(userId: UUID): PairingLink {
         val code = generateNumericCode()
-        val link = database.createPairingLink(userId, code)
+        val link = authRepo.createPairingLink(userId, code)
         return PairingLink(link.oneTimeCode, link.expiresAt)
     }
 
@@ -252,11 +258,11 @@ class AuthService(
     }
 
     fun pairingQr(code: String): PairingQrResult {
-        val link = database.getPendingDeviceLinkByCode(code)
+        val link = authRepo.getPendingDeviceLinkByCode(code)
         if (link == null || link.state != "initiated" || link.expiresAt.isBefore(Instant.now()))
             return PairingQrResult.NotFound
         val sessionId = UUID.randomUUID().toString()
-        database.setPairingWebSession(link.id, sessionId)
+        authRepo.setPairingWebSession(link.id, sessionId)
         return PairingQrResult.Ok(sessionId)
     }
 
@@ -273,14 +279,14 @@ class AuthService(
         wrappedMasterKey: ByteArray,
         wrapFormat: String,
     ): PairingCompleteResult {
-        val link = database.getPendingDeviceLinkByWebSessionId(sessionId)
+        val link = authRepo.getPendingDeviceLinkByWebSessionId(sessionId)
         if (link == null || link.expiresAt.isBefore(Instant.now())) return PairingCompleteResult.NotFound
         if (link.state != "device_registered") return PairingCompleteResult.WrongState
         if (link.userId != androidSession.userId) return PairingCompleteResult.NotFound
 
         val (rawToken, _, hash) = issueToken()
-        val webSession = database.createSession(androidSession.userId, hash, "web")
-        database.completePairingLink(link.id, wrappedMasterKey, wrapFormat, rawToken, webSession)
+        val webSession = authRepo.createSession(androidSession.userId, hash, "web")
+        authRepo.completePairingLink(link.id, wrappedMasterKey, wrapFormat, rawToken, webSession)
         return PairingCompleteResult.Ok
     }
 
@@ -297,7 +303,7 @@ class AuthService(
     }
 
     fun pairingStatus(sessionId: String): PairingStatusResult {
-        val link = database.getPendingDeviceLinkByWebSessionId(sessionId)
+        val link = authRepo.getPendingDeviceLinkByWebSessionId(sessionId)
             ?: return PairingStatusResult.NotFound
         if (link.state != "wrap_complete" && link.expiresAt.isBefore(Instant.now()))
             return PairingStatusResult.Expired

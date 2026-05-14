@@ -3,6 +3,17 @@ package digital.heirlooms.server
 import digital.heirlooms.server.routes.buildApp
 import digital.heirlooms.server.domain.upload.UploadPage
 import digital.heirlooms.server.domain.upload.UploadRecord
+import digital.heirlooms.server.repository.auth.AuthRepository
+import digital.heirlooms.server.repository.capsule.CapsuleRepository
+import digital.heirlooms.server.repository.diag.DiagRepository
+import digital.heirlooms.server.repository.keys.KeyRepository
+import digital.heirlooms.server.repository.plot.FlowRepository
+import digital.heirlooms.server.repository.plot.PlotItemRepository
+import digital.heirlooms.server.repository.plot.PlotMemberRepository
+import digital.heirlooms.server.repository.plot.PlotRepository
+import digital.heirlooms.server.repository.social.SocialRepository
+import digital.heirlooms.server.repository.storage.BlobRepository
+import digital.heirlooms.server.repository.upload.UploadRepository
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
@@ -31,13 +42,42 @@ import java.util.UUID
 class FinUploadHandlerTest {
 
     private val mockStorage = mockk<FileStore>()
-    private val mockDatabase = mockk<Database>()
-    private val app = buildApp(mockStorage, mockDatabase)
+    // mockDatabase is still needed for routes that take Database directly
+    private val mockDatabase = mockk<Database>(relaxed = true)
+    // Individual repo mocks for services
+    private val mockUploadRepo = mockk<UploadRepository>()
+    private val mockBlobRepo = mockk<BlobRepository>(relaxed = true)
+    private val mockAuthRepo = mockk<AuthRepository>(relaxed = true)
+    private val mockCapsuleRepo = mockk<CapsuleRepository>(relaxed = true)
+    private val mockDiagRepo = mockk<DiagRepository>(relaxed = true)
+    private val mockKeyRepo = mockk<KeyRepository>(relaxed = true)
+    private val mockPlotRepo = mockk<PlotRepository>(relaxed = true)
+    private val mockFlowRepo = mockk<FlowRepository>(relaxed = true)
+    private val mockItemRepo = mockk<PlotItemRepository>(relaxed = true)
+    private val mockMemberRepo = mockk<PlotMemberRepository>(relaxed = true)
+    private val mockSocialRepo = mockk<SocialRepository>(relaxed = true)
 
-    // Stub the database record call used by the upload handler
-    private fun stubDatabase() {
-        every { mockDatabase.recordUpload(any()) } just runs
-        every { mockDatabase.findByContentHash(any()) } returns null
+    private val app = buildApp(
+        storage = mockStorage,
+        database = mockDatabase,
+        uploadRepo = mockUploadRepo,
+        authRepo = mockAuthRepo,
+        capsuleRepo = mockCapsuleRepo,
+        plotRepo = mockPlotRepo,
+        flowRepo = mockFlowRepo,
+        itemRepo = mockItemRepo,
+        memberRepo = mockMemberRepo,
+        keyRepo = mockKeyRepo,
+        socialRepo = mockSocialRepo,
+        blobRepo = mockBlobRepo,
+        diagRepo = mockDiagRepo,
+    )
+
+    // Stub the repo calls used by UploadService
+    private fun stubUploadRepo() {
+        every { mockUploadRepo.recordUpload(any()) } just runs
+        every { mockUploadRepo.findByContentHash(any()) } returns null
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
     }
 
     // -------------------------------------------------------------------------
@@ -46,7 +86,7 @@ class FinUploadHandlerTest {
 
     @Test
     fun `POST with jpeg body returns 201`() {
-        stubDatabase()
+        stubUploadRepo()
         every { mockStorage.save(any(), any()) } returns StorageKey("some-uuid.jpg")
 
         val response = app(
@@ -60,7 +100,7 @@ class FinUploadHandlerTest {
 
     @Test
     fun `response body contains the storage key`() {
-        stubDatabase()
+        stubUploadRepo()
         every { mockStorage.save(any(), any()) } returns StorageKey("some-uuid.jpg")
 
         val response = app(
@@ -74,7 +114,7 @@ class FinUploadHandlerTest {
 
     @Test
     fun `storage is called with the correct MIME type`() {
-        stubDatabase()
+        stubUploadRepo()
         val capturedMime = slot<String>()
         every { mockStorage.save(any(), capture(capturedMime)) } returns StorageKey("uuid.mp4")
 
@@ -89,7 +129,7 @@ class FinUploadHandlerTest {
 
     @Test
     fun `storage is called with the correct bytes`() {
-        stubDatabase()
+        stubUploadRepo()
         val capturedBytes = slot<ByteArray>()
         every { mockStorage.save(capture(capturedBytes), any()) } returns StorageKey("uuid.jpg")
 
@@ -105,7 +145,7 @@ class FinUploadHandlerTest {
 
     @Test
     fun `Content-Type with charset parameter passes clean MIME type to storage`() {
-        stubDatabase()
+        stubUploadRepo()
         val capturedMime = slot<String>()
         every { mockStorage.save(any(), capture(capturedMime)) } returns StorageKey("uuid.jpg")
 
@@ -120,7 +160,7 @@ class FinUploadHandlerTest {
 
     @Test
     fun `missing Content-Type header defaults to octet-stream`() {
-        stubDatabase()
+        stubUploadRepo()
         val capturedMime = slot<String>()
         every { mockStorage.save(any(), capture(capturedMime)) } returns StorageKey("uuid.bin")
 
@@ -133,8 +173,9 @@ class FinUploadHandlerTest {
     fun `upload records metadata to the database`() {
         val capturedRecord = slot<UploadRecord>()
         every { mockStorage.save(any(), any()) } returns StorageKey("some-uuid.jpg")
-        every { mockDatabase.findByContentHash(any()) } returns null
-        every { mockDatabase.recordUpload(capture(capturedRecord)) } just runs
+        every { mockUploadRepo.findByContentHash(any()) } returns null
+        every { mockUploadRepo.recordUpload(capture(capturedRecord)) } just runs
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         app(
             Request(POST, "/api/content/upload")
@@ -159,12 +200,12 @@ class FinUploadHandlerTest {
 
         assertEquals(BAD_REQUEST, response.status)
         verify(exactly = 0) { mockStorage.save(any(), any()) }
-        verify(exactly = 0) { mockDatabase.recordUpload(any()) }
+        verify(exactly = 0) { mockUploadRepo.recordUpload(any()) }
     }
 
     @Test
     fun `storage exception returns 500`() {
-        every { mockDatabase.findByContentHash(any()) } returns null
+        every { mockUploadRepo.findByContentHash(any()) } returns null
         every { mockStorage.save(any(), any()) } throws RuntimeException("disk full")
 
         val response = app(
@@ -186,7 +227,7 @@ class FinUploadHandlerTest {
         every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(listOf(
             UploadRecord(UUID.randomUUID(), "some-uuid.jpg", "image/jpeg", 1024),
         ), null)
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
@@ -198,7 +239,7 @@ class FinUploadHandlerTest {
     @Test
     fun `GET uploads returns empty items when no uploads`() {
         every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(emptyList(), null)
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
@@ -322,7 +363,21 @@ class FinUploadHandlerTest {
     // -------------------------------------------------------------------------
 
     private val mockDirectStorage = mockk<FileStore>(moreInterfaces = arrayOf(DirectUploadSupport::class))
-    private val appWithDirectUpload = buildApp(mockDirectStorage, mockDatabase)
+    private val appWithDirectUpload = buildApp(
+        storage = mockDirectStorage,
+        database = mockDatabase,
+        uploadRepo = mockUploadRepo,
+        authRepo = mockAuthRepo,
+        capsuleRepo = mockCapsuleRepo,
+        plotRepo = mockPlotRepo,
+        flowRepo = mockFlowRepo,
+        itemRepo = mockItemRepo,
+        memberRepo = mockMemberRepo,
+        keyRepo = mockKeyRepo,
+        socialRepo = mockSocialRepo,
+        blobRepo = mockBlobRepo,
+        diagRepo = mockDiagRepo,
+    )
 
     @Test
     fun `POST uploads prepare returns 200 with storageKey and uploadUrl`() {
@@ -367,8 +422,8 @@ class FinUploadHandlerTest {
     @Test
     fun `POST uploads confirm records upload and returns 201`() {
         val capturedRecord = slot<UploadRecord>()
-        every { mockDatabase.findByContentHash(any()) } returns null
-        every { mockDatabase.recordUpload(capture(capturedRecord)) } just runs
+        every { mockUploadRepo.findByContentHash(any()) } returns null
+        every { mockUploadRepo.recordUpload(capture(capturedRecord)) } just runs
         every { mockStorage.get(any()) } returns ByteArray(0)
 
         val response = app(
@@ -399,7 +454,7 @@ class FinUploadHandlerTest {
 
     @Test
     fun `uploading a new file succeeds with 201`() {
-        stubDatabase()
+        stubUploadRepo()
         every { mockStorage.save(any(), any()) } returns StorageKey("new-file.jpg")
 
         val response = app(
@@ -414,11 +469,12 @@ class FinUploadHandlerTest {
     @Test
     fun `uploading the same file twice returns 409 with storageKey of the first`() {
         every { mockStorage.save(any(), any()) } returns StorageKey("first-upload.jpg")
-        every { mockDatabase.recordUpload(any()) } just runs
-        every { mockDatabase.findByContentHash(any()) } returnsMany listOf(
+        every { mockUploadRepo.recordUpload(any()) } just runs
+        every { mockUploadRepo.findByContentHash(any()) } returnsMany listOf(
             null,
             UploadRecord(UUID.randomUUID(), "first-upload.jpg", "image/jpeg", 5L),
         )
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         app(
             Request(POST, "/api/content/upload")
@@ -441,8 +497,9 @@ class FinUploadHandlerTest {
             StorageKey("file-a.jpg"),
             StorageKey("file-b.jpg"),
         )
-        every { mockDatabase.recordUpload(any()) } just runs
-        every { mockDatabase.findByContentHash(any()) } returns null
+        every { mockUploadRepo.recordUpload(any()) } just runs
+        every { mockUploadRepo.findByContentHash(any()) } returns null
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val first = app(
             Request(POST, "/api/content/upload")
@@ -462,8 +519,9 @@ class FinUploadHandlerTest {
     @Test
     fun `uploading when existing rows have null hashes does not cause false duplicate`() {
         every { mockStorage.save(any(), any()) } returns StorageKey("new-file.jpg")
-        every { mockDatabase.recordUpload(any()) } just runs
-        every { mockDatabase.findByContentHash(any()) } returns null
+        every { mockUploadRepo.recordUpload(any()) } just runs
+        every { mockUploadRepo.findByContentHash(any()) } returns null
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(
             Request(POST, "/api/content/upload")
@@ -480,8 +538,8 @@ class FinUploadHandlerTest {
 
     @Test
     fun `confirm with new contentHash succeeds with 201`() {
-        every { mockDatabase.findByContentHash(any()) } returns null
-        every { mockDatabase.recordUpload(any()) } just runs
+        every { mockUploadRepo.findByContentHash(any()) } returns null
+        every { mockUploadRepo.recordUpload(any()) } just runs
         every { mockStorage.get(any()) } returns ByteArray(0)
 
         val response = app(
@@ -495,7 +553,7 @@ class FinUploadHandlerTest {
 
     @Test
     fun `confirm with duplicate contentHash returns 409 with existing storageKey`() {
-        every { mockDatabase.findByContentHash("abcd1234") } returns
+        every { mockUploadRepo.findByContentHash("abcd1234") } returns
             UploadRecord(UUID.randomUUID(), "original.mp4", "video/mp4", 1000L)
 
         val response = app(
@@ -511,8 +569,8 @@ class FinUploadHandlerTest {
     @Test
     fun `confirm without contentHash records upload normally`() {
         val capturedRecord = slot<UploadRecord>()
-        every { mockDatabase.findByContentHash(any()) } returns null
-        every { mockDatabase.recordUpload(capture(capturedRecord)) } just runs
+        every { mockUploadRepo.findByContentHash(any()) } returns null
+        every { mockUploadRepo.recordUpload(capture(capturedRecord)) } just runs
         every { mockStorage.get(any()) } returns ByteArray(0)
 
         val response = app(
@@ -532,13 +590,29 @@ class FinUploadHandlerTest {
     @Test
     fun `thumbnail is generated and stored for supported image type`() {
         val thumbBytes = byteArrayOf(1, 2, 3)
-        every { mockDatabase.findByContentHash(any()) } returns null
+        every { mockUploadRepo.findByContentHash(any()) } returns null
         every { mockStorage.save(any(), any()) } returns StorageKey("some-uuid.jpg")
         every { mockStorage.saveWithKey(any(), any(), any()) } just runs
         val capturedRecord = slot<UploadRecord>()
-        every { mockDatabase.recordUpload(capture(capturedRecord)) } just runs
+        every { mockUploadRepo.recordUpload(capture(capturedRecord)) } just runs
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
-        val appWithThumb = buildApp(mockStorage, mockDatabase, thumbnailGenerator = { _, _ -> thumbBytes })
+        val appWithThumb = buildApp(
+            storage = mockStorage,
+            database = mockDatabase,
+            uploadRepo = mockUploadRepo,
+            authRepo = mockAuthRepo,
+            capsuleRepo = mockCapsuleRepo,
+            plotRepo = mockPlotRepo,
+            flowRepo = mockFlowRepo,
+            itemRepo = mockItemRepo,
+            memberRepo = mockMemberRepo,
+            keyRepo = mockKeyRepo,
+            socialRepo = mockSocialRepo,
+            blobRepo = mockBlobRepo,
+            diagRepo = mockDiagRepo,
+            thumbnailGenerator = { _, _ -> thumbBytes },
+        )
         appWithThumb(
             Request(POST, "/api/content/upload")
                 .header("Content-Type", "image/jpeg")
@@ -551,10 +625,11 @@ class FinUploadHandlerTest {
 
     @Test
     fun `no thumbnail stored when video bytes are invalid`() {
-        every { mockDatabase.findByContentHash(any()) } returns null
+        every { mockUploadRepo.findByContentHash(any()) } returns null
         every { mockStorage.save(any(), any()) } returns StorageKey("uuid.mp4")
         val capturedRecord = slot<UploadRecord>()
-        every { mockDatabase.recordUpload(capture(capturedRecord)) } just runs
+        every { mockUploadRepo.recordUpload(capture(capturedRecord)) } just runs
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         app(
             Request(POST, "/api/content/upload")
@@ -568,11 +643,27 @@ class FinUploadHandlerTest {
 
     @Test
     fun `upload succeeds even when thumbnail generation throws`() {
-        every { mockDatabase.findByContentHash(any()) } returns null
+        every { mockUploadRepo.findByContentHash(any()) } returns null
         every { mockStorage.save(any(), any()) } returns StorageKey("uuid.jpg")
-        every { mockDatabase.recordUpload(any()) } just runs
+        every { mockUploadRepo.recordUpload(any()) } just runs
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
-        val appWithFailingThumb = buildApp(mockStorage, mockDatabase, thumbnailGenerator = { _, _ -> throw RuntimeException("out of memory") })
+        val appWithFailingThumb = buildApp(
+            storage = mockStorage,
+            database = mockDatabase,
+            uploadRepo = mockUploadRepo,
+            authRepo = mockAuthRepo,
+            capsuleRepo = mockCapsuleRepo,
+            plotRepo = mockPlotRepo,
+            flowRepo = mockFlowRepo,
+            itemRepo = mockItemRepo,
+            memberRepo = mockMemberRepo,
+            keyRepo = mockKeyRepo,
+            socialRepo = mockSocialRepo,
+            blobRepo = mockBlobRepo,
+            diagRepo = mockDiagRepo,
+            thumbnailGenerator = { _, _ -> throw RuntimeException("out of memory") },
+        )
         val response = appWithFailingThumb(
             Request(POST, "/api/content/upload")
                 .header("Content-Type", "image/jpeg")
@@ -591,7 +682,7 @@ class FinUploadHandlerTest {
         every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(listOf(
             UploadRecord(UUID.randomUUID(), "uuid.mp4", "video/mp4", 10000L),
         ), null)
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
@@ -603,7 +694,7 @@ class FinUploadHandlerTest {
         every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(listOf(
             UploadRecord(UUID.randomUUID(), "uuid.jpg", "image/jpeg", 1024L, thumbnailKey = "uuid-thumb.jpg"),
         ), null)
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
@@ -655,13 +746,26 @@ class FinUploadHandlerTest {
 
     @Test
     fun `upload succeeds even when metadata extraction throws`() {
-        every { mockDatabase.findByContentHash(any()) } returns null
+        every { mockUploadRepo.findByContentHash(any()) } returns null
         every { mockStorage.save(any(), any()) } returns StorageKey("uuid.jpg")
-        every { mockDatabase.recordUpload(any()) } just runs
+        every { mockUploadRepo.recordUpload(any()) } just runs
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val appWithFailingMeta = buildApp(
-            mockStorage, mockDatabase,
-            metadataExtractor = { _, _ -> throw RuntimeException("extractor failed") }
+            storage = mockStorage,
+            database = mockDatabase,
+            uploadRepo = mockUploadRepo,
+            authRepo = mockAuthRepo,
+            capsuleRepo = mockCapsuleRepo,
+            plotRepo = mockPlotRepo,
+            flowRepo = mockFlowRepo,
+            itemRepo = mockItemRepo,
+            memberRepo = mockMemberRepo,
+            keyRepo = mockKeyRepo,
+            socialRepo = mockSocialRepo,
+            blobRepo = mockBlobRepo,
+            diagRepo = mockDiagRepo,
+            metadataExtractor = { _, _ -> throw RuntimeException("extractor failed") },
         )
         val response = appWithFailingMeta(
             Request(POST, "/api/content/upload")
@@ -716,7 +820,7 @@ class FinUploadHandlerTest {
         every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(listOf(
             UploadRecord(UUID.randomUUID(), "uuid.jpg", "image/jpeg", 1024L, rotation = 90),
         ), null)
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
@@ -729,7 +833,7 @@ class FinUploadHandlerTest {
         every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(listOf(
             UploadRecord(UUID.randomUUID(), "uuid.jpg", "image/jpeg", 1024L),
         ), null)
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
@@ -825,7 +929,7 @@ class FinUploadHandlerTest {
     @Test
     fun `tags field present as empty array in list response for untagged upload`() {
         every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(listOf(knownRecord), null)
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
@@ -837,7 +941,7 @@ class FinUploadHandlerTest {
     fun `tags field present and populated after tagging`() {
         val tagged = knownRecord.copy(tags = listOf("vacation"))
         every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(listOf(tagged), null)
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
@@ -853,7 +957,7 @@ class FinUploadHandlerTest {
     fun `GET uploads with tag param passes tag to database`() {
         val tagged = knownRecord.copy(tags = listOf("family"))
         every { mockDatabase.listUploadsPaginated(any(), any(), tags = listOf("family"), excludeTag = null) } returns UploadPage(listOf(tagged), null)
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads?tag=family"))
 
@@ -865,7 +969,7 @@ class FinUploadHandlerTest {
     @Test
     fun `GET uploads with exclude_tag param passes excludeTag to database`() {
         every { mockDatabase.listUploadsPaginated(any(), any(), tags = emptyList(), excludeTag = "trash") } returns UploadPage(listOf(knownRecord), null)
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads?exclude_tag=trash"))
 
@@ -877,7 +981,7 @@ class FinUploadHandlerTest {
     fun `GET uploads with both tag and exclude_tag passes both to database`() {
         val tagged = knownRecord.copy(tags = listOf("family"))
         every { mockDatabase.listUploadsPaginated(any(), any(), tags = listOf("family"), excludeTag = "trash") } returns UploadPage(listOf(tagged), null)
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads?tag=family&exclude_tag=trash"))
 
@@ -888,7 +992,7 @@ class FinUploadHandlerTest {
     @Test
     fun `GET uploads with unknown tag returns empty items`() {
         every { mockDatabase.listUploadsPaginated(any(), any(), tags = listOf("nonexistent"), excludeTag = null) } returns UploadPage(emptyList(), null)
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads?tag=nonexistent"))
 
@@ -899,7 +1003,7 @@ class FinUploadHandlerTest {
     @Test
     fun `GET uploads with no params uses default pagination`() {
         every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(listOf(knownRecord), null)
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 
@@ -917,7 +1021,7 @@ class FinUploadHandlerTest {
             PreparedUpload(StorageKey("uploads/uuid-content.bin"), "https://minio/content-url")
         every { (mockDirectStorage as DirectUploadSupport).prepareUpload("application/octet-stream") } returns
             PreparedUpload(StorageKey("uploads/uuid-thumb.bin"), "https://minio/thumb-url")
-        every { mockDatabase.insertPendingBlob(any()) } returns UUID.randomUUID()
+        every { mockBlobRepo.insertPendingBlob(any()) } returns UUID.randomUUID()
 
         val response = appWithDirectUpload(
             Request(POST, "/api/content/uploads/initiate")
@@ -931,7 +1035,7 @@ class FinUploadHandlerTest {
         assertTrue(body.contains("uploadUrl"))
         assertTrue(body.contains("thumbnailStorageKey"))
         assertTrue(body.contains("thumbnailUploadUrl"))
-        verify(exactly = 2) { mockDatabase.insertPendingBlob(any()) }
+        verify(exactly = 2) { mockBlobRepo.insertPendingBlob(any()) }
     }
 
     @Test
@@ -950,7 +1054,7 @@ class FinUploadHandlerTest {
     fun `POST uploads initiate with legacy body returns single signed URL`() {
         every { (mockDirectStorage as DirectUploadSupport).prepareUpload("video/mp4") } returns
             PreparedUpload(StorageKey("uploads/uuid.mp4"), "https://minio/video-url")
-        every { mockDatabase.insertPendingBlob(any()) } returns UUID.randomUUID()
+        every { mockBlobRepo.insertPendingBlob(any()) } returns UUID.randomUUID()
 
         val response = appWithDirectUpload(
             Request(POST, "/api/content/uploads/initiate")
@@ -963,7 +1067,7 @@ class FinUploadHandlerTest {
         assertTrue(body.contains("storageKey"))
         assertTrue(body.contains("uploadUrl"))
         assertTrue(!body.contains("thumbnailStorageKey"))
-        verify(exactly = 1) { mockDatabase.insertPendingBlob(any()) }
+        verify(exactly = 1) { mockBlobRepo.insertPendingBlob(any()) }
     }
 
     // -------------------------------------------------------------------------
@@ -982,8 +1086,8 @@ class FinUploadHandlerTest {
 
     @Test
     fun `POST uploads confirm with encrypted storage_class and valid envelopes returns 201`() {
-        every { mockDatabase.recordUpload(any()) } just runs
-        every { mockDatabase.deletePendingBlob(any()) } just runs
+        every { mockUploadRepo.recordUpload(any()) } just runs
+        every { mockBlobRepo.deletePendingBlob(any()) } just runs
 
         val wrappedDek = makeSymmetricEnvelope(AlgorithmIds.MASTER_AES256GCM_V1)
         val enc = java.util.Base64.getEncoder()
@@ -995,7 +1099,7 @@ class FinUploadHandlerTest {
         )
 
         assertEquals(CREATED, response.status)
-        verify { mockDatabase.recordUpload(match { it.storageClass == "encrypted" }) }
+        verify { mockUploadRepo.recordUpload(match { it.storageClass == "encrypted" }) }
     }
 
     @Test
@@ -1024,10 +1128,10 @@ class FinUploadHandlerTest {
     @Test
     fun `POST uploads confirm with legacy body behaves as today`() {
         val capturedRecord = slot<UploadRecord>()
-        every { mockDatabase.findByContentHash(any()) } returns null
-        every { mockDatabase.recordUpload(capture(capturedRecord)) } just runs
+        every { mockUploadRepo.findByContentHash(any()) } returns null
+        every { mockUploadRepo.recordUpload(capture(capturedRecord)) } just runs
         every { mockStorage.get(any()) } returns ByteArray(0)
-        every { mockDatabase.deletePendingBlob(any()) } just runs
+        every { mockBlobRepo.deletePendingBlob(any()) } just runs
 
         val response = app(
             Request(POST, "/api/content/uploads/confirm")
@@ -1041,8 +1145,8 @@ class FinUploadHandlerTest {
 
     @Test
     fun `POST uploads confirm encrypted skips dedup check`() {
-        every { mockDatabase.recordUpload(any()) } just runs
-        every { mockDatabase.deletePendingBlob(any()) } just runs
+        every { mockUploadRepo.recordUpload(any()) } just runs
+        every { mockBlobRepo.deletePendingBlob(any()) } just runs
 
         val wrappedDek = makeSymmetricEnvelope(AlgorithmIds.MASTER_AES256GCM_V1)
         val enc = java.util.Base64.getEncoder()
@@ -1053,7 +1157,7 @@ class FinUploadHandlerTest {
                 .body("""{"storageKey":"uploads/uuid.bin","mimeType":"image/jpeg","fileSize":1000,"storage_class":"encrypted","envelopeVersion":1,"wrappedDek":"${enc.encodeToString(wrappedDek)}","dekFormat":"master-aes256gcm-v1","contentHash":"abcd1234"}""")
         )
 
-        verify(exactly = 0) { mockDatabase.findByContentHash(any()) }
+        verify(exactly = 0) { mockUploadRepo.findByContentHash(any()) }
     }
 
     // -------------------------------------------------------------------------
@@ -1097,7 +1201,7 @@ class FinUploadHandlerTest {
     @Test
     fun `GET uploads list includes storageClass on all items`() {
         every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns UploadPage(listOf(knownRecord), null)
-        every { mockDatabase.fetchExpiredCompostedUploads() } returns emptyList()
+        every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
         val response = app(Request(GET, "/api/content/uploads"))
 

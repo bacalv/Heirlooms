@@ -8,6 +8,28 @@ import digital.heirlooms.server.MediaMetadata
 import digital.heirlooms.server.MetadataExtractor
 import digital.heirlooms.server.authUserId
 import digital.heirlooms.server.generateThumbnail
+import digital.heirlooms.server.repository.auth.AuthRepository
+import digital.heirlooms.server.repository.auth.PostgresAuthRepository
+import digital.heirlooms.server.repository.capsule.CapsuleRepository
+import digital.heirlooms.server.repository.capsule.PostgresCapsuleRepository
+import digital.heirlooms.server.repository.diag.DiagRepository
+import digital.heirlooms.server.repository.diag.PostgresDiagRepository
+import digital.heirlooms.server.repository.keys.KeyRepository
+import digital.heirlooms.server.repository.keys.PostgresKeyRepository
+import digital.heirlooms.server.repository.plot.FlowRepository
+import digital.heirlooms.server.repository.plot.PlotItemRepository
+import digital.heirlooms.server.repository.plot.PlotMemberRepository
+import digital.heirlooms.server.repository.plot.PlotRepository
+import digital.heirlooms.server.repository.plot.PostgresFlowRepository
+import digital.heirlooms.server.repository.plot.PostgresPlotItemRepository
+import digital.heirlooms.server.repository.plot.PostgresPlotMemberRepository
+import digital.heirlooms.server.repository.plot.PostgresPlotRepository
+import digital.heirlooms.server.repository.social.SocialRepository
+import digital.heirlooms.server.repository.social.PostgresSocialRepository
+import digital.heirlooms.server.repository.storage.BlobRepository
+import digital.heirlooms.server.repository.storage.PostgresBlobRepository
+import digital.heirlooms.server.repository.upload.UploadRepository
+import digital.heirlooms.server.repository.upload.PostgresUploadRepository
 import digital.heirlooms.server.routes.auth.authRoutes
 import digital.heirlooms.server.routes.capsule.capsuleReverseLookupRoute
 import digital.heirlooms.server.routes.capsule.capsuleRoutes
@@ -87,18 +109,56 @@ fun buildApp(
     metadataExtractor: (ByteArray, String) -> MediaMetadata = MetadataExtractor()::extract,
     previewDurationSeconds: Int = 15,
     authSecret: ByteArray = ByteArray(32),
+): HttpHandler = buildApp(
+    storage = storage,
+    database = database,
+    uploadRepo = PostgresUploadRepository(database.dataSource),
+    authRepo = PostgresAuthRepository(database.dataSource),
+    capsuleRepo = PostgresCapsuleRepository(database.dataSource),
+    plotRepo = PostgresPlotRepository(database.dataSource),
+    flowRepo = PostgresFlowRepository(database.dataSource),
+    itemRepo = PostgresPlotItemRepository(database.dataSource),
+    memberRepo = PostgresPlotMemberRepository(database.dataSource),
+    keyRepo = PostgresKeyRepository(database.dataSource),
+    socialRepo = PostgresSocialRepository(database.dataSource),
+    blobRepo = PostgresBlobRepository(database.dataSource),
+    diagRepo = PostgresDiagRepository(database.dataSource),
+    thumbnailGenerator = thumbnailGenerator,
+    metadataExtractor = metadataExtractor,
+    previewDurationSeconds = previewDurationSeconds,
+    authSecret = authSecret,
+)
+
+internal fun buildApp(
+    storage: FileStore,
+    database: Database,
+    uploadRepo: UploadRepository,
+    authRepo: AuthRepository,
+    capsuleRepo: CapsuleRepository,
+    plotRepo: PlotRepository,
+    flowRepo: FlowRepository,
+    itemRepo: PlotItemRepository,
+    memberRepo: PlotMemberRepository,
+    keyRepo: KeyRepository,
+    socialRepo: SocialRepository,
+    blobRepo: BlobRepository,
+    diagRepo: DiagRepository,
+    thumbnailGenerator: (ByteArray, String) -> ByteArray? = ::generateThumbnail,
+    metadataExtractor: (ByteArray, String) -> MediaMetadata = MetadataExtractor()::extract,
+    previewDurationSeconds: Int = 15,
+    authSecret: ByteArray = ByteArray(32),
 ): HttpHandler {
     val directUpload = storage as? DirectUploadSupport
 
     // Construct service instances
-    val uploadService = UploadService(database, storage, thumbnailGenerator, metadataExtractor)
-    val authService = digital.heirlooms.server.service.auth.AuthService(database, authSecret)
-    val capsuleService = digital.heirlooms.server.service.capsule.CapsuleService(database)
-    val plotService = digital.heirlooms.server.service.plot.PlotService(database)
-    val flowService = digital.heirlooms.server.service.plot.FlowService(database)
-    val sharedPlotService = digital.heirlooms.server.service.plot.SharedPlotService(database)
-    val keyService = digital.heirlooms.server.service.keys.KeyService(database)
-    val socialService = digital.heirlooms.server.service.social.SocialService(database)
+    val uploadService = UploadService(uploadRepo, blobRepo, socialRepo, plotRepo, flowRepo, storage, thumbnailGenerator, metadataExtractor)
+    val authService = digital.heirlooms.server.service.auth.AuthService(authRepo, keyRepo, socialRepo, plotRepo, authSecret)
+    val capsuleService = digital.heirlooms.server.service.capsule.CapsuleService(capsuleRepo)
+    val plotService = digital.heirlooms.server.service.plot.PlotService(plotRepo)
+    val flowService = digital.heirlooms.server.service.plot.FlowService(flowRepo, plotRepo, itemRepo, uploadRepo)
+    val sharedPlotService = digital.heirlooms.server.service.plot.SharedPlotService(plotRepo, memberRepo)
+    val keyService = digital.heirlooms.server.service.keys.KeyService(keyRepo)
+    val socialService = digital.heirlooms.server.service.social.SocialService(socialRepo)
 
     val contentContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
@@ -160,7 +220,7 @@ fun buildApp(
             "/diagnostics/events" meta { summary = "Post a diagnostic event" } bindContract POST to { req ->
                 try {
                     val node = com.fasterxml.jackson.databind.ObjectMapper().readTree(req.bodyString())
-                    database.insertDiagEvent(
+                    diagRepo.insertDiagEvent(
                         deviceLabel = node?.get("deviceLabel")?.asText() ?: "",
                         tag         = node?.get("tag")?.asText()         ?: "unknown",
                         message     = node?.get("message")?.asText()     ?: "",
@@ -174,7 +234,7 @@ fun buildApp(
             },
             "/diagnostics/events" meta { summary = "List diagnostic events" } bindContract GET to { req ->
                 try {
-                    val events = database.listDiagEvents(userId = req.authUserId())
+                    val events = diagRepo.listDiagEvents(userId = req.authUserId())
                     val json = com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(events)
                     Response(OK).header("Content-Type", "application/json").body(json)
                 } catch (e: Exception) {
