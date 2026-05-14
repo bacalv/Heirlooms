@@ -62,6 +62,31 @@ The intent: wake him once for urgent things (e.g. 2am access request), then back
 - Playwright E2E: actor-based, against staging — task TST-004 queued
 - Production deployments always require Bret's explicit approval before OpsManager proceeds
 
+## Agent workspace / branching strategy
+
+Each agent that edits code or commits docs works in its own git worktree, not in the CTO workspace.
+
+**CTO workspace** (`~/IdeaProjects/Heirlooms`) — Bret's. PA also commits task files and docs directly to `main` here.
+
+**Agent workspaces** — `~/IdeaProjects/agent-workspaces/Heirlooms/<agent-name>/`
+
+To create one:
+```bash
+./scripts/create-agent-workspace.sh <agent-name> <task-id>
+# e.g. ./scripts/create-agent-workspace.sh developer-1 IOS-001
+```
+
+- Worktree is created at `~/IdeaProjects/agent-workspaces/Heirlooms/<agent-name>/`
+- Branch: `agent/<agent-name>/<task-id>` based off `origin/main`
+- Agent commits to that branch only
+- PA (from CTO workspace) reviews, merges to main, then cleans up:
+  ```
+  git worktree remove ~/IdeaProjects/agent-workspaces/Heirlooms/<agent-name>
+  git branch -d agent/<agent-name>/<task-id>
+  ```
+
+Agent naming convention: `developer-1`, `developer-2`, `security`, `test-manager`, `ops`, `architect`.
+
 ## Task system
 
 See `tasks/progress.md` for the full queue.
