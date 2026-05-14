@@ -25,12 +25,14 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [TST-005](queue/TST-005_playwright-infrastructure.md) | Playwright infrastructure setup | Testing | Medium | TestManager | TST-003, ARCH-002 |
 | [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | Developer | TST-005 |
 | [SEC-002](queue/SEC-002_auth-crypto-coverage.md) | 100% coverage plan for auth/crypto paths | Security | High | SecurityManager | TST-004 |
-| [SEC-003](queue/SEC-003_client-security-review.md) | Client security flaw testing plan | Security | Medium | SecurityManager | SEC-001 |
 | [DOC-001](queue/DOC-001_uml-sequence-diagrams.md) | UML sequence diagrams from test output | Docs | Low | Developer | TST-004 |
 | [BUG-001](queue/BUG-001_keychain-master-key-slot-collision.md) | Keychain slot collision — master key vs plot key | Bug Fix | Medium | Developer | — |
 | [SEC-004](queue/SEC-004_rate-limiting-auth-logging.md) | Rate limiting + failed-login logging | Security | Medium | SecurityManager | — |
 | [SEC-005](queue/SEC-005_session-invalidation-mime-validation.md) | Session invalidation + MIME validation | Security | Medium | SecurityManager | — |
 | [SEC-006](queue/SEC-006_criteria-date-input-validation.md) | Criteria date input validation | Security | Medium | SecurityManager | — |
+| [SEC-007](queue/SEC-007_android-session-token-keystore.md) | Android: encrypt session token with Keystore | Security | High | Developer | — |
+| [SEC-008](queue/SEC-008_web-csp-session-token.md) | Web: CSP header + session token off localStorage | Security | High | Developer | — |
+| [SEC-009](queue/SEC-009_android-biometric-flag-secure.md) | Android: FLAG_SECURE + biometric vault-unlock gate | Security | Medium | Developer | SEC-007 |
 
 ## In Progress
 
@@ -60,6 +62,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [DOC-002](done/DOC-002_doc-cleanup-history-backfill.md) | Doc cleanup + history backfill from git | Docs | 2026-05-14 |
 | [IOS-001](done/IOS-001_qr-scanner-avfoundation.md) | Complete iOS QRScannerView (AVFoundation) | iOS | 2026-05-15 |
 | [SEC-001](done/SEC-001_security-hardening.md) | Security hardening + threat model | Security | 2026-05-15 |
+| [SEC-003](done/SEC-003_client-security-review.md) | Client security flaw testing plan | Security | 2026-05-15 |
 
 ## Brainstorming
 
