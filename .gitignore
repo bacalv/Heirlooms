@@ -39,6 +39,7 @@ captures/
 # -----------------------------------------------------------------------------
 *.class
 *.jar
+.kotlin/
 !gradle/wrapper/gradle-wrapper.jar
 !**/gradle/wrapper/gradle-wrapper.jar
 
