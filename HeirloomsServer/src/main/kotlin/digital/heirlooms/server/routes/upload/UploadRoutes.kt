@@ -459,6 +459,9 @@ fun initiateUploadContractRoute(uploadService: UploadService): ContractRoute =
             val node = ObjectMapper().readTree(request.bodyString())
             val mimeType = node?.get("mimeType")?.asText() ?: ""
             val storageClassRaw = node?.get("storage_class")?.asText()
+            if (mimeType.isNotBlank() && !isAllowedMimeType(mimeType)) {
+                return@to Response(BAD_REQUEST).body("Unsupported media type")
+            }
             when (val result = uploadService.initiateUpload(mimeType, storageClassRaw)) {
                 is UploadService.InitiateResult.Encrypted ->
                     Response(OK).header("Content-Type", "application/json")

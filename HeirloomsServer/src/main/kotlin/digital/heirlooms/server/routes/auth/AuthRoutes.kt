@@ -79,9 +79,13 @@ private fun loginRoute(authService: AuthService): ContractRoute =
                 is AuthService.LoginResult.Success ->
                     Response(OK).header("Content-Type", "application/json")
                         .body(sessionTokenJson(result.token, result.userId, result.expiresAt))
-                AuthService.LoginResult.InvalidCredentials ->
+                AuthService.LoginResult.InvalidCredentials -> {
+                    val clientIp = request.header("X-Forwarded-For")?.split(",")?.firstOrNull()?.trim()
+                        ?: request.header("X-Real-IP")?.trim() ?: "unknown"
+                    authLogger.warn("Failed login attempt for username='{}' from IP={}", username, clientIp)
                     Response(UNAUTHORIZED).header("Content-Type", "application/json")
                         .body("""{"error":"Invalid credentials"}""")
+                }
             }
         } catch (e: Exception) {
             authLogger.error("login error", e)
@@ -116,15 +120,23 @@ private fun setupExistingRoute(authService: AuthService): ContractRoute =
                 is AuthService.SetupExistingResult.Success ->
                     Response(OK).header("Content-Type", "application/json")
                         .body(sessionTokenJson(result.token, result.userId, result.expiresAt))
-                AuthService.SetupExistingResult.InvalidCredentials ->
+                AuthService.SetupExistingResult.InvalidCredentials -> {
+                    val clientIp = request.header("X-Forwarded-For")?.split(",")?.firstOrNull()?.trim()
+                        ?: request.header("X-Real-IP")?.trim() ?: "unknown"
+                    authLogger.warn("Failed setup-existing attempt for username='{}' from IP={}", username, clientIp)
                     Response(UNAUTHORIZED).header("Content-Type", "application/json")
                         .body("""{"error":"Invalid credentials"}""")
+                }
                 AuthService.SetupExistingResult.PassphraseAlreadySet ->
                     Response(CONFLICT).header("Content-Type", "application/json")
                         .body("""{"error":"Passphrase already set"}""")
-                AuthService.SetupExistingResult.NoDeviceKey ->
+                AuthService.SetupExistingResult.NoDeviceKey -> {
+                    val clientIp = request.header("X-Forwarded-For")?.split(",")?.firstOrNull()?.trim()
+                        ?: request.header("X-Real-IP")?.trim() ?: "unknown"
+                    authLogger.warn("Failed setup-existing (no device key) for username='{}' from IP={}", username, clientIp)
                     Response(UNAUTHORIZED).header("Content-Type", "application/json")
                         .body("""{"error":"Invalid credentials"}""")
+                }
             }
         } catch (e: Exception) {
             authLogger.error("setup-existing error", e)

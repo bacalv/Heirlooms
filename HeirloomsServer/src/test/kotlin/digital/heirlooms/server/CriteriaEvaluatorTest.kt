@@ -259,6 +259,65 @@ class CriteriaEvaluatorTest {
         }
     }
 
+    // ---- SEC-006: Date field input validation --------------------------------
+
+    @Test
+    fun `taken_after valid date passes validation`() {
+        val f = eval("""{"type":"taken_after","date":"2024-06-15"}""")
+        assertEquals("taken_at >= ?::date", f.sql)
+        assertEquals(1, f.setters.size)
+    }
+
+    @Test
+    fun `taken_after malformed date throws CriteriaValidationException`() {
+        assertThrows<CriteriaValidationException> {
+            eval("""{"type":"taken_after","date":"not-a-date"}""")
+        }
+    }
+
+    @Test
+    fun `taken_after invalid month throws CriteriaValidationException`() {
+        assertThrows<CriteriaValidationException> {
+            eval("""{"type":"taken_after","date":"2024-13-01"}""")
+        }
+    }
+
+    @Test
+    fun `taken_after SQL injection string throws CriteriaValidationException`() {
+        assertThrows<CriteriaValidationException> {
+            eval("""{"type":"taken_after","date":"''; DROP TABLE uploads; --"}""")
+        }
+    }
+
+    @Test
+    fun `taken_before malformed date throws CriteriaValidationException`() {
+        assertThrows<CriteriaValidationException> {
+            eval("""{"type":"taken_before","date":"not-a-date"}""")
+        }
+    }
+
+    @Test
+    fun `uploaded_after malformed date throws CriteriaValidationException`() {
+        assertThrows<CriteriaValidationException> {
+            eval("""{"type":"uploaded_after","date":"not-a-date"}""")
+        }
+    }
+
+    @Test
+    fun `uploaded_before malformed date throws CriteriaValidationException`() {
+        assertThrows<CriteriaValidationException> {
+            eval("""{"type":"uploaded_before","date":"not-a-date"}""")
+        }
+    }
+
+    @Test
+    fun `taken_after date exceeding max length throws CriteriaValidationException`() {
+        val longDate = "2024-01-01-extra-padding-that-exceeds-limit"
+        assertThrows<CriteriaValidationException> {
+            eval("""{"type":"taken_after","date":"$longDate"}""")
+        }
+    }
+
     // ---- Unsupported / unknown -----------------------------------------------
 
     @Test

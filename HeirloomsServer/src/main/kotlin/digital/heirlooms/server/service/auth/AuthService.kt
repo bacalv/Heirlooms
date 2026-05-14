@@ -145,6 +145,8 @@ class AuthService(
         val keyRecord = keyRepo.getWrappedKeyByDeviceIdAndUser(deviceId, user.id)
             ?: return SetupExistingResult.NoDeviceKey
         authRepo.setUserAuth(user.id, authVerifier, authSalt)
+        // F-07: Invalidate all existing sessions so old tokens cannot be reused after passphrase change.
+        authRepo.deleteAllSessionsForUser(user.id)
         if (wrappedMasterKeyRecovery != null && !wrapFormatRecovery.isNullOrBlank()) {
             keyRepo.upsertRecoveryPassphrase(
                 RecoveryPassphraseRecord(

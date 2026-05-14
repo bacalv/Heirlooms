@@ -29,6 +29,8 @@ import digital.heirlooms.server.repository.storage.BlobRepository
 import digital.heirlooms.server.repository.storage.PostgresBlobRepository
 import digital.heirlooms.server.repository.upload.UploadRepository
 import digital.heirlooms.server.repository.upload.PostgresUploadRepository
+import digital.heirlooms.server.filters.AuthRateLimiter
+import digital.heirlooms.server.filters.rateLimitFilter
 import digital.heirlooms.server.routes.auth.authRoutes
 import digital.heirlooms.server.routes.capsule.capsuleReverseLookupRoute
 import digital.heirlooms.server.routes.capsule.capsuleRoutes
@@ -69,6 +71,7 @@ import org.http4k.contract.contract
 import org.http4k.contract.meta
 import org.http4k.contract.openapi.ApiInfo
 import org.http4k.contract.openapi.v3.OpenApi3
+import org.http4k.core.then
 import org.http4k.core.HttpHandler
 import org.http4k.core.Method.GET
 import org.http4k.core.Method.POST
@@ -244,7 +247,7 @@ internal fun buildApp(
     return routes(
         "/api/content" bind contentContract,
         "/api/keys" bind keysContract,
-        "/api/auth" bind authContract,
+        "/api/auth" bind rateLimitFilter(AuthRateLimiter.challengeAndLogin, "/challenge", "/login").then(authContract),
         "/api" bind capsuleContract,
         "/api" bind socialContract,
         "/api" bind diagContract,

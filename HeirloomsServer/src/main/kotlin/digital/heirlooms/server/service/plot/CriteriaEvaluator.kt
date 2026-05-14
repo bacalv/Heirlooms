@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.sql.Connection
 import java.sql.PreparedStatement
+import java.time.LocalDate
 import java.util.UUID
 
 class CriteriaValidationException(message: String) : Exception(message)
@@ -18,6 +19,27 @@ data class CriteriaFragment(val sql: String, val setters: List<ParamSetter>)
 object CriteriaEvaluator {
 
     private const val MAX_DEPTH = 10
+    private const val MAX_DATE_LENGTH = 20
+
+    /**
+     * Validates that [date] is a valid ISO-8601 date string (YYYY-MM-DD) and does not
+     * exceed [MAX_DATE_LENGTH] characters. Throws [CriteriaValidationException] on failure.
+     * This prevents PSQLException from propagating as a 500 when a malformed date is passed
+     * directly to PostgreSQL's `::date` cast.
+     */
+    private fun validateDate(date: String, atomType: String) {
+        if (date.length > MAX_DATE_LENGTH)
+            throw CriteriaValidationException(
+                "'$atomType' invalid date format: expected YYYY-MM-DD (value too long)"
+            )
+        try {
+            LocalDate.parse(date)
+        } catch (_: Exception) {
+            throw CriteriaValidationException(
+                "'$atomType' invalid date format: expected YYYY-MM-DD, got '$date'"
+            )
+        }
+    }
 
     fun evaluate(
         criteriaJson: String,
@@ -77,6 +99,7 @@ object CriteriaEvaluator {
             "taken_after" -> {
                 val date = node.get("date")?.asText()?.takeIf { it.isNotBlank() }
                     ?: throw CriteriaValidationException("'taken_after' atom requires a non-empty 'date' field")
+                validateDate(date, "taken_after")
                 CriteriaFragment(
                     "taken_at >= ?::date",
                     listOf { stmt, idx -> stmt.setString(idx, date); idx + 1 }
@@ -86,6 +109,7 @@ object CriteriaEvaluator {
             "taken_before" -> {
                 val date = node.get("date")?.asText()?.takeIf { it.isNotBlank() }
                     ?: throw CriteriaValidationException("'taken_before' atom requires a non-empty 'date' field")
+                validateDate(date, "taken_before")
                 CriteriaFragment(
                     "taken_at < (?::date + INTERVAL '1 day')",
                     listOf { stmt, idx -> stmt.setString(idx, date); idx + 1 }
@@ -95,6 +119,7 @@ object CriteriaEvaluator {
             "uploaded_after" -> {
                 val date = node.get("date")?.asText()?.takeIf { it.isNotBlank() }
                     ?: throw CriteriaValidationException("'uploaded_after' atom requires a non-empty 'date' field")
+                validateDate(date, "uploaded_after")
                 CriteriaFragment(
                     "uploaded_at >= ?::date",
                     listOf { stmt, idx -> stmt.setString(idx, date); idx + 1 }
@@ -104,6 +129,7 @@ object CriteriaEvaluator {
             "uploaded_before" -> {
                 val date = node.get("date")?.asText()?.takeIf { it.isNotBlank() }
                     ?: throw CriteriaValidationException("'uploaded_before' atom requires a non-empty 'date' field")
+                validateDate(date, "uploaded_before")
                 CriteriaFragment(
                     "uploaded_at < (?::date + INTERVAL '1 day')",
                     listOf { stmt, idx -> stmt.setString(idx, date); idx + 1 }

@@ -1222,4 +1222,61 @@ class FinUploadHandlerTest {
         assertTrue(response.body.payload.array().contentEquals(byteArrayOf(7, 8, 9)))
         verify { mockStorage.get(StorageKey("uploads/uuid-thumb.bin")) }
     }
+
+    // -------------------------------------------------------------------------
+    // SEC-005 F-08 — MIME type allowlist on /uploads/initiate
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `POST uploads initiate with unsupported MIME type returns 400`() {
+        val response = appWithDirectUpload(
+            Request(POST, "/api/content/uploads/initiate")
+                .header("Content-Type", "application/json")
+                .body("""{"mimeType":"application/pdf","storage_class":"encrypted"}""")
+        )
+
+        assertEquals(BAD_REQUEST, response.status)
+        assertTrue(response.bodyString().contains("Unsupported media type"))
+    }
+
+    @Test
+    fun `POST uploads initiate with audio MIME type returns 400`() {
+        val response = appWithDirectUpload(
+            Request(POST, "/api/content/uploads/initiate")
+                .header("Content-Type", "application/json")
+                .body("""{"mimeType":"audio/mpeg","storage_class":"encrypted"}""")
+        )
+
+        assertEquals(BAD_REQUEST, response.status)
+        assertTrue(response.bodyString().contains("Unsupported media type"))
+    }
+
+    @Test
+    fun `POST uploads initiate with application octet-stream MIME type returns 400`() {
+        val response = appWithDirectUpload(
+            Request(POST, "/api/content/uploads/initiate")
+                .header("Content-Type", "application/json")
+                .body("""{"mimeType":"application/octet-stream","storage_class":"encrypted"}""")
+        )
+
+        assertEquals(BAD_REQUEST, response.status)
+        assertTrue(response.bodyString().contains("Unsupported media type"))
+    }
+
+    @Test
+    fun `POST uploads initiate with image MIME type is accepted`() {
+        every { (mockDirectStorage as DirectUploadSupport).prepareUpload("image/heic") } returns
+            PreparedUpload(StorageKey("uploads/uuid-content.bin"), "https://minio/content-url")
+        every { (mockDirectStorage as DirectUploadSupport).prepareUpload("application/octet-stream") } returns
+            PreparedUpload(StorageKey("uploads/uuid-thumb.bin"), "https://minio/thumb-url")
+        every { mockBlobRepo.insertPendingBlob(any()) } returns UUID.randomUUID()
+
+        val response = appWithDirectUpload(
+            Request(POST, "/api/content/uploads/initiate")
+                .header("Content-Type", "application/json")
+                .body("""{"mimeType":"image/heic","storage_class":"encrypted"}""")
+        )
+
+        assertEquals(OK, response.status)
+    }
 }
