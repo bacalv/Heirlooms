@@ -433,6 +433,42 @@ class UploadService(
         return ShareResult.Shared(shared)
     }
 
+    // ---- Upload query delegation (thin wrappers for route use) ---------------
+
+    fun listAllTags(userId: java.util.UUID) = uploadRepo.listAllTags(userId)
+
+    fun findUploadForUser(id: java.util.UUID, userId: java.util.UUID) =
+        uploadRepo.findUploadByIdForUser(id, userId) ?: uploadRepo.findUploadByIdForSharedMember(id, userId)
+
+    fun existsByContentHash(hash: String, userId: java.util.UUID) = uploadRepo.existsByContentHash(hash, userId)
+
+    fun listUploadsPaginated(
+        cursor: String? = null, limit: Int = 50, tags: List<String> = emptyList(),
+        excludeTag: String? = null, fromDate: Instant? = null, toDate: Instant? = null,
+        inCapsule: Boolean? = null, includeComposted: Boolean = false, hasLocation: Boolean? = null,
+        sort: digital.heirlooms.server.domain.upload.UploadSort = digital.heirlooms.server.domain.upload.UploadSort.UPLOAD_NEWEST,
+        justArrived: Boolean = false, mediaType: String? = null, isReceived: Boolean? = null,
+        plotId: java.util.UUID? = null, userId: java.util.UUID,
+    ) = uploadRepo.listUploadsPaginated(
+        cursor, limit, tags, excludeTag, fromDate, toDate, inCapsule, includeComposted,
+        hasLocation, sort, justArrived, mediaType, isReceived, plotId, userId, plotRepo,
+    )
+
+    fun listCompostedUploadsPaginated(cursor: String? = null, limit: Int = 50, userId: java.util.UUID) =
+        uploadRepo.listCompostedUploadsPaginated(cursor, limit, userId)
+
+    fun compostUpload(id: java.util.UUID, userId: java.util.UUID) = uploadRepo.compostUpload(id, userId)
+
+    fun restoreUpload(id: java.util.UUID, userId: java.util.UUID) = uploadRepo.restoreUpload(id, userId)
+
+    fun updateRotation(id: java.util.UUID, rotation: Int, userId: java.util.UUID) =
+        uploadRepo.updateRotation(id, rotation, userId)
+
+    fun recordView(id: java.util.UUID, userId: java.util.UUID) = uploadRepo.recordView(id, userId)
+
+    fun updateTags(id: java.util.UUID, tags: List<String>, userId: java.util.UUID) =
+        uploadRepo.updateTags(id, tags, userId) { conn, uploadId, uid -> flowRepo.runUnstagedFlowsForUpload(conn, uploadId, uid) }
+
     // ---- Compost cleanup (background) --------------------------------------
 
     fun launchCompostCleanup() {

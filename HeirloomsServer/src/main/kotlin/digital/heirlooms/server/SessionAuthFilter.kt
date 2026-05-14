@@ -1,5 +1,6 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.repository.auth.AuthRepository
 import org.http4k.core.Filter
 import org.http4k.core.Request
 import org.http4k.core.Response
@@ -23,7 +24,7 @@ private fun isUnauthenticated(path: String): Boolean =
     path.startsWith("/api/auth/pairing/status") ||
     path in UNAUTHENTICATED_PATHS
 
-fun sessionAuthFilter(database: Database, staticApiKey: String = ""): Filter = Filter { next ->
+fun sessionAuthFilter(authRepository: AuthRepository, staticApiKey: String = ""): Filter = Filter { next ->
     { request ->
         if (isUnauthenticated(request.uri.path)) {
             next(request)
@@ -40,13 +41,13 @@ fun sessionAuthFilter(database: Database, staticApiKey: String = ""): Filter = F
                         .getOrElse { runCatching { Base64.getDecoder().decode(token) }.getOrNull() }
                     bytes?.let {
                         val hash = MessageDigest.getInstance("SHA-256").digest(it)
-                        database.findSessionByTokenHash(hash)
+                        authRepository.findSessionByTokenHash(hash)
                     }
                 }
                 if (session == null || session.expiresAt.isBefore(Instant.now())) {
                     Response(UNAUTHORIZED).body("Unauthorized")
                 } else {
-                    database.refreshSession(session.id)
+                    authRepository.refreshSession(session.id)
                     next(request.header("X-Auth-User-Id", session.userId.toString())
                                   .header("X-Auth-Device-Kind", session.deviceKind))
                 }

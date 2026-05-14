@@ -43,7 +43,6 @@ private val enc = Base64.getEncoder()
 
 class KeysHandlerTest {
 
-    private val mockDatabase = mockk<Database>(relaxed = true)
     private val mockKeyRepo = mockk<KeyRepository>()
     private val mockUploadRepo = mockk<UploadRepository>(relaxed = true)
     private val mockAuthRepo = mockk<AuthRepository>(relaxed = true)
@@ -58,7 +57,6 @@ class KeysHandlerTest {
 
     private val app = buildApp(
         storage = mockk<FileStore>(relaxed = true),
-        database = mockDatabase,
         uploadRepo = mockUploadRepo,
         authRepo = mockAuthRepo,
         capsuleRepo = mockCapsuleRepo,

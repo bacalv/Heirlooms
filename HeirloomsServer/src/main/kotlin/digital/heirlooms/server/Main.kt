@@ -1,5 +1,9 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.repository.auth.PostgresAuthRepository
+import digital.heirlooms.server.repository.keys.PostgresKeyRepository
+import digital.heirlooms.server.repository.storage.PostgresBlobRepository
+import digital.heirlooms.server.repository.upload.PostgresUploadRepository
 import digital.heirlooms.server.routes.buildApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,10 +53,15 @@ fun main() {
     }
 
     val exifScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    val exifService = ExifExtractionService(database, storage, exifScope)
+    val exifService = ExifExtractionService(PostgresUploadRepository(database.dataSource), storage, exifScope)
     exifService.recoverPending()
 
-    val cleanupService = PendingBlobsCleanupService(database, storage)
+    val cleanupService = PendingBlobsCleanupService(
+        blobRepository = PostgresBlobRepository(database.dataSource),
+        authRepository = PostgresAuthRepository(database.dataSource),
+        keyRepository = PostgresKeyRepository(database.dataSource),
+        storage = storage,
+    )
     cleanupService.startPeriodicCleanup()
     println("PendingBlobsCleanupService started")
 
@@ -63,7 +72,7 @@ fun main() {
     val app = buildApp(storage, database, previewDurationSeconds = config.previewDurationSeconds, authSecret = authSecret)
     if (config.apiKey.isNotEmpty()) println("Static API key auth enabled (development/test mode)")
     val server = corsFilter().then(
-        sessionAuthFilter(database, config.apiKey).then(app)
+        sessionAuthFilter(PostgresAuthRepository(database.dataSource), config.apiKey).then(app)
     ).asServer(Netty(config.serverPort))
     server.start()
     println("HeirloomsServer running on port ${config.serverPort}")

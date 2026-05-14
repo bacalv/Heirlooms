@@ -32,12 +32,10 @@ import java.util.UUID
 class PaginationTest {
 
     private val mockStorage = mockk<FileStore>()
-    private val mockDatabase = mockk<Database>(relaxed = true)
     private val mockUploadRepo = mockk<UploadRepository>(relaxed = true)
 
     private val app = buildApp(
         storage = mockStorage,
-        database = mockDatabase,
         uploadRepo = mockUploadRepo,
         authRepo = mockk<AuthRepository>(relaxed = true),
         capsuleRepo = mockk<CapsuleRepository>(relaxed = true),
@@ -64,7 +62,7 @@ class PaginationTest {
 
     @Test
     fun `GET uploads returns items and null next_cursor on last page`() {
-        every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns
+        every { mockUploadRepo.listUploadsPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
             UploadPage(listOf(upload()), null)
         every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
@@ -80,7 +78,7 @@ class PaginationTest {
 
     @Test
     fun `GET uploads returns next_cursor when more pages exist`() {
-        every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns
+        every { mockUploadRepo.listUploadsPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
             UploadPage(listOf(upload()), "some-cursor-value")
         every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
@@ -93,7 +91,7 @@ class PaginationTest {
     @Test
     fun `GET uploads with cursor param passes it to database`() {
         val cursorSlot = slot<String?>()
-        every { mockDatabase.listUploadsPaginated(captureNullable(cursorSlot), any(), any(), any()) } returns
+        every { mockUploadRepo.listUploadsPaginated(captureNullable(cursorSlot), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
             UploadPage(emptyList(), null)
         every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
@@ -105,7 +103,7 @@ class PaginationTest {
     @Test
     fun `GET uploads with limit param passes it to database`() {
         val limitSlot = slot<Int>()
-        every { mockDatabase.listUploadsPaginated(any(), capture(limitSlot), any(), any()) } returns
+        every { mockUploadRepo.listUploadsPaginated(any(), capture(limitSlot), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
             UploadPage(emptyList(), null)
         every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
@@ -117,7 +115,7 @@ class PaginationTest {
     @Test
     fun `GET uploads limit is clamped to 200`() {
         val limitSlot = slot<Int>()
-        every { mockDatabase.listUploadsPaginated(any(), capture(limitSlot), any(), any()) } returns
+        every { mockUploadRepo.listUploadsPaginated(any(), capture(limitSlot), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
             UploadPage(emptyList(), null)
         every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
@@ -129,7 +127,7 @@ class PaginationTest {
     @Test
     fun `GET uploads returns multiple items`() {
         val uploads = listOf(upload(), upload(), upload())
-        every { mockDatabase.listUploadsPaginated(any(), any(), any(), any()) } returns
+        every { mockUploadRepo.listUploadsPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
             UploadPage(uploads, null)
         every { mockUploadRepo.fetchExpiredCompostedUploads() } returns emptyList()
 
@@ -143,7 +141,7 @@ class PaginationTest {
 
     @Test
     fun `GET uploads composted returns items and null next_cursor`() {
-        every { mockDatabase.listCompostedUploadsPaginated(any(), any()) } returns
+        every { mockUploadRepo.listCompostedUploadsPaginated(any(), any(), any()) } returns
             UploadPage(emptyList(), null)
 
         val response = app(Request(GET, "/api/content/uploads/composted"))
@@ -156,7 +154,7 @@ class PaginationTest {
 
     @Test
     fun `GET uploads composted empty state returns empty items array`() {
-        every { mockDatabase.listCompostedUploadsPaginated(any(), any()) } returns
+        every { mockUploadRepo.listCompostedUploadsPaginated(any(), any(), any()) } returns
             UploadPage(emptyList(), null)
 
         val response = app(Request(GET, "/api/content/uploads/composted"))
