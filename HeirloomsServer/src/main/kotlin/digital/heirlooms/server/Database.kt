@@ -2159,27 +2159,34 @@ class Database(private val dataSource: DataSource) {
             if (exists) return ApproveResult.AlreadyApproved
 
             if (plot.visibility == "shared") {
-                val isDuplicate = conn.prepareStatement(
-                    """SELECT 1 FROM plot_items pi
-                       JOIN uploads u ON pi.upload_id = u.id
-                       WHERE pi.plot_id = ?
-                         AND u.content_hash IS NOT NULL
-                         AND u.content_hash = (SELECT content_hash FROM uploads WHERE id = ? AND content_hash IS NOT NULL)
-                       LIMIT 1"""
+                val incomingHash = conn.prepareStatement(
+                    "SELECT content_hash FROM uploads WHERE id = ?"
                 ).use { stmt ->
-                    stmt.setObject(1, plotId); stmt.setObject(2, uploadId)
-                    stmt.executeQuery().next()
+                    stmt.setObject(1, uploadId)
+                    val rs = stmt.executeQuery()
+                    if (rs.next()) rs.getString(1) else null
                 }
-                if (isDuplicate) {
-                    conn.prepareStatement(
-                        """INSERT INTO plot_staging_decisions (plot_id, upload_id, decision, source_flow_id)
-                           VALUES (?, ?, 'approved', ?)
-                           ON CONFLICT (plot_id, upload_id) DO UPDATE SET decision = 'approved', decided_at = NOW()"""
+                if (incomingHash != null) {
+                    val isDuplicate = conn.prepareStatement(
+                        """SELECT 1 FROM plot_items pi
+                           JOIN uploads u ON u.id = pi.upload_id
+                           WHERE pi.plot_id = ? AND u.content_hash = ?
+                           LIMIT 1"""
                     ).use { stmt ->
-                        stmt.setObject(1, plotId); stmt.setObject(2, uploadId); stmt.setObject(3, sourceFlowId)
-                        stmt.executeUpdate()
+                        stmt.setObject(1, plotId); stmt.setString(2, incomingHash)
+                        stmt.executeQuery().next()
                     }
-                    return ApproveResult.DuplicateContent
+                    if (isDuplicate) {
+                        conn.prepareStatement(
+                            """INSERT INTO plot_staging_decisions (plot_id, upload_id, decision, source_flow_id)
+                               VALUES (?, ?, 'approved', ?)
+                               ON CONFLICT (plot_id, upload_id) DO UPDATE SET decision = 'approved', decided_at = NOW()"""
+                        ).use { stmt ->
+                            stmt.setObject(1, plotId); stmt.setObject(2, uploadId); stmt.setObject(3, sourceFlowId)
+                            stmt.executeUpdate()
+                        }
+                        return ApproveResult.DuplicateContent
+                    }
                 }
             }
 

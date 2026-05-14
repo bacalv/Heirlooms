@@ -438,7 +438,7 @@ class SharedPlotApiTest {
     // ---- Staging approval on shared plot ------------------------------------
 
     @Test
-    fun `approve staging on shared plot without DEK fields returns 400`() {
+    fun `approve staging on shared plot without DEK fields succeeds for unencrypted items`() {
         val plot = createSharedPlot("d3-stage-approve-shared")
         val tag = "d3-stage-approve-shared-tag"
         val uploadId = uploadImage()
@@ -461,7 +461,7 @@ class SharedPlotApiTest {
                 Request.Builder().url("$base/api/plots/${plot.getString("id")}/staging/$uploadId/approve")
                     .post("{}".toRequestBody("application/json".toMediaType())).build()
             ).execute()
-            assertThat(approveResp.code).isEqualTo(400)
+            assertThat(approveResp.code).isEqualTo(204)
         } finally {
             client.newCall(Request.Builder().url("$base/api/flows/${flow.getString("id")}").delete().build()).execute()
             deletePlot(plot.getString("id"))
