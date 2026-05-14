@@ -2,6 +2,52 @@
 
 ---
 
+## v0.51.4 — Shared plots: end-to-end hardening (14 May 2026)
+
+Post-deployment shakedown with real devices (Bret's phone, Sadaar's Fire pad, Wighty's phone).
+First full end-to-end shared plot flow: upload → tag → flow → staging approval → member's garden.
+
+**Server fixes**
+- `listUploadsPaginated` now scopes shared collection plot queries to all joined members
+  (`user_id IN (members)` instead of `user_id = requester`)
+- DEK overlay: for shared collection plots, `wrapped_item_dek` / `wrapped_thumbnail_dek`
+  from `plot_items` are returned in place of the personal-key-wrapped DEKs so members
+  can decrypt items they don't own
+- `findUploadByIdForSharedMember` — new DB function; used as fallback on the metadata,
+  thumbnail, file-stream, and preview endpoints so members can access other members' content
+- `findUploadByIdForSharedMember` also COALESCEs plot-key-wrapped DEKs from `plot_items`
+  so single-item fetches (photo detail, download) receive the correct DEK
+- `handleApproveStagingItem` — `wrappedItemDek` now optional for shared plots when item
+  is unencrypted (public storageClass); previously blocked all legacy item approvals
+
+**Web fixes**
+- `UploadThumb` handles `plot-aes256gcm-v1` DEK format: fetches + caches plot key on first
+  render, decrypts thumbnail via `unwrapDekWithPlotKey`
+- `UploadThumb` `plotId` prop threaded from `PlotItemsRow` → `PlotThumbCard` → `EncryptedThumb`
+- Flows added to top-level desktop nav and mobile hamburger menu
+- Empty plot label changed from "No items match this plot's criteria yet." to "Empty"
+
+**Android features**
+- `StagingViewModel` — DEK re-wrap at staging approval for shared plots: fetches plot key,
+  unwraps item DEK with master key, re-wraps with plot key, passes to `approveItem`
+- `CreateFlowDialog` — full criteria builder matching web: tags (chips), media type
+  (All/Photos/Videos), date range, has location, received only; replaces hardcoded
+  `just_arrived` criteria
+- `SharedPlotsScreen` — FAB to create a new shared plot directly from Android: generates
+  plot key, wraps for self, calls `createPlot` with `visibility=shared`
+- `PlotEditSheet` — "Invite member" button for owned shared plots opens `InviteMemberSheet`:
+  loads friends list, wraps plot key for selected friend, calls `addPlotMember`
+- `PhotoDetailViewModel` — handles `plot-aes256gcm-v1` DEK format (tries all cached plot
+  keys); capsule-refs 404 for non-owners swallowed gracefully (empty list shown)
+- `StagingViewModel` — surfaces approve errors as a visible banner
+
+**Deployments**
+- Server: heirlooms-server-00056-6r7 through 00062-294
+- Web: heirlooms-web-00074-7ln through 00076-5xf
+- Android: versionCode 56→57, versionName 0.51.3→0.51.4
+
+---
+
 ## v0.51.2 — Shared plot membership overhaul E3: Android (13 May 2026)
 
 - **Shared Plots tab** — new "Shared" bottom nav tab (`PeopleAlt` icon). Four sections populated

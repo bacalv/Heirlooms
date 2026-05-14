@@ -93,7 +93,7 @@ function EncryptedThumb({ upload, className, style, alt, rotation, plotId }) {
         } else {
           URL.revokeObjectURL(url)
         }
-      } catch (e) { console.error('[EncryptedThumb]', upload.id, upload.thumbnailDekFormat, e) }
+      } catch { /* show fallback */ }
       if (!cancelled) setLoading(false)
     })()
     return () => { cancelled = true }

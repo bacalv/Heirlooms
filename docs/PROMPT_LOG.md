@@ -2,6 +2,40 @@
 
 ---
 
+## Session — 14 May 2026 — Shared plots: deploy, test, harden (v0.51.3–v0.51.4)
+
+Deployed v0.51.x (server, web, Android) and ran first real multi-device test with Bret's
+phone and Sadaar's Fire pad. Uncovered and fixed the full chain of issues between "membership
+model is implemented" and "photos actually appear on another person's device."
+
+**Deployed**
+- Server, web, Android all deployed fresh from v0.51.2 baseline
+- Android installed on Bret's phone, Wighty's phone, Sadaar's Fire pad via ADB
+
+**Fixes discovered through real testing**
+The gap between passing integration tests and working end-to-end was significant:
+- Upload query scoped to `user_id = requester` — members couldn't see any items
+- Server returned personal-key DEKs to members — thumbnails couldn't decrypt
+- Thumbnail endpoint returned 404 for non-owners — greys even when query was fixed
+- Metadata, file, and preview endpoints also returned 404 for non-owners
+- `findUploadByIdForSharedMember` returned personal-key DEK — detail view failed
+- `getCapsulesForUpload` returned 404 for non-owners — crashed PhotoDetail load
+- `handleApproveStagingItem` required `wrappedItemDek` even for unencrypted items
+- `PhotoDetailViewModel` didn't handle `plot-aes256gcm-v1` DEK format
+
+**Android features added during session**
+- Staging approval DEK re-wrap (was web-only)
+- Full flow criteria builder (was hardcoded `just_arrived`)
+- Create shared plot from Shared tab FAB
+- Invite member from garden PlotEditSheet
+
+**Other improvements**
+- Flows added to web top-level nav
+- Empty plot label simplified to "Empty"
+- Error surfacing in Android staging screen
+
+---
+
 ## Session — 13 May 2026 — Shared plot membership brief
 
 Designed and wrote the brief for a UX overhaul of M10's shared plot membership

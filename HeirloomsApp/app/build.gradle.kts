@@ -13,8 +13,8 @@ android {
         applicationId = "digital.heirlooms.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 56
-        versionName = "0.51.3"
+        versionCode = 57
+        versionName = "0.51.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
