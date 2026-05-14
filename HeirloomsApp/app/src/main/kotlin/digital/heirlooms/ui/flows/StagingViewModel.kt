@@ -1,6 +1,7 @@
 package digital.heirlooms.ui.flows
 
 import android.util.Base64
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import digital.heirlooms.api.HeirloomsApi
@@ -15,6 +16,7 @@ data class StagingState(
     val pending: List<Upload> = emptyList(),
     val rejected: List<Upload> = emptyList(),
     val loading: Boolean = true,
+    val approveError: String? = null,
 )
 
 class StagingViewModel : ViewModel() {
@@ -69,8 +71,11 @@ class StagingViewModel : ViewModel() {
                 }
 
                 api.approveItem(plotId, uploadId, wrappedItemDek, itemDekFormat, wrappedThumbDek, thumbDekFormat)
+                _state.value = _state.value.copy(approveError = null)
                 load(api, flowId, plotId)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.e("StagingVM", "approve failed for $uploadId isShared=$isSharedPlot wrappedDek=${upload.wrappedDek != null} dekFmt=${upload.dekFormat}", e)
+                _state.value = _state.value.copy(approveError = e.message ?: "Couldn't approve item")
                 load(api, flowId, plotId)
             }
         }

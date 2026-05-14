@@ -189,16 +189,19 @@ private fun handleApproveStagingItem(plotId: UUID, uploadId: UUID, request: Requ
 
     if (plot?.visibility == "shared") {
         val wrappedItemDek = node?.get("wrappedItemDek")?.asText()
-            ?: return Response(BAD_REQUEST).body("wrappedItemDek required for shared plots")
-        dekFormat = node.get("itemDekFormat")?.asText()
-            ?: return Response(BAD_REQUEST).body("itemDekFormat required for shared plots")
-        dekBytes = try { java.util.Base64.getDecoder().decode(wrappedItemDek) }
-            catch (_: Exception) { return Response(BAD_REQUEST).body("wrappedItemDek is not valid base64") }
-        val wrappedThumb = node.get("wrappedThumbnailDek")?.asText()
-        thumbFormat = node.get("thumbnailDekFormat")?.asText()
-        thumbBytes = wrappedThumb?.let {
-            try { java.util.Base64.getDecoder().decode(it) } catch (_: Exception) { null }
+        if (wrappedItemDek != null) {
+            // Encrypted item: accept re-wrapped DEK
+            dekFormat = node?.get("itemDekFormat")?.asText()
+                ?: return Response(BAD_REQUEST).body("itemDekFormat required when wrappedItemDek is provided")
+            dekBytes = try { java.util.Base64.getDecoder().decode(wrappedItemDek) }
+                catch (_: Exception) { return Response(BAD_REQUEST).body("wrappedItemDek is not valid base64") }
+            val wrappedThumb = node?.get("wrappedThumbnailDek")?.asText()
+            thumbFormat = node?.get("thumbnailDekFormat")?.asText()
+            thumbBytes = wrappedThumb?.let {
+                try { java.util.Base64.getDecoder().decode(it) } catch (_: Exception) { null }
+            }
         }
+        // Unencrypted (public) items have no DEK to wrap — allow through without DEK fields
     }
 
     return when (database.approveStagingItem(plotId, uploadId, sourceFlowId, request.authUserId(), dekBytes, dekFormat, thumbBytes, thumbFormat)) {

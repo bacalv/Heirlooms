@@ -74,6 +74,13 @@ fun StagingScreen(
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Parchment),
         )
 
+        if (state.approveError != null) {
+            Text(
+                "Couldn't approve: ${state.approveError}",
+                style = MaterialTheme.typography.bodySmall.copy(color = androidx.compose.ui.graphics.Color.Red),
+                modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        }
         if (state.loading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Forest)
