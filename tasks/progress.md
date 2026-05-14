@@ -12,7 +12,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | Agent ID | Task | Started |
 |----------|------|---------|
-| developer-1 | [IOS-001](in-progress/IOS-001_qr-scanner-avfoundation.md) | 2026-05-14 |
 | security | [SEC-001](in-progress/SEC-001_security-hardening.md) | 2026-05-14 |
 
 ---
@@ -30,12 +29,12 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [SEC-002](queue/SEC-002_auth-crypto-coverage.md) | 100% coverage plan for auth/crypto paths | Security | High | SecurityManager | TST-004 |
 | [SEC-003](queue/SEC-003_client-security-review.md) | Client security flaw testing plan | Security | Medium | SecurityManager | SEC-001 |
 | [DOC-001](queue/DOC-001_uml-sequence-diagrams.md) | UML sequence diagrams from test output | Docs | Low | Developer | TST-004 |
+| [BUG-001](queue/BUG-001_keychain-master-key-slot-collision.md) | Keychain slot collision — master key vs plot key | Bug Fix | Medium | Developer | — |
 
 ## In Progress
 
 | ID | Title | Category | Assigned to | Claimed by |
 |----|-------|----------|-------------|------------|
-| [IOS-001](in-progress/IOS-001_qr-scanner-avfoundation.md) | Complete iOS QRScannerView (AVFoundation) | iOS | Developer | developer-1 |
 | [SEC-001](in-progress/SEC-001_security-hardening.md) | Security hardening + threat model | Security | SecurityManager | security |
 
 ## Done
@@ -60,6 +59,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [DONE-BUG-v051](done/DONE-BUG-v051_shared-plot-membership.md) | Post-M10 fixes — shared plot membership overhaul (v0.50.1–v0.51.5) | Bug Fix | 2026-05-14 |
 | [DONE-BUG-v053](done/DONE-BUG-v053_server-refactor-security.md) | Post-M10 fixes — server refactor + security hardening (v0.52.0–v0.53.1) | Bug Fix | 2026-05-14 |
 | [DOC-002](done/DOC-002_doc-cleanup-history-backfill.md) | Doc cleanup + history backfill from git | Docs | 2026-05-14 |
+| [IOS-001](done/IOS-001_qr-scanner-avfoundation.md) | Complete iOS QRScannerView (AVFoundation) | iOS | 2026-05-15 |
 
 ## Brainstorming
 

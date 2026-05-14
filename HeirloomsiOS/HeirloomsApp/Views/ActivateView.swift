@@ -9,6 +9,7 @@ struct ActivateView: View {
     enum ScanMode {
         case friendInvite    // Scan 1: heirlooms://invite/friend/<token>
         case plotInvite      // Scan 2: heirlooms://invite/plot/<token>
+        case webPairing      // Scan 3: JSON {"session_id":"...","pubkey":"..."} from web session
     }
 
     var scanMode: ScanMode = .friendInvite
@@ -17,6 +18,7 @@ struct ActivateView: View {
     @State private var isShowingScanner = false
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var successMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -38,6 +40,14 @@ struct ActivateView: View {
                     .padding(.horizontal, 32)
 
                 Spacer()
+
+                if let successMessage {
+                    Text(successMessage)
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
 
                 if let errorMessage {
                     Text(errorMessage)
@@ -69,9 +79,9 @@ struct ActivateView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .sheet(isPresented: $isShowingScanner) {
-            QRScannerView(mode: scanMode) { scannedURL in
+            QRScannerView(mode: scanMode) { scannedString in
                 isShowingScanner = false
-                Task { await handle(scannedURL: scannedURL) }
+                Task { await handle(scannedString: scannedString) }
             }
         }
     }
@@ -82,6 +92,7 @@ struct ActivateView: View {
         switch scanMode {
         case .friendInvite: return "Welcome to Heirlooms"
         case .plotInvite:   return "Scan the shared album code"
+        case .webPairing:   return "Connect a device"
         }
     }
 
@@ -91,6 +102,8 @@ struct ActivateView: View {
             return "Your family member has a QR code ready. Tap Activate to scan it."
         case .plotInvite:
             return "Ask your family member to show the album QR code."
+        case .webPairing:
+            return "Show the QR code from your browser to give it access to your Heirlooms."
         }
     }
 
@@ -98,29 +111,41 @@ struct ActivateView: View {
         switch scanMode {
         case .friendInvite: return "Activate"
         case .plotInvite:   return "Scan QR Code"
+        case .webPairing:   return "Scan Pairing Code"
         }
     }
 
     // MARK: - QR handling
 
-    private func handle(scannedURL url: URL) async {
+    private func handle(scannedString string: String) async {
         isLoading = true
         errorMessage = nil
+        successMessage = nil
         defer { isLoading = false }
 
-        guard url.scheme == "heirlooms" else {
-            errorMessage = "This doesn't look like a Heirlooms code. Try again."
+        // Try heirlooms:// URL first (friend invite and plot invite flows).
+        if let url = URL(string: string), url.scheme == "heirlooms" {
+            switch url.host {
+            case "invite" where url.pathComponents.dropFirst().first == "friend":
+                await handleFriendInvite(url: url)
+            case "invite" where url.pathComponents.dropFirst().first == "plot":
+                await handlePlotInvite(url: url)
+            default:
+                errorMessage = "Unrecognised QR code. Please ask your family member to regenerate it."
+            }
             return
         }
 
-        switch url.host {
-        case "invite" where url.pathComponents.dropFirst().first == "friend":
-            await handleFriendInvite(url: url)
-        case "invite" where url.pathComponents.dropFirst().first == "plot":
-            await handlePlotInvite(url: url)
-        default:
-            errorMessage = "Unrecognised QR code. Please ask your family member to regenerate it."
+        // Try JSON pairing payload: {"session_id":"...","pubkey":"..."} from web session.
+        if let data = string.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+           let sessionId = json["session_id"],
+           let webPubkey = json["pubkey"] {
+            await handleWebPairing(sessionId: sessionId, webPubkey: webPubkey)
+            return
         }
+
+        errorMessage = "This doesn't look like a Heirlooms code. Try again."
     }
 
     private func handleFriendInvite(url: URL) async {
@@ -238,6 +263,48 @@ struct ActivateView: View {
         }
     }
 
+    private func handleWebPairing(sessionId: String, webPubkey: String) async {
+        do {
+            // Base64url → standard base64 → Data (web session pubkey in SPKI/DER format).
+            let base64 = webPubkey
+                .replacingOccurrences(of: "-", with: "+")
+                .replacingOccurrences(of: "_", with: "/")
+            let padded = base64 + String(repeating: "=", count: (4 - base64.count % 4) % 4)
+            guard let spkiData = Data(base64Encoded: padded) else {
+                throw HeirloomsError.invalidPublicKey("Cannot decode web pubkey from QR")
+            }
+
+            // Import SPKI → uncompressed x963 (65 bytes) required by wrapDEK.
+            let uncompressed = try P256.KeyAgreement.PublicKey(derRepresentation: spkiData).x963Representation
+
+            // Retrieve master key. Stored in the plot-key Keychain slot at activation time.
+            guard let masterKeyData = try? KeychainManager.getPlotKey(), masterKeyData.count == 32 else {
+                throw HeirloomsError.decryptionFailed("Master key not available — please re-activate the app")
+            }
+
+            // Wrap master key to the web session's P-256 pubkey.
+            let (wrappedMasterKey, _) = try EnvelopeCrypto.wrapDEK(
+                dek: SymmetricKey(data: masterKeyData),
+                recipientPublicKeyData: uncompressed
+            )
+
+            let api = HeirloomsAPI()
+            try await api.completePairing(
+                sessionId: sessionId,
+                wrappedMasterKey: wrappedMasterKey,
+                webPubkey: webPubkey
+            )
+
+            await MainActor.run {
+                successMessage = "Browser linked. You can now close this screen."
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = "Pairing failed: \(error.localizedDescription)"
+            }
+        }
+    }
+
     // MARK: - Crypto helpers
 
     private func generateRandomBytes(_ count: Int) -> Data {
@@ -265,7 +332,7 @@ struct ActivateView: View {
 struct QRScannerView: UIViewRepresentable {
 
     let mode: ActivateView.ScanMode
-    let onScanned: (URL) -> Void
+    let onScanned: (String) -> Void
 
     func makeUIView(context: Context) -> QRPreviewView {
         let view = QRPreviewView()
@@ -285,13 +352,13 @@ struct QRScannerView: UIViewRepresentable {
 
     final class Coordinator: NSObject, AVCaptureMetadataOutputObjectsDelegate {
 
-        let onScanned: (URL) -> Void
+        let onScanned: (String) -> Void
         weak var previewView: QRPreviewView?
         private let session = AVCaptureSession()
         private var hasFired = false
         private let sessionQueue = DispatchQueue(label: "digital.heirlooms.qr-session")
 
-        init(onScanned: @escaping (URL) -> Void) {
+        init(onScanned: @escaping (String) -> Void) {
             self.onScanned = onScanned
         }
 
@@ -349,14 +416,12 @@ struct QRScannerView: UIViewRepresentable {
             guard let readableObject = metadataObjects
                     .compactMap({ $0 as? AVMetadataMachineReadableCodeObject })
                     .first(where: { $0.type == .qr }),
-                  let stringValue = readableObject.stringValue,
-                  let url = URL(string: stringValue),
-                  url.scheme == "heirlooms"
+                  let stringValue = readableObject.stringValue
             else { return }
 
             hasFired = true
             stopSession()
-            onScanned(url)
+            onScanned(stringValue)
         }
     }
 }
