@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "digital.heirlooms"
-version = "0.50.4"
+version = "0.53.0"
 
 repositories {
     mavenCentral()
