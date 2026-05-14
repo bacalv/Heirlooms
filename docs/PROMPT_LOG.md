@@ -46,7 +46,7 @@ Pure code reorganisation — no behaviour changes. Service classes extracted fro
   - Two `UploadHandlerTest` tests needed `findUploadByIdForSharedMember` stub added (test only stubbed first lookup; fallback lookup was always called in original code too)
   - Two `KeysHandlerTest` retire-device tests fixed by adding `getDeviceForUser` method to `KeyService` so the handler calls through the service rather than `listDevices().find{}`
 
-**Coverage:** Integration tests pending Docker restart (step 7).
+**Coverage:** Integration tests could not run — Docker Desktop returned 500 Internal Server Error throughout the session despite multiple restart attempts. This is the known Testcontainers/Docker Desktop issue documented in memory. Code changes are complete and unit tests pass. Run `./gradlew coverageTest` after a manual Docker restart to get the updated coverage numbers. Expected: approximately flat vs 52.1% baseline (service layer adds new classes but same code paths are exercised).
 
 ---
 
