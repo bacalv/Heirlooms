@@ -1,4 +1,4 @@
-package digital.heirlooms.server
+package digital.heirlooms.server.service.upload
 
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage

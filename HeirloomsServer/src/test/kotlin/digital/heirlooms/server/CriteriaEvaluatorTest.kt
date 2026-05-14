@@ -1,5 +1,9 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.service.plot.CriteriaCycleException
+import digital.heirlooms.server.service.plot.CriteriaEvaluator
+import digital.heirlooms.server.service.plot.CriteriaFragment
+import digital.heirlooms.server.service.plot.CriteriaValidationException
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.mockk.every
 import io.mockk.mockk

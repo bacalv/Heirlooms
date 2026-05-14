@@ -1,4 +1,4 @@
-package digital.heirlooms.server
+package digital.heirlooms.server.config
 
 import java.util.Properties
 

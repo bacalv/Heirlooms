@@ -1,4 +1,4 @@
-package digital.heirlooms.server
+package digital.heirlooms.server.crypto
 
 import java.nio.charset.StandardCharsets
 

@@ -1,6 +1,6 @@
 package digital.heirlooms.server.routes.auth
 
-import digital.heirlooms.server.authUserId
+import digital.heirlooms.server.filters.authUserId
 import digital.heirlooms.server.representation.auth.challengeResponseJson
 import digital.heirlooms.server.representation.auth.inviteResponseJson
 import digital.heirlooms.server.representation.auth.pairingInitiateResponseJson

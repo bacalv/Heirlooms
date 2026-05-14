@@ -1,4 +1,4 @@
-package digital.heirlooms.server
+package digital.heirlooms.server.filters
 
 import org.http4k.core.Filter
 import org.http4k.core.Response

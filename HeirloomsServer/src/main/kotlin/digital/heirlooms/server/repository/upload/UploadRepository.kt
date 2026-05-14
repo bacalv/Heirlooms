@@ -1,6 +1,6 @@
 package digital.heirlooms.server.repository.upload
 
-import digital.heirlooms.server.CriteriaEvaluator
+import digital.heirlooms.server.service.plot.CriteriaEvaluator
 import digital.heirlooms.server.domain.auth.FOUNDING_USER_ID
 import digital.heirlooms.server.domain.upload.DecodedCursor
 import digital.heirlooms.server.domain.upload.UploadPage

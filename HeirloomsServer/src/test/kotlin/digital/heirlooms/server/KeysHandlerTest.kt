@@ -1,6 +1,7 @@
 package digital.heirlooms.server
 
 import digital.heirlooms.server.routes.buildApp
+import digital.heirlooms.server.storage.FileStore
 import digital.heirlooms.server.domain.keys.RecoveryPassphraseRecord
 import digital.heirlooms.server.domain.keys.WrappedKeyRecord
 import digital.heirlooms.server.repository.auth.AuthRepository

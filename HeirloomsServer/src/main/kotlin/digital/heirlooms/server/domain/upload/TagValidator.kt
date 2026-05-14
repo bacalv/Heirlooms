@@ -1,4 +1,4 @@
-package digital.heirlooms.server
+package digital.heirlooms.server.domain.upload
 
 private val TAG_REGEX = Regex("^[a-z0-9]+(-[a-z0-9]+)*$")
 private const val MAX_TAG_LENGTH = 50

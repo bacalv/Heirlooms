@@ -2,6 +2,7 @@ package digital.heirlooms.server
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
+import digital.heirlooms.server.config.AppConfig
 import digital.heirlooms.server.domain.auth.InviteRecord
 import digital.heirlooms.server.domain.auth.UserRecord
 import digital.heirlooms.server.domain.auth.UserSessionRecord
