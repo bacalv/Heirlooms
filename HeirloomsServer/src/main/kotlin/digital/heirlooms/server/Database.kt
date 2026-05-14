@@ -409,20 +409,22 @@ class Database(private val dataSource: DataSource) {
                           u.thumbnail_key, u.taken_at, u.latitude, u.longitude, u.altitude,
                           u.device_make, u.device_model, u.rotation, u.tags, u.composted_at,
                           u.exif_processed_at, u.last_viewed_at, u.storage_class, u.envelope_version,
-                          u.wrapped_dek, u.dek_format, u.encrypted_metadata, u.encrypted_metadata_format,
-                          u.thumbnail_storage_key, u.wrapped_thumbnail_dek, u.thumbnail_dek_format,
+                          COALESCE(pi.wrapped_item_dek, u.wrapped_dek) AS wrapped_dek,
+                          COALESCE(pi.item_dek_format, u.dek_format) AS dek_format,
+                          u.encrypted_metadata, u.encrypted_metadata_format,
+                          u.thumbnail_storage_key,
+                          COALESCE(pi.wrapped_thumbnail_dek, u.wrapped_thumbnail_dek) AS wrapped_thumbnail_dek,
+                          COALESCE(pi.thumbnail_dek_format, u.thumbnail_dek_format) AS thumbnail_dek_format,
                           u.preview_storage_key, u.wrapped_preview_dek, u.preview_dek_format,
                           u.plain_chunk_size, u.duration_seconds
                    FROM uploads u
+                   JOIN plot_items pi ON pi.upload_id = u.id
+                   JOIN plots p ON p.id = pi.plot_id AND p.visibility = 'shared'
+                   JOIN plot_members pm ON pm.plot_id = p.id AND pm.user_id = ? AND pm.status = 'joined'
                    WHERE u.id = ?
-                   AND EXISTS (
-                       SELECT 1 FROM plot_items pi
-                       JOIN plots p ON p.id = pi.plot_id AND p.visibility = 'shared'
-                       JOIN plot_members pm ON pm.plot_id = p.id AND pm.user_id = ? AND pm.status = 'joined'
-                       WHERE pi.upload_id = u.id
-                   )"""
+                   LIMIT 1"""
             ).use { stmt ->
-                stmt.setObject(1, id); stmt.setObject(2, userId)
+                stmt.setObject(1, userId); stmt.setObject(2, id)
                 val rs = stmt.executeQuery()
                 if (!rs.next()) return null
                 return rs.toUploadRecord()
