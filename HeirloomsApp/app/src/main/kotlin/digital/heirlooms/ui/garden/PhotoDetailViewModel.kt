@@ -2,6 +2,7 @@ package digital.heirlooms.ui.garden
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.util.Base64
 import androidx.exifinterface.media.ExifInterface
 import android.net.Uri
 import androidx.compose.ui.graphics.ImageBitmap
@@ -11,7 +12,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import digital.heirlooms.api.CapsuleRef
 import digital.heirlooms.api.HeirloomsApi
+import digital.heirlooms.api.Plot
 import digital.heirlooms.api.Upload
+import digital.heirlooms.api.isShared
 import digital.heirlooms.app.EndpointStore
 import digital.heirlooms.crypto.VaultCrypto
 import digital.heirlooms.crypto.VaultSession
@@ -286,6 +289,124 @@ class PhotoDetailViewModel(
                 val refs = try { api.getCapsulesForUpload(uploadId) } catch (_: Exception) { emptyList() }
                 _state.value = PhotoDetailState.Ready(upload, refs)
             } catch (_: Exception) {}
+        }
+    }
+
+    // ── Add to shared plot ────────────────────────────────────────────────────
+
+    /** Sealed result for the add-to-plot operation, observed by the UI. */
+    sealed class AddToPlotResult {
+        object Idle : AddToPlotResult()
+        object Working : AddToPlotResult()
+        object Success : AddToPlotResult()
+        object AlreadyPresent : AddToPlotResult()
+        data class Error(val message: String) : AddToPlotResult()
+    }
+
+    private val _addToPlotResult = MutableStateFlow<AddToPlotResult>(AddToPlotResult.Idle)
+    val addToPlotResult: StateFlow<AddToPlotResult> = _addToPlotResult.asStateFlow()
+
+    fun resetAddToPlotResult() {
+        _addToPlotResult.value = AddToPlotResult.Idle
+    }
+
+    /**
+     * Fetches shared plots the user belongs to, for display in the picker.
+     * Returns only joined shared plots (excludes personal/private plots).
+     */
+    suspend fun listSharedPlots(api: HeirloomsApi): List<Plot> = withContext(Dispatchers.IO) {
+        try {
+            api.listPlots().filter { it.isShared }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    /**
+     * Wraps the photo's DEK under the given plot's group key and calls addPlotItem.
+     * Mirrors the staging approval pattern from StagingViewModel.
+     */
+    fun addToPlot(api: HeirloomsApi, plotId: String, upload: Upload) {
+        _addToPlotResult.value = AddToPlotResult.Working
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                // 1. Resolve the plot key (cache-first, then fetch from server).
+                val plotKey = VaultSession.getPlotKey(plotId) ?: run {
+                    val (wrappedKey, _) = api.getPlotKey(plotId)
+                    val privkey = VaultSession.sharingPrivkey
+                        ?: error("Sharing key not loaded — vault may need re-unlock")
+                    val raw = VaultCrypto.unwrapPlotKey(
+                        Base64.decode(wrappedKey, Base64.NO_WRAP),
+                        privkey,
+                    )
+                    VaultSession.setPlotKey(plotId, raw)
+                    raw
+                }
+
+                // 2. Unwrap the photo's DEK (same logic as loadEncryptedContent).
+                val wrappedDek = upload.wrappedDek
+                    ?: error("Upload has no wrapped DEK — cannot re-wrap for shared plot")
+                val rawDek = when (upload.dekFormat) {
+                    VaultCrypto.ALG_P256_ECDH_HKDF_V1 -> {
+                        val privkey = VaultSession.sharingPrivkey
+                            ?: error("Sharing key not loaded")
+                        VaultCrypto.unwrapWithSharingKey(wrappedDek, privkey)
+                    }
+                    VaultCrypto.ALG_PLOT_AES256GCM_V1 -> {
+                        // Already wrapped under a plot key — unwrap it.
+                        val sourceKey = VaultSession.plotKeys.values.firstOrNull { key ->
+                            runCatching { VaultCrypto.unwrapDekWithPlotKey(wrappedDek, key) }.isSuccess
+                        } ?: error("No plot key available to unwrap source DEK")
+                        VaultCrypto.unwrapDekWithPlotKey(wrappedDek, sourceKey)
+                    }
+                    else -> VaultCrypto.unwrapDekWithMasterKey(wrappedDek, VaultSession.masterKey)
+                }
+
+                // 3. Re-wrap the DEK under the target plot key.
+                val rewrappedDek = VaultCrypto.wrapDekWithPlotKey(rawDek, plotKey)
+                val wrappedDekB64 = Base64.encodeToString(rewrappedDek, Base64.NO_WRAP)
+
+                // 4. Re-wrap the thumbnail DEK if present.
+                var wrappedThumbB64: String? = null
+                var thumbDekFormat: String? = null
+                val wrappedThumbDek = upload.wrappedThumbnailDek
+                if (wrappedThumbDek != null) {
+                    val rawThumb = when (upload.thumbnailDekFormat) {
+                        VaultCrypto.ALG_P256_ECDH_HKDF_V1 -> {
+                            val privkey = VaultSession.sharingPrivkey
+                                ?: error("Sharing key not loaded")
+                            VaultCrypto.unwrapWithSharingKey(wrappedThumbDek, privkey)
+                        }
+                        VaultCrypto.ALG_PLOT_AES256GCM_V1 -> {
+                            val sourceKey = VaultSession.plotKeys.values.firstOrNull { key ->
+                                runCatching { VaultCrypto.unwrapDekWithPlotKey(wrappedThumbDek, key) }.isSuccess
+                            } ?: error("No plot key available to unwrap thumbnail DEK")
+                            VaultCrypto.unwrapDekWithPlotKey(wrappedThumbDek, sourceKey)
+                        }
+                        else -> VaultCrypto.unwrapDekWithMasterKey(wrappedThumbDek, VaultSession.masterKey)
+                    }
+                    val rewrappedThumb = VaultCrypto.wrapDekWithPlotKey(rawThumb, plotKey)
+                    wrappedThumbB64 = Base64.encodeToString(rewrappedThumb, Base64.NO_WRAP)
+                    thumbDekFormat = VaultCrypto.ALG_PLOT_AES256GCM_V1
+                }
+
+                // 5. Call the server.
+                api.addPlotItem(
+                    plotId = plotId,
+                    uploadId = upload.id,
+                    wrappedItemDek = wrappedDekB64,
+                    itemDekFormat = VaultCrypto.ALG_PLOT_AES256GCM_V1,
+                    wrappedThumbnailDek = wrappedThumbB64,
+                    thumbnailDekFormat = thumbDekFormat,
+                )
+                _addToPlotResult.value = AddToPlotResult.Success
+            }.onFailure { e ->
+                val msg = e.message ?: "Couldn't add to plot"
+                // 409 Conflict → already in plot
+                if (msg.contains("409")) {
+                    _addToPlotResult.value = AddToPlotResult.AlreadyPresent
+                } else {
+                    _addToPlotResult.value = AddToPlotResult.Error(msg)
+                }
+            }
         }
     }
 }
