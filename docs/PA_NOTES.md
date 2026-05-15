@@ -97,28 +97,22 @@ Agent naming convention: `developer-1`, `developer-2`, `security`, `test-manager
 
 ## Pending actions (requires Bret)
 
-- **Disable old staging API key version 1** (2026-05-15): version 2 is live; disable version 1:
-  `gcloud secrets versions disable 1 --secret=heirlooms-test-api-key --project heirlooms-495416`
+- **SEC-009 Part 2 — biometric gate**: review Options A/B/C in the SEC-009 task file and decide before next iteration dispatch.
 
-- **Activate prevention hook in main worktree** (2026-05-15):
-  `git config core.hooksPath .githooks`
-  Also add this line to `scripts/create-agent-workspace.sh` so new worktrees get it automatically.
-
-- **v0.54 iteration — next session checklist** (Phase 5 → 7):
-  1. Docker Desktop restart
-  2. Build + deploy v0.54 server and web images to staging
-  3. **Review manager/architect outputs** before activating TST-007:
+- **v0.54 iteration — Phase 6 → 7**:
+  1. ✅ Docker Desktop restart — done 2026-05-15
+  2. ✅ Deploy v0.54 server + web to staging — done 2026-05-15 (server rev 00004-gjv, web rev 00003-z6z)
+  3. ✅ Old staging API key version 1 disabled — done 2026-05-15
+  4. ✅ Prevention hook activated (`git config core.hooksPath .githooks`) — done 2026-05-15
+  5. **Review manager/architect outputs** before activating TST-007:
      - `docs/briefs/ARCH-003_m11-capsule-crypto-brief.md` — M11 capsule crypto spec
      - `docs/briefs/ARCH-004_connections-data-model.md` — connections schema design
      - `docs/envelope_format.md` — envelope format amendment (ARCH-005 changes)
-     - `docs/ops/runbook.md` — deployment runbook (OPS-001)
-     - `docs/testing/TST-007_journey-diagrams.md` — Mermaid journey diagrams for all 12 test journeys (being generated now by Architect on branch agent/architect/TST-007-diagrams — merge before review)
-  4. Activate TST-007 (12-journey v0.54 staging checklist)
-  5. Triage any bugs found → critical re-enter iteration, minor go to queue
-  6. Once staging green + manager outputs approved → Operations Manager prepares production release plan for v0.54
-  7. Bret approves and promotes to production
-
-- **SEC-009 Part 2 — biometric gate**: review Options A/B/C in the SEC-009 task file and decide before next iteration dispatch.
+     - `docs/ops/runbook.md` — deployment runbook (OPS-001) *(already reviewed)*
+  6. Activate TST-007 (12-journey v0.54 staging checklist)
+  7. Triage bugs → critical re-enter iteration, minor go to queue
+  8. Once staging green → Operations Manager prepares v0.54 production release plan
+  9. Bret approves and promotes to production
 
 ## Task system
 
