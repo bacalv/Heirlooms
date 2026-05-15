@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.MultiFormatWriter
 import digital.heirlooms.api.HeirloomsApi
+import digital.heirlooms.app.BuildConfig
 import digital.heirlooms.ui.common.LocalHeirloomsApi
 import digital.heirlooms.ui.theme.Earth
 import digital.heirlooms.ui.theme.Forest
@@ -52,7 +53,21 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-private const val INVITE_BASE_URL = "https://heirlooms.digital"
+/**
+ * Web base URL derived from the flavor's API base URL (BuildConfig.BASE_URL_OVERRIDE).
+ *
+ * - Staging API:  https://test.api.heirlooms.digital  → https://test.heirlooms.digital
+ * - Prod API:     "" (empty — no override)             → https://heirlooms.digital
+ *
+ * This mirrors the approach used to fix BUG-003 in UploadWorker.
+ */
+private val INVITE_BASE_URL: String
+    get() = if (BuildConfig.BASE_URL_OVERRIDE.isNotEmpty())
+        BuildConfig.BASE_URL_OVERRIDE
+            .replace("test.api.", "test.")
+            .replace("api.", "")
+            .trimEnd('/')
+    else "https://heirlooms.digital"
 private const val QR_SIZE = 300
 
 private fun generateQrBitmap(content: String): Bitmap? = try {
