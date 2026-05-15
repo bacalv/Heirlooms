@@ -65,7 +65,15 @@ function RequireAuth() {
 }
 
 export default function App() {
-  const [sessionToken, setSessionTokenState] = useState(() => localStorage.getItem(LS_TOKEN) ?? null)
+  const [sessionToken, setSessionTokenState] = useState(() => {
+    // One-time migration: move stale token from localStorage to sessionStorage.
+    const stale = localStorage.getItem(LS_TOKEN)
+    if (stale) {
+      sessionStorage.setItem(LS_TOKEN, stale)
+      localStorage.removeItem(LS_TOKEN)
+    }
+    return sessionStorage.getItem(LS_TOKEN) ?? null
+  })
   const [username, setUsernameState] = useState(() => localStorage.getItem(LS_USERNAME) ?? null)
   const [displayName, setDisplayNameState] = useState(() => localStorage.getItem(LS_DISPLAY_NAME) ?? null)
   const [vaultUnlocked, setVaultUnlocked] = useState(false)
@@ -73,7 +81,7 @@ export default function App() {
   // On mount: validate cached session token and auto-unlock vault from IDB pairing
   // material if available (survives page refresh without re-entering passphrase).
   useEffect(() => {
-    const token = localStorage.getItem(LS_TOKEN)
+    const token = sessionStorage.getItem(LS_TOKEN)
     if (!token) return
     ;(async () => {
       try {
@@ -81,7 +89,7 @@ export default function App() {
         if (r.status === 401) {
           try { await clearPairingMaterial() } catch { /* best effort */ }
           setSessionTokenState(null)
-          localStorage.removeItem(LS_TOKEN)
+          sessionStorage.removeItem(LS_TOKEN)
           return
         }
         if (r.ok) {
@@ -108,10 +116,10 @@ export default function App() {
 
   function setSession(token, uname, dname) {
     if (token) {
-      localStorage.setItem(LS_TOKEN, token)
+      sessionStorage.setItem(LS_TOKEN, token)
       setSessionTokenState(token)
     } else {
-      localStorage.removeItem(LS_TOKEN)
+      sessionStorage.removeItem(LS_TOKEN)
       setSessionTokenState(null)
     }
     if (uname !== undefined) {
