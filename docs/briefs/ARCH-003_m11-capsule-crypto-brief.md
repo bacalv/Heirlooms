@@ -1,7 +1,8 @@
 # ARCH-003 — M11 Capsule Cryptography Brief
 
-*Authored: 2026-05-15. Status: approved. This document unlocks all M11 developer
-tasks. Read it before writing any M11 crypto code.*
+*Authored: 2026-05-15. Status: approved — amended 2026-05-15 (§9 blinding scheme
+addendum). This document unlocks all M11 developer tasks. Read it before writing
+any M11 crypto code.*
 
 ---
 
@@ -78,7 +79,12 @@ share; it never sees the plaintext structure above.
 
 **Shamir scheme:** GF(2^8) polynomial interpolation (standard Shamir over bytes,
 matching the `tss` family of implementations). The secret is the raw 32-byte capsule
-DEK or 32-byte master key. All shares must be the same length as the secret.
+`DEK` or 32-byte master key. All shares must be the same length as the secret.
+
+**Critical:** For tlock capsules, Shamir shares are computed over `DEK` (the full
+capsule content key), not over `DEK_client` (the blinding mask). Executor recovery
+reconstitutes `DEK` directly and does not require a call to `/tlock-key`. The
+blinding scheme is a server-delivery mechanism, not a property of the Shamir path.
 
 **Threshold:** Configurable per capsule. UX default is ⌈N/2⌉ + 1 (majority plus one)
 for 2 ≤ N ≤ 5, and ⌈0.6 × N⌉ for N > 5. The server enforces `1 ≤ threshold ≤ total_shares`.
@@ -127,11 +133,18 @@ ALTER TABLE capsules
 
 -- tlock fields. NULL on all non-tlock capsules.
 -- tlock_round and tlock_chain_id identify which drand round gates the key.
--- tlock_wrapped_key is the IBE ciphertext.
+-- tlock_wrapped_key is the IBE ciphertext. Under the blinding scheme (§9), the
+-- IBE ciphertext encrypts DEK_client (the client-side mask), not the full DEK.
+-- tlock_dek_tlock = DEK XOR DEK_client, stored at sealing time, served via /tlock-key.
+-- tlock_key_digest = SHA-256(DEK_tlock) stored at sealing time for tamper detection.
+-- SECURITY: tlock_dek_tlock MUST NEVER appear in application logs, access logs,
+-- or request traces. See §6.5 and ARCH-006 §6.2 for the full logging prohibition.
 ALTER TABLE capsules
     ADD COLUMN tlock_round          BIGINT  NULL,
     ADD COLUMN tlock_chain_id       TEXT    NULL,    -- drand chain hash (hex string)
-    ADD COLUMN tlock_wrapped_key    BYTEA   NULL;
+    ADD COLUMN tlock_wrapped_key    BYTEA   NULL,    -- IBE-encrypt(DEK_client)
+    ADD COLUMN tlock_dek_tlock      BYTEA   NULL,    -- DEK XOR DEK_client; delivered via /tlock-key
+    ADD COLUMN tlock_key_digest     BYTEA   NULL;    -- SHA-256(DEK_tlock); tamper detection
 
 -- Shamir fields. NULL on non-Shamir capsules.
 -- These columns describe the split configuration; actual shares live in executor_shares.
@@ -143,12 +156,18 @@ ALTER TABLE capsules
 
 -- One wrapped DEK per recipient (primary recipient uses capsules.wrapped_capsule_key;
 -- additional recipients use this table).
+-- For tlock capsules, wrapped_blinding_mask holds ECDH-wrap(DEK_client) for the
+-- Android/web blinded delivery path. See §9 for the full blinding scheme.
 CREATE TABLE capsule_recipient_keys (
-    capsule_id          UUID    NOT NULL REFERENCES capsules(id) ON DELETE CASCADE,
-    connection_id       UUID    NOT NULL REFERENCES connections(id),
-    wrapped_capsule_key BYTEA   NOT NULL,   -- capsule-ecdh-aes256gcm-v1 envelope
-    capsule_key_format  TEXT    NOT NULL DEFAULT 'capsule-ecdh-aes256gcm-v1',
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    capsule_id              UUID    NOT NULL REFERENCES capsules(id) ON DELETE CASCADE,
+    connection_id           UUID    NOT NULL REFERENCES connections(id),
+    wrapped_capsule_key     BYTEA   NOT NULL,   -- capsule-ecdh-aes256gcm-v1 envelope wrapping DEK
+    capsule_key_format      TEXT    NOT NULL DEFAULT 'capsule-ecdh-aes256gcm-v1',
+    -- wrapped_blinding_mask: ECDH-wrap(DEK_client) — non-NULL only on tlock capsules.
+    -- Used by Android/web to recover DEK_client and complete blinded decryption.
+    -- NULL on non-tlock capsules; iOS never reads this field.
+    wrapped_blinding_mask   BYTEA   NULL,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (capsule_id, connection_id)
 );
 
@@ -174,13 +193,22 @@ CREATE INDEX idx_executor_shares_nomination ON executor_shares(nomination_id);
 
 | Column | When non-NULL |
 |---|---|
-| `wrapped_capsule_key` | Capsule is sealed and has at least one bound recipient |
+| `wrapped_capsule_key` | Capsule is sealed and has at least one bound recipient. Always wraps `DEK` (not `DEK_client`) for iOS compatibility. |
 | `capsule_key_format` | Same as `wrapped_capsule_key` |
 | `tlock_round` | Capsule is sealed with a tlock gate |
 | `tlock_chain_id` | Same as `tlock_round` |
-| `tlock_wrapped_key` | Same as `tlock_round` |
+| `tlock_wrapped_key` | Same as `tlock_round`. IBE ciphertext wraps `DEK_client` under the blinding scheme (see §9). |
+| `tlock_dek_tlock` | Same as `tlock_round`. The server-held complement (`DEK XOR DEK_client`); served via `/tlock-key`. NEVER logged. |
+| `tlock_key_digest` | Same as `tlock_round`. SHA-256(`DEK_tlock`) for tamper detection. |
 | `shamir_threshold` | Capsule uses Shamir distribution |
 | `shamir_total_shares` | Same as `shamir_threshold` |
+
+For `capsule_recipient_keys`:
+
+| Column | When non-NULL |
+|---|---|
+| `wrapped_capsule_key` | Always — every row wraps `DEK` (for iOS compatibility on tlock capsules, and the only field used on non-tlock capsules) |
+| `wrapped_blinding_mask` | Tlock capsules only — wraps `DEK_client` for the Android/web blinded path (see §9) |
 
 ---
 
@@ -273,45 +301,151 @@ capsule from the delivery query until `now() >= unlock_at`.
 
 ---
 
-## 6. iOS compatibility — sealed-without-tlock
+## 6. iOS compatibility — blinding scheme and dual ECDH fields for tlock capsules
 
 tlock/BLS12-381 is Android and web only in M11. iOS cannot produce or consume
 tlock material. However, iOS can still unseal any capsule addressed to an iOS user,
-provided the capsule has the ECDH-wrapped path.
+provided the capsule has the ECDH-wrapped path for the full `DEK`.
 
-**Rule:** Every sealed capsule MUST have a `capsule-ecdh-aes256gcm-v1` wrapped DEK
-for every bound recipient, regardless of whether tlock is also used. The tlock path
-is an additional layer; it is never the only path.
+### 6.1 The blinding scheme (tlock capsules only)
 
-**What a sealed-without-tlock capsule looks like (iOS-readable):**
+For tlock-sealed capsules, the M11 design uses a *blinding scheme* to ensure the
+server never sees the capsule `DEK` even while brokering key delivery after the
+tlock round publishes:
+
+```
+DEK          — the 32-byte capsule content key (generated by the sealing client)
+DEK_client   — a 32-byte random mask generated by the sealing client
+DEK_tlock    = DEK XOR DEK_client   — the server-side component
+```
+
+At sealing time the client:
+1. Generates `DEK` (the real content key).
+2. Generates `DEK_client` (random 32 bytes — the client-held mask).
+3. Computes `DEK_tlock = DEK XOR DEK_client`.
+4. IBE-encrypts `DEK_client` (not `DEK`) under the tlock public key → stored in
+   `capsules.tlock_wrapped_key`.
+5. Sends `DEK_tlock` (32 bytes) in the sealing request as `tlock.dek_tlock` → server
+   stores it in `capsules.tlock_dek_tlock` (delivered to Android/web via `/tlock-key`).
+6. Sends `tlock_key_digest = SHA-256(DEK_tlock)` → stored in `capsules.tlock_key_digest`
+   for tamper detection at delivery time.
+7. ECDH-wraps `DEK` → `wrapped_capsule_key` (iOS-compatible direct path).
+8. ECDH-wraps `DEK_client` → `wrapped_blinding_mask` (Android/web blinded path).
+
+After the tlock round publishes, the server uses `provider.decrypt()` solely to confirm
+the IBE gate is open (non-null return = round is live). It then serves the already-stored
+`capsules.tlock_dek_tlock` value via `/tlock-key`. See §6.2 for the full delivery flow.
+
+### 6.2 Decryption path by platform
+
+**iOS (no BLS12-381 capability):**
+1. Receives `wrapped_capsule_key` from the server.
+2. ECDH-unwraps with its sharing private key → recovers `DEK`.
+3. Decrypts content. Done. No `/tlock-key` call, no BLS12-381, no XOR.
+
+**Android / web (full tlock path):**
+1. Receives `wrapped_blinding_mask` from the server.
+2. ECDH-unwraps with its sharing private key → recovers `DEK_client`.
+3. Calls `GET /api/capsules/:id/tlock-key` (authenticated) to obtain `DEK_tlock`.
+   The server has recovered `DEK_tlock` via `TimeLockProvider.decrypt()` and returns
+   it only after the tlock round has published and `unlock_at` has passed.
+4. Computes `DEK = DEK_client XOR DEK_tlock`.
+5. Decrypts content.
+
+**Security property:** The server holds `DEK_tlock` (the XOR complement) but never
+`DEK_client` (the client mask) — that is recovered by the client from its own
+ECDH-wrapped copy. Neither party alone holds `DEK`; reconstruction requires both
+components. This is the blinding guarantee.
+
+**Shamir recovery path:** Shamir shares are always computed over `DEK` (the full
+content key), not over `DEK_client`. Executor devices that reconstruct the key via
+Shamir do not need to call `/tlock-key` and do not interact with the blinding scheme.
+See §7.
+
+### 6.3 iOS contradiction resolution — Option A (chosen)
+
+A contradiction exists between the blinding scheme and iOS compatibility: if
+`wrapped_capsule_key` wrapped `DEK_client` (the mask), iOS would only recover the
+mask and could not decrypt content. Three options were considered:
+
+- **Option A (chosen):** Store two ECDH-wrapped values per recipient on tlock capsules.
+  `wrapped_capsule_key` always wraps `DEK` (preserving iOS compatibility). A new
+  `wrapped_blinding_mask` field in `capsule_recipient_keys` wraps `DEK_client` for
+  the Android/web blinded path. iOS uses `wrapped_capsule_key` and ignores
+  `wrapped_blinding_mask`. Android/web use the blinded path.
+- **Option B (rejected):** Exclude iOS recipients from tlock capsules. Too restrictive —
+  iOS users could not receive tlock-sealed content at all.
+- **Option C (rejected):** Let the sealing client choose the variant based on recipient
+  device types. Creates a split-field interpretation that is hard to validate and audit.
+
+**Option A rationale:** iOS gets the existing non-blinded path (which matches its
+current behaviour and security model). The blinding security improvement applies to
+Android and web. All platforms can receive the same tlock-sealed capsule without any
+capability negotiation.
+
+### 6.4 Schema shape for tlock capsules (all platforms)
+
+**Non-tlock capsule (all platforms including iOS):**
 
 ```json
 {
-  "capsule_id": "...",
-  "wrapped_capsule_key": "<base64url: capsule-ecdh-aes256gcm-v1 envelope>",
+  "wrapped_capsule_key": "<base64url: ECDH-wrap(DEK)>",
   "capsule_key_format": "capsule-ecdh-aes256gcm-v1",
   "tlock_round": null,
   "tlock_chain_id": null,
   "tlock_wrapped_key": null,
-  "shamir_threshold": null,
-  "shamir_total_shares": null
+  "tlock_key_digest": null
 }
 ```
 
-The iOS client unwraps `wrapped_capsule_key` using its sharing private key (P-256,
-Keychain/Secure Enclave), recovers the capsule DEK, and decrypts the content. No
-BLS12-381 or drand library required.
+**Tlock capsule (iOS uses `wrapped_capsule_key`; Android/web use `wrapped_blinding_mask`):**
 
-**What a sealed-with-tlock capsule looks like (Android/web readable, iOS reads via ECDH path):**
+```json
+{
+  "wrapped_capsule_key": "<base64url: ECDH-wrap(DEK)>",
+  "capsule_key_format": "capsule-ecdh-aes256gcm-v1",
+  "tlock_round": 1234567,
+  "tlock_chain_id": "dbd506d6...",
+  "tlock_wrapped_key": "<base64url: IBE-encrypt(DEK_client)>",
+  "tlock_key_digest": "<base64url: SHA-256(DEK_tlock)>"
+}
+```
 
-The tlock fields are populated, but `wrapped_capsule_key` and `capsule_key_format`
-are ALSO populated for the recipient's ECDH path. iOS ignores the tlock fields and
-uses the ECDH path. Android and web use tlock if it is available (round published),
-falling back to ECDH if the client chooses (ECDH is always present and always valid
-after unlock_at).
+`wrapped_blinding_mask` lives in `capsule_recipient_keys` (one row per recipient):
+
+```json
+{
+  "connection_id": "<uuid>",
+  "wrapped_capsule_key": "<base64url: ECDH-wrap(DEK)>",
+  "wrapped_blinding_mask": "<base64url: ECDH-wrap(DEK_client)>"
+}
+```
+
+### 6.5 `/tlock-key` endpoint security requirements
+
+The `/tlock-key` response delivers `DEK_tlock` to authenticated Android/web clients.
+
+**Logging requirement (CRITICAL):** The `/tlock-key` response body MUST NEVER be
+written to application logs, access logs, or request-tracing systems. The body
+contains a 32-byte value that — combined with the client's ECDH-wrapped mask — gives
+the capsule `DEK`. Log the request (capsule ID, caller user ID, status code, latency)
+but redact or omit the response body entirely. This applies to all logging middleware,
+request-interceptors, and any distributed tracing instrumentation.
+
+**Gate requirements:** The server MUST NOT return `DEK_tlock` until:
+1. The tlock round has published (confirmed via `TimeLockProvider.decrypt()` returning
+   non-null), AND
+2. `now() >= capsules.unlock_at`.
 
 **Server enforcement:** Reject any sealing request where `tlock_round IS NOT NULL`
-but `wrapped_capsule_key IS NULL`. The tlock path must always accompany an ECDH path.
+but `wrapped_capsule_key IS NULL` (the iOS-compatible full-DEK wrap must always be
+present). Also reject if `wrapped_blinding_mask IS NULL` for any recipient on a tlock
+capsule (all recipients need both wraps).
+
+**Tamper detection:** At delivery time the server SHOULD verify
+`SHA-256(DEK_tlock) == capsules.tlock_key_digest` before returning `DEK_tlock`.
+A mismatch indicates data corruption or tampering and should be treated as a server
+error (HTTP 500), with the event logged at ERROR level including the capsule ID.
 
 ---
 
@@ -412,21 +546,37 @@ Content-Type: application/json
 {
   // Per-recipient wrapped DEKs. At least one entry required.
   // Primary recipient ALSO stored in capsules.wrapped_capsule_key.
+  // For tlock capsules, wrapped_blinding_mask must ALSO be present for each recipient
+  // (ECDH-wrap(DEK_client) — used by Android/web for the blinded delivery path).
+  // For non-tlock capsules, wrapped_blinding_mask is omitted or null.
   "recipient_keys": [
     {
       "connection_id": "<uuid>",
-      // base64url of capsule-ecdh-aes256gcm-v1 asymmetric envelope
+      // base64url of capsule-ecdh-aes256gcm-v1 asymmetric envelope wrapping DEK.
+      // Always present. Used by iOS directly; also present for non-blinded fallback.
       "wrapped_capsule_key": "<base64url>",
-      "capsule_key_format": "capsule-ecdh-aes256gcm-v1"
+      "capsule_key_format": "capsule-ecdh-aes256gcm-v1",
+      // base64url of capsule-ecdh-aes256gcm-v1 asymmetric envelope wrapping DEK_client.
+      // Required for tlock capsules; omit or null for non-tlock capsules.
+      "wrapped_blinding_mask": "<base64url or null>"
     }
   ],
 
   // tlock gate — omit entirely (or send null fields) for non-tlock capsules.
+  // wrapped_key is IBE-encrypt(DEK_client) — NOT IBE-encrypt(DEK) (see §6.1).
+  // dek_tlock = DEK XOR DEK_client — the server-held complement, delivered via /tlock-key.
+  // tlock_key_digest = SHA-256(dek_tlock); server validates SHA-256(dek_tlock) == tlock_key_digest
+  //   at sealing time. dek_tlock is key material — subject to the same logging prohibition
+  //   as the /tlock-key response body (see §6.5).
   "tlock": {
     "round": 1234567,                          // bigint
     "chain_id": "dbd506d6ef76e5f386f41c651dcb808c5bcbd75471cc4eafa3f4df7ad4e4c493",
-    // base64url of the raw IBE ciphertext (not a Heirlooms envelope)
-    "wrapped_key": "<base64url>"
+    // base64url of the raw IBE ciphertext (not a Heirlooms envelope); encrypts DEK_client
+    "wrapped_key": "<base64url>",
+    // base64url of 32-byte DEK_tlock = DEK XOR DEK_client; stored in capsules.tlock_dek_tlock
+    "dek_tlock": "<base64url>",
+    // base64url of SHA-256(DEK_tlock); stored for tamper detection at delivery time
+    "tlock_key_digest": "<base64url>"
   },                                            // or null / absent
 
   // Shamir configuration — omit entirely for non-Shamir capsules.
@@ -470,11 +620,16 @@ developer task, not specified here).
 tlock. The capsule DEK must be non-extractable during its lifetime in the browser —
 extract to bytes only at the instant of wrapping.
 
-**iOS:** Performs only the ECDH wrapping path. Sends `recipient_keys` with one entry,
-omits the `tlock` field entirely, omits `shamir` unless configured. The sealing
-request is valid — the server accepts it. iOS will only be used to seal capsules
-without tlock in M11; this is a UX decision (the author uses Android or web for
-capsules that need tlock), not a server constraint.
+**iOS:** Performs only the ECDH wrapping path. Sends `recipient_keys` with one entry
+(only `wrapped_capsule_key`, no `wrapped_blinding_mask`), omits the `tlock` field
+entirely, omits `shamir` unless configured. The sealing request is valid — the server
+accepts it. iOS will only be used to seal capsules without tlock in M11; this is a
+UX decision (the author uses Android or web for capsules that need tlock), not a
+server constraint.
+
+When iOS *receives* a tlock-sealed capsule (sealed by Android/web), it reads
+`wrapped_capsule_key` (which always wraps `DEK`) and ignores `wrapped_blinding_mask`
+and the tlock fields entirely. No `/tlock-key` call, no BLS12-381. See §6.
 
 ---
 
@@ -495,3 +650,66 @@ ARCH-005 (algorithm IDs)
 No M11 developer task should begin crypto implementation without reading this brief.
 Changes to algorithm IDs, field names, or the sealing request shape require updating
 this document and notifying all platform developers before code is written.
+
+---
+
+## 9. Security addendum — blinding scheme (added 2026-05-15)
+
+This section consolidates the blinding scheme design following Security Manager review.
+It supersedes any implicit assumptions in §§1–8 about what `tlock_wrapped_key` encrypts.
+
+### 9.1 Summary of the blinding scheme
+
+For tlock-sealed capsules, the IBE ciphertext in `tlock_wrapped_key` encrypts
+`DEK_client` (a random 32-byte mask), not the full capsule `DEK`. The complement
+`DEK_tlock = DEK XOR DEK_client` is what the server derives and delivers via
+`/tlock-key` after the round publishes. Neither the server nor drand ever holds `DEK`
+directly — the server holds only `DEK_tlock`, and the client holds only `DEK_client`.
+Reconstruction of `DEK` requires both components.
+
+For non-tlock capsules, there is no blinding scheme. `wrapped_capsule_key` wraps `DEK`
+directly and the above does not apply.
+
+### 9.2 Key assignments per scheme
+
+| Field / path | Non-tlock capsule | Tlock capsule |
+|---|---|---|
+| `wrapped_capsule_key` | ECDH-wrap(`DEK`) | ECDH-wrap(`DEK`) — iOS path |
+| `wrapped_blinding_mask` | absent | ECDH-wrap(`DEK_client`) — Android/web path |
+| `tlock_wrapped_key` | absent | IBE-encrypt(`DEK_client`) |
+| `tlock_dek_tlock` | absent | `DEK XOR DEK_client` (server-stored, never logged) |
+| `tlock_key_digest` | absent | SHA-256(`DEK_tlock`) |
+| Shamir shares | Shares of `DEK` | Shares of `DEK` (not `DEK_client`) |
+| `/tlock-key` response | N/A | Returns `DEK_tlock` |
+
+### 9.3 Invariants for implementors
+
+1. `wrapped_capsule_key` ALWAYS wraps `DEK` — no exceptions. This is the iOS
+   compatibility guarantee.
+2. `wrapped_blinding_mask` is ONLY present on tlock capsules and ALWAYS wraps
+   `DEK_client`.
+3. Shamir shares are computed over `DEK` regardless of whether tlock is used.
+4. The `/tlock-key` response body and `capsules.tlock_dek_tlock` MUST NEVER appear in
+   any log, trace, or metric. Log the request metadata (capsule ID, caller, latency,
+   status) but not the body. This prohibition also applies to `dek_tlock` in the sealing
+   request body — log that a tlock sealing request was received, not its key material.
+5. `tlock_key_digest = SHA-256(DEK_tlock)` is stored at sealing time and verified
+   at delivery time. A mismatch is a hard server error (HTTP 500, log at ERROR).
+6. The server MUST NOT return `DEK_tlock` via `/tlock-key` until both:
+   - `TimeLockProvider.decrypt()` returns non-null (round has published), AND
+   - `now() >= capsules.unlock_at`.
+
+### 9.4 iOS compatibility guarantee (restated)
+
+iOS clients in M11 and beyond can receive any tlock-sealed capsule sent by Android
+or web, because `wrapped_capsule_key` always holds ECDH-wrap(`DEK`). iOS does not
+need BLS12-381, does not call `/tlock-key`, and does not participate in the blinding
+scheme. The blinding scheme is transparent to iOS.
+
+### 9.5 Why the blinding scheme matters
+
+Without blinding, `tlock_wrapped_key` would encrypt the full `DEK`. After the round
+publishes, the server could call `TimeLockProvider.decrypt()` and obtain `DEK` — which
+means a server compromise after unlock exposes all capsule content. The blinding scheme
+ensures that even a fully compromised server post-unlock cannot decrypt capsule content
+without also compromising the client's ECDH private key (which gives `DEK_client`).
