@@ -91,6 +91,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [BUG-014](done/developer-3_BUG-014_register-500-duplicate-device-id.md) | Register 409 for duplicate device_id + atomic transaction | Bug Fix | 2026-05-15 |
 | [BUG-016](done/developer-2_BUG-016_shared-plot-items-not-decrypting-for-member.md) | Shared plot items not decrypting — sharing key overwrite on web pairing fixed | Bug Fix | 2026-05-15 |
 | [BUG-013](done/developer-1_BUG-013_detail-view-triggers-rotation.md) | Detail view EXIF rotation no longer silently staged as server save | Bug Fix | 2026-05-15 |
+| [BUG-018](done/developer-1_BUG-018_shared-plot-trellis-no-staging-dek-not-rewrapped.md) | Shared-plot trellis always requires staging — prevent items flowing without DEK re-wrap | Bug Fix | 2026-05-15 |
 
 ## Brainstorming
 

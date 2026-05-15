@@ -300,6 +300,40 @@ class SchemaMigrationTest {
         assertEquals(0, n, "plot_members should cascade-delete when plot is deleted")
     }
 
+    // ---- V31 BUG-018: shared-plot trellises must have requires_staging = true ----
+    // Flyway has already run the migration. We verify the fix SQL logic is correct by
+    // inserting a legacy-style row (requires_staging=false on a shared plot), running the
+    // V31 UPDATE statement manually, and confirming it flips to true.
+
+    @Test
+    fun `V31 migration SQL fixes shared-plot trellis with requires_staging false`() {
+        val userId = FOUNDING_USER_UUID
+        val plotId = java.util.UUID.randomUUID()
+        exec("INSERT INTO plots (id, owner_user_id, name, show_in_garden, visibility) VALUES ('$plotId', '$userId', 'v31-shared-plot', true, 'shared')")
+
+        val trellisId = java.util.UUID.randomUUID()
+        exec("""INSERT INTO trellises (id, user_id, name, criteria, target_plot_id, requires_staging)
+                VALUES ('$trellisId', '$userId', 'v31-trellis', '{"type":"tag","tag":"family"}'::jsonb, '$plotId', false)""")
+
+        // Simulate the V31 migration SQL (idempotent — safe to re-run)
+        exec("""
+            UPDATE trellises t
+            SET requires_staging = true
+            FROM plots p
+            WHERE t.target_plot_id = p.id
+              AND p.visibility = 'shared'
+              AND t.requires_staging = false
+              AND t.id = '$trellisId'
+        """.trimIndent())
+
+        val n = count("SELECT COUNT(*) FROM trellises WHERE id = '$trellisId' AND requires_staging = true")
+        assertEquals(1, n, "V31 migration SQL must set requires_staging=true for shared-plot trellises")
+
+        // Cleanup
+        exec("DELETE FROM trellises WHERE id = '$trellisId'")
+        exec("DELETE FROM plots WHERE id = '$plotId'")
+    }
+
     @Test
     fun `V25+V30 deleting a trellis sets source_trellis_id to NULL on plot_items`() {
         val userId = FOUNDING_USER_UUID

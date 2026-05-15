@@ -18,6 +18,8 @@ function FlowForm({ plots, initial, onSave, onCancel, saving, error }) {
 
   const collectionPlots = plots.filter((p) => !p.criteria && !p.is_system_defined)
   const selectedPlot = collectionPlots.find((p) => p.id === targetPlotId) ?? null
+  // BUG-018: shared plots always require staging (DEK re-wrapping needed for members)
+  const targetIsShared = selectedPlot?.visibility === 'shared' || initial?.targetPlotVisibility === 'shared'
 
   function handleSubmit(e) {
     e.preventDefault()
@@ -62,15 +64,21 @@ function FlowForm({ plots, initial, onSave, onCancel, saving, error }) {
         <CriteriaBuilder state={criteriaState} onChange={setCriteriaState} />
       </div>
 
-      <label className="flex items-center gap-2 cursor-pointer select-none">
-        <input
-          type="checkbox"
-          checked={!requiresStaging}
-          onChange={(e) => setRequiresStaging(!e.target.checked)}
-          className="accent-forest"
-        />
-        <span className="text-forest">Auto-approve — items matching this flow go straight to the plot without staging review</span>
-      </label>
+      {targetIsShared ? (
+        <p className="text-xs text-text-muted">
+          Staging is always required for shared plots so items can be re-encrypted for all members.
+        </p>
+      ) : (
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={!requiresStaging}
+            onChange={(e) => setRequiresStaging(!e.target.checked)}
+            className="accent-forest"
+          />
+          <span className="text-forest">Auto-approve — items matching this flow go straight to the plot without staging review</span>
+        </label>
+      )}
 
       {error && <p className="text-earth text-xs">{error}</p>}
 

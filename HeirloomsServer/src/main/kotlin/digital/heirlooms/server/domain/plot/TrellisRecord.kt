@@ -12,4 +12,6 @@ data class TrellisRecord(
     val requiresStaging: Boolean,
     val createdAt: Instant,
     val updatedAt: Instant,
+    /** Visibility of the target plot (joined from plots table). Empty string if plot not found. */
+    val targetPlotVisibility: String = "",
 )

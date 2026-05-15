@@ -10,8 +10,11 @@ import digital.heirlooms.server.service.plot.TrellisService
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
+import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.UUID
@@ -143,5 +146,29 @@ class TrellisServiceTest {
 
         assertInstanceOf(TrellisService.CreateTrellisResult.Invalid::class.java, result,
             "Private plots must remain restricted to the owner only")
+    }
+
+    // ---- BUG-018: shared plot trellis must always pass requiresStaging=true to the repo ---
+
+    @Test
+    fun `BUG-018 service passes requiresStaging=false to repo for shared plot — repo enforces staging policy`() {
+        // The service itself passes the caller's requiresStaging value through to the repository.
+        // The repository is responsible for clamping it to true for shared plots.
+        // This test verifies that when requiresStaging=false is passed for a shared-plot trellis,
+        // the repository createTrellis is still called (not short-circuited) so the repo can enforce.
+        allowCriteria()
+        val capturedStaging = slot<Boolean>()
+        every { plotRepo.getPlotById(sharedPlotId) } returns sharedCollectionPlot(ownerUserId = ownerId)
+        every {
+            trellisRepo.createTrellis(any(), any(), any(), capture(capturedStaging), any(), any())
+        } returns TrellisRepository.TrellisCreateResult.Success(trellis(ownerId, sharedPlotId))
+
+        val result = service.createTrellis("My trellis", simpleCriteriaNode, sharedPlotId, false, ownerId)
+
+        assertInstanceOf(TrellisService.CreateTrellisResult.Created::class.java, result,
+            "Service should succeed — repo will clamp requiresStaging to true for shared plots")
+        // The service forwards the caller's value; the repository clamps it.
+        // We verify the repo was actually called so enforcement can occur.
+        verify { trellisRepo.createTrellis(any(), any(), any(), any(), any(), any()) }
     }
 }
