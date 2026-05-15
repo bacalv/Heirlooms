@@ -32,6 +32,9 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | Developer | TST-005 |
 | [SEC-002](queue/SEC-002_auth-crypto-coverage.md) | 100% coverage plan for auth/crypto paths | Security | High | SecurityManager | TST-004 |
 | [DOC-001](queue/DOC-001_uml-sequence-diagrams.md) | UML sequence diagrams from test output | Docs | Low | Developer | TST-004 |
+| [SEC-007](queue/SEC-007_android-session-token-keystore.md) | Android: encrypt session token with Keystore | Security | High | Developer | — |
+| [SEC-008](queue/SEC-008_web-csp-session-token.md) | Web: CSP header + session token off localStorage | Security | High | Developer | — |
+| [SEC-009](queue/SEC-009_android-biometric-flag-secure.md) | Android: FLAG_SECURE + biometric vault-unlock gate | Security | Medium | Developer | SEC-007 |
 
 ## In Progress
 
@@ -62,6 +65,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [IOS-001](done/IOS-001_qr-scanner-avfoundation.md) | Complete iOS QRScannerView (AVFoundation) | iOS | 2026-05-15 |
 | [SEC-001](done/SEC-001_security-hardening.md) | Security hardening + threat model | Security | 2026-05-15 |
 | [BUG-001](done/BUG-001_keychain-master-key-slot-collision.md) | Keychain slot collision — master key vs plot key | Bug Fix | 2026-05-15 |
+| [SEC-003](done/SEC-003_client-security-review.md) | Client security flaw testing plan | Security | 2026-05-15 |
 | [SEC-004](done/SEC-004_rate-limiting-auth-logging.md) | Rate limiting + failed-login logging | Security | 2026-05-15 |
 | [SEC-005](done/SEC-005_session-invalidation-mime-validation.md) | Session invalidation + MIME validation | Security | 2026-05-15 |
 | [SEC-006](done/SEC-006_criteria-date-input-validation.md) | Criteria date input validation | Security | 2026-05-15 |
