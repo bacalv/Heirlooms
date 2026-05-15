@@ -16,6 +16,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [BUG-015](queue/BUG-015_web-garden-shared-plot-row-still-stale.md) | Web garden shared plot row still stale after trellis routing — BUG-012 fix incomplete | Bug Fix | Medium | Developer | — |
 | [BUG-016](queue/BUG-016_shared-plot-items-not-decrypting-for-member.md) | Shared plot items uploaded from web not decrypting for Android member (Fire 1) | Bug Fix | High | Developer | — |
 | [UX-003](queue/UX-003_garden-polling-interval.md) | Garden polling interval — 5s default, Android configurable (2/5/10/30s) | UX | Medium | Developer | — |
+| [BUG-017](queue/BUG-017_android-plot-key-not-loaded-after-accept-invite.md) | Android — shared plot items don't decrypt after accepting invite until app restart | Bug Fix | High | Developer | — |
 | [FEAT-003](queue/FEAT-003_android-account-pairing-recovery.md) | Android account pairing / recovery — pair a fresh Android install to an existing account | Feature | Medium | Developer | — |
 | [BUG-006](queue/BUG-006_android-nav-backstack.md) | Android nav back-stack not cleared from burger menu | Bug Fix | Medium | Developer | — |
 | [TST-006](queue/TST-006_android-remote-control-investigation.md) | Investigate remote-controlled Android testing for E2E automation | Testing | Medium | TestManager | — |
