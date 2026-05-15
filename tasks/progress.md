@@ -23,7 +23,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | Developer | — |
 | [SEC-002](queue/SEC-002_auth-crypto-coverage.md) | 100% coverage plan for auth/crypto paths | Security | High | SecurityManager | TST-004 |
 | [UX-001](queue/UX-001_shared-plot-button-tap-targets.md) | Android: shared plot action buttons have insufficient tap targets | UX | Low | Developer | — |
-| [WEB-001](queue/WEB-001_friends-list-page.md) | Web: friends list page | Feature | Low | Developer | — |
+| [WEB-001](queue/WEB-001_friends-list-page.md) | Web: friends list page | Feature | Medium | Developer | — |
 | [DOC-001](queue/DOC-001_uml-sequence-diagrams.md) | UML sequence diagrams from test output | Docs | Low | Developer | TST-004 |
 | [OPS-002](queue/OPS-002_new-environment-setup-guide.md) | New environment setup guide | Operations | Low | OpsManager | — |
 

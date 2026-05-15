@@ -2,7 +2,7 @@
 id: WEB-001
 title: Web: friends list page
 category: Feature
-priority: Low
+priority: Medium
 status: queued
 depends_on: []
 touches:
