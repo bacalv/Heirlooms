@@ -61,7 +61,7 @@ import digital.heirlooms.ui.garden.CompostHeapScreen
 import digital.heirlooms.ui.share.UploadProgressScreen
 import digital.heirlooms.ui.garden.GardenScreen
 import digital.heirlooms.ui.garden.PhotoDetailScreen
-import digital.heirlooms.ui.flows.PlotBulkStagingScreen
+import digital.heirlooms.ui.trellises.PlotBulkStagingScreen
 import digital.heirlooms.ui.settings.SettingsScreen
 import digital.heirlooms.ui.shared.SharedPlotsScreen
 import digital.heirlooms.ui.social.FriendsScreen
@@ -202,7 +202,7 @@ fun MainNavigation(apiKey: String, onApiKeyReset: () -> Unit, store: digital.hei
                 onDiagnosticsTap = { navController.navigate(Routes.DIAGNOSTICS) },
                 onDevicesAccessTap = { navController.navigate(Routes.DEVICES_ACCESS) },
                 onFriendsTap = { navController.navigate(Routes.FRIENDS) },
-                onFlowsTap = { navController.navigate(Routes.FLOWS) },
+                onTrellisesTap = { navController.navigate(Routes.FLOWS) },
                 displayName = displayName,
             )
         }
@@ -376,9 +376,9 @@ private fun AppNavHost(navController: NavController, apiKey: String, onApiKeyRes
             FriendsScreen(onBack = { navController.popBackStack() })
         }
         composable(Routes.FLOWS) {
-            digital.heirlooms.ui.flows.FlowsScreen(
+            digital.heirlooms.ui.trellises.TrellisesScreen(
                 onBack = { navController.popBackStack() },
-                onStagingTap = { flowId, plotId, isSharedPlot -> navController.navigate(Routes.staging(flowId, plotId, isSharedPlot)) },
+                onStagingTap = { trellisId, plotId, isSharedPlot -> navController.navigate(Routes.staging(trellisId, plotId, isSharedPlot)) },
             )
         }
         composable(
@@ -388,11 +388,11 @@ private fun AppNavHost(navController: NavController, apiKey: String, onApiKeyRes
                 navArgument("plotId") { type = NavType.StringType },
             ),
         ) { backStack ->
-            val flowId = backStack.arguments?.getString("flowId") ?: return@composable
+            val trellisId = backStack.arguments?.getString("flowId") ?: return@composable
             val plotId = backStack.arguments?.getString("plotId") ?: return@composable
             val isSharedPlot = backStack.arguments?.getString("isSharedPlot")?.toBooleanStrictOrNull() ?: false
-            digital.heirlooms.ui.flows.StagingScreen(
-                flowId = flowId,
+            digital.heirlooms.ui.trellises.StagingScreen(
+                trellisId = trellisId,
                 plotId = plotId,
                 isSharedPlot = isSharedPlot,
                 onBack = { navController.popBackStack() },

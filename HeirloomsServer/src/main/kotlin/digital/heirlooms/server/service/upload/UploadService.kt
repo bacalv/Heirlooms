@@ -8,7 +8,7 @@ import digital.heirlooms.server.domain.upload.UploadSort
 import digital.heirlooms.server.storage.DirectUploadSupport
 import digital.heirlooms.server.storage.FileStore
 import digital.heirlooms.server.storage.StorageKey
-import digital.heirlooms.server.repository.plot.FlowRepository
+import digital.heirlooms.server.repository.plot.TrellisRepository
 import digital.heirlooms.server.repository.plot.PlotRepository
 import digital.heirlooms.server.repository.social.SocialRepository
 import digital.heirlooms.server.repository.storage.BlobRepository
@@ -34,7 +34,7 @@ class UploadService(
     private val blobRepo: BlobRepository,
     private val socialRepo: SocialRepository,
     private val plotRepo: PlotRepository,
-    private val flowRepo: FlowRepository,
+    private val flowRepo: TrellisRepository,
     private val storage: FileStore,
     private val thumbnailGenerator: (ByteArray, String) -> ByteArray? = ::generateThumbnail,
     private val metadataExtractor: (ByteArray, String) -> MediaMetadata = MetadataExtractor()::extract,
@@ -243,7 +243,7 @@ class UploadService(
             ),
             userId,
         )
-        if (tags.isNotEmpty()) uploadRepo.updateTags(id, tags, userId) { conn, uploadId, uid -> flowRepo.runUnstagedFlowsForUpload(conn, uploadId, uid) }
+        if (tags.isNotEmpty()) uploadRepo.updateTags(id, tags, userId) { conn, uploadId, uid -> flowRepo.runUnstagedTrellisesForUpload(conn, uploadId, uid) }
         runCatching { blobRepo.deletePendingBlob(storageKey) }
         if (thumbStorageKey != null) runCatching { blobRepo.deletePendingBlob(thumbStorageKey) }
         if (previewStorageKey != null) runCatching { blobRepo.deletePendingBlob(previewStorageKey) }
@@ -290,7 +290,7 @@ class UploadService(
             ),
             userId,
         )
-        if (tags.isNotEmpty()) uploadRepo.updateTags(id, tags, userId) { conn, uploadId, uid -> flowRepo.runUnstagedFlowsForUpload(conn, uploadId, uid) }
+        if (tags.isNotEmpty()) uploadRepo.updateTags(id, tags, userId) { conn, uploadId, uid -> flowRepo.runUnstagedTrellisesForUpload(conn, uploadId, uid) }
         runCatching { blobRepo.deletePendingBlob(storageKey) }
         return ConfirmResult.Created
     }
@@ -462,7 +462,7 @@ class UploadService(
     fun recordView(id: java.util.UUID, userId: java.util.UUID) = uploadRepo.recordView(id, userId)
 
     fun updateTags(id: java.util.UUID, tags: List<String>, userId: java.util.UUID) =
-        uploadRepo.updateTags(id, tags, userId) { conn, uploadId, uid -> flowRepo.runUnstagedFlowsForUpload(conn, uploadId, uid) }
+        uploadRepo.updateTags(id, tags, userId) { conn, uploadId, uid -> flowRepo.runUnstagedTrellisesForUpload(conn, uploadId, uid) }
 
     // ---- Compost cleanup (background) --------------------------------------
 

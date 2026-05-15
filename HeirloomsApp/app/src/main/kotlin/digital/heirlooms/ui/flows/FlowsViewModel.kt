@@ -1,8 +1,8 @@
-package digital.heirlooms.ui.flows
+package digital.heirlooms.ui.trellises
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import digital.heirlooms.api.Flow
+import digital.heirlooms.api.Trellis
 import digital.heirlooms.api.HeirloomsApi
 import digital.heirlooms.api.Plot
 import kotlinx.coroutines.async
@@ -11,55 +11,55 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-data class FlowWithCount(val flow: Flow, val pendingCount: Int)
+data class TrellisWithCount(val trellis: Trellis, val pendingCount: Int)
 
-sealed class FlowsState {
-    object Loading : FlowsState()
-    data class Ready(val flows: List<FlowWithCount>, val plots: List<Plot>) : FlowsState()
-    data class Error(val message: String) : FlowsState()
+sealed class TrellisesState {
+    object Loading : TrellisesState()
+    data class Ready(val trellises: List<TrellisWithCount>, val plots: List<Plot>) : TrellisesState()
+    data class Error(val message: String) : TrellisesState()
 }
 
-class FlowsViewModel : ViewModel() {
+class TrellisesViewModel : ViewModel() {
 
-    private val _state = MutableStateFlow<FlowsState>(FlowsState.Loading)
-    val state: StateFlow<FlowsState> = _state
+    private val _state = MutableStateFlow<TrellisesState>(TrellisesState.Loading)
+    val state: StateFlow<TrellisesState> = _state
 
     fun load(api: HeirloomsApi) {
         viewModelScope.launch {
-            _state.value = FlowsState.Loading
+            _state.value = TrellisesState.Loading
             try {
-                val flows = api.listFlows()
+                val trellises = api.listTrellises()
                 val plots = api.listPlots()
-                val flowsWithCounts = coroutineScope {
-                    flows.map { flow ->
+                val trellisesWithCounts = coroutineScope {
+                    trellises.map { trellis ->
                         async {
-                            val count = runCatching { api.getFlowStaging(flow.id).size }.getOrDefault(0)
-                            FlowWithCount(flow, count)
+                            val count = runCatching { api.getTrellisStaging(trellis.id).size }.getOrDefault(0)
+                            TrellisWithCount(trellis, count)
                         }
                     }.map { it.await() }
                 }
-                _state.value = FlowsState.Ready(flowsWithCounts, plots)
+                _state.value = TrellisesState.Ready(trellisesWithCounts, plots)
             } catch (e: Exception) {
-                _state.value = FlowsState.Error(e.message ?: "Couldn't load")
+                _state.value = TrellisesState.Error(e.message ?: "Couldn't load")
             }
         }
     }
 
-    fun createFlow(api: HeirloomsApi, name: String, targetPlotId: String, requiresStaging: Boolean, criteria: String) {
+    fun createTrellis(api: HeirloomsApi, name: String, targetPlotId: String, requiresStaging: Boolean, criteria: String) {
         viewModelScope.launch {
             try {
-                api.createFlow(name, criteria = criteria, targetPlotId = targetPlotId, requiresStaging = requiresStaging)
+                api.createTrellis(name, criteria = criteria, targetPlotId = targetPlotId, requiresStaging = requiresStaging)
                 load(api)
             } catch (_: Exception) { }
         }
     }
 
-    fun deleteFlow(api: HeirloomsApi, flowId: String) {
-        val current = _state.value as? FlowsState.Ready ?: return
-        _state.value = FlowsState.Ready(current.flows.filter { it.flow.id != flowId }, current.plots)
+    fun deleteTrellis(api: HeirloomsApi, trellisId: String) {
+        val current = _state.value as? TrellisesState.Ready ?: return
+        _state.value = TrellisesState.Ready(current.trellises.filter { it.trellis.id != trellisId }, current.plots)
         viewModelScope.launch {
             try {
-                api.deleteFlow(flowId)
+                api.deleteTrellis(trellisId)
                 load(api)
             } catch (_: Exception) {
                 _state.value = current

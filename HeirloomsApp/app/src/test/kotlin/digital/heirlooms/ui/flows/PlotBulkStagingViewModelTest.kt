@@ -1,4 +1,4 @@
-package digital.heirlooms.ui.flows
+package digital.heirlooms.ui.trellises
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi

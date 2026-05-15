@@ -1,4 +1,4 @@
-package digital.heirlooms.ui.flows
+package digital.heirlooms.ui.trellises
 
 import android.util.Base64
 import android.util.Log
@@ -24,11 +24,11 @@ class StagingViewModel : ViewModel() {
     private val _state = MutableStateFlow(StagingState())
     val state: StateFlow<StagingState> = _state
 
-    fun load(api: HeirloomsApi, flowId: String, plotId: String) {
+    fun load(api: HeirloomsApi, trellisId: String, plotId: String) {
         viewModelScope.launch {
             _state.value = _state.value.copy(loading = true)
             try {
-                val pending = api.getFlowStaging(flowId).map { it.upload }
+                val pending = api.getTrellisStaging(trellisId).map { it.upload }
                 val rejected = api.getRejectedItems(plotId).map { it.upload }
                 _state.value = StagingState(pending = pending, rejected = rejected, loading = false)
             } catch (_: Exception) {
@@ -37,7 +37,7 @@ class StagingViewModel : ViewModel() {
         }
     }
 
-    fun approve(api: HeirloomsApi, flowId: String, plotId: String, uploadId: String, upload: Upload, isSharedPlot: Boolean) {
+    fun approve(api: HeirloomsApi, trellisId: String, plotId: String, uploadId: String, upload: Upload, isSharedPlot: Boolean) {
         _state.value = _state.value.copy(pending = _state.value.pending.filter { it.id != uploadId })
         viewModelScope.launch {
             try {
@@ -72,35 +72,35 @@ class StagingViewModel : ViewModel() {
 
                 api.approveItem(plotId, uploadId, wrappedItemDek, itemDekFormat, wrappedThumbDek, thumbDekFormat)
                 _state.value = _state.value.copy(approveError = null)
-                load(api, flowId, plotId)
+                load(api, trellisId, plotId)
             } catch (e: Exception) {
                 Log.e("StagingVM", "approve failed for $uploadId isShared=$isSharedPlot wrappedDek=${upload.wrappedDek != null} dekFmt=${upload.dekFormat}", e)
                 _state.value = _state.value.copy(approveError = e.message ?: "Couldn't approve item")
-                load(api, flowId, plotId)
+                load(api, trellisId, plotId)
             }
         }
     }
 
-    fun reject(api: HeirloomsApi, flowId: String, plotId: String, uploadId: String) {
+    fun reject(api: HeirloomsApi, trellisId: String, plotId: String, uploadId: String) {
         _state.value = _state.value.copy(pending = _state.value.pending.filter { it.id != uploadId })
         viewModelScope.launch {
             try {
                 api.rejectItem(plotId, uploadId)
-                load(api, flowId, plotId)
+                load(api, trellisId, plotId)
             } catch (_: Exception) {
-                load(api, flowId, plotId)
+                load(api, trellisId, plotId)
             }
         }
     }
 
-    fun restore(api: HeirloomsApi, flowId: String, plotId: String, uploadId: String) {
+    fun restore(api: HeirloomsApi, trellisId: String, plotId: String, uploadId: String) {
         _state.value = _state.value.copy(rejected = _state.value.rejected.filter { it.id != uploadId })
         viewModelScope.launch {
             try {
                 api.unrejectItem(plotId, uploadId)
-                load(api, flowId, plotId)
+                load(api, trellisId, plotId)
             } catch (_: Exception) {
-                load(api, flowId, plotId)
+                load(api, trellisId, plotId)
             }
         }
     }

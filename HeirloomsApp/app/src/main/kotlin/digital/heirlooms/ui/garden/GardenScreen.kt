@@ -107,7 +107,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import digital.heirlooms.api.isShared
 import digital.heirlooms.api.Plot
-import digital.heirlooms.ui.flows.CreateFlowDialog
+import digital.heirlooms.ui.trellises.CreateTrellisDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -245,20 +245,20 @@ fun GardenScreen(
     val leaveError by vm.leaveError.collectAsStateWithLifecycle()
     var showCreatePlot by remember { mutableStateOf(false) }
 
-    // State for "New flow" shortcut on shared plot cards
-    var newFlowForPlotId by remember { mutableStateOf<String?>(null) }
+    // State for "New trellis" shortcut on shared plot cards
+    var newTrellisForPlotId by remember { mutableStateOf<String?>(null) }
     val allNonSystemPlots = (state as? GardenLoadState.Ready)
         ?.rows?.mapNotNull { it.plot }?.filter { !it.isSystemDefined } ?: emptyList()
 
-    if (newFlowForPlotId != null) {
-        CreateFlowDialog(
+    if (newTrellisForPlotId != null) {
+        CreateTrellisDialog(
             plots = allNonSystemPlots,
-            initialPlotId = newFlowForPlotId,
-            onDismiss = { newFlowForPlotId = null },
+            initialPlotId = newTrellisForPlotId,
+            onDismiss = { newTrellisForPlotId = null },
             onCreate = { name, plotId, requiresStaging, criteria ->
-                newFlowForPlotId = null
+                newTrellisForPlotId = null
                 scope.launch {
-                    try { api.createFlow(name, criteria, plotId, requiresStaging) } catch (_: Exception) {}
+                    try { api.createTrellis(name, criteria, plotId, requiresStaging) } catch (_: Exception) {}
                 }
             },
         )
@@ -368,7 +368,7 @@ fun GardenScreen(
                                     ownerDisplayName = row.plot?.let { ownerNames[it.id] },
                                     emptyLabel = if (isJustArrived) "Nothing waiting." else "Empty",
                                     pendingStagingCount = row.plot?.id?.let { sharedStagingCounts[it] } ?: 0,
-                                    onNewFlow = { row.plot?.let { newFlowForPlotId = it.id } },
+                                    onNewFlow = { row.plot?.let { newTrellisForPlotId = it.id } },
                                     onBulkStaging = {
                                         row.plot?.let { onBulkStaging(it.id, rowLabel) }
                                     },

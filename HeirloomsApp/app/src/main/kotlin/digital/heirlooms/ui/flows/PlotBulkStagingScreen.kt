@@ -1,4 +1,4 @@
-package digital.heirlooms.ui.flows
+package digital.heirlooms.ui.trellises
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
