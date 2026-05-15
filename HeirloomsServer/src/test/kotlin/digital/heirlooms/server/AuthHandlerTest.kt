@@ -1,5 +1,7 @@
 package digital.heirlooms.server
 
+import digital.heirlooms.server.filters.IpRateLimiter
+import digital.heirlooms.server.filters.rateLimitFilter
 import digital.heirlooms.server.filters.sessionAuthFilter
 import digital.heirlooms.server.repository.auth.PostgresAuthRepository
 import digital.heirlooms.server.repository.keys.PostgresKeyRepository
@@ -16,6 +18,7 @@ import org.http4k.core.Request
 import org.http4k.core.then
 import org.http4k.core.Status.Companion.BAD_REQUEST
 import org.http4k.core.Status.Companion.CONFLICT
+import org.http4k.core.Status.Companion.TOO_MANY_REQUESTS
 import org.http4k.core.Status.Companion.CREATED
 import org.http4k.core.Status.Companion.GONE
 import org.http4k.core.Status.Companion.NOT_FOUND
@@ -660,6 +663,57 @@ class AuthHandlerTest {
             "Decrypted master key should match the original after fresh login")
     }
 
+    // ---- SEC-005 F-07: setup-existing invalidates all prior sessions ----------
+
+    @Test
+    fun `setup-existing invalidates prior sessions — old token returns 401`() {
+        // 1. Create a session for the founding user via setup-existing
+        val deviceId = "inviter-sec005-${UUID.randomUUID()}"
+        val oldToken = setupInviterSession(deviceId)
+
+        // 2. Verify the old token works before the second setup-existing call
+        val meBeforeResp = get("/api/auth/me", oldToken)
+        assertEquals(OK, meBeforeResp.status, "Old token should be valid before passphrase change")
+
+        // 3. Reset auth so we can call setup-existing again (simulates passphrase change)
+        authRepo.resetUserAuth(FOUNDING_USER_ID)
+
+        // 4. Call setup-existing with a new passphrase — this must invalidate the old session
+        val newDeviceId = "inviter-sec005-new-${UUID.randomUUID()}"
+        keyRepo.insertWrappedKey(
+            WrappedKeyRecord(
+                id = UUID.randomUUID(),
+                deviceId = newDeviceId,
+                deviceLabel = "Owner's New Phone",
+                deviceKind = "android",
+                pubkeyFormat = "p256-spki",
+                pubkey = ByteArray(65) { 7 },
+                wrappedMasterKey = ByteArray(64) { 8 },
+                wrapFormat = "p256-ecdh-hkdf-aes256gcm-v1",
+                createdAt = java.time.Instant.now(),
+                lastUsedAt = java.time.Instant.now(),
+                retiredAt = null,
+            ),
+            userId = FOUNDING_USER_ID,
+        )
+        val authSalt = ByteArray(16) { 22 }
+        val authVerifier = sha256(ByteArray(32) { 33 })
+        val setupBody = """
+            {
+              "username": "bret",
+              "device_id": "$newDeviceId",
+              "auth_salt": "${urlEnc.encodeToString(authSalt)}",
+              "auth_verifier": "${urlEnc.encodeToString(authVerifier)}"
+            }
+        """.trimIndent()
+        val setupResp = post("/api/auth/setup-existing", setupBody)
+        assertEquals(OK, setupResp.status, "Second setup-existing should succeed")
+
+        // 5. Old token must now be rejected
+        val meAfterResp = get("/api/auth/me", oldToken)
+        assertEquals(UNAUTHORIZED, meAfterResp.status, "Old session token must be invalidated after setup-existing")
+    }
+
     // ---- 30. Two users same username via register returns 409 --------------
 
     @Test
@@ -686,5 +740,34 @@ class AuthHandlerTest {
         }"""
         val resp = post("/api/auth/register", body)
         assertEquals(CONFLICT, resp.status)
+    }
+
+    // ---- SEC-004 F-05/F-06: Rate limiting on /login returns 429 after sustained brute-force ----
+
+    @Test
+    fun `login returns 429 after exceeding rate limit`() {
+        // Build an isolated app instance with a tight rate limit (3 per minute) for this test
+        val tightLimiter = IpRateLimiter(maxRequests = 3, windowSeconds = 60)
+        val isolatedApp = rateLimitFilter(tightLimiter, "/challenge", "/login")
+            .then(sessionAuthFilter(authRepo))
+            .then(buildApp(mockk(relaxed = true), database, authSecret = ByteArray(32)))
+
+        val bruteForceIp = "203.0.113.${(1..254).random()}"
+        val loginBody = """{"username":"nobody_brute","auth_key":"${urlEnc.encodeToString(ByteArray(32))}"}"""
+
+        var got429 = false
+        // Up to 15 attempts — after 3, any further login or challenge should return 429
+        for (i in 1..15) {
+            val req = Request(POST, "/api/auth/login")
+                .header("Content-Type", "application/json")
+                .header("X-Forwarded-For", bruteForceIp)
+                .body(loginBody)
+            val resp = isolatedApp(req)
+            if (resp.status == TOO_MANY_REQUESTS) {
+                got429 = true
+                break
+            }
+        }
+        assert(got429) { "Expected 429 Too Many Requests after exceeding rate limit on /login" }
     }
 }

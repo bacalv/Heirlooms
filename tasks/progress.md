@@ -62,6 +62,9 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [IOS-001](done/IOS-001_qr-scanner-avfoundation.md) | Complete iOS QRScannerView (AVFoundation) | iOS | 2026-05-15 |
 | [SEC-001](done/SEC-001_security-hardening.md) | Security hardening + threat model | Security | 2026-05-15 |
 | [BUG-001](done/BUG-001_keychain-master-key-slot-collision.md) | Keychain slot collision — master key vs plot key | Bug Fix | 2026-05-15 |
+| [SEC-004](done/SEC-004_rate-limiting-auth-logging.md) | Rate limiting + failed-login logging | Security | 2026-05-15 |
+| [SEC-005](done/SEC-005_session-invalidation-mime-validation.md) | Session invalidation + MIME validation | Security | 2026-05-15 |
+| [SEC-006](done/SEC-006_criteria-date-input-validation.md) | Criteria date input validation | Security | 2026-05-15 |
 
 ## Brainstorming
 
