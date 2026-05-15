@@ -41,6 +41,17 @@ class StagingViewModel : ViewModel() {
         _state.value = _state.value.copy(pending = _state.value.pending.filter { it.id != uploadId })
         viewModelScope.launch {
             try {
+                // Ensure the sharing private key is available. GardenViewModel normally
+                // loads this, but the user may reach the staging screen directly without
+                // visiting Garden first in the same session.
+                if (isSharedPlot && VaultSession.sharingPrivkey == null) {
+                    val existing = api.getSharingKeyMe()
+                    if (existing != null) {
+                        val privkeyBytes = VaultCrypto.unwrapDekWithMasterKey(existing.wrappedPrivkey, VaultSession.masterKey)
+                        VaultSession.setSharingPrivkey(privkeyBytes)
+                    }
+                }
+
                 var wrappedItemDek: String? = null
                 var itemDekFormat: String? = null
                 var wrappedThumbDek: String? = null
