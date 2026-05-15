@@ -8,6 +8,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "e2e": "playwright test --project=staging",
+    "e2e:local": "playwright test --project=local",
+    "e2e:headed": "playwright test --project=staging --headed",
+    "e2e:install": "playwright install chromium",
     "postinstall": "node scripts/copy-ffmpeg.mjs"
   },
   "dependencies": {
@@ -26,6 +30,7 @@
     "react-router-dom": "^7.15.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^18.3.1",
