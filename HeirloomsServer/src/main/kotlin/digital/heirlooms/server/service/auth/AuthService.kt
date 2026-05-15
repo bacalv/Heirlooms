@@ -12,11 +12,14 @@ import digital.heirlooms.server.repository.plot.PlotRepository
 import digital.heirlooms.server.repository.social.SocialRepository
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.sql.Timestamp
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.Base64
 import java.util.UUID
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+import javax.sql.DataSource
 
 /**
  * Encapsulates authentication and session business logic: token generation,
@@ -29,6 +32,7 @@ class AuthService(
     private val socialRepo: SocialRepository,
     private val plotRepo: PlotRepository,
     private val serverSecret: ByteArray,
+    private val dataSource: DataSource? = null,
 ) {
     private val urlEnc: Base64.Encoder = Base64.getUrlEncoder().withoutPadding()
     private val urlDec: Base64.Decoder = Base64.getUrlDecoder()
@@ -171,6 +175,7 @@ class AuthService(
         data class Success(val token: String, val userId: UUID, val expiresAt: Instant) : RegisterResult()
         object InvalidInvite : RegisterResult()
         object UsernameTaken : RegisterResult()
+        object DeviceIdTaken : RegisterResult()
     }
 
     fun register(
@@ -193,7 +198,160 @@ class AuthService(
         if (invite == null || invite.usedAt != null || invite.expiresAt.isBefore(Instant.now()))
             return RegisterResult.InvalidInvite
         if (authRepo.findUserByUsername(username) != null) return RegisterResult.UsernameTaken
+        // Pre-flight: reject a device that is already registered to any account.
+        if (keyRepo.getWrappedKeyByDeviceId(deviceId) != null) return RegisterResult.DeviceIdTaken
 
+        // Run all writes in a single transaction so no orphaned rows are left on failure.
+        // If dataSource is null (unit tests with mock repos), fall back to non-transactional path.
+        return registerInTransaction(
+            dataSource, invite, username, displayName, authVerifier, authSalt,
+            wrappedMasterKey, wrapFormat, pubkeyFormat, pubkey,
+            deviceId, deviceLabel, deviceKind,
+            wrappedMasterKeyRecovery, wrapFormatRecovery,
+        )
+    }
+
+    private fun registerInTransaction(
+        ds: DataSource?,
+        invite: digital.heirlooms.server.domain.auth.InviteRecord,
+        username: String,
+        displayName: String,
+        authVerifier: ByteArray,
+        authSalt: ByteArray,
+        wrappedMasterKey: ByteArray,
+        wrapFormat: String,
+        pubkeyFormat: String,
+        pubkey: ByteArray,
+        deviceId: String,
+        deviceLabel: String,
+        deviceKind: String,
+        wrappedMasterKeyRecovery: ByteArray?,
+        wrapFormatRecovery: String?,
+    ): RegisterResult {
+        if (ds != null) {
+            // Transactional: inline all writes on the shared connection.
+            val conn = ds.connection
+            conn.autoCommit = false
+            try {
+                val userId = UUID.randomUUID()
+                val now = Instant.now()
+
+                // 1. Create user row.
+                conn.prepareStatement(
+                    "INSERT INTO users (id, username, display_name, auth_verifier, auth_salt) VALUES (?, ?, ?, ?, ?)"
+                ).use { stmt ->
+                    stmt.setObject(1, userId)
+                    stmt.setString(2, username)
+                    stmt.setString(3, displayName)
+                    stmt.setBytes(4, authVerifier)
+                    stmt.setBytes(5, authSalt)
+                    stmt.executeUpdate()
+                }
+
+                // 2. Create system plot for the new user.
+                conn.prepareStatement(
+                    "INSERT INTO plots (id, owner_user_id, name, sort_order, is_system_defined) VALUES (gen_random_uuid(), ?, '__just_arrived__', -1000, TRUE)"
+                ).use { stmt ->
+                    stmt.setObject(1, userId)
+                    stmt.executeUpdate()
+                }
+
+                // 3. Optionally store recovery passphrase.
+                if (wrappedMasterKeyRecovery != null && !wrapFormatRecovery.isNullOrBlank()) {
+                    conn.prepareStatement(
+                        """INSERT INTO recovery_passphrase (user_id, wrapped_master_key, wrap_format, argon2_params, salt, created_at, updated_at)
+                           VALUES (?, ?, ?, ?::jsonb, ?, NOW(), NOW())
+                           ON CONFLICT (user_id) DO UPDATE SET
+                               wrapped_master_key = EXCLUDED.wrapped_master_key,
+                               wrap_format = EXCLUDED.wrap_format,
+                               argon2_params = EXCLUDED.argon2_params,
+                               salt = EXCLUDED.salt,
+                               updated_at = NOW()"""
+                    ).use { stmt ->
+                        stmt.setObject(1, userId)
+                        stmt.setBytes(2, wrappedMasterKeyRecovery)
+                        stmt.setString(3, wrapFormatRecovery)
+                        stmt.setString(4, "{}")
+                        stmt.setBytes(5, ByteArray(0))
+                        stmt.executeUpdate()
+                    }
+                }
+
+                // 4. Insert device wrapped key (may throw on duplicate device_id — pre-flight above guards this, but belt-and-suspenders).
+                conn.prepareStatement(
+                    """INSERT INTO wrapped_keys (id, device_id, device_label, device_kind, pubkey_format,
+                           pubkey, wrapped_master_key, wrap_format, created_at, last_used_at, retired_at, user_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+                ).use { stmt ->
+                    stmt.setObject(1, UUID.randomUUID())
+                    stmt.setString(2, deviceId)
+                    stmt.setString(3, deviceLabel)
+                    stmt.setString(4, deviceKind)
+                    stmt.setString(5, pubkeyFormat)
+                    stmt.setBytes(6, pubkey)
+                    stmt.setBytes(7, wrappedMasterKey)
+                    stmt.setString(8, wrapFormat)
+                    stmt.setTimestamp(9, Timestamp.from(now))
+                    stmt.setTimestamp(10, Timestamp.from(now))
+                    stmt.setNull(11, java.sql.Types.TIMESTAMP)
+                    stmt.setObject(12, userId)
+                    stmt.executeUpdate()
+                }
+
+                // 5. Mark invite used and create friendship.
+                conn.prepareStatement(
+                    "UPDATE invites SET used_at = NOW(), used_by = ? WHERE id = ?"
+                ).use { stmt ->
+                    stmt.setObject(1, userId)
+                    stmt.setObject(2, invite.id)
+                    stmt.executeUpdate()
+                }
+
+                val u1 = if (invite.createdBy.toString() < userId.toString()) invite.createdBy else userId
+                val u2 = if (invite.createdBy.toString() < userId.toString()) userId else invite.createdBy
+                conn.prepareStatement(
+                    "INSERT INTO friendships (user_id_1, user_id_2) VALUES (?, ?) ON CONFLICT DO NOTHING"
+                ).use { stmt ->
+                    stmt.setObject(1, u1)
+                    stmt.setObject(2, u2)
+                    stmt.executeUpdate()
+                }
+
+                // 6. Issue session token.
+                val (token, _, hash) = issueToken()
+                val sessionId = UUID.randomUUID()
+                val sessionExpiresAt = now.plus(90, ChronoUnit.DAYS)
+                conn.prepareStatement(
+                    """INSERT INTO user_sessions (id, user_id, token_hash, device_kind, created_at, last_used_at, expires_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)"""
+                ).use { stmt ->
+                    stmt.setObject(1, sessionId)
+                    stmt.setObject(2, userId)
+                    stmt.setBytes(3, hash)
+                    stmt.setString(4, deviceKind)
+                    stmt.setTimestamp(5, Timestamp.from(now))
+                    stmt.setTimestamp(6, Timestamp.from(now))
+                    stmt.setTimestamp(7, Timestamp.from(sessionExpiresAt))
+                    stmt.executeUpdate()
+                }
+
+                conn.commit()
+                return RegisterResult.Success(token, userId, sessionExpiresAt)
+            } catch (e: org.postgresql.util.PSQLException) {
+                try { conn.rollback() } catch (_: Exception) {}
+                if (e.serverErrorMessage?.constraint == "wrapped_keys_device_id_key")
+                    return RegisterResult.DeviceIdTaken
+                throw e
+            } catch (e: Exception) {
+                try { conn.rollback() } catch (_: Exception) {}
+                throw e
+            } finally {
+                try { conn.autoCommit = true } catch (_: Exception) {}
+                conn.close()
+            }
+        }
+
+        // Non-transactional fallback (unit tests with mock repos / no DataSource).
         val newUser = authRepo.createUser(
             username = username,
             displayName = displayName,
@@ -241,6 +399,7 @@ class AuthService(
         val session = authRepo.createSession(newUser.id, hash, deviceKind)
         return RegisterResult.Success(token, newUser.id, session.expiresAt)
     }
+
 
     // ---- Invite connect (existing user → friend) --------------------------------
 

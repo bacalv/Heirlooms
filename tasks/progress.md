@@ -87,6 +87,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [OPS-001](done/OPS-001_deployment-runbook.md) | Deployment runbook | Operations | 2026-05-15 |
 | [BUG-015](done/developer-4_BUG-015_web-garden-shared-plot-row-still-stale.md) | Web garden shared plot row still stale — excludeIds leak fix | Bug Fix | 2026-05-15 |
 | [UX-003](done/UX-003_garden-polling-interval.md) | Garden polling 5s default; Android configurable (2/5/10/30s) | UX | 2026-05-15 |
+| [BUG-014](done/developer-3_BUG-014_register-500-duplicate-device-id.md) | Register 409 for duplicate device_id + atomic transaction | Bug Fix | 2026-05-15 |
 
 ## Brainstorming
 
