@@ -34,8 +34,11 @@ class PostgresTrellisRepository(private val dataSource: DataSource) : TrellisRep
     override fun listTrellises(userId: UUID): List<TrellisRecord> {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
-                """SELECT id, user_id, name, criteria, target_plot_id, requires_staging, created_at, updated_at
-                   FROM trellises WHERE user_id = ? ORDER BY created_at ASC"""
+                """SELECT t.id, t.user_id, t.name, t.criteria, t.target_plot_id, t.requires_staging,
+                          t.created_at, t.updated_at, COALESCE(p.visibility, '') AS target_plot_visibility
+                   FROM trellises t
+                   LEFT JOIN plots p ON p.id = t.target_plot_id
+                   WHERE t.user_id = ? ORDER BY t.created_at ASC"""
             ).use { stmt ->
                 stmt.setObject(1, userId)
                 val rs = stmt.executeQuery()
@@ -49,8 +52,11 @@ class PostgresTrellisRepository(private val dataSource: DataSource) : TrellisRep
     override fun getTrellisById(id: UUID, userId: UUID): TrellisRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
-                """SELECT id, user_id, name, criteria, target_plot_id, requires_staging, created_at, updated_at
-                   FROM trellises WHERE id = ? AND user_id = ?"""
+                """SELECT t.id, t.user_id, t.name, t.criteria, t.target_plot_id, t.requires_staging,
+                          t.created_at, t.updated_at, COALESCE(p.visibility, '') AS target_plot_visibility
+                   FROM trellises t
+                   LEFT JOIN plots p ON p.id = t.target_plot_id
+                   WHERE t.id = ? AND t.user_id = ?"""
             ).use { stmt ->
                 stmt.setObject(1, id)
                 stmt.setObject(2, userId)
@@ -72,11 +78,12 @@ class PostgresTrellisRepository(private val dataSource: DataSource) : TrellisRep
         if (targetPlot.criteria != null) return TrellisRepository.TrellisCreateResult.Error("Target plot must be a collection plot (criteria IS NULL)")
 
         // Staging policy: private plots never need staging (your own content);
-        // public plots always require staging; shared plots respect the caller's preference.
+        // public and shared plots always require staging (shared plots need DEK re-wrapping
+        // for members — BUG-018).
         val effectiveStaging = when (targetPlot.visibility) {
-            "private" -> false
-            "public"  -> true
-            else      -> requiresStaging
+            "private"          -> false
+            "public", "shared" -> true
+            else               -> requiresStaging
         }
 
         val id = UUID.randomUUID()
@@ -110,12 +117,12 @@ class PostgresTrellisRepository(private val dataSource: DataSource) : TrellisRep
         targetPlot: PlotRecord?,
         userId: UUID,
     ): TrellisRepository.TrellisUpdateResult {
-        // Enforce same staging policy as createTrellis
+        // Enforce same staging policy as createTrellis (BUG-018: shared plots also forced)
         val effectiveStaging = requiresStaging?.let {
             when (targetPlot?.visibility) {
-                "private" -> false
-                "public"  -> true
-                else      -> it
+                "private"          -> false
+                "public", "shared" -> true
+                else               -> it
             }
         }
 
@@ -157,7 +164,11 @@ class PostgresTrellisRepository(private val dataSource: DataSource) : TrellisRep
 
     // Inserts upload into plot_items for every unstaged trellis whose criteria it satisfies.
     override fun runUnstagedTrellisesForUpload(conn: Connection, uploadId: UUID, userId: UUID) {
-        val trellises = listTrellises(userId).filter { !it.requiresStaging }
+        // BUG-018: defensive guard — skip any trellis targeting a shared plot even if
+        // requires_staging is falsely stored as false (guards legacy rows and future bypasses).
+        val trellises = listTrellises(userId)
+            .filter { !it.requiresStaging }
+            .filter { it.targetPlotVisibility != "shared" }
         for (trellis in trellises) {
             try {
                 val fragment = CriteriaEvaluator.evaluate(trellis.criteria, userId, conn)
@@ -204,13 +215,14 @@ class PostgresTrellisRepository(private val dataSource: DataSource) : TrellisRep
     }
 
     private fun ResultSet.toTrellisRecord() = TrellisRecord(
-        id             = getObject("id", UUID::class.java),
-        userId         = getObject("user_id", UUID::class.java),
-        name           = getString("name"),
-        criteria       = getString("criteria"),
-        targetPlotId   = getObject("target_plot_id", UUID::class.java),
-        requiresStaging = getBoolean("requires_staging"),
-        createdAt      = getTimestamp("created_at").toInstant(),
-        updatedAt      = getTimestamp("updated_at").toInstant(),
+        id                   = getObject("id", UUID::class.java),
+        userId               = getObject("user_id", UUID::class.java),
+        name                 = getString("name"),
+        criteria             = getString("criteria"),
+        targetPlotId         = getObject("target_plot_id", UUID::class.java),
+        requiresStaging      = getBoolean("requires_staging"),
+        createdAt            = getTimestamp("created_at").toInstant(),
+        updatedAt            = getTimestamp("updated_at").toInstant(),
+        targetPlotVisibility = getString("target_plot_visibility") ?: "",
     )
 }
