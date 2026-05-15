@@ -255,6 +255,9 @@ private fun registerRoute(authService: AuthService): ContractRoute =
                 AuthService.RegisterResult.UsernameTaken ->
                     Response(CONFLICT).header("Content-Type", "application/json")
                         .body("""{"error":"Username already taken"}""")
+                AuthService.RegisterResult.DeviceIdTaken ->
+                    Response(CONFLICT).header("Content-Type", "application/json")
+                        .body("""{"error":"This device is already registered to another account"}""")
             }
         } catch (e: Exception) {
             authLogger.error("register error", e)

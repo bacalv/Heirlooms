@@ -852,6 +852,74 @@ class AuthHandlerTest {
         assertEquals(FORBIDDEN, resp.status, "Expected 403 for self-connect: ${resp.bodyString()}")
     }
 
+    // ---- BUG-014: duplicate device_id returns 409 and no orphan user is created ----
+
+    @Test
+    fun `register with duplicate device_id returns 409`() {
+        val inviterToken = setupInviterSession("inviter-dup-dev-${UUID.randomUUID()}")
+        val invite1 = generateInvite(inviterToken)
+        val invite2 = generateInvite(inviterToken)
+        val sharedDeviceId = "shared-device-${UUID.randomUUID()}"
+
+        // First registration succeeds
+        val user1 = "dup_dev_user1_${UUID.randomUUID().toString().take(6)}"
+        registerUser(user1, invite1, deviceId = sharedDeviceId)
+
+        // Second registration with the same device_id should fail with 409
+        val user2 = "dup_dev_user2_${UUID.randomUUID().toString().take(6)}"
+        val body = """{
+            "invite_token": "$invite2",
+            "username": "$user2",
+            "display_name": "User Two",
+            "auth_salt": "${urlEnc.encodeToString(ByteArray(16))}",
+            "auth_verifier": "${urlEnc.encodeToString(ByteArray(32))}",
+            "wrapped_master_key": "${stdEnc.encodeToString(ByteArray(64))}",
+            "wrap_format": "p256-ecdh-hkdf-aes256gcm-v1",
+            "pubkey_format": "p256-spki",
+            "pubkey": "${stdEnc.encodeToString(ByteArray(65))}",
+            "device_id": "$sharedDeviceId",
+            "device_label": "Shared Phone",
+            "device_kind": "android"
+        }"""
+        val resp = post("/api/auth/register", body)
+        assertEquals(CONFLICT, resp.status, "Expected 409 for duplicate device_id: ${resp.bodyString()}")
+        val errorMsg = mapper.readTree(resp.bodyString()).get("error").asText()
+        assertTrue(errorMsg.contains("device", ignoreCase = true), "Error message should mention device: $errorMsg")
+    }
+
+    @Test
+    fun `register with duplicate device_id leaves no orphaned user row`() {
+        val inviterToken = setupInviterSession("inviter-orphan-${UUID.randomUUID()}")
+        val invite1 = generateInvite(inviterToken)
+        val invite2 = generateInvite(inviterToken)
+        val sharedDeviceId = "orphan-device-${UUID.randomUUID()}"
+
+        val user1 = "orphan_u1_${UUID.randomUUID().toString().take(6)}"
+        registerUser(user1, invite1, deviceId = sharedDeviceId)
+
+        val user2 = "orphan_u2_${UUID.randomUUID().toString().take(6)}"
+        val body = """{
+            "invite_token": "$invite2",
+            "username": "$user2",
+            "display_name": "Orphan",
+            "auth_salt": "${urlEnc.encodeToString(ByteArray(16))}",
+            "auth_verifier": "${urlEnc.encodeToString(ByteArray(32))}",
+            "wrapped_master_key": "${stdEnc.encodeToString(ByteArray(64))}",
+            "wrap_format": "p256-ecdh-hkdf-aes256gcm-v1",
+            "pubkey_format": "p256-spki",
+            "pubkey": "${stdEnc.encodeToString(ByteArray(65))}",
+            "device_id": "$sharedDeviceId",
+            "device_label": "Shared Phone",
+            "device_kind": "android"
+        }"""
+        val resp = post("/api/auth/register", body)
+        assertEquals(CONFLICT, resp.status)
+
+        // The user2 row must NOT have been created — the transaction rolled back (or pre-flight rejected).
+        val orphanedUser = authRepo.findUserByUsername(user2)
+        assertTrue(orphanedUser == null, "No user row should exist for a failed register (orphan check)")
+    }
+
     // ---- SEC-004 F-05/F-06: Rate limiting on /login returns 429 after sustained brute-force ----
 
     @Test

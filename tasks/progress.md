@@ -12,6 +12,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Agent | Branch | Started |
 |----|-------|-------|--------|---------|
+| [BUG-014](done/developer-3_BUG-014_register-500-duplicate-device-id.md) | Register 500 on duplicate device_id — 409 fix + atomic transaction | developer-3 | agent/developer-3/BUG-014 | **done** |
 | [BUG-010](in-progress/developer-1_BUG-010_members-cant-create-trellis-for-shared-plot.md) | Members can't create trellis for shared plot | developer-1 | agent/developer-1/BUG-010 | 2026-05-15 |
 | [SEC-008](in-progress/developer-2_SEC-008_web-csp-session-token.md) + [BUG-011](in-progress/developer-2_BUG-011_web-trellis-form-partial-rename.md) + [BUG-012](in-progress/developer-2_BUG-012_web-garden-stale-after-trellis-route.md) | Web: CSP + trellis label fix + garden staleness | developer-2 | agent/developer-2/SEC-008 | 2026-05-15 |
 | [BUG-009](done/BUG-009_staging-approval-sharing-key-not-loaded.md) | Staging approval fails — sharing key not loaded | developer-4 | agent/developer-4/BUG-009 | **done** |

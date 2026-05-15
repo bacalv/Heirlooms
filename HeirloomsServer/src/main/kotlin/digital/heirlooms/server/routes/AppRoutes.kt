@@ -133,6 +133,7 @@ fun buildApp(
     metadataExtractor = metadataExtractor,
     previewDurationSeconds = previewDurationSeconds,
     authSecret = authSecret,
+    dataSource = database.dataSource,
 )
 
 internal fun buildApp(
@@ -152,12 +153,13 @@ internal fun buildApp(
     metadataExtractor: (ByteArray, String) -> MediaMetadata = MetadataExtractor()::extract,
     previewDurationSeconds: Int = 15,
     authSecret: ByteArray = ByteArray(32),
+    dataSource: javax.sql.DataSource? = null,
 ): HttpHandler {
     val directUpload = storage as? DirectUploadSupport
 
     // Construct service instances
     val uploadService = UploadService(uploadRepo, blobRepo, socialRepo, plotRepo, flowRepo, storage, thumbnailGenerator, metadataExtractor)
-    val authService = digital.heirlooms.server.service.auth.AuthService(authRepo, keyRepo, socialRepo, plotRepo, authSecret)
+    val authService = digital.heirlooms.server.service.auth.AuthService(authRepo, keyRepo, socialRepo, plotRepo, authSecret, dataSource)
     val capsuleService = digital.heirlooms.server.service.capsule.CapsuleService(capsuleRepo)
     val plotService = digital.heirlooms.server.service.plot.PlotService(plotRepo)
     val flowService = digital.heirlooms.server.service.plot.TrellisService(flowRepo, plotRepo, itemRepo, uploadRepo)
