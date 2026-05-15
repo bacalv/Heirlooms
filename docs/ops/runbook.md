@@ -147,6 +147,7 @@ cd HeirloomsWeb && npm run build
 ```bash
 cd HeirloomsWeb && docker build \
   --platform linux/amd64 \
+  --build-arg VITE_API_URL=https://test.api.heirlooms.digital \
   -t europe-west2-docker.pkg.dev/heirlooms-495416/heirlooms/heirlooms-web-test:latest \
   .
 
