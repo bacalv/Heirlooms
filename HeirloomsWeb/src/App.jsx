@@ -36,14 +36,23 @@ async function loadSharingKey(token, masterKey) {
 
 // Generates and uploads a sharing keypair if none exists yet.
 // Safe to call after loadSharingKey — skips generation if the key is already loaded.
+// If the server already has a key (409), falls back to loading the existing key.
 async function ensureSharingKey(token, masterKey) {
   if (getSharingPrivkey() !== null) return
   try {
     const { privkeyPkcs8, pubkeySpki } = await generateSharingKeypair()
     const wrappedPrivkey = await wrapDekUnderMasterKey(privkeyPkcs8, masterKey)
-    await putSharingKey(token, toB64(pubkeySpki), toB64(wrappedPrivkey), ALG_MASTER_AES256GCM_V1)
-    const cryptoKey = await importSharingPrivkey(privkeyPkcs8)
-    setSharingPrivkey(cryptoKey)
+    try {
+      await putSharingKey(token, toB64(pubkeySpki), toB64(wrappedPrivkey), ALG_MASTER_AES256GCM_V1)
+      const cryptoKey = await importSharingPrivkey(privkeyPkcs8)
+      setSharingPrivkey(cryptoKey)
+    } catch (uploadErr) {
+      // 409 means a sharing key is already registered (e.g. from Android). Load it.
+      if (uploadErr.message?.includes('409')) {
+        await loadSharingKey(token, masterKey)
+      }
+      // Any other error: best-effort, will retry on next unlock
+    }
   } catch { /* best-effort; will retry on next unlock */ }
 }
 

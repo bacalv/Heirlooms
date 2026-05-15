@@ -103,6 +103,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [ARCH-005](done/ARCH-005_envelope-format-amendment.md) | Envelope format amendment — add plot key algo, reserve M11 IDs | Architecture | 2026-05-15 |
 | [ARCH-004](done/ARCH-004_connections-data-model.md) | Connections data model brief — identity layer for M11 | Architecture | 2026-05-15 |
 | [ARCH-003](done/ARCH-003_m11-capsule-crypto-brief.md) | M11 capsule cryptography brief | Architecture | 2026-05-15 |
+| [BUG-016](done/developer-2_BUG-016_shared-plot-items-not-decrypting-for-member.md) | Shared plot items not decrypting — sharing key overwrite on web pairing | Bug Fix | 2026-05-15 |
 
 ## Brainstorming
 
