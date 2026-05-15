@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Info.plist for the HeirloomsShare extension target.
+
+  HOW TO USE:
+  After creating the HeirloomsShare target in Xcode (File → New → Target →
+  Share Extension), Xcode auto-generates an Info.plist inside the new target
+  folder. Either replace it entirely with this file (and update
+  Build Settings → Info.plist File to point here), or merge the NSExtension
+  block below into the generated file.
+
+  Key points:
+  - NSExtensionPrincipalClass must match the module + class name.
+    For Swift targets, the module name equals the target name at runtime, so
+    $(PRODUCT_MODULE_NAME).ShareViewController expands to
+    HeirloomsShare.ShareViewController.
+  - NSExtensionActivationRule declares the accepted UTIs (images and movies).
+    At most 10 images / 5 videos per invocation keeps memory inside the
+    120 MB Share Extension limit.
+  - Set PRODUCT_BUNDLE_IDENTIFIER to digital.heirlooms.ios.share in the
+    target's Build Settings — do not hard-code it here so the $(…) variables
+    keep working.
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>$(DEVELOPMENT_LANGUAGE)</string>
+    <key>CFBundleDisplayName</key>
+    <string>Heirlooms</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    <key>CFBundlePackageType</key>
+    <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+
+    <!-- Share Extension configuration -->
+    <key>NSExtension</key>
+    <dict>
+        <key>NSExtensionAttributes</key>
+        <dict>
+            <!--
+              Activation rule: show the Heirlooms share sheet when the user
+              selects one or more images (public.image) or movies (public.movie).
+            -->
+            <key>NSExtensionActivationRule</key>
+            <dict>
+                <!-- public.image — photos from Photos, Files, Safari, etc. -->
+                <key>NSExtensionActivationSupportsImageWithMaxCount</key>
+                <integer>10</integer>
+                <!-- public.movie — video clips -->
+                <key>NSExtensionActivationSupportsMovieWithMaxCount</key>
+                <integer>5</integer>
+            </dict>
+        </dict>
+        <!--
+          NSExtensionPointIdentifier must be com.apple.share-services for
+          a Share Extension.
+        -->
+        <key>NSExtensionPointIdentifier</key>
+        <string>com.apple.share-services</string>
+        <!--
+          NSExtensionPrincipalClass: Xcode substitutes PRODUCT_MODULE_NAME at
+          build time (the module equals the target name: HeirloomsShare).
+          UIViewController subclasses are automatically exposed to Objective-C.
+        -->
+        <key>NSExtensionPrincipalClass</key>
+        <string>$(PRODUCT_MODULE_NAME).ShareViewController</string>
+    </dict>
+</dict>
+</plist>

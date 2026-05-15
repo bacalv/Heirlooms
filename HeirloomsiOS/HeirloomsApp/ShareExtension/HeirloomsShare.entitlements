@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for the HeirloomsShare extension target.
+
+  HOW TO ADD IN XCODE:
+  1. Select the HeirloomsShare target in the project navigator.
+  2. Go to Signing & Capabilities.
+  3. Click "+ Capability" and add:
+       a. "Keychain Sharing" — add the SAME group as the main app:
+          digital.heirlooms.keychain
+       b. "App Groups"       — add the SAME group as the main app:
+          group.digital.heirlooms
+
+  The keychain-access-groups value MUST be identical to the main app's value
+  (same team prefix, same group name). This is what allows the extension to read
+  Keychain items written by the main app.
+
+  IMPORTANT FOR FREE ACCOUNTS:
+  With a free Apple ID, Xcode uses a "Personal Team" certificate. The team ID
+  prefix is assigned automatically and $(AppIdentifierPrefix) will expand to it.
+  You do not need to know the team ID explicitly — Xcode handles it.
+-->
+<plist version="1.0">
+<dict>
+    <!-- Must match the main app's keychain-access-groups entry exactly. -->
+    <key>keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)digital.heirlooms.keychain</string>
+    </array>
+
+    <!-- Must match the main app's app group entry exactly. -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.digital.heirlooms</string>
+    </array>
+</dict>
+</plist>
