@@ -157,4 +157,83 @@ describe('GardenPage', () => {
     await waitFor(() => screen.getByText(/Compost heap/i))
     expect(screen.getByRole('link', { name: /Compost heap/i })).toBeInTheDocument()
   })
+
+  // BUG-015 regression: after tagging a Just Arrived item, the optimistic
+  // exclusion (justArrivedExclude) must only hide the item from the Just
+  // Arrived row — user/shared plot rows must NOT be filtered.
+  it('BUG-015: tagged item is excluded from Just Arrived but still visible in user plot row', async () => {
+    const taggedUpload = {
+      id: 'upload-abc',
+      storageKey: 'photo/upload-abc',
+      mimeType: 'image/jpeg',
+      tags: [],
+      storageClass: 'public',
+    }
+
+    // Both Just Arrived and user-plot-1 return the same item before tagging.
+    // After tagging, the server routes it — both rows return it (simulating
+    // server state after trellis routing completes).
+    global.fetch.mockImplementation((url) => {
+      const u = typeof url === 'string' ? url : url.toString()
+      if (u.includes('/api/plots') && !u.includes('/api/plots/')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([systemPlot, userPlot1]),
+        })
+      }
+      if (u.includes('/api/content/uploads/composted')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [], next_cursor: null }) })
+      }
+      if (u.includes(`/api/content/uploads/${taggedUpload.id}/tags`)) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+      }
+      if (u.includes('/api/content/uploads')) {
+        // Both Just Arrived and user-plot-1 rows return the item
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ items: [taggedUpload], next_cursor: null }),
+        })
+      }
+      if (u.includes(`/api/content/uploads/${taggedUpload.id}/thumb`)) {
+        return Promise.resolve({ ok: false })
+      }
+      return Promise.resolve({ ok: false })
+    })
+
+    render(<Wrapper><GardenPage /></Wrapper>)
+
+    // Wait for page to load — both rows present
+    await waitFor(() => {
+      expect(screen.getByText('Just arrived')).toBeInTheDocument()
+      expect(screen.getByText('Family')).toBeInTheDocument()
+    })
+
+    // Wait for Edit tags buttons to appear (one per row × one item each = 2)
+    await waitFor(() => {
+      expect(screen.getAllByTitle('Edit tags').length).toBeGreaterThanOrEqual(2)
+    })
+
+    // Click the first Edit tags button (in Just Arrived row)
+    const justArrivedHeading = screen.getByText('Just arrived')
+    const justArrivedSection = justArrivedHeading.closest('div.space-y-2')
+    const tagButton = within(justArrivedSection).getByTitle('Edit tags')
+    fireEvent.click(tagButton)
+
+    // Tag modal should appear
+    await waitFor(() => expect(screen.getByText('Edit tags')).toBeInTheDocument())
+
+    // Save without changing tags
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    // After saving: Just Arrived should no longer show the Edit tags button
+    // (item optimistically excluded), but Family row still should (BUG-015 fix)
+    await waitFor(() => {
+      const familyHeading = screen.getByText('Family')
+      const familySection = familyHeading.closest('div.space-y-1')
+      // Family row must still show the item's Edit tags button
+      expect(within(familySection).getByTitle('Edit tags')).toBeInTheDocument()
+      // Just Arrived row must no longer show it
+      expect(within(justArrivedSection).queryByTitle('Edit tags')).not.toBeInTheDocument()
+    })
+  })
 })
