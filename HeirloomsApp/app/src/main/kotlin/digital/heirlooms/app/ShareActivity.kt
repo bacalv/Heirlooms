@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -51,6 +52,10 @@ class ShareActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // SEC-009 Part 1 (A-05): ShareActivity shows a preview of decrypted media before upload.
+        // FLAG_SECURE prevents screenshots and recent-apps thumbnails from capturing it.
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
 
         if (savedInstanceState == null) {
             pendingUris = resolveUris()
