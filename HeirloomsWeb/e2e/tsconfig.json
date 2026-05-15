@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "outDir": "../dist-e2e",
+    "rootDir": ".",
+    "types": ["@playwright/test"]
+  },
+  "include": ["./**/*.ts"],
+  "exclude": ["../node_modules"]
+}
