@@ -12,7 +12,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |----|-------|----------|----------|-------------|------------|
-| [BUG-013](queue/BUG-013_detail-view-triggers-rotation.md) | Viewing photo detail on Android silently saves rotation — corrupts orientation | Bug Fix | High | Developer | — |
 | [BUG-014](queue/BUG-014_register-500-duplicate-device-id.md) | Register returns 500 instead of 409 when device_id already exists in wrapped_keys | Bug Fix | Medium | Developer | — |
 | [BUG-015](queue/BUG-015_web-garden-shared-plot-row-still-stale.md) | Web garden shared plot row still stale after trellis routing — BUG-012 fix incomplete | Bug Fix | Medium | Developer | — |
 | [BUG-016](queue/BUG-016_shared-plot-items-not-decrypting-for-member.md) | Shared plot items uploaded from web not decrypting for Android member (Fire 1) | Bug Fix | High | Developer | — |
@@ -87,6 +86,8 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [SEC-010](done/SEC-010_git-history-secret-scan.md) | Git history secret scan + prevention hook | Security | 2026-05-15 |
 | [OPS-001](done/OPS-001_deployment-runbook.md) | Deployment runbook | Operations | 2026-05-15 |
 | [BUG-015](done/developer-4_BUG-015_web-garden-shared-plot-row-still-stale.md) | Web garden shared plot row still stale — excludeIds leak fix | Bug Fix | 2026-05-15 |
+| [UX-003](done/UX-003_garden-polling-interval.md) | Reduce garden polling to 5s; configurable interval on Android | UX | 2026-05-15 |
+| [BUG-013](done/BUG-013_detail-view-triggers-rotation.md) | Detail view silently saves EXIF rotation to server — display-only fix | Bug Fix | 2026-05-15 |
 
 ## Brainstorming
 
