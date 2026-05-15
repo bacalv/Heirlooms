@@ -16,6 +16,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [BUG-015](queue/BUG-015_web-garden-shared-plot-row-still-stale.md) | Web garden shared plot row still stale after trellis routing — BUG-012 fix incomplete | Bug Fix | Medium | Developer | — |
 | [BUG-016](queue/BUG-016_shared-plot-items-not-decrypting-for-member.md) | Shared plot items uploaded from web not decrypting for Android member (Fire 1) | Bug Fix | High | Developer | — |
 | [UX-003](queue/UX-003_garden-polling-interval.md) | Garden polling interval — 5s default, Android configurable (2/5/10/30s) | UX | Medium | Developer | — |
+| [ARCH-006](queue/ARCH-006_tlock-provider-interface.md) | TimeLock provider interface — stub first, drand later | Architecture | High | TechnicalArchitect | ARCH-003 |
 | [BUG-006](queue/BUG-006_android-nav-backstack.md) | Android nav back-stack not cleared from burger menu | Bug Fix | Medium | Developer | — |
 | [TST-006](queue/TST-006_android-remote-control-investigation.md) | Investigate remote-controlled Android testing for E2E automation | Testing | Medium | TestManager | — |
 | [UX-002](queue/UX-002_closed-plot-visual-indicator.md) | Closed plots should show a locked state — disable approve/share actions | UX | Medium | Developer | — |
