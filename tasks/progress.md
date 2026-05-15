@@ -13,14 +13,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | ID | Title | Agent | Branch | Started |
 |----|-------|-------|--------|---------|
 | [TST-003](in-progress/TST-003_manual-staging-checklist.md) | Manual staging test checklist | TestManager (interactive) | — | 2026-05-15 |
-| [ARCH-002](in-progress/ARCH-002_behavioral-spec-diagrams.md) | Behavioral spec diagrams | architect | agent/architect/ARCH-002 | 2026-05-15 |
 | [REF-001](in-progress/REF-001_rename-flow-to-trellis.md) | Rename Flow → Trellis | developer-1 | agent/developer-1/REF-001 | 2026-05-15 |
-| [IOS-002](in-progress/IOS-002_share-extension.md) | iOS Share Extension target | developer-2 | agent/developer-2/IOS-002 | 2026-05-15 |
-| [BUG-001](in-progress/BUG-001_keychain-master-key-slot-collision.md) | Keychain slot collision fix | developer-3 | agent/developer-3/BUG-001 | 2026-05-15 |
-| [SEC-003](in-progress/SEC-003_client-security-review.md) | Client security flaw testing plan | security-audit | agent/security-audit/SEC-003 | 2026-05-15 |
-| [SEC-004](in-progress/SEC-004_rate-limiting-auth-logging.md) | Rate limiting + failed-login logging | security | agent/security/SEC-004 | 2026-05-15 |
-| [SEC-005](in-progress/SEC-005_session-invalidation-mime-validation.md) | Session invalidation + MIME validation | security | agent/security/SEC-004 | 2026-05-15 |
-| [SEC-006](in-progress/SEC-006_criteria-date-input-validation.md) | Criteria date input validation | security | agent/security/SEC-004 | 2026-05-15 |
 
 ---
 
