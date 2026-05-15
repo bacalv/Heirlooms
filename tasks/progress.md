@@ -86,6 +86,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [SEC-008](done/SEC-008_web-csp-session-token.md) | Web: CSP header + session token off localStorage | Security | 2026-05-15 |
 | [SEC-010](done/SEC-010_git-history-secret-scan.md) | Git history secret scan + prevention hook | Security | 2026-05-15 |
 | [OPS-001](done/OPS-001_deployment-runbook.md) | Deployment runbook | Operations | 2026-05-15 |
+| [BUG-015](done/developer-4_BUG-015_web-garden-shared-plot-row-still-stale.md) | Web garden shared plot row still stale — excludeIds leak fix | Bug Fix | 2026-05-15 |
 
 ## Brainstorming
 

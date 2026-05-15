@@ -1314,7 +1314,6 @@ export function GardenPage() {
                   onCompostClick={setConfirmCompost}
                   onShareClick={setShareUploadItem}
                   refreshKey={plotRefreshKey}
-                  excludeIds={justArrivedExclude}
                 />
               ))}
             </div>
