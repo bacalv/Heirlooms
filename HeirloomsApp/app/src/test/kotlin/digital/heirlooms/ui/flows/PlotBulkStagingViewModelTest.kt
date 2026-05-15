@@ -1,10 +1,15 @@
 package digital.heirlooms.ui.trellises
 
+import digital.heirlooms.api.HeirloomsApi
+import digital.heirlooms.crypto.VaultSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -12,6 +17,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.util.concurrent.TimeUnit
 
 /**
  * Unit tests for [PlotBulkStagingViewModel] — covers the selection state machine
@@ -19,22 +25,29 @@ import org.junit.Test
  *
  * Network path (load / approveSelected / rejectSelected) exercises real OkHttp
  * dispatch on background threads that the test dispatcher cannot drive; those
- * paths are covered by integration tests instead.
+ * paths are covered by integration tests instead, except for the BUG-009 regression
+ * test below which uses MockWebServer to verify the sharing-key eager-load path.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlotBulkStagingViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
+    private val server = MockWebServer()
 
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
+        server.start()
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        server.shutdown()
+        VaultSession.lock()
     }
+
+    private fun baseUrl() = server.url("/").toString().trimEnd('/')
 
     // ── Initial state ─────────────────────────────────────────────────────────
 
@@ -146,6 +159,52 @@ class PlotBulkStagingViewModelTest {
     @Test
     fun doneCount_starts_at_zero() {
         assertEquals(0, PlotBulkStagingViewModel().state.value.doneCount)
+    }
+
+    // ── BUG-009 regression — sharing key loaded without visiting Garden ───────
+
+    /**
+     * Regression test for BUG-009: approveSelected must fetch the sharing key from
+     * the server when [VaultSession.sharingPrivkey] is null (i.e. when the user
+     * navigated directly to the staging screen without first visiting Garden).
+     *
+     * Setup: VaultSession is unlocked but sharingPrivkey is null; a single
+     * non-encrypted item is selected. We enqueue:
+     *   1. GET /api/sharing/keys/me → 404 (no key on server; simplest path with
+     *      no crypto needed, still exercises the fetch attempt)
+     *   2. POST /api/content/plots/:plotId/staging/:uploadId/approve → 200
+     *   3. GET /api/content/plots/:plotId/staging → 200 (empty list; reload after approve)
+     *
+     * We verify that the getSharingKeyMe request was actually made, proving the VM
+     * no longer silently skips key loading when Garden hasn't been opened.
+     */
+    @Test
+    fun approveSelected_fetches_sharing_key_when_not_cached() = runTest {
+        // Unlock vault (needed for VaultSession.masterKey in the real path,
+        // but here getSharingKeyMe returns 404 so no crypto is performed).
+        VaultSession.unlock(ByteArray(32))
+
+        // 1. getSharingKeyMe → 404 (no key stored; lazy-load path returns null)
+        server.enqueue(MockResponse().setResponseCode(404))
+        // 2. approveItem → 200
+        server.enqueue(MockResponse().setBody("{}").setResponseCode(200))
+        // 3. getPlotStaging reload → 200 empty list
+        server.enqueue(MockResponse().setBody("[]").setResponseCode(200))
+
+        val api = HeirloomsApi(baseUrl = baseUrl(), apiKey = "test")
+        val vm = withItems("upload-1")
+        vm.toggleItem("upload-1")
+
+        vm.approveSelected(api, "plot-abc")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        // Wait for all real I/O to complete (MockWebServer runs on a real thread).
+        val firstRequest = server.takeRequest(5, TimeUnit.SECONDS)
+        assertEquals(
+            "First request must be getSharingKeyMe (BUG-009: key was not pre-loaded)",
+            "/api/keys/sharing/me",
+            firstRequest?.path,
+        )
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

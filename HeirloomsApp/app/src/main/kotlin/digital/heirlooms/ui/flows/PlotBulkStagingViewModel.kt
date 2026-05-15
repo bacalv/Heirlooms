@@ -64,6 +64,17 @@ class PlotBulkStagingViewModel : ViewModel() {
         if (toApprove.isEmpty()) return
         _state.value = _state.value.copy(working = true, error = null)
         viewModelScope.launch {
+            // Ensure the sharing private key is available before processing any item.
+            // GardenViewModel normally loads this key, but the user may navigate directly
+            // to the staging approval screen without visiting Garden first.
+            if (VaultSession.sharingPrivkey == null) {
+                val existing = api.getSharingKeyMe()
+                if (existing != null) {
+                    val privkeyBytes = VaultCrypto.unwrapDekWithMasterKey(existing.wrappedPrivkey, VaultSession.masterKey)
+                    VaultSession.setSharingPrivkey(privkeyBytes)
+                }
+            }
+
             var successCount = 0
             val errors = mutableListOf<String>()
             for (uploadId in toApprove) {
