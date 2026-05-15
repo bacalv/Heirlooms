@@ -296,6 +296,7 @@ private fun AppNavHost(navController: NavController, apiKey: String, onApiKeyRes
                 onBulkStaging = { plotId, plotName ->
                     navController.navigate(Routes.plotBulkStaging(plotId, plotName))
                 },
+                store = store,
             )
         }
         composable(

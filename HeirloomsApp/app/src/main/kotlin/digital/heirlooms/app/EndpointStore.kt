@@ -122,6 +122,13 @@ class EndpointStore(private val store: PreferenceStore) {
     fun setVideoPlaybackThreshold(seconds: Int) =
         store.putString(KEY_VIDEO_THRESHOLD, seconds.toString())
 
+    // Garden refresh interval in milliseconds. Options: 2000, 5000 (default), 10000, 30000.
+    fun getGardenRefreshIntervalMs(): Long =
+        store.getString(KEY_GARDEN_REFRESH_INTERVAL_MS, DEFAULT_GARDEN_REFRESH_INTERVAL_MS.toString())
+            .toLongOrNull() ?: DEFAULT_GARDEN_REFRESH_INTERVAL_MS
+    fun setGardenRefreshIntervalMs(ms: Long) =
+        store.putString(KEY_GARDEN_REFRESH_INTERVAL_MS, ms.toString())
+
     companion object {
         const val KEY_API_KEY = "api_key"          // retained for migration detection
         private const val KEY_SESSION_TOKEN = "session_token"
@@ -132,6 +139,8 @@ class EndpointStore(private val store: PreferenceStore) {
         private const val KEY_WELCOMED = "welcomed"
         private const val KEY_VIDEO_THRESHOLD = "video_playback_threshold"
         const val DEFAULT_VIDEO_THRESHOLD = 300  // 5 minutes
+        private const val KEY_GARDEN_REFRESH_INTERVAL_MS = "garden_refresh_interval_ms"
+        const val DEFAULT_GARDEN_REFRESH_INTERVAL_MS = 5_000L  // 5 seconds
 
         /**
          * Convenience factory for use in Activities and Services.

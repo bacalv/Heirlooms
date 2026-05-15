@@ -1004,9 +1004,9 @@ export function GardenPage() {
   const userPlots = plots.filter((p) => !p.is_system_defined)
   const userPlotIds = userPlots.map((p) => p.id)
 
-  // Poll all plot rows every 10 seconds to pick up newly arrived items.
+  // Poll all plot rows every 5 seconds to pick up newly arrived items.
   useEffect(() => {
-    const id = setInterval(() => setPlotRefreshKey((k) => k + 1), 10_000)
+    const id = setInterval(() => setPlotRefreshKey((k) => k + 1), 5_000)
     return () => clearInterval(id)
   }, [])
 

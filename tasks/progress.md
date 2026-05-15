@@ -86,8 +86,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [SEC-010](done/SEC-010_git-history-secret-scan.md) | Git history secret scan + prevention hook | Security | 2026-05-15 |
 | [OPS-001](done/OPS-001_deployment-runbook.md) | Deployment runbook | Operations | 2026-05-15 |
 | [BUG-015](done/developer-4_BUG-015_web-garden-shared-plot-row-still-stale.md) | Web garden shared plot row still stale — excludeIds leak fix | Bug Fix | 2026-05-15 |
-| [UX-003](done/UX-003_garden-polling-interval.md) | Reduce garden polling to 5s; configurable interval on Android | UX | 2026-05-15 |
-| [BUG-013](done/BUG-013_detail-view-triggers-rotation.md) | Detail view silently saves EXIF rotation to server — display-only fix | Bug Fix | 2026-05-15 |
+| [UX-003](done/UX-003_garden-polling-interval.md) | Garden polling 5s default; Android configurable (2/5/10/30s) | UX | 2026-05-15 |
 
 ## Brainstorming
 
