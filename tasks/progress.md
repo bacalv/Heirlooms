@@ -89,6 +89,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [BUG-006](done/developer-1_BUG-006_android-nav-backstack.md) | Android burger menu nav clears back-stack via navigateFromBurger() | Bug Fix | 2026-05-15 |
 | [BUG-002](done/BUG-002_remove-didnt-take-messaging.md) | Remove "didn't take" messaging — replace with plain error strings | Bug Fix | 2026-05-15 |
 | [BUG-005](done/developer-3_BUG-005_thumbnail-rotation.md) | Thumbnail generator now applies EXIF orientation — rotation baked into pixels | Bug Fix | 2026-05-15 |
+| [BUG-017](done/developer-4_BUG-017_android-plot-key-not-loaded-after-accept-invite.md) | Android: eagerly fetch plot key after accepting invite so thumbnails decrypt without restart | Bug Fix | 2026-05-15 |
 
 ## Brainstorming
 
