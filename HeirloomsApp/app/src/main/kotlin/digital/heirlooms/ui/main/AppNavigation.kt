@@ -193,16 +193,16 @@ fun MainNavigation(apiKey: String, onApiKeyReset: () -> Unit, store: digital.hei
             BurgerPanel(
                 sheetState = burgerSheetState,
                 onDismiss = { showBurger = false },
-                onSettingsTap = { navController.navigate(Routes.SETTINGS) },
-                onCompostHeapTap = { navController.navigate(Routes.COMPOST) },
+                onSettingsTap = { navController.navigateFromBurger(Routes.SETTINGS) },
+                onCompostHeapTap = { navController.navigateFromBurger(Routes.COMPOST) },
                 uploadsInProgress = uploadsActive,
                 onUploadsTap = {
-                    activeSessionTag?.let { navController.navigate(Routes.uploadProgress(it)) }
+                    activeSessionTag?.let { navController.navigateFromBurger(Routes.uploadProgress(it)) }
                 },
-                onDiagnosticsTap = { navController.navigate(Routes.DIAGNOSTICS) },
-                onDevicesAccessTap = { navController.navigate(Routes.DEVICES_ACCESS) },
-                onFriendsTap = { navController.navigate(Routes.FRIENDS) },
-                onTrellisesTap = { navController.navigate(Routes.FLOWS) },
+                onDiagnosticsTap = { navController.navigateFromBurger(Routes.DIAGNOSTICS) },
+                onDevicesAccessTap = { navController.navigateFromBurger(Routes.DEVICES_ACCESS) },
+                onFriendsTap = { navController.navigateFromBurger(Routes.FRIENDS) },
+                onTrellisesTap = { navController.navigateFromBurger(Routes.FLOWS) },
                 displayName = displayName,
             )
         }
@@ -453,5 +453,15 @@ private fun NavController.navigateToTab(route: String) {
         popUpTo(graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true
         restoreState = true
+    }
+}
+
+// Burger menu navigation: pop the back-stack to the start destination before pushing the
+// target screen so that pressing Back from a burger-launched screen returns cleanly to the
+// root rather than stepping through stale intermediate screens.
+private fun NavController.navigateFromBurger(route: String) {
+    navigate(route) {
+        popUpTo(graph.findStartDestination().id) { inclusive = false }
+        launchSingleTop = true
     }
 }
