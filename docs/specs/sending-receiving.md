@@ -25,7 +25,7 @@ sequenceDiagram
     participant C as Crypto Layer
     participant S as Server
 
-    Note over Sender,C: Step 1 — Fetch recipient's sharing pubkey
+    Note over Sender,C: Step 1 - Fetch recipient's sharing pubkey
     Sender->>S: GET /sharing/{recipientUserId} [X-Api-Key]
     S-->>S: verify friendship(sender, recipient)
     alt Not friends
@@ -33,21 +33,21 @@ sequenceDiagram
     else No sharing key
         S->>Sender: 404
     else Success
-        S->>Sender: 200 {pubkey (b64 — SPKI bytes)}
+        S->>Sender: 200 {pubkey (b64 - SPKI bytes)}
     end
 
-    Note over Sender,C: Step 2 — Unwrap item DEK with sender's master key
-    Sender->>C: unwrapDekWithMasterKey(upload.wrappedDek, masterKey) → contentDek
+    Note over Sender,C: Step 2 - Unwrap item DEK with sender's master key
+    Sender->>C: unwrapDekWithMasterKey(upload.wrappedDek, masterKey) -> contentDek
 
-    Note over Sender,C: Step 3 — Re-wrap DEK for recipient using their sharing pubkey
-    Sender->>C: wrapDekForFriend(contentDek, recipientPubkeySpki)<br/>→ asymmetric envelope (p256-ecdh-hkdf-aes256gcm-v1)<br/>[ephemeral P-256 keygen → ECDH → HKDF-SHA256 → AES-256-GCM]
+    Note over Sender,C: Step 3 - Re-wrap DEK for recipient using their sharing pubkey
+    Sender->>C: wrapDekForFriend(contentDek, recipientPubkeySpki)<br/>-> asymmetric envelope (p256-ecdh-hkdf-aes256gcm-v1)<br/>[ephemeral P-256 keygen -> ECDH -> HKDF-SHA256 -> AES-256-GCM]
 
-    Note over Sender,C: Step 4 — Re-wrap thumbnail DEK (if present)
-    Sender->>C: unwrapDekWithMasterKey(upload.wrappedThumbnailDek) → thumbDek
-    Sender->>C: wrapDekForFriend(thumbDek, recipientPubkeySpki) → wrappedThumbnailDek
+    Note over Sender,C: Step 4 - Re-wrap thumbnail DEK (if present)
+    Sender->>C: unwrapDekWithMasterKey(upload.wrappedThumbnailDek) -> thumbDek
+    Sender->>C: wrapDekForFriend(thumbDek, recipientPubkeySpki) -> wrappedThumbnailDek
 
-    Note over Sender,S: Step 5 — Post share to server
-    Sender->>S: POST /uploads/{uploadId}/share [X-Api-Key]<br/>{toUserId: recipientUserId,<br/> wrappedDek (b64 — asymmetric envelope),<br/> wrappedThumbnailDek? (b64),<br/> dekFormat: "p256-ecdh-hkdf-aes256gcm-v1",<br/> rotation? (int)}
+    Note over Sender,S: Step 5 - Post share to server
+    Sender->>S: POST /uploads/{uploadId}/share [X-Api-Key]<br/>{toUserId: recipientUserId,<br/> wrappedDek (b64 - asymmetric envelope),<br/> wrappedThumbnailDek? (b64),<br/> dekFormat: "p256-ecdh-hkdf-aes256gcm-v1",<br/> rotation? (int)}
     S-->>S: verify friendship(sender, recipient)<br/>verify upload owned by sender<br/>check recipient does not already have item
     alt Upload not found / not owned
         S->>Sender: 404
@@ -56,7 +56,7 @@ sequenceDiagram
     else Recipient already has item
         S->>Sender: 409 "Recipient already has this item"
     else Success
-        S-->>S: INSERT INTO uploads (recipient's copy)<br/>  storage_key = same as sender's<br/>  wrapped_dek = re-wrapped DEK<br/>  dek_format = "p256-ecdh-hkdf-aes256gcm-v1"<br/>  shared_from_user_id = sender.userId<br/>  last_viewed_at = NULL (→ Just Arrived)
+        S-->>S: INSERT INTO uploads (recipient's copy)<br/>  storage_key = same as sender's<br/>  wrapped_dek = re-wrapped DEK<br/>  dek_format = "p256-ecdh-hkdf-aes256gcm-v1"<br/>  shared_from_user_id = sender.userId<br/>  last_viewed_at = NULL (-> Just Arrived)
         S->>Sender: 201 {recipient upload record}
     end
 ```
@@ -74,19 +74,19 @@ sequenceDiagram
     S->>Recipient: 200 {items: [..., {id, shared_from_user_id, wrappedDek, dekFormat: "p256-...", ...}]}
 
     Note over Recipient,C: Received items have dekFormat = "p256-ecdh-hkdf-aes256gcm-v1"
-    Recipient->>C: unwrapWithSharingKey(wrappedDek, ownSharingPrivkey)<br/>→ contentDek (asymmetric envelope unwrap:<br/>   extract ephemeralPubkey → ECDH → HKDF → AES-GCM decrypt)
+    Recipient->>C: unwrapWithSharingKey(wrappedDek, ownSharingPrivkey)<br/>-> contentDek (asymmetric envelope unwrap:<br/>   extract ephemeralPubkey -> ECDH -> HKDF -> AES-GCM decrypt)
 
     Recipient->>S: GET /uploads/{id}/thumb [X-Api-Key]
     S->>Recipient: 200 encrypted thumbnail blob
 
-    Recipient->>C: unwrapWithSharingKey(wrappedThumbnailDek, ownSharingPrivkey) → thumbDek
-    Recipient->>C: decryptSymmetric(thumbBlob, thumbDek) → JPEG bytes
+    Recipient->>C: unwrapWithSharingKey(wrappedThumbnailDek, ownSharingPrivkey) -> thumbDek
+    Recipient->>C: decryptSymmetric(thumbBlob, thumbDek) -> JPEG bytes
     Recipient-->>Recipient: display thumbnail
 
     Note over Recipient: User taps item to open detail
     Recipient->>S: GET /uploads/{id}/file [X-Api-Key]
     S->>Recipient: 200 encrypted content blob
-    Recipient->>C: decryptStreamingContent(blob, contentDek) → plaintext
+    Recipient->>C: decryptStreamingContent(blob, contentDek) -> plaintext
     Recipient-->>Recipient: display / play
 
     Recipient->>S: POST /uploads/{id}/view [X-Api-Key]
@@ -110,7 +110,7 @@ sequenceDiagram
     App->>S: GET /me [X-Api-Key]  (or from cached friends list)
     App->>S: GET /friends [X-Api-Key]
     S->>App: 200 [{user_id, username, display_name, ...}]
-    App-->>App: match shared_from_user_id → "From: Alice"
+    App-->>App: match shared_from_user_id -> "From: Alice"
 ```
 
 ### 4. Upload and Retrieve Sharing Key Pair
@@ -121,18 +121,18 @@ sequenceDiagram
     participant C as Crypto Layer
     participant S as Server
 
-    Note over App,C: On first setup or new device — generate sharing key pair
-    App->>C: generateKeyPair P-256 → (sharingPrivkey, sharingPubkeySpki)
-    App->>C: wrapDekUnderMasterKey(sharingPrivkeyBytes, masterKey)<br/>→ wrappedPrivkey (master-aes256gcm-v1 envelope)
+    Note over App,C: On first setup or new device - generate sharing key pair
+    App->>C: generateKeyPair P-256 -> (sharingPrivkey, sharingPubkeySpki)
+    App->>C: wrapDekUnderMasterKey(sharingPrivkeyBytes, masterKey)<br/>-> wrappedPrivkey (master-aes256gcm-v1 envelope)
 
     App->>S: PUT /sharing [X-Api-Key]<br/>{pubkey (b64 SPKI bytes),<br/> wrappedPrivkey (b64),<br/> wrapFormat: "master-aes256gcm-v1"}
     S-->>S: upsert sharing_keys record for userId
     S->>App: 204 No Content
 
-    Note over App,C: On another device — restore sharing key
+    Note over App,C: On another device - restore sharing key
     App->>S: GET /sharing/me [X-Api-Key]
     S->>App: 200 {pubkey (b64), wrappedPrivkey (b64), wrapFormat}
-    App->>C: unwrapDekWithMasterKey(wrappedPrivkey, masterKey) → sharingPrivkeyBytes
-    App->>C: importSharingPrivkey(sharingPrivkeyBytes) → CryptoKey
-    Note over App,C: Sharing private key restored; can decrypt received items + plot keys
+    App->>C: unwrapDekWithMasterKey(wrappedPrivkey, masterKey) -> sharingPrivkeyBytes
+    App->>C: importSharingPrivkey(sharingPrivkeyBytes) -> CryptoKey
+    Note over App,C: Sharing private key restored<br/> can decrypt received items + plot keys
 ```

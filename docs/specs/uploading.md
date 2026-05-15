@@ -28,25 +28,25 @@ sequenceDiagram
     participant S as Server
     participant GCS as GCS (signed URL)
 
-    App->>C: generateDek() → contentDek (32 random bytes)
-    App->>C: generateDek() → thumbDek (32 random bytes)
-    App->>C: encryptStreamingContent(plaintext, contentDek)<br/>→ encryptedBlob (streaming chunks: [nonce][ct+tag]...)
-    App->>C: encryptThumbnail(thumbBytes, thumbDek)<br/>→ encryptedThumb (symmetric envelope)
-    App->>C: wrapDekUnderMasterKey(contentDek, masterKey)<br/>→ wrappedDek (master-aes256gcm-v1 envelope)
-    App->>C: wrapDekUnderMasterKey(thumbDek, masterKey)<br/>→ wrappedThumbDek
+    App->>C: generateDek() -> contentDek (32 random bytes)
+    App->>C: generateDek() -> thumbDek (32 random bytes)
+    App->>C: encryptStreamingContent(plaintext, contentDek)<br/>-> encryptedBlob (streaming chunks: [nonce][ct+tag]...)
+    App->>C: encryptThumbnail(thumbBytes, thumbDek)<br/>-> encryptedThumb (symmetric envelope)
+    App->>C: wrapDekUnderMasterKey(contentDek, masterKey)<br/>-> wrappedDek (master-aes256gcm-v1 envelope)
+    App->>C: wrapDekUnderMasterKey(thumbDek, masterKey)<br/>-> wrappedThumbDek
 
     App->>S: POST /uploads/initiate [X-Api-Key]<br/>{mimeType, storage_class: "encrypted"}
-    S-->>S: generate two storageKeys; insertPendingBlob for each
+    S-->>S: generate two storageKeys<br/> insertPendingBlob for each
     S->>App: 200 {storageKey, uploadUrl, thumbnailStorageKey, thumbnailUploadUrl}
 
-    App->>GCS: PUT {uploadUrl} — encrypted content blob
+    App->>GCS: PUT {uploadUrl} - encrypted content blob
     GCS->>App: 200 OK
 
-    App->>GCS: PUT {thumbnailUploadUrl} — encrypted thumbnail blob
+    App->>GCS: PUT {thumbnailUploadUrl} - encrypted thumbnail blob
     GCS->>App: 200 OK
 
     App->>S: POST /uploads/confirm [X-Api-Key]<br/>{storageKey, thumbnailStorageKey, mimeType, fileSize,<br/> storage_class: "encrypted", envelopeVersion: 1,<br/> wrappedDek (b64), dekFormat: "master-aes256gcm-v1",<br/> wrappedThumbnailDek (b64), thumbnailDekFormat,<br/> encryptedMetadata? (b64), encryptedMetadataFormat?,<br/> contentHash?, takenAt?, tags: [...]}
-    S-->>S: validate envelope fields; dedup check on contentHash<br/>insertUploadRecord with storage_class="encrypted"<br/>launchFlowRouting (auto-route upload through flows)
+    S-->>S: validate envelope fields<br/> dedup check on contentHash<br/>insertUploadRecord with storage_class="encrypted"<br/>launchFlowRouting (auto-route upload through flows)
     S->>App: 201 Created
     Note over App: Item appears in Garden on next load
 ```
@@ -63,7 +63,7 @@ sequenceDiagram
 
     ShareSheet->>App: ACTION_SEND intent with Uri
     App-->>App: read file bytes via ContentResolver
-    App->>C: generateDEK(); encrypt content + thumbnail
+    App->>C: generateDEK()<br/> encrypt content + thumbnail
     App->>C: wrapDEKUnderMasterKey(contentDek)
     App->>S: POST /uploads/initiate [X-Api-Key]<br/>{mimeType, storage_class: "encrypted"}
     S->>App: 200 {storageKey, uploadUrl, thumbnailStorageKey, thumbnailUploadUrl}
@@ -71,7 +71,7 @@ sequenceDiagram
     App->>GCS: PUT encryptedThumb to thumbnailUploadUrl
     App->>S: POST /uploads/confirm [X-Api-Key] {all fields}
     S->>App: 201 Created
-    App-->>App: show success toast; finish share activity
+    App-->>App: show success toast<br/> finish share activity
 ```
 
 ### 3. Web Drag-and-Drop / Paste Upload (Swim-lane)
@@ -82,9 +82,9 @@ sequenceDiagram
     participant S as Server
     participant GCS as GCS
 
-    Browser-->>Browser: drop event or paste event → File object
+    Browser-->>Browser: drop event or paste event -> File object
     Browser-->>Browser: generateDek() via crypto.getRandomValues
-    Browser-->>Browser: encrypt file chunks (streaming AES-GCM)<br/>encrypt thumbnail (AES-GCM)<br/>wrapDekUnderMasterKey(dek, masterKey) → wrappedDek
+    Browser-->>Browser: encrypt file chunks (streaming AES-GCM)<br/>encrypt thumbnail (AES-GCM)<br/>wrapDekUnderMasterKey(dek, masterKey) -> wrappedDek
 
     Browser->>S: POST /uploads/initiate [X-Api-Key]<br/>{mimeType, storage_class: "encrypted"}
     S->>Browser: 200 {storageKey, uploadUrl, thumbnailStorageKey, thumbnailUploadUrl}
@@ -110,8 +110,8 @@ sequenceDiagram
     participant GCS as GCS
 
     Ext->>BUM: scheduleUpload(fileURL, mimeType)
-    BUM->>C: generateDEK(); encryptAESGCM(content); buildEnvelope
-    BUM->>C: wrapDEKUnderMasterKey(dek) → wrappedDek
+    BUM->>C: generateDEK()<br/> encryptAESGCM(content)<br/> buildEnvelope
+    BUM->>C: wrapDEKUnderMasterKey(dek) -> wrappedDek
     BUM->>S: POST /uploads/initiate [X-Api-Key]<br/>{mimeType, storage_class: "encrypted"}
     S->>BUM: 200 {storageKey, uploadUrl, thumbnailStorageKey, thumbnailUploadUrl}
     BUM->>GCS: background URLSession PUT encryptedBlob
@@ -154,11 +154,11 @@ sequenceDiagram
     participant GCS as GCS
 
     App->>S: POST /upload [X-Api-Key]<br/>Content-Type: image/jpeg<br/>[raw file bytes in body]
-    S-->>S: SHA-256 hash → dedup check<br/>store plaintext bytes in GCS<br/>generate thumbnail (server-side)<br/>extract EXIF metadata (server-side)
+    S-->>S: SHA-256 hash -> dedup check<br/>store plaintext bytes in GCS<br/>generate thumbnail (server-side)<br/>extract EXIF metadata (server-side)
     alt Duplicate
         S->>App: 409 {storageKey}
     else New
         S->>App: 201 {upload record}
     end
-    Note over App: Plaintext storage class; no wrappedDek; legacy_plaintext storage_class
+    Note over App: Plaintext storage class<br/> no wrappedDek<br/> legacy_plaintext storage_class
 ```

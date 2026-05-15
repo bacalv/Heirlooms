@@ -38,7 +38,7 @@ For the underlying protocol flows (crypto, API sequences, state machines) see th
 
 ## Journey 1: Upload and view a photo
 
-```
+```mermaid
 journey
   title Journey 1: Upload and view a photo (regression + BUG-005 retest)
   section Setup
@@ -48,7 +48,7 @@ journey
     Upload portrait-mode photo via Android: 5: Android
     Photo appears in Just Arrived on Android within 30s: 5: Android, Server
     Photo appears in Just Arrived on web within 30s: 5: Web, Server
-  section BUG-005 retest — thumbnail orientation
+  section BUG-005 retest - thumbnail orientation
     Thumbnail orientation matches full-res detail view on Android: 3: Android
     Thumbnail orientation matches full-res detail view on web: 3: Web
     Full-resolution photo loads on both platforms: 5: Android, Web
@@ -62,7 +62,7 @@ journey
 
 ## Journey 2: Invite flow
 
-```
+```mermaid
 journey
   title Journey 2: Invite flow (regression)
   section Setup
@@ -84,11 +84,11 @@ journey
 
 ## Journey 3: Friend connection
 
-```
+```mermaid
 journey
   title Journey 3: Friend connection (regression)
   section Prerequisites
-    Journey 2 complete — User A and User B both exist: 5: Bret
+    Journey 2 complete - User A and User B both exist: 5: Bret
   section Automatic friendship at invite redemption
     Confirm friendship created via API for User A: 5: Bret, Server
     Confirm friendship created via API for User B: 5: Bret, Server
@@ -96,7 +96,7 @@ journey
     User A opens burger menu on Android: 5: Android
     User A navigates to Friends screen: 5: Android
     User B appears in User A friends list: 5: Android
-  section Web (no standalone friends list — expected)
+  section Web (no standalone friends list - expected)
     Confirm web has no separate friends list page: 5: Web
 ```
 
@@ -104,30 +104,30 @@ journey
 
 ## Journey 4: Shared plot and staging approval
 
-```
+```mermaid
 journey
   title Journey 4: Shared plot + staging approval (regression + BUG-008, BUG-009 retest)
   section Prerequisites
-    Journey 3 complete — User A and User B are friends: 5: Bret
+    Journey 3 complete - User A and User B are friends: 5: Bret
   section Create shared plot
-    User A creates new shared plot "v054 Test share": 5: Android
+    User A creates new shared plot v054 Test share: 5: Android
     Shared plot appears in User A plot list: 5: Android
-  section BUG-008 retest — invite link domain
+  section BUG-008 retest - invite link domain
     User A generates share invite link via Android: 3: Android
     Verify link reads test.heirlooms.digital (not heirlooms.digital): 3: Bret, Android
   section User B joins shared plot
     User B opens the invite link in browser: 5: Web
-    User B joins "v054 Test share": 5: Web, Server
+    User B joins v054 Test share: 5: Web, Server
     Both users see shared plot in their plot lists: 5: Android, Web
   section Trellis and upload setup
-    User A creates trellis — tag "v054share" to "v054 Test share" (requires_staging=true): 5: Android
-    User A uploads photo tagged "v054share": 5: Android, Server
+    User A creates trellis - tag v054share to v054 Test share (requires_staging=true): 5: Android
+    User A uploads photo tagged v054share: 5: Android, Server
     Upload routes to staging queue for shared plot: 5: Server
-  section BUG-009 retest — cold-start staging approval
+  section BUG-009 retest - cold-start staging approval
     User A force-kills and reopens Android app: 3: Android
-    User A navigates directly to Shared → "v054 Test share": 3: Android
+    User A navigates directly to Shared > v054 Test share: 3: Android
     User A approves staged item WITHOUT visiting Garden first: 3: Android
-    Approval succeeds — no error toast: 3: Android, Server
+    Approval succeeds - no error toast: 3: Android, Server
     Approved photo appears in shared plot for User A: 5: Android
     Approved photo appears in shared plot for User B: 5: Android, Web
 ```
@@ -136,40 +136,40 @@ journey
 
 ## Journey 5: Member trellis creation for shared plot
 
-```
+```mermaid
 journey
   title Journey 5: Member trellis creation for shared plot (BUG-010 retest)
   section Prerequisites
-    Journey 4 complete — User B is a member of "v054 Test share": 5: Bret
-  section BUG-010 retest — shared plot in member dropdown
+    Journey 4 complete - User B is a member of v054 Test share: 5: Bret
+  section BUG-010 retest - shared plot in member dropdown
     User B opens web trellis creation form: 3: Web
-    "v054 Test share" appears in target plot dropdown: 3: Web
+    v054 Test share appears in target plot dropdown: 3: Web
   section Member creates trellis targeting shared plot
-    User B creates trellis — tag "b-share" to "v054 Test share" (requires_staging=true): 3: Web, Server
+    User B creates trellis - tag b-share to v054 Test share (requires_staging=true): 3: Web, Server
     Trellis saved and visible in User B trellis list: 3: Web
   section Member upload routes to shared staging queue
-    User B uploads photo tagged "b-share": 3: Web, Server
-    Upload routes to staging queue for "v054 Test share": 3: Server
+    User B uploads photo tagged b-share: 3: Web, Server
+    Upload routes to staging queue for v054 Test share: 3: Server
   section Owner approval
-    User A (owner) opens staging queue for "v054 Test share" on Android: 5: Android
+    User A (owner) opens staging queue for v054 Test share on Android: 5: Android
     User A approves the item: 5: Android, Server
-    Photo appears in "v054 Test share" for both users: 5: Android, Web
+    Photo appears in v054 Test share for both users: 5: Android, Web
 ```
 
 ---
 
 ## Journey 6: Web trellis UI labels
 
-```
+```mermaid
 journey
   title Journey 6: Web trellis UI labels (BUG-011 retest)
   section Setup
     User A logged in on web: 5: Bret, Web
     Navigate to Trellises page: 5: Web
-  section BUG-011 retest — form label
+  section BUG-011 retest - form label
     Click to create a new trellis: 3: Web
-    Form label reads "Trellis name" (not "Flow name"): 3: Bret, Web
-    Submit button reads "Create trellis" (not "Create flow"): 3: Bret, Web
+    Form label reads Trellis name (not Flow name): 3: Bret, Web
+    Submit button reads Create trellis (not Create flow): 3: Bret, Web
   section Create trellis and verify persistence
     Submit the trellis creation form: 5: Web
     New trellis saves without error: 5: Web, Server
@@ -180,26 +180,26 @@ journey
 
 ## Journey 7: Web garden reactivity after trellis routing
 
-```
+```mermaid
 journey
   title Journey 7: Web garden reactivity after trellis routing (BUG-012 retest)
   section Setup
-    User A has trellis routing tag "v054share" to "v054 Test share": 5: Bret, Web
+    User A has trellis routing tag v054share to v054 Test share: 5: Bret, Web
     A photo is visible in Just Arrived on web Garden page: 5: Web
   section Tag and optimistic removal
-    Apply tag "v054share" to the photo in Just Arrived: 5: Web
+    Apply tag v054share to the photo in Just Arrived: 5: Web
     Photo disappears from Just Arrived (optimistic update): 5: Web
-  section BUG-012 retest — live shared plot row update
+  section BUG-012 retest - live shared plot row update
     Remain on Garden page without navigating away or refreshing: 3: Bret, Web
-    "v054 Test share" shared plot row updates within ~2 seconds: 3: Web, Server
-    Photo appears in the "v054 Test share" shared plot row: 3: Web
+    v054 Test share shared plot row updates within ~2 seconds: 3: Web, Server
+    Photo appears in the v054 Test share shared plot row: 3: Web
 ```
 
 ---
 
 ## Journey 8: Web-specific upload methods
 
-```
+```mermaid
 journey
   title Journey 8: Web-specific upload methods (regression)
   section Setup
@@ -219,7 +219,7 @@ journey
 
 ## Journey 9: Android session token security
 
-```
+```mermaid
 journey
   title Journey 9: Android session token security (SEC-007 retest)
   section Prerequisites
@@ -233,24 +233,24 @@ journey
   section Session continuity
     Log out of Android staging app: 3: Android
     Log back in: 3: Android, Server
-    Session resumes correctly — app usable: 3: Android
+    Session resumes correctly - app usable: 3: Android
 ```
 
 ---
 
 ## Journey 10: Web CSP and session token storage
 
-```
+```mermaid
 journey
   title Journey 10: Web CSP + session token (SEC-008 retest)
   section Prerequisites
     Confirm SEC-008 is deployed to staging: 1: Bret
   section LocalStorage check
     Open web app in browser: 3: Web
-    Open DevTools → Application → Local Storage: 3: Bret
+    Open DevTools > Application > Local Storage: 3: Bret
     Session token is NOT present in LocalStorage: 3: Bret, Web
   section CSP header check
-    Open DevTools → Network panel: 3: Bret
+    Open DevTools > Network panel: 3: Bret
     Inspect HTML response headers: 3: Bret, Web
     Content-Security-Policy header is present: 3: Bret, Web
   section App functionality
@@ -262,7 +262,7 @@ journey
 
 ## Journey 11: iOS regression
 
-```
+```mermaid
 journey
   title Journey 11: iOS regression (if TestFlight build available)
   section Prerequisites
@@ -282,19 +282,19 @@ journey
 
 ## Journey 12: Android flavor smoke test
 
-```
+```mermaid
 journey
   title Journey 12: Android flavor smoke test (regression)
   section Prerequisites
     Android staging flavor (burnt-orange icon, v0.54 APK) installed: 5: Bret, Android
-    Journey 4 complete — "v054 Test share" shared plot exists: 5: Bret
+    Journey 4 complete - v054 Test share shared plot exists: 5: Bret
   section App launch and auth
     App launches and vault unlock screen appears: 5: Android
     Log in as User A: 5: Android, Server
   section Key screens
     Garden screen loads with Just Arrived row: 5: Android
-    Shared screen shows "v054 Test share": 5: Android
+    Shared screen shows v054 Test share: 5: Android
   section Trellis labels regression
     Open Trellises screen: 5: Android
-    All labels read "Trellis" (not "Flow"): 5: Android, Bret
+    All labels read Trellis (not Flow): 5: Android, Bret
 ```

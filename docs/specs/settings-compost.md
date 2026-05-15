@@ -30,7 +30,7 @@ sequenceDiagram
     participant S as Server
 
     App->>S: GET /me [X-Api-Key]
-    S-->>S: resolve session → userId
+    S-->>S: resolve session -> userId
     S->>App: 200 {user_id, username, display_name}
 ```
 
@@ -42,12 +42,12 @@ sequenceDiagram
     participant C as Crypto Layer
     participant S as Server
 
-    Note over App,C: User enters old passphrase → verify → enter new passphrase
-    App->>C: argon2id(newPassphrase, newSalt, {m:65536, t:3, p:1}) → kek (32 bytes)
-    App->>C: encryptSymmetric("argon2id-aes256gcm-v1", kek, masterKey)<br/>→ wrappedMasterKey (symmetric envelope)
+    Note over App,C: User enters old passphrase -> verify -> enter new passphrase
+    App->>C: argon2id(newPassphrase, newSalt, {m:65536, t:3, p:1}) -> kek (32 bytes)
+    App->>C: encryptSymmetric("argon2id-aes256gcm-v1", kek, masterKey)<br/>-> wrappedMasterKey (symmetric envelope)
 
-    App->>S: PUT /passphrase [X-Api-Key]<br/>{wrappedMasterKey (b64),<br/> wrapFormat: "argon2id-aes256gcm-v1",<br/> argon2Params: {m: 65536, t: 3, p: 1},<br/> salt (b64 — 16 random bytes)}
-    S-->>S: validate fields; upsert recovery_passphrase row
+    App->>S: PUT /passphrase [X-Api-Key]<br/>{wrappedMasterKey (b64),<br/> wrapFormat: "argon2id-aes256gcm-v1",<br/> argon2Params: {m: 65536, t: 3, p: 1},<br/> salt (b64 - 16 random bytes)}
+    S-->>S: validate fields<br/> upsert recovery_passphrase row
     alt Missing required fields
         S->>App: 400 "Missing required fields"
     else Valid
@@ -115,7 +115,7 @@ sequenceDiagram
     participant S as Server
 
     App->>S: POST /uploads/{id}/compost [X-Api-Key]
-    S-->>S: load upload; verify ownership
+    S-->>S: load upload<br/> verify ownership
     alt Upload not found
         S->>App: 404
     else Already composted
@@ -138,7 +138,7 @@ sequenceDiagram
     participant S as Server
 
     App->>S: GET /uploads/composted?limit=50 [X-Api-Key]
-    S-->>S: SELECT * FROM uploads WHERE user_id = userId AND composted_at IS NOT NULL<br/>ORDER BY composted_at DESC; cursor-paginate
+    S-->>S: SELECT * FROM uploads WHERE user_id = userId AND composted_at IS NOT NULL<br/>ORDER BY composted_at DESC<br/> cursor-paginate
     S->>App: 200 {items: [...composted upload records], nextCursor}
 
     App->>S: POST /uploads/{id}/restore [X-Api-Key]
@@ -164,7 +164,7 @@ sequenceDiagram
     Note over App: User must remove all tags before composting
 
     App->>S: PATCH /uploads/{id}/tags [X-Api-Key]<br/>{tags: []}
-    S-->>S: validateTags([]) → valid
+    S-->>S: validateTags([]) -> valid
     S-->>S: UPDATE uploads SET tags = '{}'
     S->>App: 200 {updated upload record with tags: []}
 

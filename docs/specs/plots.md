@@ -54,7 +54,7 @@ sequenceDiagram
     App->>S: GET /plots [X-Api-Key]
     S-->>S: SELECT * FROM plots WHERE owner_user_id = userId<br/>ORDER BY sort_order ASC
     S->>App: 200 [{plot records including criteria JSON, visibility, showInGarden, ...}]
-    Note over App: System plots (Just Arrived, Compost, etc.) are included;<br/>they cannot be edited or deleted
+    Note over App: System plots (Just Arrived, Compost, etc.) are included<br/><br/>they cannot be edited or deleted
 ```
 
 ### 2. Create Private Plot with Criteria
@@ -65,7 +65,7 @@ sequenceDiagram
     participant S as Server
 
     App->>S: POST /plots [X-Api-Key]<br/>{name: "Summer 2024",<br/> criteria: {type:"and", children:[<br/>   {type:"taken_after", date:"2024-06-01"},<br/>   {type:"taken_before", date:"2024-08-31"}]},<br/> show_in_garden: true,<br/> visibility: "private"}
-    S-->>S: validateAndSerializeCriteria(node, userId)<br/>→ checks atom types, recursion depth ≤ 10<br/>→ resolves plot_ref atoms (cycle detection)
+    S-->>S: validateAndSerializeCriteria(node, userId)<br/>-> checks atom types, recursion depth <= 10<br/>-> resolves plot_ref atoms (cycle detection)
     alt Criteria invalid
         S->>App: 400 "Invalid criteria: ..."
     else Valid
@@ -82,8 +82,8 @@ sequenceDiagram
     participant C as Crypto Layer
     participant S as Server
 
-    App->>C: generatePlotKey() → 32 random bytes (plotKey)
-    App->>C: wrapPlotKeyForMember(plotKey, ownSharingPubkey)<br/>→ {wrappedKey, format: "p256-ecdh-hkdf-aes256gcm-v1"}
+    App->>C: generatePlotKey() -> 32 random bytes (plotKey)
+    App->>C: wrapPlotKeyForMember(plotKey, ownSharingPubkey)<br/>-> {wrappedKey, format: "p256-ecdh-hkdf-aes256gcm-v1"}
 
     App->>S: POST /plots [X-Api-Key]<br/>{name: "Family Album",<br/> visibility: "shared",<br/> wrappedPlotKey (b64),<br/> plotKeyFormat: "p256-ecdh-hkdf-aes256gcm-v1",<br/> show_in_garden: true}
     S-->>S: validate wrappedPlotKey + plotKeyFormat required for shared
@@ -99,7 +99,7 @@ sequenceDiagram
     participant S as Server
 
     App->>S: PUT /plots/{id} [X-Api-Key]<br/>{name: "New Name", show_in_garden: false,<br/> criteria: {type: "tag", tag: "vacation"}}
-    S-->>S: load plot; check ownership
+    S-->>S: load plot<br/> check ownership
     alt System-defined plot
         S->>App: 403 {error: "Cannot modify a system-defined plot"}
     else User-defined
@@ -117,7 +117,7 @@ sequenceDiagram
     participant S as Server
 
     App->>S: DELETE /plots/{id} [X-Api-Key]
-    S-->>S: load plot; check ownership
+    S-->>S: load plot<br/> check ownership
     alt System-defined
         S->>App: 403 {error: "Cannot delete a system-defined plot"}
     else Not found
@@ -155,6 +155,6 @@ sequenceDiagram
     Note over App: User attempts to create a plot that references another plot<br/>which already references back (cycle)
 
     App->>S: POST /plots [X-Api-Key]<br/>{criteria: {type:"plot_ref", plot_id:"uuid-A"}}
-    S-->>S: evalNode(plot_ref) → load plot A's criteria<br/>recurse into plot A → encounters plot being created<br/>or exceeds depth=10
+    S-->>S: evalNode(plot_ref) -> load plot A's criteria<br/>recurse into plot A -> encounters plot being created<br/>or exceeds depth=10
     S->>App: 400 "Circular plot_ref detected"<br/>or "Criteria expression exceeds maximum nesting depth of 10"
 ```

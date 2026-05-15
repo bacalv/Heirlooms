@@ -27,7 +27,7 @@ sequenceDiagram
     participant GCS as GCS / Storage
 
     App->>S: GET /uploads?limit=50&sort=upload_newest [X-Api-Key]
-    S-->>S: query uploads for user (not composted)<br/>apply filters; cursor-paginate
+    S-->>S: query uploads for user (not composted)<br/>apply filters<br/> cursor-paginate
     S->>App: 200 {items: [...], nextCursor}
 
     loop For each visible thumbnail
@@ -35,7 +35,7 @@ sequenceDiagram
         S->>GCS: fetch encrypted thumbnail blob
         GCS->>S: blob bytes
         S->>App: 200 Content-Type: application/octet-stream (encrypted)
-        App-->>App: unwrapDekWithMasterKey(wrappedThumbDek)<br/>→ thumbDek<br/>decryptSymmetric(blob, thumbDek) → JPEG bytes<br/>display thumbnail
+        App-->>App: unwrapDekWithMasterKey(wrappedThumbDek)<br/>-> thumbDek<br/>decryptSymmetric(blob, thumbDek) -> JPEG bytes<br/>display thumbnail
     end
 ```
 
@@ -71,7 +71,7 @@ sequenceDiagram
     App->>S: GET /uploads/{id} [X-Api-Key]
     S->>App: 200 {upload record including wrappedDek, dekFormat, storageKey, ...}
 
-    App->>C: unwrapDekWithMasterKey(wrappedDek) → contentDek
+    App->>C: unwrapDekWithMasterKey(wrappedDek) -> contentDek
 
     App->>S: GET /uploads/{id}/file [X-Api-Key]
     Note over S: Supports Range header for video streaming
@@ -79,7 +79,7 @@ sequenceDiagram
     GCS->>S: encrypted blob
     S->>App: 200 Content-Type: application/octet-stream<br/>(or 206 Partial Content for range requests)
 
-    App->>C: decryptStreamingContent(blob, contentDek)<br/>→ plaintext bytes
+    App->>C: decryptStreamingContent(blob, contentDek)<br/>-> plaintext bytes
     App-->>App: display image / play video
 
     App->>S: POST /uploads/{id}/view [X-Api-Key]
@@ -101,7 +101,7 @@ sequenceDiagram
 
     App->>S: GET /uploads?...&cursor={nextCursor}
     S->>App: 200 {items: [...], nextCursor: null}
-    Note over App: nextCursor null → end of results
+    Note over App: nextCursor null -> end of results
 ```
 
 ### 5. Plot Row (Filter by Plot)
@@ -124,12 +124,12 @@ sequenceDiagram
     participant App as Client App
     participant S as Server
 
-    App-->>App: SHA-256(plaintext bytes) → hexHash
+    App-->>App: SHA-256(plaintext bytes) -> hexHash
 
     App->>S: GET /uploads/hash/{hexHash} [X-Api-Key]
     alt Duplicate found
         S->>App: 200 {exists: true}
-        Note over App: Skip upload — already in library
+        Note over App: Skip upload - already in library
     else New content
         S->>App: 404
         Note over App: Proceed with upload flow

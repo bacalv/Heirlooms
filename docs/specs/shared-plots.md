@@ -39,8 +39,8 @@ sequenceDiagram
     participant C as Crypto Layer
     participant S as Server
 
-    Owner->>C: generatePlotKey() → plotKey (32 random bytes)
-    Owner->>C: wrapPlotKeyForMember(plotKey, ownSharingPubkeySpki)<br/>→ {wrappedKey (asymmetric envelope), format: "p256-ecdh-hkdf-aes256gcm-v1"}
+    Owner->>C: generatePlotKey() -> plotKey (32 random bytes)
+    Owner->>C: wrapPlotKeyForMember(plotKey, ownSharingPubkeySpki)<br/>-> {wrappedKey (asymmetric envelope), format: "p256-ecdh-hkdf-aes256gcm-v1"}
 
     Owner->>S: POST /plots [X-Api-Key]<br/>{name: "Family Album",<br/> visibility: "shared",<br/> wrappedPlotKey (b64),<br/> plotKeyFormat: "p256-ecdh-hkdf-aes256gcm-v1",<br/> show_in_garden: true}
     S-->>S: createPlot(visibility="shared")<br/>createMemberRecord(owner, role="owner",<br/>  wrappedPlotKey, plotKeyFormat)
@@ -57,14 +57,14 @@ sequenceDiagram
 
     Note over Owner,C: Owner already has friend's sharing pubkey
     Owner->>S: GET /sharing/{friendUserId} [X-Api-Key]
-    S-->>S: verify friendship; return friend's pubkey
+    S-->>S: verify friendship<br/> return friend's pubkey
     S->>Owner: 200 {pubkey (b64)}
 
     Owner->>S: GET /plots/{plotId}/plot-key [X-Api-Key]
     S->>Owner: 200 {wrappedPlotKey (b64), format}
 
-    Owner->>C: unwrapPlotKey(wrappedPlotKey, ownSharingPrivkey) → plotKey
-    Owner->>C: wrapPlotKeyForMember(plotKey, friendSharingPubkeySpki)<br/>→ {wrappedKey, format: "p256-ecdh-hkdf-aes256gcm-v1"}
+    Owner->>C: unwrapPlotKey(wrappedPlotKey, ownSharingPrivkey) -> plotKey
+    Owner->>C: wrapPlotKeyForMember(plotKey, friendSharingPubkeySpki)<br/>-> {wrappedKey, format: "p256-ecdh-hkdf-aes256gcm-v1"}
 
     Owner->>S: POST /plots/{plotId}/members [X-Api-Key]<br/>{userId: friendUserId,<br/> wrappedPlotKey (b64),<br/> plotKeyFormat: "p256-ecdh-hkdf-aes256gcm-v1"}
     S-->>S: verify ownership or membership<br/>verify friendship(owner, friend)<br/>check not already member
@@ -88,7 +88,7 @@ sequenceDiagram
     participant S as Server
 
     Owner->>S: POST /plots/{plotId}/invites [X-Api-Key]
-    S-->>S: generate 48-hour token; store invite record
+    S-->>S: generate 48-hour token<br/> store invite record
     S->>Owner: 201 {token, expires_at}
 
     Note over Owner,Recipient: Owner shares invite link out-of-band
@@ -97,7 +97,7 @@ sequenceDiagram
     S-->>S: validate token (not expired, not used)
     S->>Recipient: 200 {plotId, plotName, inviterDisplayName, inviterUserId}
 
-    Recipient->>S: POST /plots/join [X-Api-Key]<br/>{token,<br/> recipientSharingPubkey (b64 — recipient's sharing pubkey)}
+    Recipient->>S: POST /plots/join [X-Api-Key]<br/>{token,<br/> recipientSharingPubkey (b64 - recipient's sharing pubkey)}
     S-->>S: redeemInvite: create pending_plot_key_request<br/>(store recipient pubkey, invite_id, state="pending")
     S->>Recipient: 200 {state: "pending", inviteId, inviterDisplayName}
 
@@ -106,8 +106,8 @@ sequenceDiagram
         S->>Owner: 200 [{inviteId, recipientPubkey, ...}]
     end
 
-    Owner->>C: unwrapPlotKey(wrappedPlotKey, ownSharingPrivkey) → plotKey
-    Owner->>C: wrapPlotKeyForMember(plotKey, recipientSharingPubkeySpki)<br/>→ {wrappedPlotKey, format: "p256-ecdh-hkdf-aes256gcm-v1"}
+    Owner->>C: unwrapPlotKey(wrappedPlotKey, ownSharingPrivkey) -> plotKey
+    Owner->>C: wrapPlotKeyForMember(plotKey, recipientSharingPubkeySpki)<br/>-> {wrappedPlotKey, format: "p256-ecdh-hkdf-aes256gcm-v1"}
 
     Owner->>S: POST /plots/{plotId}/members/pending/{inviteId}/confirm [X-Api-Key]<br/>{wrappedPlotKey (b64), plotKeyFormat}
     S-->>S: create member record with status="invited"<br/>store wrapped plot key for recipient
@@ -115,14 +115,14 @@ sequenceDiagram
 
     Note over Recipient,S: Recipient's client is notified / polls
     Recipient->>S: POST /plots/{plotId}/accept [X-Api-Key]<br/>{localName: "Family Album"}
-    S-->>S: update membership status → "active"
+    S-->>S: update membership status -> "active"
     S->>Recipient: 204 No Content
 
     Note over Recipient,C: Recipient can now fetch their wrapped plot key
     Recipient->>S: GET /plots/{plotId}/plot-key [X-Api-Key]
     S->>Recipient: 200 {wrappedPlotKey (b64), format}
-    Recipient->>C: unwrapPlotKey(wrappedPlotKey, recipientSharingPrivkey) → plotKey
-    Note over Recipient,C: Plot key in memory; can decrypt plot items
+    Recipient->>C: unwrapPlotKey(wrappedPlotKey, recipientSharingPrivkey) -> plotKey
+    Note over Recipient,C: Plot key in memory<br/> can decrypt plot items
 ```
 
 ### 4. Member Adds Item to Shared Plot
@@ -136,14 +136,14 @@ sequenceDiagram
     Member->>S: GET /plots/{plotId}/plot-key [X-Api-Key]
     S->>Member: 200 {wrappedPlotKey (b64), format}
 
-    Member->>C: unwrapPlotKey(wrappedPlotKey, sharingPrivkey) → plotKey
-    Member->>C: unwrapDekWithMasterKey(upload.wrappedDek) → contentDek
-    Member->>C: wrapDekWithPlotKey(contentDek, plotKey)<br/>→ {wrappedItemDek, format: "plot-aes256gcm-v1"}
-    Member->>C: unwrapDekWithMasterKey(upload.wrappedThumbnailDek) → thumbDek
-    Member->>C: wrapDekWithPlotKey(thumbDek, plotKey) → {wrappedThumbDek, format}
+    Member->>C: unwrapPlotKey(wrappedPlotKey, sharingPrivkey) -> plotKey
+    Member->>C: unwrapDekWithMasterKey(upload.wrappedDek) -> contentDek
+    Member->>C: wrapDekWithPlotKey(contentDek, plotKey)<br/>-> {wrappedItemDek, format: "plot-aes256gcm-v1"}
+    Member->>C: unwrapDekWithMasterKey(upload.wrappedThumbnailDek) -> thumbDek
+    Member->>C: wrapDekWithPlotKey(thumbDek, plotKey) -> {wrappedThumbDek, format}
 
     Member->>S: POST /plots/{plotId}/items [X-Api-Key]<br/>{uploadId,<br/> wrappedItemDek (b64), itemDekFormat: "plot-aes256gcm-v1",<br/> wrappedThumbnailDek? (b64), thumbnailDekFormat?}
-    S-->>S: verify membership; verify upload ownership<br/>store wrapped_dek with plot_items row
+    S-->>S: verify membership<br/> verify upload ownership<br/>store wrapped_dek with plot_items row
     alt Not a member
         S->>Member: 404
     else Plot closed
@@ -182,12 +182,12 @@ sequenceDiagram
     else Target not active member
         S->>Owner: 400 "Target user is not an active member"
     else Success
-        S-->>S: UPDATE role to "owner" for newOwner; demote caller to "member"
+        S-->>S: UPDATE role to "owner" for newOwner<br/> demote caller to "member"
         S->>Owner: 204 No Content
     end
 
     Owner->>S: POST /plots/{plotId}/leave [X-Api-Key]
-    S-->>S: verify membership; owner must have already transferred
+    S-->>S: verify membership<br/> owner must have already transferred
     S->>Owner: 204 No Content
 ```
 

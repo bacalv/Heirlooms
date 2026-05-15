@@ -70,7 +70,7 @@ sequenceDiagram
     participant S as Server
 
     App->>S: POST /capsules [X-Api-Key]<br/>{shape: "sealed",<br/> unlock_at: "2030-06-15T00:00:00+00:00",<br/> recipients: ["charlie"],<br/> upload_ids: ["uuid1"]}
-    S-->>S: shape="sealed" → require at least one upload
+    S-->>S: shape="sealed" -> require at least one upload
     S-->>S: INSERT capsule with state="sealed" directly
     S->>App: 201 {capsule detail with state: "sealed"}
     Note over App: Contents are immediately immutable
@@ -84,7 +84,7 @@ sequenceDiagram
     participant S as Server
 
     App->>S: PATCH /capsules/{id} [X-Api-Key]<br/>{message: "Updated message.",<br/> unlock_at: "2028-01-01T00:00:00+00:00"}
-    S-->>S: load capsule; verify ownership
+    S-->>S: load capsule<br/> verify ownership
     alt Terminal state (delivered / cancelled)
         S->>App: 409 {error: "capsule is in a terminal state and cannot be modified"}
     else Sealed + trying to change upload_ids
@@ -105,7 +105,7 @@ sequenceDiagram
     participant S as Server
 
     App->>S: POST /capsules/{id}/seal [X-Api-Key]
-    S-->>S: load capsule; verify ownership
+    S-->>S: load capsule<br/> verify ownership
     alt Not in "open" state
         S->>App: 409 {error: "capsule cannot be sealed in its current state"}
     else No uploads
@@ -114,7 +114,7 @@ sequenceDiagram
         S-->>S: UPDATE capsules SET state = "sealed"
         S->>App: 200 {capsule detail with state: "sealed"}
     end
-    Note over App: Contents are now immutable; unlock_at still editable via PATCH
+    Note over App: Contents are now immutable<br/> unlock_at still editable via PATCH
 ```
 
 ### 5. Cancel a Capsule
@@ -125,7 +125,7 @@ sequenceDiagram
     participant S as Server
 
     App->>S: POST /capsules/{id}/cancel [X-Api-Key]
-    S-->>S: load capsule; verify ownership
+    S-->>S: load capsule<br/> verify ownership
     alt Already terminal (delivered / cancelled)
         S->>App: 409 {error: "capsule is already in a terminal state"}
     else Not found
@@ -144,7 +144,7 @@ sequenceDiagram
     participant S as Server
 
     App->>S: GET /capsules?state=open,sealed&order=unlock_at [X-Api-Key]
-    S-->>S: filter by state list; order by unlock_at
+    S-->>S: filter by state list<br/> order by unlock_at
     S->>App: 200 {capsules: [{capsule summaries}]}
 
     App->>S: GET /capsules/{id} [X-Api-Key]
@@ -180,7 +180,7 @@ sequenceDiagram
     participant S as Server
     participant Recipient as Recipient (client)
 
-    Note over S,Recipient: M12 — not implemented<br/>Trigger: scheduled job checks unlock_at <= NOW() for sealed capsules<br/>Action: update state to "delivered"; notify recipients<br/>Recipient view: GET /capsules/{id} returns full contents
+    Note over S,Recipient: M12 - not implemented<br/>Trigger: scheduled job checks unlock_at <= NOW() for sealed capsules<br/>Action: update state to "delivered"<br/> notify recipients<br/>Recipient view: GET /capsules/{id} returns full contents
 ```
 
 ### 9. Posthumous Unlock — STUB (M13, Out of Scope)
@@ -190,5 +190,5 @@ sequenceDiagram
     participant S as Server
     participant Executor as Designated Executor
 
-    Note over S,Executor: M13 — not implemented<br/>Mechanism TBD (executor key, dead-man switch, or notary)<br/>Outcome: designated executor can unlock capsule on behalf of deceased user
+    Note over S,Executor: M13 - not implemented<br/>Mechanism TBD (executor key, dead-man switch, or notary)<br/>Outcome: designated executor can unlock capsule on behalf of deceased user
 ```

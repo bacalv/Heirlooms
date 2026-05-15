@@ -73,7 +73,7 @@ sequenceDiagram
     participant S as Server
 
     App->>S: GET /flows/{flowId}/staging [X-Api-Key]
-    S-->>S: load flow; verify ownership; query staging items for this flow
+    S-->>S: load flow<br/> verify ownership<br/> query staging items for this flow
     S->>App: 200 [{upload records in pending staging state}]
 
     App->>S: GET /plots/{plotId}/staging [X-Api-Key]
@@ -89,10 +89,10 @@ sequenceDiagram
     participant S as Server
 
     App->>S: POST /plots/{plotId}/staging/{uploadId}/approve [X-Api-Key]<br/>{sourceFlowId: "uuid"}
-    S-->>S: verify plot ownership (PlotNotOwned → 404)
-    S-->>S: verify plot not closed (PlotClosed → 403)
-    S-->>S: check item in pending state (NotFound → 404)
-    S-->>S: check no duplicate content (DuplicateContent → 204 silently)
+    S-->>S: verify plot ownership (PlotNotOwned -> 404)
+    S-->>S: verify plot not closed (PlotClosed -> 403)
+    S-->>S: check item in pending state (NotFound -> 404)
+    S-->>S: check no duplicate content (DuplicateContent -> 204 silently)
     alt Already approved
         S->>App: 409 "Item is already in the collection"
     else Success
@@ -113,14 +113,14 @@ sequenceDiagram
     App->>S: GET /plots/{plotId}/plot-key [X-Api-Key]
     S->>App: 200 {wrappedPlotKey (b64), format}
 
-    App->>C: unwrapPlotKey(wrappedPlotKey, ownSharingPrivkey) → plotKey
-    App->>C: unwrapDekWithMasterKey(upload.wrappedDek) → contentDek
-    App->>C: wrapDekWithPlotKey(contentDek, plotKey)<br/>→ {wrappedItemDek, format: "plot-aes256gcm-v1"}
-    App->>C: unwrapDekWithMasterKey(upload.wrappedThumbnailDek) → thumbDek
-    App->>C: wrapDekWithPlotKey(thumbDek, plotKey) → {wrappedThumbnailDek, format}
+    App->>C: unwrapPlotKey(wrappedPlotKey, ownSharingPrivkey) -> plotKey
+    App->>C: unwrapDekWithMasterKey(upload.wrappedDek) -> contentDek
+    App->>C: wrapDekWithPlotKey(contentDek, plotKey)<br/>-> {wrappedItemDek, format: "plot-aes256gcm-v1"}
+    App->>C: unwrapDekWithMasterKey(upload.wrappedThumbnailDek) -> thumbDek
+    App->>C: wrapDekWithPlotKey(thumbDek, plotKey) -> {wrappedThumbnailDek, format}
 
     App->>S: POST /plots/{plotId}/staging/{uploadId}/approve [X-Api-Key]<br/>{sourceFlowId, wrappedItemDek (b64),<br/> itemDekFormat: "plot-aes256gcm-v1",<br/> wrappedThumbnailDek (b64), thumbnailDekFormat}
-    S-->>S: decode wrappedItemDek; store alongside plot_items record
+    S-->>S: decode wrappedItemDek<br/> store alongside plot_items record
     S-->>S: INSERT INTO plot_items (plot_id, upload_id, wrapped_dek, dek_format, ...)
     S->>App: 204 No Content
 ```
@@ -135,7 +135,7 @@ sequenceDiagram
     App->>S: POST /plots/{plotId}/staging/{uploadId}/reject [X-Api-Key]<br/>{sourceFlowId: "uuid"}
     S-->>S: verify plot ownership
     alt Already approved
-        S->>App: 409 "Item is already approved — remove it from the collection first"
+        S->>App: 409 "Item is already approved - remove it from the collection first"
     else Success
         S-->>S: INSERT/UPDATE staging decision state="rejected"
         S->>App: 204 No Content
@@ -152,7 +152,7 @@ sequenceDiagram
     participant S as Server
 
     App->>S: DELETE /plots/{plotId}/staging/{uploadId}/decision [X-Api-Key]
-    S-->>S: verify plot ownership; delete decision record
+    S-->>S: verify plot ownership<br/> delete decision record
     alt Found and deleted
         S->>App: 204 No Content
     else Not found
@@ -169,7 +169,7 @@ sequenceDiagram
     participant S as Server
 
     App->>S: POST /plots/{plotId}/items [X-Api-Key]<br/>{uploadId: "uuid"}<br/>or for shared plot:<br/>{uploadId, wrappedItemDek (b64), itemDekFormat,<br/> wrappedThumbnailDek? (b64), thumbnailDekFormat?}
-    S-->>S: verify plot ownership or membership<br/>verify upload owned by userId<br/>for shared: decode wrappedItemDek; store with record
+    S-->>S: verify plot ownership or membership<br/>verify upload owned by userId<br/>for shared: decode wrappedItemDek<br/> store with record
     alt Already present
         S->>App: 409 "Item already in collection"
     else Plot closed
@@ -180,7 +180,7 @@ sequenceDiagram
     end
 
     App->>S: DELETE /plots/{plotId}/items/{uploadId} [X-Api-Key]
-    S-->>S: verify ownership/membership; delete plot_items row
+    S-->>S: verify ownership/membership<br/> delete plot_items row
     S->>App: 204 No Content
 ```
 
@@ -199,5 +199,5 @@ sequenceDiagram
     S-->>S: flow routing: match found, requiresStaging=false
     S-->>S: INSERT INTO plot_items directly (no staging step)
     S->>App: 201 Created
-    Note over App: Item is immediately in collection; no staging approval needed
+    Note over App: Item is immediately in collection<br/> no staging approval needed
 ```
