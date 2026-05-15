@@ -61,6 +61,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [DOC-002](done/DOC-002_doc-cleanup-history-backfill.md) | Doc cleanup + history backfill from git | Docs | 2026-05-14 |
 | [IOS-001](done/IOS-001_qr-scanner-avfoundation.md) | Complete iOS QRScannerView (AVFoundation) | iOS | 2026-05-15 |
 | [SEC-001](done/SEC-001_security-hardening.md) | Security hardening + threat model | Security | 2026-05-15 |
+| [BUG-003](done/BUG-003_upload-worker-hardcoded-prod-url.md) | UploadWorker hardcoded prod URL fix | Bug Fix | 2026-05-15 |
 
 ## Brainstorming
 
