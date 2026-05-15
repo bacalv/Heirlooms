@@ -178,7 +178,60 @@ The following rule should be added to `CLAUDE.md` and all agent persona files:
 |---|---|---|
 | Redact working-tree files | SecurityManager (SEC-010) | DONE |
 | Install pre-commit hook | SecurityManager (SEC-010) | DONE |
-| Rotate key in Secret Manager | Bret (CTO) | PENDING |
-| Disable old key version | Bret (CTO) | PENDING |
+| Rotate key in Secret Manager (new version 2 created) | Bret (CTO) | DONE — 2026-05-15 |
+| Disable old key version (version 1) | Bret (CTO) | PENDING — see §8 |
 | Verify staging API works with new key | Bret (CTO) | PENDING |
 | Update `create-agent-workspace.sh` | OpsManager | RECOMMENDED |
+
+---
+
+## 8. Recommended follow-up actions (Bret — manual)
+
+### 8.1 Disable Secret Manager version 1 (REQUIRED)
+
+Version 2 of `heirlooms-test-api-key` was created by Bret on 2026-05-15. Version 1
+(the exposed value) is **still enabled** in Secret Manager as of 2026-05-15.
+
+Once Cloud Run staging (`heirlooms-server-test`) is confirmed to be using the new
+version 2 key, disable version 1:
+
+```bash
+gcloud secrets versions disable 1 \
+  --secret=heirlooms-test-api-key \
+  --project heirlooms-495416
+```
+
+To confirm Cloud Run is using the new version, verify staging health and that an
+invite can be generated with the new key:
+
+```bash
+# Fetch the new key value
+NEW_KEY=$(gcloud secrets versions access 2 \
+  --secret=heirlooms-test-api-key --project heirlooms-495416)
+
+# Test it against staging
+curl -s -H "X-API-Key: $NEW_KEY" \
+  https://test.api.heirlooms.digital/api/auth/invites
+```
+
+Expected: HTTP 200 with an invite token JSON. Once confirmed, disable version 1.
+
+### 8.2 Activate pre-commit hook in all worktrees
+
+Run the following in the main worktree and each active agent worktree:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Or add it to `scripts/create-agent-workspace.sh` so future worktrees get it
+automatically (see recommendation 2 in §6 above).
+
+### 8.3 Add no-hardcoding rule to CLAUDE.md and persona files
+
+Add to `CLAUDE.md` (under "Agent constraints") and all agent persona files:
+
+> **Never hardcode secret values** in task files, docs, or code. Reference the
+> Secret Manager secret name only (e.g. `heirlooms-test-api-key`). To use a
+> secret locally, fetch it at runtime:
+> `gcloud secrets versions access latest --secret=<name> --project heirlooms-495416`

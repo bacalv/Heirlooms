@@ -134,12 +134,24 @@ sufficient. Document the decision either way.
    commit SHAs, affected files, redactions performed, history rewrite decision
    (no rewrite — repo is private, key will be rotated), and recommendations.
 
+### Update — 2026-05-15 (session 2)
+
+Bret confirmed: Secret Manager version 2 of `heirlooms-test-api-key` was created
+on 2026-05-15. Old version 1 is still enabled — to be disabled once Cloud Run
+is confirmed using version 2. See scan report §8 for the disable command.
+
+Additional file redacted in this session: `tasks/queue/TST-007_manual-staging-checklist-v054.md`
+(file was created after the initial commit; key appeared in 2 places).
+
+Scan report updated: key rotation status table updated, §8 "Recommended follow-up
+actions" added with disable command, verification steps, and hook activation instructions.
+
 ### Outstanding actions (Bret — manual)
 
-- Rotate the staging API key in Secret Manager (add new version, disable old)
-- Verify staging API works with new key
+- **Disable Secret Manager version 1** of `heirlooms-test-api-key` after confirming staging works with version 2 (see scan report §8.1)
+- Verify staging API works with new key (version 2)
 - Add `git config core.hooksPath .githooks` to `scripts/create-agent-workspace.sh`
-- Add no-hardcoding rule to CLAUDE.md and agent persona files
+- Add no-hardcoding rule to CLAUDE.md and agent persona files (see scan report §8.3)
 
 ### Files changed
 
@@ -147,6 +159,7 @@ sufficient. Document the decision either way.
 - `tasks/done/TST-003_manual-staging-checklist.md` — 2 redactions
 - `tasks/queue/TST-004_playwright-e2e-suite.md` — 1 redaction
 - `tasks/queue/TST-005_playwright-infrastructure.md` — 1 redaction (removed hardcoded fallback guidance)
+- `tasks/queue/TST-007_manual-staging-checklist-v054.md` — 2 redactions (added in session 2)
 - `docs/testing/TST-003_walkthrough.md` — 3 redactions
 - `tasks/queue/SEC-010_git-history-secret-scan.md` — 1 redaction (this file)
 - `.githooks/pre-commit` — new tracked hook file
