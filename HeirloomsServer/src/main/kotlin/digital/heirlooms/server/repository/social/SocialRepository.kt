@@ -6,7 +6,9 @@ import java.util.UUID
 import javax.sql.DataSource
 
 interface SocialRepository {
-    fun upsertSharingKey(userId: UUID, pubkey: ByteArray, wrappedPrivkey: ByteArray, wrapFormat: String)
+    /** Insert a sharing key for [userId] only if one does not already exist.
+     *  Returns true if the row was inserted, false if one was already present. */
+    fun insertSharingKeyIfAbsent(userId: UUID, pubkey: ByteArray, wrappedPrivkey: ByteArray, wrapFormat: String): Boolean
     fun getSharingKey(userId: UUID): digital.heirlooms.server.domain.keys.AccountSharingKeyRecord?
     fun listFriends(userId: UUID): List<digital.heirlooms.server.domain.keys.FriendRecord>
     fun createFriendship(a: UUID, b: UUID)
@@ -15,20 +17,18 @@ interface SocialRepository {
 
 class PostgresSocialRepository(private val dataSource: DataSource) : SocialRepository {
 
-    override fun upsertSharingKey(userId: UUID, pubkey: ByteArray, wrappedPrivkey: ByteArray, wrapFormat: String) {
+    override fun insertSharingKeyIfAbsent(userId: UUID, pubkey: ByteArray, wrappedPrivkey: ByteArray, wrapFormat: String): Boolean {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """INSERT INTO account_sharing_keys (user_id, pubkey, wrapped_privkey, wrap_format)
                    VALUES (?, ?, ?, ?)
-                   ON CONFLICT (user_id) DO UPDATE
-                   SET pubkey = EXCLUDED.pubkey, wrapped_privkey = EXCLUDED.wrapped_privkey,
-                       wrap_format = EXCLUDED.wrap_format"""
+                   ON CONFLICT (user_id) DO NOTHING"""
             ).use { stmt ->
                 stmt.setObject(1, userId)
                 stmt.setString(2, java.util.Base64.getEncoder().encodeToString(pubkey))
                 stmt.setString(3, java.util.Base64.getEncoder().encodeToString(wrappedPrivkey))
                 stmt.setString(4, wrapFormat)
-                stmt.executeUpdate()
+                return stmt.executeUpdate() > 0
             }
         }
     }

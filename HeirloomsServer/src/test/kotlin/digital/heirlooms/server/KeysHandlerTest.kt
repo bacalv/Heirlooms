@@ -282,4 +282,63 @@ class KeysHandlerTest {
 
         assertEquals(NOT_FOUND, response.status)
     }
+
+    // ---- Sharing key (insert-only) ----
+
+    private fun validSharingKeyBody() = """
+        {
+          "pubkey": "${enc.encodeToString(ByteArray(91) { 1 })}",
+          "wrappedPrivkey": "${enc.encodeToString(ByteArray(128) { 2 })}",
+          "wrapFormat": "master-aes256gcm-v1"
+        }
+    """.trimIndent()
+
+    @Test
+    fun `put sharing key returns 204 when inserted`() {
+        every { mockSocialRepo.insertSharingKeyIfAbsent(any(), any(), any(), any()) } returns true
+
+        val response = app(
+            Request(PUT, "/api/keys/sharing")
+                .header("Content-Type", "application/json")
+                .body(validSharingKeyBody())
+        )
+
+        assertEquals(NO_CONTENT, response.status)
+        verify { mockSocialRepo.insertSharingKeyIfAbsent(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `put sharing key returns 409 when key already exists`() {
+        every { mockSocialRepo.insertSharingKeyIfAbsent(any(), any(), any(), any()) } returns false
+
+        val response = app(
+            Request(PUT, "/api/keys/sharing")
+                .header("Content-Type", "application/json")
+                .body(validSharingKeyBody())
+        )
+
+        assertEquals(CONFLICT, response.status)
+    }
+
+    @Test
+    fun `put sharing key returns 400 when pubkey is missing`() {
+        val response = app(
+            Request(PUT, "/api/keys/sharing")
+                .header("Content-Type", "application/json")
+                .body("""{"wrappedPrivkey":"${enc.encodeToString(ByteArray(128){2})}","wrapFormat":"master-aes256gcm-v1"}""")
+        )
+
+        assertEquals(BAD_REQUEST, response.status)
+    }
+
+    @Test
+    fun `put sharing key returns 400 when pubkey is invalid base64`() {
+        val response = app(
+            Request(PUT, "/api/keys/sharing")
+                .header("Content-Type", "application/json")
+                .body("""{"pubkey":"not-valid-base64!!!","wrappedPrivkey":"${enc.encodeToString(ByteArray(128){2})}","wrapFormat":"master-aes256gcm-v1"}""")
+        )
+
+        assertEquals(BAD_REQUEST, response.status)
+    }
 }

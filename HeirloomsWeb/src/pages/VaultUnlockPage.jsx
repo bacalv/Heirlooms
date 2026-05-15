@@ -20,14 +20,23 @@ async function loadSharingKey(apiKey, masterKey) {
 
 // Generates and uploads a sharing keypair if none exists yet.
 // Safe to call after loadSharingKey — skips generation if the key is already loaded.
+// If the server already has a key (409), falls back to loading the existing key.
 async function ensureSharingKey(apiKey, masterKey) {
   if (vaultSession.getSharingPrivkey() !== null) return
   try {
     const { privkeyPkcs8, pubkeySpki } = await vault.generateSharingKeypair()
     const wrappedPrivkey = await vault.wrapDekUnderMasterKey(privkeyPkcs8, masterKey)
-    await putSharingKey(apiKey, vault.toB64(pubkeySpki), vault.toB64(wrappedPrivkey), vault.ALG_MASTER_AES256GCM_V1)
-    const cryptoKey = await vault.importSharingPrivkey(privkeyPkcs8)
-    vaultSession.setSharingPrivkey(cryptoKey)
+    try {
+      await putSharingKey(apiKey, vault.toB64(pubkeySpki), vault.toB64(wrappedPrivkey), vault.ALG_MASTER_AES256GCM_V1)
+      const cryptoKey = await vault.importSharingPrivkey(privkeyPkcs8)
+      vaultSession.setSharingPrivkey(cryptoKey)
+    } catch (uploadErr) {
+      // 409 means a sharing key is already registered (e.g. from Android). Load it.
+      if (uploadErr.message?.includes('409')) {
+        await loadSharingKey(apiKey, masterKey)
+      }
+      // Any other error: best-effort, will retry on next unlock
+    }
   } catch { /* best-effort; will retry on next unlock */ }
 }
 

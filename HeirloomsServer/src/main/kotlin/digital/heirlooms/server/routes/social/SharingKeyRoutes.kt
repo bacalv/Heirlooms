@@ -12,6 +12,7 @@ import org.http4k.core.Method.PUT
 import org.http4k.core.Request
 import org.http4k.core.Response
 import org.http4k.core.Status.Companion.BAD_REQUEST
+import org.http4k.core.Status.Companion.CONFLICT
 import org.http4k.core.Status.Companion.FORBIDDEN
 import org.http4k.core.Status.Companion.INTERNAL_SERVER_ERROR
 import org.http4k.core.Status.Companion.NOT_FOUND
@@ -30,10 +31,10 @@ fun sharingKeyRoutes(socialService: SocialService): List<ContractRoute> = listOf
     getFriendSharingKeyRoute(socialService),
 )
 
-// PUT /sharing — upload or replace own sharing keypair
+// PUT /sharing — upload sharing keypair (insert-only; 409 if one already exists)
 private fun putSharingKeyRoute(socialService: SocialService): ContractRoute =
     "/sharing" meta {
-        summary = "Upload account-level sharing public key and wrapped private key"
+        summary = "Upload account-level sharing public key and wrapped private key (insert-only; 409 if already registered)"
     } bindContract PUT to { request: Request ->
         try {
             val userId = request.authUserId() ?: return@to Response(FORBIDDEN)
@@ -45,6 +46,7 @@ private fun putSharingKeyRoute(socialService: SocialService): ContractRoute =
                 return@to Response(BAD_REQUEST).body("Missing required fields")
             when (val result = socialService.putSharingKey(userId, pubkeyB64, wrappedPrivkeyB64, wrapFormat)) {
                 SocialService.PutSharingKeyResult.Ok -> Response(NO_CONTENT)
+                SocialService.PutSharingKeyResult.AlreadyExists -> Response(CONFLICT).body("Sharing key already registered")
                 is SocialService.PutSharingKeyResult.Invalid -> Response(BAD_REQUEST).body(result.message)
             }
         } catch (e: Exception) {

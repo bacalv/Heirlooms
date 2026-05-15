@@ -20,6 +20,8 @@ class SocialService(
 
     sealed class PutSharingKeyResult {
         object Ok : PutSharingKeyResult()
+        /** A sharing key is already registered for this user; the upload was rejected. */
+        object AlreadyExists : PutSharingKeyResult()
         data class Invalid(val message: String) : PutSharingKeyResult()
     }
 
@@ -34,8 +36,8 @@ class SocialService(
             ?: return PutSharingKeyResult.Invalid("pubkey is not valid Base64")
         val wrappedPrivkey = runCatching { dec.decode(wrappedPrivkeyB64) }.getOrNull()
             ?: return PutSharingKeyResult.Invalid("wrappedPrivkey is not valid Base64")
-        socialRepo.upsertSharingKey(userId, pubkey, wrappedPrivkey, wrapFormat)
-        return PutSharingKeyResult.Ok
+        val inserted = socialRepo.insertSharingKeyIfAbsent(userId, pubkey, wrappedPrivkey, wrapFormat)
+        return if (inserted) PutSharingKeyResult.Ok else PutSharingKeyResult.AlreadyExists
     }
 
     fun getMySharingKey(userId: UUID): AccountSharingKeyRecord? = socialRepo.getSharingKey(userId)
