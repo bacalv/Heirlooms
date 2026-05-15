@@ -51,10 +51,18 @@ private val VIDEO_THRESHOLD_OPTIONS = listOf(
     Int.MAX_VALUE to "No limit",
 )
 
+private val GARDEN_REFRESH_OPTIONS = listOf(
+    2_000L to "2s",
+    5_000L to "5s",
+    10_000L to "10s",
+    30_000L to "30s",
+)
+
 @Composable
 fun SettingsScreen(onApiKeyReset: () -> Unit, store: EndpointStore) {
     var showResetConfirm by remember { mutableStateOf(false) }
     var videoThreshold by remember { mutableStateOf(store.getVideoPlaybackThreshold()) }
+    var gardenRefreshIntervalMs by remember { mutableStateOf(store.getGardenRefreshIntervalMs()) }
 
     Scaffold(
         containerColor = Parchment,
@@ -101,6 +109,41 @@ fun SettingsScreen(onApiKeyReset: () -> Unit, store: EndpointStore) {
                             onClick = {
                                 videoThreshold = seconds
                                 store.setVideoPlaybackThreshold(seconds)
+                            },
+                            label = { Text(label, style = MaterialTheme.typography.bodySmall) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Forest,
+                                selectedLabelColor = Parchment,
+                                containerColor = Forest08,
+                                labelColor = Forest,
+                            ),
+                        )
+                    }
+                }
+            }
+            HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Forest15)
+
+            // Garden refresh interval
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                Text(
+                    "Garden refresh interval",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Forest,
+                )
+                Text(
+                    "How often the garden checks for new arrivals.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                    modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GARDEN_REFRESH_OPTIONS.forEach { (ms, label) ->
+                        val selected = gardenRefreshIntervalMs == ms
+                        FilterChip(
+                            selected = selected,
+                            onClick = {
+                                gardenRefreshIntervalMs = ms
+                                store.setGardenRefreshIntervalMs(ms)
                             },
                             label = { Text(label, style = MaterialTheme.typography.bodySmall) },
                             colors = FilterChipDefaults.filterChipColors(

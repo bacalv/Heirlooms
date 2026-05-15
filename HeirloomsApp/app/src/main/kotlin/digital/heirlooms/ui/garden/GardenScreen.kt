@@ -94,6 +94,7 @@ import androidx.work.BackoffPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import digital.heirlooms.app.EndpointStore
 import digital.heirlooms.app.UploadWorker
 import digital.heirlooms.ui.main.DiagnosticsStore
 import digital.heirlooms.ui.social.ShareSheet
@@ -123,6 +124,7 @@ fun GardenScreen(
     onPhotoTap: (String) -> Unit,
     onNavigateToExplore: (plotId: String?, justArrived: Boolean) -> Unit,
     onBulkStaging: (plotId: String, plotName: String) -> Unit = { _, _ -> },
+    store: EndpointStore? = null,
     vm: GardenViewModel = viewModel(),
 ) {
     val api = LocalHeirloomsApi.current
@@ -232,7 +234,9 @@ fun GardenScreen(
 
     LaunchedEffect(Unit) {
         while (true) {
-            delay(5_000L)
+            val intervalMs = store?.getGardenRefreshIntervalMs()
+                ?: EndpointStore.DEFAULT_GARDEN_REFRESH_INTERVAL_MS
+            delay(intervalMs)
             vm.refreshJustArrived(api)
             vm.refreshSharedStagingCounts(api)
         }
