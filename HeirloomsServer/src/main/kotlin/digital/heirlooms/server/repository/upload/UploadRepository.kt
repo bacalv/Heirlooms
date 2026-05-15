@@ -656,6 +656,15 @@ class PostgresUploadRepository(private val dataSource: DataSource) : UploadRepos
                     val fragment = CriteriaEvaluator.evaluate(criteriaJson, userId, conn)
                     conditions += fragment.sql
                     setters += fragment.setters
+                } else if (plot.isSystemDefined) {
+                    // System plot ("just arrived"): show untagged uploads not in any open/sealed capsule
+                    conditions += "tags = '{}'::text[]"
+                    conditions += "composted_at IS NULL"
+                    conditions += """NOT EXISTS (
+                        SELECT 1 FROM capsule_contents cc
+                        JOIN capsules c ON c.id = cc.capsule_id
+                        WHERE cc.upload_id = uploads.id AND c.state IN ('open','sealed')
+                    )"""
                 } else {
                     conditions += "id IN (SELECT upload_id FROM plot_items WHERE plot_id = ?)"
                     setters += listOf { stmt, idx -> stmt.setObject(idx, plotId); idx + 1 }

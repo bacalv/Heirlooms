@@ -66,6 +66,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [ARCH-002](done/ARCH-002_behavioral-spec-diagrams.md) | Behavioral spec diagrams — use case inventory + Mermaid sequences | Docs | 2026-05-15 |
 | [REF-001](done/REF-001_rename-flow-to-trellis.md) | Rename Flow → Trellis across all platforms | Refactoring | 2026-05-15 |
 | [BUG-003](done/BUG-003_upload-worker-hardcoded-prod-url.md) | UploadWorker hardcoded prod URL fix | Bug Fix | 2026-05-15 |
+| [BUG-004](done/BUG-004_garden-uploads-not-showing.md) | Garden uploads not showing — system plot fix | Bug Fix | 2026-05-15 |
 
 ## Brainstorming
 
