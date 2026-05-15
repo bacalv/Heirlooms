@@ -22,7 +22,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [UX-002](queue/UX-002_closed-plot-visual-indicator.md) | Closed plots should show a locked state — disable approve/share actions | UX | Medium | Developer | — |
 | [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | Developer | — |
 | [SEC-002](queue/SEC-002_auth-crypto-coverage.md) | 100% coverage plan for auth/crypto paths | Security | High | SecurityManager | TST-004 |
-| [BUG-002](queue/BUG-002_remove-didnt-take-messaging.md) | Remove "didn't take" messaging — replace with plain error strings | Bug Fix | Low | Developer | — |
 | [BUG-005](queue/BUG-005_thumbnail-rotation.md) | Investigate thumbnail rotation — first upload shows incorrect orientation | Bug Fix | Low | Developer | — |
 | [UX-001](queue/UX-001_shared-plot-button-tap-targets.md) | Android: shared plot action buttons have insufficient tap targets | UX | Low | Developer | — |
 | [WEB-001](queue/WEB-001_friends-list-page.md) | Web: friends list page | Feature | Low | Developer | — |
@@ -91,6 +90,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [BUG-014](done/developer-3_BUG-014_register-500-duplicate-device-id.md) | Register 409 for duplicate device_id + atomic transaction | Bug Fix | 2026-05-15 |
 | [BUG-016](done/developer-2_BUG-016_shared-plot-items-not-decrypting-for-member.md) | Shared plot items not decrypting — sharing key overwrite on web pairing fixed | Bug Fix | 2026-05-15 |
 | [BUG-013](done/developer-1_BUG-013_detail-view-triggers-rotation.md) | Detail view EXIF rotation no longer silently staged as server save | Bug Fix | 2026-05-15 |
+| [BUG-002](done/BUG-002_remove-didnt-take-messaging.md) | Remove "didn't take" messaging — replace with plain error strings | Bug Fix | 2026-05-15 |
 
 ## Brainstorming
 

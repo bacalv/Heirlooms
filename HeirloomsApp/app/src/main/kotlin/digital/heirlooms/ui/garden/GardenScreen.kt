@@ -308,7 +308,7 @@ fun GardenScreen(
                 is GardenLoadState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Forest)
                 }
-                is GardenLoadState.Error -> DidntTake(onRetry = { vm.load(api) })
+                is GardenLoadState.Error -> LoadError(onRetry = { vm.load(api) })
                 is GardenLoadState.Ready -> {
                     val allEmpty = s.rows.all { it.uploads.isEmpty() }
                     if (allEmpty && s.rows.size <= 1) {
@@ -894,7 +894,7 @@ private fun AddPlotRow(onClick: () -> Unit) {
 }
 
 @Composable
-internal fun DidntTake(onRetry: () -> Unit) {
+internal fun LoadError(onRetry: () -> Unit) {
     Column(
         Modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

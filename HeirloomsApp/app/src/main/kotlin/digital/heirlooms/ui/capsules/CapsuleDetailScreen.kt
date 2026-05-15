@@ -124,7 +124,7 @@ fun CapsuleDetailScreen(
             loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Forest)
             }
-            error != null -> digital.heirlooms.ui.garden.DidntTake(onRetry = { vm.load(api, capsuleId) })
+            error != null -> digital.heirlooms.ui.garden.LoadError(onRetry = { vm.load(api, capsuleId) })
             else -> {
                 val c = capsule ?: return@Scaffold
                 val bgColor = when (c.state) {

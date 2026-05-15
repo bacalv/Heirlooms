@@ -70,7 +70,7 @@ import digital.heirlooms.ui.common.HeirloomsImage
 import digital.heirlooms.ui.common.LocalHeirloomsApi
 import digital.heirlooms.ui.common.TagInputField
 import digital.heirlooms.ui.common.UploadThumbnail as CommonUploadThumbnail
-import digital.heirlooms.ui.garden.DidntTake
+import digital.heirlooms.ui.garden.LoadError
 import digital.heirlooms.ui.share.RecentTagsStore
 import digital.heirlooms.ui.social.ShareSheet
 import digital.heirlooms.ui.theme.Forest
@@ -181,7 +181,7 @@ fun ExploreScreen(
             is ExploreState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Forest)
             }
-            is ExploreState.Error -> DidntTake(onRetry = { vm.load(api) })
+            is ExploreState.Error -> LoadError(onRetry = { vm.load(api) })
             is ExploreState.Ready -> {
                 if (s.uploads.isEmpty()) {
                     Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {

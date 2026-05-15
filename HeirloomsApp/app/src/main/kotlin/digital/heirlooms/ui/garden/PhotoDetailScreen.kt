@@ -300,7 +300,7 @@ fun PhotoDetailScreen(
             is PhotoDetailState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Forest)
             }
-            is PhotoDetailState.Error -> DidntTake(onRetry = { vm.load(api, uploadId) })
+            is PhotoDetailState.Error -> LoadError(onRetry = { vm.load(api, uploadId) })
             is PhotoDetailState.Ready -> {
                 val u = s.upload
                 val effectiveTags = stagedTags ?: u.tags

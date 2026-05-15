@@ -91,7 +91,7 @@ fun CompostHeapScreen(
                 is CompostState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Forest)
                 }
-                is CompostState.Error -> DidntTake(onRetry = { vm.load(api) })
+                is CompostState.Error -> LoadError(onRetry = { vm.load(api) })
                 is CompostState.Ready -> {
                     if (s.uploads.isEmpty()) {
                         Box(
