@@ -12,6 +12,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |----|-------|----------|----------|-------------|------------|
+| [SEC-011](queue/SEC-011_device-revocation.md) | Device revocation — allow users to remove old devices from Devices & Access | Security | Medium | SecurityManager | — |
 | [BUG-019](queue/BUG-019_register-duplicate-device-id-wrong-error-message.md) | Registration shows "Username already exists" for duplicate device_id (409) collision | Bug Fix | Low | Developer | — |
 | [BUG-018](queue/BUG-018_shared-plot-trellis-no-staging-dek-not-rewrapped.md) | Shared plot trellis without staging — items auto-flow with original DEK, members can't decrypt | Bug Fix | High | Developer | — |
 | [BUG-017](queue/BUG-017_android-plot-key-not-loaded-after-accept-invite.md) | Android — shared plot items don't decrypt after accepting invite until app restart | Bug Fix | High | Developer | — |
