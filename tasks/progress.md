@@ -12,6 +12,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |----|-------|----------|----------|-------------|------------|
+| [OPS-003](queue/OPS-003_pre-production-staging-environment.md) | Pre-production staging environment — prod-snapshot + anonymisation pipeline | Operations | Low | OpsManager | — |
 | [TST-008](queue/TST-008_shared-plot-e2e-smoke-test.md) | Shared plot E2E smoke test — formalise spec and identify automation strategy | Testing | High | TestManager | — |
 | [ARCH-007](queue/ARCH-007_e2ee-tag-scheme.md) | E2EE tag scheme — HMAC token identifiers + encrypted display names | Architecture | High | TechnicalArchitect | — |
 | [SEC-012](queue/SEC-012_tag-metadata-leakage-accepted-risk.md) | Tag metadata leakage — document and disclose accepted residual risk | Security | Medium | SecurityManager | ARCH-007 |

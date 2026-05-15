@@ -40,12 +40,18 @@ The intent: wake him once for urgent things (e.g. 2am access request), then back
 
 ## Live environments
 
-| | Production | Staging |
+**Naming convention (agreed 2026-05-16):** Bret calls the non-production environment
+**test** (not staging). Reserve "staging" for a future prod-snapshot environment (OPS-003).
+
+| | Production | Test |
 |--|--|--|
 | API | https://api.heirlooms.digital | https://test.api.heirlooms.digital |
 | Web | https://heirlooms.digital | https://test.heirlooms.digital |
 | DB | `heirlooms` on `heirlooms-db` | `heirlooms-test` on `heirlooms-db` |
 | API key | (secret — ask Bret) | `heirlooms-test-api-key` in Secret Manager |
+
+Test environment is **throw-away** — accounts, data, and test sessions are disposable.
+The GCS bucket is currently shared with production (known gap — OPS-003).
 
 ## Architecture summary
 
@@ -108,13 +114,14 @@ Agent naming convention: `developer-1`, `developer-2`, `security`, `test-manager
 
 - **SEC-009 Part 2 — biometric gate**: review Options A/B/C in the SEC-009 task file and decide before next iteration dispatch.
 
-- **v0.54 production release** (next session):
-  1. ✅ TST-007 complete — conditional pass (2026-05-15)
-  2. ✅ All 5 blocking/non-blocking bugs fixed and deployed to staging (2026-05-15): BUG-013, BUG-014, BUG-015, BUG-016, UX-003
-  3. **Retest BUG-013 and BUG-016 on staging** (photo detail rotation + shared plot E2EE decryption for member)
-  4. Install updated APK on Fire tablet and retest BUG-016 with Fire 1
-  5. Once both pass → Operations Manager prepares v0.54 production release plan
-  6. Bret approves and promotes to production
+- **v0.54 production release — ON HOLD (2026-05-16)**: Bret decided to hold production
+  at v0.53.1 and accumulate more fixes before promoting. Too many gaps found during the
+  smoke test session to justify a release now. Revisit when BUG-020, BUG-022, and WEB-001
+  are resolved and another smoke test cycle passes.
+
+- **Next iteration planning**: large backlog of new tasks created during the smoke test
+  session (BUG-019 through BUG-022, FEAT-003/004, SEC-011/012, ARCH-007, TST-008,
+  OPS-003). Run "Let's plan the next iteration" to prioritise.
 
 ## Task system
 
