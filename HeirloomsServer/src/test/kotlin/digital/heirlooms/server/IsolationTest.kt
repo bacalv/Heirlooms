@@ -63,6 +63,7 @@ class IsolationTest {
         private lateinit var inviterToken: String
         private lateinit var aliceToken: String
         private lateinit var aliceUploadId: String
+        private lateinit var aliceGardenUploadId: String
         private lateinit var alicePlotId: String
         private lateinit var aliceCapsuleId: String
         private lateinit var bobToken: String
@@ -100,6 +101,7 @@ class IsolationTest {
             bobToken = registerUser("bob_iso", invite2)
 
             aliceUploadId = createUpload(aliceToken)
+            aliceGardenUploadId = createUpload(aliceToken) // not added to any capsule — stays in Garden
             alicePlotId = createPlot(aliceToken)
             aliceCapsuleId = createCapsule(aliceToken, aliceUploadId)
         }
@@ -279,6 +281,29 @@ class IsolationTest {
         val aliceSysId = aliceSys[0].get("id").asText()
         val bobSysId = bobSys[0].get("id").asText()
         assertTrue(aliceSysId != bobSysId, "System plots must be distinct rows")
+    }
+
+    @Test
+    fun `Querying system plot returns untagged uploads not in capsule (Garden fix)`() {
+        // Retrieve Alice's system plot ID
+        val plots = isoMapper.readTree(get("/api/plots", aliceToken).bodyString())
+        val systemPlotId = plots.first { it.get("name").asText() == "__just_arrived__" }.get("id").asText()
+
+        // Query uploads filtered by the system plot
+        val resp = get("/api/content/uploads?plot_id=$systemPlotId", aliceToken)
+        assertEquals(OK, resp.status)
+        val items = isoMapper.readTree(resp.bodyString()).get("items")
+
+        // aliceGardenUploadId has no tags and is not in any capsule — must appear
+        assertTrue(
+            items.any { it.get("id").asText() == aliceGardenUploadId },
+            "Untagged upload not in a capsule should appear when querying the system plot",
+        )
+        // aliceUploadId is in an open capsule — must NOT appear
+        assertFalse(
+            items.any { it.get("id").asText() == aliceUploadId },
+            "Upload inside an open capsule should not appear in the Garden",
+        )
     }
 
     // ======== Capsule isolation ===============================================
