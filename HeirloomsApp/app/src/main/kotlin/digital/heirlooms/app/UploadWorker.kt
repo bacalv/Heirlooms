@@ -9,6 +9,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import digital.heirlooms.api.HeirloomsApi
 import digital.heirlooms.crypto.DeviceKeyManager
 import digital.heirlooms.crypto.VaultSession
 import okhttp3.OkHttpClient
@@ -49,7 +50,7 @@ class UploadWorker(
         val result = try {
             if (VaultSession.isUnlocked) {
                 uploader.uploadEncryptedViaSigned(
-                    baseUrl = BASE_URL,
+                    baseUrl = HeirloomsApi.BASE_URL,
                     file = file,
                     mimeType = mimeType,
                     masterKey = VaultSession.masterKey,
@@ -64,7 +65,7 @@ class UploadWorker(
                 )
             } else {
                 uploader.uploadViaSigned(
-                    baseUrl = BASE_URL,
+                    baseUrl = HeirloomsApi.BASE_URL,
                     file = file,
                     mimeType = mimeType,
                     apiKey = apiKey,
@@ -166,7 +167,6 @@ class UploadWorker(
         const val KEY_MIME_TYPES = "mime_types"
         const val TAG_COUNT_PREFIX = "count:"
 
-        private const val BASE_URL = "https://api.heirlooms.digital"
         private const val CHANNEL_RESULT = "heirloom_upload_v2"
         private const val NOTIFICATION_RESULT = 2
     }

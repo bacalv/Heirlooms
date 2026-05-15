@@ -65,6 +65,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [SEC-006](done/SEC-006_criteria-date-input-validation.md) | Criteria date input validation | Security | 2026-05-15 |
 | [ARCH-002](done/ARCH-002_behavioral-spec-diagrams.md) | Behavioral spec diagrams — use case inventory + Mermaid sequences | Docs | 2026-05-15 |
 | [REF-001](done/REF-001_rename-flow-to-trellis.md) | Rename Flow → Trellis across all platforms | Refactoring | 2026-05-15 |
+| [BUG-003](done/BUG-003_upload-worker-hardcoded-prod-url.md) | UploadWorker hardcoded prod URL fix | Bug Fix | 2026-05-15 |
 
 ## Brainstorming
 
