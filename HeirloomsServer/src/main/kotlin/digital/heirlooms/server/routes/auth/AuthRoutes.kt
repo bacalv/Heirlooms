@@ -8,14 +8,17 @@ import digital.heirlooms.server.representation.auth.pairingStatusCompleteJson
 import digital.heirlooms.server.representation.auth.sessionTokenJson
 import digital.heirlooms.server.service.auth.AuthService
 import org.http4k.contract.ContractRoute
+import org.http4k.contract.div
 import org.http4k.contract.meta
 import org.http4k.core.Method.GET
 import org.http4k.core.Method.POST
 import org.http4k.core.Request
 import org.http4k.core.Response
+import org.http4k.lens.Path
 import org.http4k.core.Status.Companion.BAD_REQUEST
 import org.http4k.core.Status.Companion.CONFLICT
 import org.http4k.core.Status.Companion.CREATED
+import org.http4k.core.Status.Companion.FORBIDDEN
 import org.http4k.core.Status.Companion.GONE
 import org.http4k.core.Status.Companion.INTERNAL_SERVER_ERROR
 import org.http4k.core.Status.Companion.NOT_FOUND
@@ -35,6 +38,7 @@ fun authRoutes(authService: AuthService): List<ContractRoute> = listOf(
     meRoute(authService),
     getInviteRoute(authService),
     registerRoute(authService),
+    inviteConnectRoute(authService),
     pairingInitiateRoute(authService),
     pairingQrRoute(authService),
     pairingCompleteRoute(authService),
@@ -257,6 +261,40 @@ private fun registerRoute(authService: AuthService): ContractRoute =
             Response(INTERNAL_SERVER_ERROR).body("Internal server error")
         }
     }
+
+// ---- POST /invites/{token}/connect -----------------------------------------
+
+private fun inviteConnectRoute(authService: AuthService): ContractRoute {
+    val tokenPath = Path.of("token")
+    return "/invites" / tokenPath / "connect" meta {
+        summary = "Redeem an invite token as a friend connection for an already-authenticated user"
+    } bindContract POST to { token: String, _: String ->
+        { request: Request -> handleInviteConnect(token, request, authService) }
+    }
+}
+
+private fun handleInviteConnect(token: String, request: Request, authService: AuthService): Response {
+    return try {
+        val requesterId = request.authUserId()
+        when (val result = authService.connectViaInvite(requesterId, token)) {
+            is AuthService.ConnectViaInviteResult.Success ->
+                Response(OK).header("Content-Type", "application/json")
+                    .body("""{"inviter_display_name":"${result.inviterDisplayName}"}""")
+            AuthService.ConnectViaInviteResult.InvalidInvite ->
+                Response(GONE).header("Content-Type", "application/json")
+                    .body("""{"error":"Invite token is invalid, expired, or already used"}""")
+            AuthService.ConnectViaInviteResult.AlreadyFriends ->
+                Response(CONFLICT).header("Content-Type", "application/json")
+                    .body("""{"error":"Already friends"}""")
+            AuthService.ConnectViaInviteResult.SelfConnect ->
+                Response(FORBIDDEN).header("Content-Type", "application/json")
+                    .body("""{"error":"Cannot connect with yourself"}""")
+        }
+    } catch (e: Exception) {
+        authLogger.error("invites/connect error", e)
+        Response(INTERNAL_SERVER_ERROR).body("Internal server error")
+    }
+}
 
 // ---- POST /pairing/initiate ------------------------------------------------
 

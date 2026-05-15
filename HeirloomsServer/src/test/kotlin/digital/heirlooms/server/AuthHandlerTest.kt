@@ -18,6 +18,7 @@ import org.http4k.core.Request
 import org.http4k.core.then
 import org.http4k.core.Status.Companion.BAD_REQUEST
 import org.http4k.core.Status.Companion.CONFLICT
+import org.http4k.core.Status.Companion.FORBIDDEN
 import org.http4k.core.Status.Companion.TOO_MANY_REQUESTS
 import org.http4k.core.Status.Companion.CREATED
 import org.http4k.core.Status.Companion.GONE
@@ -740,6 +741,115 @@ class AuthHandlerTest {
         }"""
         val resp = post("/api/auth/register", body)
         assertEquals(CONFLICT, resp.status)
+    }
+
+    // ---- FEAT-001: invite connect for existing users --------------------------------
+
+    /**
+     * Scenario: userA registers via founding-user's invite (making them friends with founding user).
+     * userB registers via founding-user's invite as well.
+     * userA generates their own invite and userB uses it to connect as friends.
+     * This verifies two existing users (neither of whom is the founding user) can befriend each other.
+     */
+    @Test
+    fun `connect via invite creates friendship between existing users`() {
+        // 1. Register userA (becomes friend of founding user)
+        val founderToken = setupInviterSession("inviter-feat001a-${UUID.randomUUID()}")
+        val inviteForA = generateInvite(founderToken)
+        val userAUsername = "feat001a_${UUID.randomUUID().toString().take(6)}"
+        val userASession = registerUser(userAUsername, inviteForA)
+
+        // 2. Register userB (becomes friend of founding user; not yet friends with userA)
+        val inviteForB = generateInvite(founderToken)
+        val userBUsername = "feat001b_${UUID.randomUUID().toString().take(6)}"
+        val userBSession = registerUser(userBUsername, inviteForB)
+
+        // 3. userA generates an invite of their own
+        val userAInvite = generateInvite(userASession)
+
+        // 4. userB redeems userA's invite via the connect endpoint — they were not yet friends
+        val resp = post("/api/auth/invites/$userAInvite/connect", "", userBSession)
+        assertEquals(OK, resp.status, "Expected 200 for connect: ${resp.bodyString()}")
+        val node = mapper.readTree(resp.bodyString())
+        assertNotNull(node.get("inviter_display_name"), "Response should include inviter display name")
+
+        // 5. Verify the invite token is consumed — cannot be used for registration
+        val regBody = """{
+            "invite_token": "$userAInvite",
+            "username": "ghost_after_connect_${UUID.randomUUID().toString().take(6)}",
+            "display_name": "Ghost",
+            "auth_salt": "${urlEnc.encodeToString(ByteArray(16))}",
+            "auth_verifier": "${urlEnc.encodeToString(ByteArray(32))}",
+            "wrapped_master_key": "${stdEnc.encodeToString(ByteArray(64))}",
+            "wrap_format": "p256-ecdh-hkdf-aes256gcm-v1",
+            "pubkey_format": "p256-spki",
+            "pubkey": "${stdEnc.encodeToString(ByteArray(65))}",
+            "device_id": "${UUID.randomUUID()}",
+            "device_label": "Phone",
+            "device_kind": "android"
+        }"""
+        val regResp = post("/api/auth/register", regBody)
+        assertEquals(GONE, regResp.status, "Consumed invite should return 410 on register")
+    }
+
+    @Test
+    fun `connect via invite returns 409 if already friends`() {
+        // userA and userB are already friends (userB registered via userA's invite).
+        // Then userB tries to connect via another of userA's invites → 409.
+        val founderToken = setupInviterSession("inviter-already2-${UUID.randomUUID()}")
+        val inviteForA = generateInvite(founderToken)
+        val userAUsername = "feat001already_a_${UUID.randomUUID().toString().take(5)}"
+        val userASession = registerUser(userAUsername, inviteForA)
+
+        val inviteForBFromA = generateInvite(userASession)
+        val userBUsername = "feat001already_b_${UUID.randomUUID().toString().take(5)}"
+        val userBSession = registerUser(userBUsername, inviteForBFromA)
+
+        // userA generates a second invite — userB tries to connect again (already friends)
+        val secondInviteFromA = generateInvite(userASession)
+        val resp = post("/api/auth/invites/$secondInviteFromA/connect", "", userBSession)
+        assertEquals(CONFLICT, resp.status, "Expected 409 when already friends: ${resp.bodyString()}")
+    }
+
+    @Test
+    fun `connect via invite returns 410 for expired invite`() {
+        val founderToken = setupInviterSession("inviter-exp-c-${UUID.randomUUID()}")
+        val inviteForA = generateInvite(founderToken)
+        val userAUsername = "feat001expa_${UUID.randomUUID().toString().take(6)}"
+        val userASession = registerUser(userAUsername, inviteForA)
+
+        // userA creates an invite and then it expires
+        val expiredInviteToken = generateInvite(userASession)
+        val invite = authRepo.findInviteByToken(expiredInviteToken)!!
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "UPDATE invites SET expires_at = NOW() - INTERVAL '1 hour' WHERE id = ?"
+            ).use { stmt -> stmt.setObject(1, invite.id); stmt.executeUpdate() }
+        }
+
+        // Register userB separately
+        val inviteForB = generateInvite(founderToken)
+        val userBUsername = "feat001expb_${UUID.randomUUID().toString().take(6)}"
+        val userBSession = registerUser(userBUsername, inviteForB)
+
+        val resp = post("/api/auth/invites/$expiredInviteToken/connect", "", userBSession)
+        assertEquals(GONE, resp.status, "Expected 410 for expired invite: ${resp.bodyString()}")
+    }
+
+    @Test
+    fun `connect via invite returns 401 if unauthenticated`() {
+        val inviterToken = setupInviterSession("inviter-unauth-${UUID.randomUUID()}")
+        val inviteToken = generateInvite(inviterToken)
+        val resp = post("/api/auth/invites/$inviteToken/connect", "")
+        assertEquals(UNAUTHORIZED, resp.status)
+    }
+
+    @Test
+    fun `connect via invite returns 403 when connecting with own invite`() {
+        val inviterToken = setupInviterSession("inviter-self-${UUID.randomUUID()}")
+        val inviteToken = generateInvite(inviterToken)
+        val resp = post("/api/auth/invites/$inviteToken/connect", "", inviterToken)
+        assertEquals(FORBIDDEN, resp.status, "Expected 403 for self-connect: ${resp.bodyString()}")
     }
 
     // ---- SEC-004 F-05/F-06: Rate limiting on /login returns 429 after sustained brute-force ----

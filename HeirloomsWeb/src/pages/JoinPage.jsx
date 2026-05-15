@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { argon2id } from '@noble/hashes/argon2'
 import { OliveBranchIcon } from '../brand/OliveBranchIcon'
-import { authRegister, API_URL } from '../api'
+import { authRegister, authInviteConnect, API_URL } from '../api'
 import {
   generateMasterKey, generateSalt, wrapMasterKeyForDevice,
   toB64, toB64url, sha256,
 } from '../crypto/vaultCrypto'
 import { unlock } from '../crypto/vaultSession'
 import { generateAndStoreKeypair, getDeviceId, getDeviceLabel, markVaultSetUp } from '../crypto/deviceKeyManager'
+import { useAuth } from '../AuthContext'
 
 const ARGON2_PARAMS = { m: 65536, t: 3, p: 1 }
 
@@ -22,8 +23,15 @@ export function JoinPage({ onJoined }) {
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState(null)
   const [working, setWorking] = useState(false)
+  const [connected, setConnected] = useState(false)
+  const [inviterName, setInviterName] = useState(null)
   const firstRef = useRef(null)
   const navigate = useNavigate()
+  const auth = useAuth()
+
+  // If the user is already logged in and an invite token is present, offer friend-connect.
+  const isLoggedIn = !!(auth?.sessionToken)
+  const tokenFromUrl = searchParams.get('token')
 
   useEffect(() => { firstRef.current?.focus() }, [])
 
@@ -84,6 +92,80 @@ export function JoinPage({ onJoined }) {
     }
   }
 
+  async function handleConnect() {
+    setWorking(true)
+    setError(null)
+    try {
+      const r = await authInviteConnect(auth.sessionToken, tokenFromUrl)
+      if (r.status === 409) { setError('You are already connected with this person.'); return }
+      if (r.status === 403) { setError('You cannot connect with yourself.'); return }
+      if (r.status === 410) { setError('This invite link is invalid or expired.'); return }
+      if (!r.ok) { setError(`Something went wrong (${r.status}).`); return }
+      const data = await r.json()
+      setInviterName(data.inviter_display_name || null)
+      setConnected(true)
+    } catch {
+      setError('Something went wrong. Please try again.')
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  // ---- Logged-in user following an invite link --------------------------------
+  if (isLoggedIn && tokenFromUrl) {
+    if (connected) {
+      return (
+        <div className="min-h-screen bg-parchment flex items-center justify-center">
+          <div className="bg-white rounded-card shadow-sm border border-forest-08 p-8 w-full max-w-sm text-center">
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <OliveBranchIcon width={20} />
+              <span className="font-serif italic text-[17px] text-forest">Heirlooms</span>
+            </div>
+            <p className="text-base font-serif text-forest mb-2">
+              {inviterName ? `You're now connected with ${inviterName}.` : "You're now connected!"}
+            </p>
+            <button
+              onClick={() => navigate('/', { replace: true })}
+              className="mt-4 w-full bg-forest text-parchment py-2 rounded-button text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              Go to Heirlooms
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div className="min-h-screen bg-parchment flex items-center justify-center">
+        <div className="bg-white rounded-card shadow-sm border border-forest-08 p-8 w-full max-w-sm">
+          <div className="flex items-center gap-2 mb-1">
+            <OliveBranchIcon width={20} />
+            <span className="font-serif italic text-[17px] text-forest">Heirlooms</span>
+          </div>
+          <p className="text-sm text-text-muted mb-6">You have an invite link.</p>
+          <p className="text-sm text-forest mb-4">
+            Connect with the person who shared this link?
+          </p>
+          {error && <p className="text-sm text-earth font-serif italic mb-3">{error}</p>}
+          <button
+            onClick={handleConnect}
+            disabled={working}
+            className="w-full bg-forest text-parchment py-2 rounded-button text-sm font-medium hover:opacity-90 disabled:opacity-40 transition-opacity"
+          >
+            {working ? 'Connecting…' : 'Connect as friend'}
+          </button>
+          <button
+            onClick={() => navigate('/', { replace: true })}
+            className="mt-2 w-full text-text-muted py-2 rounded-button text-sm hover:text-forest transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ---- New user registration form --------------------------------------------
   return (
     <div className="min-h-screen bg-parchment flex items-center justify-center">
       <div className="bg-white rounded-card shadow-sm border border-forest-08 p-8 w-full max-w-sm">

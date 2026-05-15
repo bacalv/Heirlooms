@@ -242,6 +242,29 @@ class AuthService(
         return RegisterResult.Success(token, newUser.id, session.expiresAt)
     }
 
+    // ---- Invite connect (existing user → friend) --------------------------------
+
+    sealed class ConnectViaInviteResult {
+        data class Success(val inviterDisplayName: String) : ConnectViaInviteResult()
+        object InvalidInvite : ConnectViaInviteResult()
+        object AlreadyFriends : ConnectViaInviteResult()
+        object SelfConnect : ConnectViaInviteResult()
+    }
+
+    fun connectViaInvite(requesterId: UUID, inviteToken: String): ConnectViaInviteResult {
+        val invite = authRepo.findInviteByToken(inviteToken)
+        if (invite == null || invite.usedAt != null || invite.expiresAt.isBefore(Instant.now()))
+            return ConnectViaInviteResult.InvalidInvite
+        if (invite.createdBy == requesterId)
+            return ConnectViaInviteResult.SelfConnect
+        if (socialRepo.areFriends(invite.createdBy, requesterId))
+            return ConnectViaInviteResult.AlreadyFriends
+        authRepo.markInviteUsed(invite.id, requesterId)
+        socialRepo.createFriendship(invite.createdBy, requesterId)
+        val inviter = authRepo.findUserById(invite.createdBy)
+        return ConnectViaInviteResult.Success(inviterDisplayName = inviter?.displayName ?: "")
+    }
+
     // ---- Invite generation -----------------------------------------------------
 
     data class InviteDetails(val token: String, val expiresAt: Instant)
