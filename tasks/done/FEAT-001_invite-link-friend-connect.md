@@ -71,4 +71,23 @@ on the recipient's account state.
 
 ## Completion notes
 
-<!-- Agent appends here and moves file to tasks/done/ -->
+Completed 2026-05-15 by Developer-5 (agent/developer-5/FEAT-001).
+
+### What was implemented
+
+**Server (HeirloomsServer):**
+- Added `connectViaInvite(requesterId, inviteToken)` to `AuthService.kt` with sealed result type covering `Success`, `InvalidInvite`, `AlreadyFriends`, and `SelfConnect`.
+- Added `POST /api/auth/invites/{token}/connect` route in `AuthRoutes.kt` using http4k path lens pattern, requires authentication. Returns 200 with `inviter_display_name`, 409 if already friends, 403 on self-connect, 410 on invalid/expired/used token.
+- Token is consumed (`markInviteUsed`) on successful connect — cannot be reused for either connection or registration.
+- 5 new integration tests in `AuthHandlerTest.kt` covering: success + token consumed, already-friends (409), expired invite (410), unauthenticated (401), self-connect (403). All 36 tests pass.
+
+**Web (HeirloomsWeb):**
+- Added `authInviteConnect(sessionToken, inviteToken)` to `api.js`.
+- Updated `JoinPage.jsx`: if the user is already logged in (`auth.sessionToken` non-null) and `?token=` is present in the URL, renders a "Connect as friend" confirmation screen instead of the registration form. Shows success message with inviter display name on connect, with a "Go to Heirlooms" button navigating home. Handles 409/403/410 error cases with user-friendly messages.
+
+### What was NOT implemented (follow-up)
+
+- **Android (`InviteRedemptionScreen.kt`)**: Android deep-link handling for the existing-user connect flow was not modified. The screen would need to check for an active session and call the new endpoint instead of showing the registration flow. This should be a follow-up task referencing the new `POST /api/auth/invites/{token}/connect` endpoint.
+
+### Schema changes
+None required — reused existing `invites` table with the same `markInviteUsed` mechanism.

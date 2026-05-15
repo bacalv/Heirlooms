@@ -69,4 +69,28 @@ Option A is a targeted fix with minimal blast radius. Option B is more robust lo
 
 ## Completion notes
 
-<!-- Agent appends here and moves file to tasks/done/ -->
+**Implemented 2026-05-15 — Option A (targeted lazy-fetch in approval functions)**
+
+### Changes made
+
+**`HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/flows/PlotBulkStagingViewModel.kt`**
+- Added eager sharing-key fetch at the top of `approveSelected()` coroutine, before
+  iterating items. If `VaultSession.sharingPrivkey` is null, calls `api.getSharingKeyMe()`;
+  if a key exists on the server, unwraps and stores it via `VaultSession.setSharingPrivkey()`.
+
+**`HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/flows/StagingViewModel.kt`**
+- Same pattern added to `approve()`, guarded by `isSharedPlot` (no-op for private plots).
+
+**`HeirloomsApp/app/src/test/kotlin/digital/heirlooms/ui/flows/PlotBulkStagingViewModelTest.kt`**
+- Added BUG-009 regression test `approveSelected_fetches_sharing_key_when_not_cached`
+  using MockWebServer. Verifies that the first outbound request when `sharingPrivkey` is
+  null is `GET /api/keys/sharing/me`, proving the key is no longer silently skipped.
+
+### Approach
+Option A was chosen: targeted fix in each approval function with minimal blast radius.
+Both `PlotBulkStagingViewModel` (bulk staging) and `StagingViewModel` (single-item staging)
+were updated, as both had the same `error("Sharing key not loaded")` guard.
+
+### Tests
+Existing unit tests pass. New regression test covers the BUG-009 path.
+Run: `./gradlew :app:testProdDebugUnitTest --no-daemon`

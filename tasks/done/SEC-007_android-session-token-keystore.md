@@ -56,3 +56,29 @@ Steps:
 - Finding A-01 in `docs/security/client-security-findings.md`
 - `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/EndpointStore.kt`
 - [Jetpack EncryptedSharedPreferences](https://developer.android.com/reference/androidx/security/crypto/EncryptedSharedPreferences)
+
+## Completion notes
+
+Implemented 2026-05-15 on branch `agent/developer-3/SEC-007`.
+
+**What was done:**
+- Added `androidx.security:security-crypto:1.1.0-alpha06` to `app/build.gradle.kts`.
+- Added `EncryptedSharedPreferenceStore` class in `EndpointStore.kt` backed by
+  `EncryptedSharedPreferences` using `MasterKey.KeyScheme.AES256_GCM` (Android Keystore).
+  The encrypted prefs file is named `heirloom_prefs_enc`.
+- Updated `EndpointStore.create()` factory to: (1) open both the old plaintext store and the
+  new encrypted store, (2) migrate all known keys (session_token, api_key, username,
+  display_name, auth_salt, wifi_only, welcomed, video_playback_threshold) from plaintext to
+  encrypted on first run, deleting each key from plaintext after writing, then (3) return an
+  `EndpointStore` backed exclusively by the encrypted store.
+- The `SharedPreferenceStore` class is retained (with new `contains()` and `remove()` helpers)
+  purely for the migration step; no new production code writes to it after the factory runs.
+- `EndpointStoreTest` is unaffected — it uses the `InMemoryPreferenceStore` test double which
+  bypasses both implementations.
+
+**All acceptance criteria met:**
+- `session_token` (and all other values) no longer written to `heirloom_prefs.xml` after upgrade.
+- Existing sessions survive: migration reads the old value and writes it to the encrypted store
+  before deleting from plaintext, so no forced logout occurs.
+- `EndpointStoreTest` unit tests continue to pass without modification.
+- Change is confined to `HeirloomsApp/`.

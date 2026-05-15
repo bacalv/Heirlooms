@@ -12,8 +12,14 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Agent | Branch | Started |
 |----|-------|-------|--------|---------|
-| [TST-003](in-progress/TST-003_manual-staging-checklist.md) | Manual staging test checklist | TestManager (interactive) | — | 2026-05-15 |
-| [REF-001](in-progress/REF-001_rename-flow-to-trellis.md) | Rename Flow → Trellis | developer-1 | agent/developer-1/REF-001 | 2026-05-15 |
+| [BUG-010](in-progress/developer-1_BUG-010_members-cant-create-trellis-for-shared-plot.md) | Members can't create trellis for shared plot | developer-1 | agent/developer-1/BUG-010 | 2026-05-15 |
+| [SEC-008](in-progress/developer-2_SEC-008_web-csp-session-token.md) + [BUG-011](in-progress/developer-2_BUG-011_web-trellis-form-partial-rename.md) + [BUG-012](in-progress/developer-2_BUG-012_web-garden-stale-after-trellis-route.md) | Web: CSP + trellis label fix + garden staleness | developer-2 | agent/developer-2/SEC-008 | 2026-05-15 |
+| [BUG-009](done/BUG-009_staging-approval-sharing-key-not-loaded.md) | Staging approval fails — sharing key not loaded | developer-4 | agent/developer-4/BUG-009 | **done** |
+| [FEAT-001](done/FEAT-001_invite-link-friend-connect.md) | Invite link friend-connect for existing users | developer-5 | agent/developer-5/FEAT-001 | **done** |
+| [FEAT-002](done/FEAT-002_manual-add-to-shared-plot.md) | Manual add to shared plot — Android + web | developer-6 | agent/developer-6/FEAT-002 | **done** |
+| [SEC-010](in-progress/security_SEC-010_git-history-secret-scan.md) | Git history secret scan + prevention hook | security | agent/security/SEC-010 | 2026-05-15 |
+| [TST-005](done/TST-005_playwright-infrastructure.md) | Playwright infrastructure setup | test-manager | agent/test-manager/TST-005 | **done** |
+| [OPS-001](in-progress/ops_OPS-001_deployment-runbook.md) | Deployment runbook | ops | agent/ops/OPS-001 | 2026-05-15 |
 
 ---
 
@@ -21,17 +27,35 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |----|-------|----------|----------|-------------|------------|
-| [TST-005](queue/TST-005_playwright-infrastructure.md) | Playwright infrastructure setup | Testing | Medium | TestManager | TST-003, ARCH-002 |
-| [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | Developer | TST-005 |
-| [SEC-002](queue/SEC-002_auth-crypto-coverage.md) | 100% coverage plan for auth/crypto paths | Security | High | SecurityManager | TST-004 |
-| [DOC-001](queue/DOC-001_uml-sequence-diagrams.md) | UML sequence diagrams from test output | Docs | Low | Developer | TST-004 |
+| [BUG-009](queue/BUG-009_staging-approval-sharing-key-not-loaded.md) | Staging approval fails if Garden not visited — sharing key not loaded | Bug Fix | High | Developer | — |
+| [BUG-010](queue/BUG-010_members-cant-create-trellis-for-shared-plot.md) | Shared plot members can't create a trellis targeting a plot they're a member of | Bug Fix | High | Developer | — |
+| [FEAT-002](queue/FEAT-002_manual-add-to-shared-plot.md) | Manual "add to shared plot" from photo detail — Android and web | Feature | High | Developer | — |
 | [SEC-007](queue/SEC-007_android-session-token-keystore.md) | Android: encrypt session token with Keystore | Security | High | Developer | — |
 | [SEC-008](queue/SEC-008_web-csp-session-token.md) | Web: CSP header + session token off localStorage | Security | High | Developer | — |
+| [SEC-010](queue/SEC-010_git-history-secret-scan.md) | Git history secret scan — rotate exposed staging API key, audit for others | Security | High | SecurityManager | — |
+| [OPS-001](queue/OPS-001_deployment-runbook.md) | Deployment runbook | Operations | High | OpsManager | — |
+| [BUG-006](queue/BUG-006_android-nav-backstack.md) | Android nav back-stack not cleared from burger menu | Bug Fix | Medium | Developer | — |
+| [BUG-008](queue/BUG-008_invite-url-hardcoded-prod-domain.md) | Android staging flavor generates invite links with production domain | Bug Fix | Medium | Developer | — |
+| [BUG-012](queue/BUG-012_web-garden-stale-after-trellis-route.md) | Web garden doesn't update shared plot row after trellis routing | Bug Fix | Medium | Developer | — |
+| [FEAT-001](queue/FEAT-001_invite-link-friend-connect.md) | Invite link doubles as friend-connect for existing users | Feature | Medium | Developer | — |
+| [TST-005](queue/TST-005_playwright-infrastructure.md) | Playwright infrastructure setup | Testing | Medium | TestManager | — |
+| [TST-006](queue/TST-006_android-remote-control-investigation.md) | Investigate remote-controlled Android testing for E2E automation | Testing | Medium | TestManager | — |
+| [UX-002](queue/UX-002_closed-plot-visual-indicator.md) | Closed plots should show a locked state — disable approve/share actions | UX | Medium | Developer | — |
 | [SEC-009](queue/SEC-009_android-biometric-flag-secure.md) | Android: FLAG_SECURE + biometric vault-unlock gate | Security | Medium | Developer | SEC-007 |
+| [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | Developer | TST-005 |
+| [BUG-002](queue/BUG-002_remove-didnt-take-messaging.md) | Remove "didn't take" messaging — replace with plain error strings | Bug Fix | Low | Developer | — |
+| [BUG-005](queue/BUG-005_thumbnail-rotation.md) | Investigate thumbnail rotation — first upload shows incorrect orientation | Bug Fix | Low | Developer | — |
+| [BUG-011](queue/BUG-011_web-trellis-form-partial-rename.md) | Web trellis form still shows "Flow name" / "Create flow" labels | Bug Fix | Low | Developer | — |
+| [UX-001](queue/UX-001_shared-plot-button-tap-targets.md) | Android: shared plot action buttons have insufficient tap targets | UX | Low | Developer | — |
+| [WEB-001](queue/WEB-001_friends-list-page.md) | Web: friends list page | Feature | Low | Developer | — |
+| [SEC-002](queue/SEC-002_auth-crypto-coverage.md) | 100% coverage plan for auth/crypto paths | Security | High | SecurityManager | TST-004 |
+| [DOC-001](queue/DOC-001_uml-sequence-diagrams.md) | UML sequence diagrams from test output | Docs | Low | Developer | TST-004 |
+| [OPS-002](queue/OPS-002_new-environment-setup-guide.md) | New environment setup guide | Operations | Low | OpsManager | OPS-001 |
+| [TST-007](queue/TST-007_manual-staging-checklist-v054.md) | Manual staging test checklist — v0.54 iteration *(held — activates at Phase 6)* | Testing | High | TestManager | — |
 
 ## In Progress
 
-*(see Currently Running above)*
+*(none)*
 
 ## Done
 
@@ -67,10 +91,21 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [REF-001](done/REF-001_rename-flow-to-trellis.md) | Rename Flow → Trellis across all platforms | Refactoring | 2026-05-15 |
 | [BUG-003](done/BUG-003_upload-worker-hardcoded-prod-url.md) | UploadWorker hardcoded prod URL fix | Bug Fix | 2026-05-15 |
 | [BUG-004](done/BUG-004_garden-uploads-not-showing.md) | Garden uploads not showing — system plot fix | Bug Fix | 2026-05-15 |
+| [BUG-007](done/BUG-007_web-no-sharing-key-generation.md) | Web app never generates sharing key — web-only users can't be invited to shared plots | Bug Fix | 2026-05-15 |
+| [TST-003](done/TST-003_manual-staging-checklist.md) | Manual staging test checklist — 6 journeys, 11 issues found | Testing | 2026-05-15 |
+| [SEC-007](done/SEC-007_android-session-token-keystore.md) | Android: encrypt session token with Keystore (EncryptedSharedPreferences) | Security | 2026-05-15 |
+| [BUG-008](done/BUG-008_invite-url-hardcoded-prod-domain.md) | Android staging flavor generates invite links with production domain | Bug Fix | 2026-05-15 |
+| [SEC-009](done/SEC-009_android-biometric-flag-secure.md) | Android: FLAG_SECURE on vault Activities (Part 1 only; Part 2 biometric deferred) | Security | 2026-05-15 |
+| [BUG-009](done/BUG-009_staging-approval-sharing-key-not-loaded.md) | Staging approval fails if Garden not visited — sharing key eager-load fix | Bug Fix | 2026-05-15 |
+| [TST-005](done/TST-005_playwright-infrastructure.md) | Playwright infrastructure setup | Testing | 2026-05-15 |
+| [FEAT-001](done/FEAT-001_invite-link-friend-connect.md) | Invite link friend-connect for existing users | Feature | 2026-05-15 |
+| [FEAT-002](done/FEAT-002_manual-add-to-shared-plot.md) | Manual "add to shared plot" from photo detail — Android + web | Feature | 2026-05-15 |
+| [ARCH-005](done/ARCH-005_envelope-format-amendment.md) | Envelope format amendment — add plot key algo, reserve M11 IDs | Architecture | 2026-05-15 |
+| [ARCH-004](done/ARCH-004_connections-data-model.md) | Connections data model brief — identity layer for M11 | Architecture | 2026-05-15 |
+| [ARCH-003](done/ARCH-003_m11-capsule-crypto-brief.md) | M11 capsule cryptography brief | Architecture | 2026-05-15 |
 
 ## Brainstorming
 
 | ID | Title | Category |
 |----|-------|----------|
 | [IDEA-001](brainstorming/IDEA-001_trellis-naming.md) | Flow → Trellis naming research | Brainstorming |
-| [BUG-007](done/BUG-007_web-no-sharing-key-generation.md) | Web app never generates sharing key — web-only users can't be invited to shared plots | Bug Fix | 2026-05-15 |

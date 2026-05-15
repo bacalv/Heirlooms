@@ -28,4 +28,10 @@ and replace with "Trellis name" and "Create trellis" respectively.
 
 ## Completion notes
 
-<!-- Agent appends here and moves file to tasks/done/ -->
+Implemented 2026-05-15.
+
+Two string literals in `HeirloomsWeb/src/pages/FlowsPage.jsx` `FlowForm` component updated:
+- Label text: `"Flow name"` → `"Trellis name"`
+- Submit button: `'Create flow'` → `'Create trellis'` (the `'Update flow'` branch renamed to `'Update trellis'` for consistency)
+
+Build verified clean.

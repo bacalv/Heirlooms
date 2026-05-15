@@ -159,4 +159,26 @@ Current allowed origins (as of 2026-05-15):
 
 ## Completion notes
 
-<!-- OpsManager appends here and moves file to tasks/done/ -->
+**Completed by:** OpsManager  
+**Date:** 2026-05-15  
+**Deliverable:** `docs/ops/runbook.md` — committed on branch `agent/ops/OPS-001`
+
+**What was written:**
+
+The runbook covers all 11 operation types requested in the task spec:
+
+1. Docker Desktop restart protocol — why, when, exact manual steps
+2. Staging server deployment — gradlew shadowJar, Docker build with Dockerfile.update, push to Artifact Registry, gcloud run deploy to heirlooms-server-test (us-central1), health check
+3. Staging web deployment — npm run build, Docker build/push, gcloud run deploy to heirlooms-web-test
+4. Staging Android build and install — assembleStagingDebug, adb install
+5. Generate a staging invite token — curl with X-API-Key fetched from Secret Manager
+6. Production promotion — CTO approval required; pinned-digest deploy commands for server (europe-west2) and web (us-central1); config diff table (DB_URL, API_KEY, memory, region, service account); post-deploy verification; error log check
+7. Health checks — curl commands for both environments, what a healthy response looks like, gcloud logging read commands for error triage
+8. Rollback procedure — gcloud run revisions list to find previous digest, re-deploy by pinned digest; CTO approval required for production
+9. Secret rotation — general pattern (Secret Manager versions add), SEC-010 API key pattern, production DB password rotation (with Cloud SQL psql step)
+10. Database access and migration notes — Cloud SQL connect commands, Flyway behaviour on startup, what to check if a migration fails (logs, flyway_schema_history table), shared DB server caveat
+11. GCS CORS configuration — gsutil cors set/get, current allowed origins
+
+**Open questions surfaced (not blockers):**
+- Staging GCS bucket (`heirlooms-uploads`) is shared with production — flagged in the Known friction points table
+- Staging `us-central1` vs production server `europe-west2` asymmetry noted

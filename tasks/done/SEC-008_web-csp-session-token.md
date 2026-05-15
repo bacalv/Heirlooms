@@ -92,3 +92,13 @@ eliminating session token access from JavaScript entirely. This requires server-
 - Findings W-01 and W-02 in `docs/security/client-security-findings.md`
 - `HeirloomsWeb/nginx.conf`
 - `HeirloomsWeb/src/App.jsx` L37, L55–111
+
+## Completion notes
+
+Implemented 2026-05-15.
+
+**Part 1 — CSP (nginx.conf):** Added `Content-Security-Policy`, `X-Frame-Options: DENY`, and `X-Content-Type-Options: nosniff` headers with `always` flag so they are sent on all responses including error pages.
+
+**Part 2 — sessionStorage migration (App.jsx):** All `localStorage` reads/writes/removes for `heirlooms_session_token` (LS_TOKEN) migrated to `sessionStorage`. One-time migration logic in the `useState` initializer detects a stale token in localStorage, copies it to sessionStorage, and removes it from localStorage — so users logged in before the change remain logged in for the current tab. Non-secret fields (`heirlooms_username`, `heirlooms_display_name`) remain in localStorage as permitted by the task spec.
+
+Build verified clean (`npm run build`).

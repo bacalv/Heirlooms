@@ -45,4 +45,32 @@ this plot" (default: true for shared plots).
 
 ## Completion notes
 
-<!-- Agent appends here and moves file to tasks/done/ -->
+**Completed: 2026-05-15**
+
+### Root cause
+
+`TrellisService.createTrellis` had a hard ownership check:
+```kotlin
+if (targetPlot.ownerUserId != userId)
+    return CreateTrellisResult.Invalid("Target plot not found")
+```
+This rejected any user who wasn't the plot owner, even joined members of shared plots.
+
+### Fix
+
+Replaced the owner-only guard in `TrellisService.createTrellis` with a combined check:
+- User is the plot owner, **OR**
+- The target plot is `visibility = "shared"` AND `plotRepo.isMember(targetPlotId, userId)` returns true (status='joined')
+
+Private plots remain owner-only. Public plots were already reachable by owners, and the `requires_staging=true` enforcement in `TrellisRepository.createTrellis` handles the spam concern for public plots.
+
+No plot-level setting was needed — the existing staging mechanism already gives the owner full control over what gets into the collection.
+
+### Files changed
+
+- `HeirloomsServer/src/main/kotlin/digital/heirlooms/server/service/plot/TrellisService.kt` — relaxed ownership check in `createTrellis`
+- `HeirloomsServer/src/test/kotlin/digital/heirlooms/server/TrellisServiceTest.kt` — new unit tests covering: owner on shared plot, owner on private plot, joined member on shared plot (the bug fix), non-member rejected, non-owner on private plot rejected
+
+### Tests
+
+All tests pass: `./gradlew test --no-daemon` — BUILD SUCCESSFUL

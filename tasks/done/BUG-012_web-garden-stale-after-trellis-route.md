@@ -56,4 +56,12 @@ after an upload completes.
 
 ## Completion notes
 
-<!-- Agent appends here and moves file to tasks/done/ -->
+Implemented 2026-05-15 in `HeirloomsWeb/src/pages/GardenPage.jsx`.
+
+**Issue 1 — Stale shared plot row after trellis routing:**
+`handleQuickUpdateTags` already called `setPlotRefreshKey((k) => k + 1)` immediately after a successful tag update, but the server needs a short window to complete trellis routing before the refreshed plot list reflects the routed item. Added a follow-up `setTimeout(() => setPlotRefreshKey((k) => k + 1), 1500)` to fire a second silent re-fetch 1.5 s later. Together the immediate + delayed refresh satisfies the "within 2 seconds" acceptance criterion without any loading flash.
+
+**Issue 2 — Poll interval:**
+Reduced the background poll interval from 30 s to 10 s (`setInterval(..., 10_000)`) so newly uploaded or routed items surface sooner during normal use.
+
+Build verified clean.

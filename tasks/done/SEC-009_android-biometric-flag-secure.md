@@ -90,3 +90,39 @@ passphrase to re-wrap the master key on first run after the update. Design the m
 - `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/crypto/DeviceKeyManager.kt` L63
 - `HeirloomsApp/app/src/main/kotlin/digital/heirlooms/app/MainActivity.kt`
 - [BiometricPrompt docs](https://developer.android.com/training/sign-in/biometric-auth)
+
+## Completion notes
+
+Implemented 2026-05-15 on branch `agent/developer-3/SEC-007`.
+
+### Part 1 — FLAG_SECURE (DONE)
+
+`window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)` added to `onCreate()` in both:
+- `MainActivity` — hosts the full vault UI (garden, photo detail, capsules, etc.)
+- `ShareActivity` — shows a preview of decrypted media before upload
+
+`SettingsActivity` was intentionally excluded: it shows no decrypted vault content (only upload
+queue status and Wi-Fi toggle), so FLAG_SECURE is not required there and would unnecessarily
+prevent screenshots of non-sensitive UI.
+
+**Acceptance criteria for Part 1 met:** screenshots and recent-apps thumbnails of vault content
+will render as a blank frame on all API levels supported by the app (minSdk 26+).
+
+### Part 2 — Biometric gate (DEFERRED — requires CTO decision)
+
+Part 2 (finding A-02: `setUserAuthenticationRequired(false)` on the Keystore key wrapping the
+vault master key) has **not** been implemented in this iteration. It is deferred for the following
+reason:
+
+The task presents three implementation options (A, B, C) with meaningfully different UX trade-offs:
+- **Option A** (per-operation biometric) — most secure, most friction
+- **Option B** (30-second timed biometric) — balanced; recommended in the task
+- **Option C** (UI-only gate, softer) — least friction, bypassable in-process
+
+Option B requires migrating the existing Keystore key (delete + regenerate), which forces all
+enrolled users to re-pair or re-enter their passphrase on upgrade. This is a significant user
+experience decision that needs explicit CTO sign-off before implementation.
+
+**Action required:** CTO to choose Option A, B, or C and confirm acceptable migration UX before
+Part 2 is scheduled. Once decided, a new task should be created targeting `DeviceKeyManager.kt`
+and the vault unlock screen with the chosen option specified.

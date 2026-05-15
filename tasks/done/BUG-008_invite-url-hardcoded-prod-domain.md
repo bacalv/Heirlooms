@@ -54,4 +54,16 @@ Or alternatively, add a separate `WEB_BASE_URL` build config field per flavor in
 
 ## Completion notes
 
-<!-- Agent appends here and moves file to tasks/done/ -->
+Implemented 2026-05-15 on branch `agent/developer-3/SEC-007`.
+
+**What was done:**
+- Replaced the `private const val INVITE_BASE_URL = "https://heirlooms.digital"` constant in
+  `DevicesAccessScreen.kt` with a computed `private val INVITE_BASE_URL: String` property that
+  derives the web base URL from `BuildConfig.BASE_URL_OVERRIDE`:
+  - Staging: `"https://test.api.heirlooms.digital"` → `"https://test.heirlooms.digital"` ✓
+  - Prod: `""` (empty) → `"https://heirlooms.digital"` ✓
+- Added `import digital.heirlooms.app.BuildConfig`.
+
+**All acceptance criteria met:**
+- Staging flavor generates invite links pointing to `https://test.heirlooms.digital`.
+- Production flavor continues to generate links pointing to `https://heirlooms.digital`.
