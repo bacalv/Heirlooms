@@ -219,7 +219,7 @@ fun DevicesAccessScreen(onBack: () -> Unit, onNavigateToPairing: () -> Unit) {
                 )
                 Text(pairingExpiry, style = MaterialTheme.typography.bodySmall, color = Forest)
                 Spacer(Modifier.height(8.dp))
-                Text("Type this code into heirlooms.digital on your browser. Then tap Scan QR below.",
+                Text("Type this code into ${INVITE_BASE_URL.removePrefix("https://")} on your browser. Then tap Scan QR below.",
                     style = MaterialTheme.typography.bodySmall, color = Forest)
                 Spacer(Modifier.height(12.dp))
                 Button(
