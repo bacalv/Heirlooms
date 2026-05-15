@@ -33,7 +33,7 @@ function FlowForm({ plots, initial, onSave, onCancel, saving, error }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-3 text-sm font-sans">
       <div>
-        <label className="block text-text-muted mb-1">Flow name</label>
+        <label className="block text-text-muted mb-1">Trellis name</label>
         <input type="text" value={name} onChange={(e) => setName(e.target.value)} required
           placeholder="e.g. Photos of Sadaar → Family"
           className="w-full px-3 py-1.5 border border-forest-25 rounded text-forest bg-parchment focus:outline-none focus:border-forest"
@@ -81,7 +81,7 @@ function FlowForm({ plots, initial, onSave, onCancel, saving, error }) {
         </button>
         <button type="submit" disabled={saving || !name.trim() || (!initial && !targetPlotId)}
           className="px-4 py-1.5 bg-forest text-parchment rounded-button hover:opacity-90 transition-opacity disabled:opacity-40">
-          {saving ? '…' : initial ? 'Update flow' : 'Create flow'}
+          {saving ? '…' : initial ? 'Update trellis' : 'Create trellis'}
         </button>
       </div>
     </form>

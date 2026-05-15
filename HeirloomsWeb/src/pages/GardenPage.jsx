@@ -1004,9 +1004,9 @@ export function GardenPage() {
   const userPlots = plots.filter((p) => !p.is_system_defined)
   const userPlotIds = userPlots.map((p) => p.id)
 
-  // Poll all plot rows every 30 seconds to pick up newly arrived items.
+  // Poll all plot rows every 10 seconds to pick up newly arrived items.
   useEffect(() => {
-    const id = setInterval(() => setPlotRefreshKey((k) => k + 1), 30_000)
+    const id = setInterval(() => setPlotRefreshKey((k) => k + 1), 10_000)
     return () => clearInterval(id)
   }, [])
 
@@ -1107,8 +1107,12 @@ export function GardenPage() {
     // Optimistically remove from Just arrived immediately (it now has tags).
     setJustArrivedExclude((prev) => new Set([...prev, uploadId]))
     setQuickTagUpload(null)
-    // Silently re-fetch user plots in the background (no loading flash).
+    // Silently re-fetch all plot rows in the background (no loading flash).
+    // The immediate refresh catches most cases; the follow-up at ~1.5 s gives the
+    // server time to finish trellis routing so the target plot row reflects the
+    // routed item within the 2-second acceptance window.
     setPlotRefreshKey((k) => k + 1)
+    setTimeout(() => setPlotRefreshKey((k) => k + 1), 1500)
   }
 
   async function handleCompostConfirmed() {
