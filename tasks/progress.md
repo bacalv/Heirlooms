@@ -12,7 +12,11 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |----|-------|----------|----------|-------------|------------|
-| [TST-007](queue/TST-007_manual-staging-checklist-v054.md) | Manual staging test checklist — v0.54 iteration *(held — activates at Phase 6)* | Testing | High | TestManager | — |
+| [BUG-013](queue/BUG-013_detail-view-triggers-rotation.md) | Viewing photo detail on Android silently saves rotation — corrupts orientation | Bug Fix | High | Developer | — |
+| [BUG-014](queue/BUG-014_register-500-duplicate-device-id.md) | Register returns 500 instead of 409 when device_id already exists in wrapped_keys | Bug Fix | Medium | Developer | — |
+| [BUG-015](queue/BUG-015_web-garden-shared-plot-row-still-stale.md) | Web garden shared plot row still stale after trellis routing — BUG-012 fix incomplete | Bug Fix | Medium | Developer | — |
+| [BUG-016](queue/BUG-016_shared-plot-items-not-decrypting-for-member.md) | Shared plot items uploaded from web not decrypting for Android member (Fire 1) | Bug Fix | High | Developer | — |
+| [UX-003](queue/UX-003_garden-polling-interval.md) | Garden polling interval — 5s default, Android configurable (2/5/10/30s) | UX | Medium | Developer | — |
 | [BUG-006](queue/BUG-006_android-nav-backstack.md) | Android nav back-stack not cleared from burger menu | Bug Fix | Medium | Developer | — |
 | [TST-006](queue/TST-006_android-remote-control-investigation.md) | Investigate remote-controlled Android testing for E2E automation | Testing | Medium | TestManager | — |
 | [UX-002](queue/UX-002_closed-plot-visual-indicator.md) | Closed plots should show a locked state — disable approve/share actions | UX | Medium | Developer | — |
@@ -75,6 +79,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [ARCH-005](done/ARCH-005_envelope-format-amendment.md) | Envelope format amendment — add plot key algo, reserve M11 IDs | Architecture | 2026-05-15 |
 | [ARCH-004](done/ARCH-004_connections-data-model.md) | Connections data model brief — identity layer for M11 | Architecture | 2026-05-15 |
 | [ARCH-003](done/ARCH-003_m11-capsule-crypto-brief.md) | M11 capsule cryptography brief | Architecture | 2026-05-15 |
+| [TST-007](done/TST-007_manual-staging-checklist-v054.md) | Manual staging checklist v0.54 — conditional pass, 4 new bugs logged | Testing | 2026-05-15 |
 | [BUG-010](done/BUG-010_members-cant-create-trellis-for-shared-plot.md) | Members can't create trellis for shared plot | Bug Fix | 2026-05-15 |
 | [BUG-011](done/BUG-011_web-trellis-form-partial-rename.md) | Web trellis form "Flow name" / "Create flow" label fix | Bug Fix | 2026-05-15 |
 | [BUG-012](done/BUG-012_web-garden-stale-after-trellis-route.md) | Web garden doesn't update shared plot row after trellis routing | Bug Fix | 2026-05-15 |

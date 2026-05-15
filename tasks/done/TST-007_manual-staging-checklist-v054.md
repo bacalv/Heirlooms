@@ -62,9 +62,8 @@ Validate the fixes hold and retest BUG-005 (thumbnail rotation).
 - [ ] Full-resolution loads on both platforms
 - [ ] Upload a second photo (landscape) — confirm thumbnail orientation also correct
 
-**Result:** ___
-**Time taken:** ___
-**Notes:** ___
+**Result:** PARTIAL
+**Notes:** Web PASS — thumbnails and detail correct, BUG-005 not reproduced. Android: garden requires manual refresh after upload (UX-003 — polling interval). Critical new bug: opening detail view without pressing rotate causes rotation to be persisted server-side on both platforms → BUG-013 logged (High priority).
 
 ---
 
@@ -81,9 +80,7 @@ Validate the fixes hold and retest BUG-005 (thumbnail rotation).
 - [ ] User B can log in successfully
 - [ ] User B sees an empty garden
 
-**Result:** ___
-**Time taken:** ___
-**Notes:** ___
+**Result:** PASS
 
 ---
 
@@ -95,9 +92,8 @@ Validate the fixes hold and retest BUG-005 (thumbnail rotation).
 - [ ] User A can see User B in the Friends screen on Android (burger menu → Friends)
 - [ ] Web has no standalone friends list UI (expected — no regression)
 
-**Result:** ___
-**Time taken:** ___
-**Notes:** ___
+**Result:** PASS
+**Notes:** API confirms User B in User A's friends list immediately after invite redemption. Friends screen check deferred to Android manual step.
 
 ---
 
@@ -120,9 +116,8 @@ Validate the fixes hold and retest BUG-005 (thumbnail rotation).
 - [ ] Approval succeeds (no "1 item(s) failed to approve" error)
 - [ ] Photo appears in the shared plot for both users
 
-**Result:** ___
-**Time taken:** ___
-**Notes:** ___
+**Result:** PASS
+**Notes:** BUG-008 PASS — invite link shows test.heirlooms.digital. BUG-009 PASS — approval succeeded with no error (sharing key loaded at vault unlock, not lazily at Garden visit). Direct add-member flow used for shared plot invite (no link-based member invite in this flow). Staging approval tested with requires_staging=true trellis.
 
 ---
 
@@ -138,9 +133,8 @@ Validate the fixes hold and retest BUG-005 (thumbnail rotation).
 - [ ] User B uploads a photo tagged "b-share" — routes to staging queue for "v054 Test share"
 - [ ] User A (owner) approves the item → photo appears in the shared plot
 
-**Result:** ___
-**Time taken:** ___
-**Notes:** ___
+**Result:** PASS
+**Notes:** BUG-010 PASS — Fire 1 (member) can see "v054 Test share" as a trellis target. Approved items visible to owner.
 
 ---
 
@@ -156,9 +150,8 @@ Validate the fixes hold and retest BUG-005 (thumbnail rotation).
 - [ ] Confirm submit button reads "Create trellis" (not "Create flow") — **BUG-011 retest**
 - [ ] Create the trellis — it saves correctly and appears in the list
 
-**Result:** ___
-**Time taken:** ___
-**Notes:** ___
+**Result:** PASS
+**Notes:** BUG-011 PASS — form shows "New trellis" label (acceptable variant, no "Flow" terminology remaining).
 
 ---
 
@@ -174,9 +167,8 @@ Validate the fixes hold and retest BUG-005 (thumbnail rotation).
 - [ ] Without navigating away or refreshing, the "v054 Test share" shared plot row updates within ~2 seconds — **BUG-012 retest**
 - [ ] Photo appears in the shared plot row
 
-**Result:** ___
-**Time taken:** ___
-**Notes:** ___
+**Result:** FAIL
+**Notes:** BUG-012 fix incomplete. Auto-approve trellis confirmed (screenshots), item disappears from Just Arrived correctly, but shared plot row does not update after 10+ seconds. Manual refresh required. Logged as BUG-015.
 
 ---
 
@@ -188,9 +180,7 @@ Validate the fixes hold and retest BUG-005 (thumbnail rotation).
 - [ ] CMD+V paste upload: copy an image to clipboard, paste in the app — upload completes
 - [ ] Both uploads appear in Just Arrived within ~30 s
 
-**Result:** ___
-**Time taken:** ___
-**Notes:** ___
+**Result:** PASS
 
 ---
 
@@ -203,9 +193,8 @@ Validate the fixes hold and retest BUG-005 (thumbnail rotation).
 - [ ] Session token is stored in Keystore (not SharedPreferences plaintext) — verify via `adb shell run-as digital.heirlooms.app.test cat shared_prefs/...` and confirm token is not plaintext
 - [ ] Log out and log in again — session resumes correctly
 
-**Result:** ___
-**Time taken:** ___
-**Notes:** ___
+**Result:** PASS
+**Notes:** heirloom_prefs.xml empty; heirloom_prefs_enc.xml contains only Tink-encrypted blobs. No plaintext session token in SharedPreferences.
 
 ---
 
@@ -218,9 +207,8 @@ Validate the fixes hold and retest BUG-005 (thumbnail rotation).
 - [ ] Open DevTools → Network — confirm a `Content-Security-Policy` header is present on HTML responses
 - [ ] App functions normally (login, upload, browse)
 
-**Result:** ___
-**Time taken:** ___
-**Notes:** ___
+**Result:** PASS
+**Notes:** localStorage contains only heirlooms-deviceId, heirlooms-vaultSetUp, heirlooms_display_name — no session token. CSP header verified via curl (connect-src test.api.heirlooms.digital). App functions normally.
 
 ---
 
@@ -250,40 +238,44 @@ Validate the fixes hold and retest BUG-005 (thumbnail rotation).
 - [ ] Shared screen shows "v054 Test share"
 - [ ] Trellises screen loads (labels all say "Trellis", not "Flow")
 
-**Result:** ___
-**Time taken:** ___
-**Notes:** ___
+**Result:** PASS
 
 ---
 
 ## Summary
 
-**Date tested:** ___
-**Tester:** ___
-**Staging build:** ___ (git SHA)
+**Date tested:** 2026-05-15
+**Tester:** Bret (CTO)
+**Staging build:** 94bc7df (main)
 
 | Journey | Result | Notes |
 |---------|--------|-------|
-| 1. Upload and view | | |
-| 2. Invite flow | | |
-| 3. Friend connection | | |
-| 4. Shared plot + staging approval | | |
-| 5. Member trellis creation | | |
-| 6. Web trellis UI labels | | |
-| 7. Web garden reactivity | | |
-| 8. Web upload methods | | |
-| 9. Android session token (SEC-007) | | |
-| 10. Web CSP + session token (SEC-008) | | |
-| 11. iOS regression | | |
-| 12. Android flavor smoke | | |
+| 1. Upload and view | PARTIAL | Web PASS; Android no auto-refresh (UX-003); BUG-013 rotation on detail view |
+| 2. Invite flow | PASS | |
+| 3. Friend connection | PASS | API confirmed |
+| 4. Shared plot + staging approval | PASS | BUG-008 PASS; BUG-009 PASS |
+| 5. Member trellis creation | PASS | BUG-010 PASS |
+| 6. Web trellis UI labels | PASS | BUG-011 PASS — shows "New trellis" |
+| 7. Web garden reactivity | FAIL | BUG-012 fix incomplete → BUG-015 |
+| 8. Web upload methods | PASS | Drag-and-drop + paste both work |
+| 9. Android session token (SEC-007) | PASS | No plaintext in SharedPreferences |
+| 10. Web CSP + session token (SEC-008) | PASS | CSP correct; no session token in localStorage |
+| 11. iOS regression | SKIPPED | Xcode project not yet set up |
+| 12. Android flavor smoke | PASS | |
 
-**Overall verdict:** ___
+**Overall verdict:** CONDITIONAL PASS — 9 pass, 1 partial, 1 fail, 1 skipped. Two new high-priority bugs (BUG-013 rotation, BUG-016 E2EE decryption) plus BUG-015 regression. Recommend fixing BUG-013 and BUG-016 before production release.
 
 ---
 
 ## Failures log
 
 <!-- One entry per failure. Each becomes a BUG-XXX task in queue/. -->
+
+**Setup — pairing flow (3 issues found and fixed inline, 2026-05-15):**
+
+- **[FIXED]** Android staging flavor pairing instruction showed `heirlooms.digital` (hardcoded) instead of `test.heirlooms.digital`. Fix: use `INVITE_BASE_URL` in `DevicesAccessScreen.kt`. Commit `aaf3961`.
+- **[FIXED]** Staging web bundle baked with production API URL — `VITE_API_URL` build-arg was never passed to `docker build`. Fix: runbook §3 updated, image rebuilt. Commit `41045f8`.
+- **[FIXED]** Staging web CSP `connect-src` hardcoded to `api.heirlooms.digital`, blocking XHR to `test.api.heirlooms.digital`. Fix: `nginx.conf` → template with `envsubst`. Commit `94bc7df`.
 
 ---
 
