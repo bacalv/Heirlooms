@@ -329,38 +329,47 @@ class HeirloomsApi(
         }
     }
 
-    // ── Flows ────────────────────────────────────────────────────────────────
+    // ── Trellises ─────────────────────────────────────────────────────────────
 
-    suspend fun listFlows(): List<Flow> {
-        val arr = JSONArray(get("/api/flows"))
-        return (0 until arr.length()).map { arr.getJSONObject(it).toFlow() }
+    suspend fun listTrellises(): List<Trellis> {
+        val arr = JSONArray(get("/api/trellises"))
+        return (0 until arr.length()).map { arr.getJSONObject(it).toTrellis() }
     }
 
-    suspend fun createFlow(name: String, criteria: String, targetPlotId: String, requiresStaging: Boolean): Flow =
-        JSONObject(post("/api/flows",
+    suspend fun createTrellis(name: String, criteria: String, targetPlotId: String, requiresStaging: Boolean): Trellis =
+        JSONObject(post("/api/trellises",
             """{"name":${name.jsonEsc()},"criteria":$criteria,"targetPlotId":${targetPlotId.jsonEsc()},"requiresStaging":$requiresStaging}"""
-        )).toFlow()
+        )).toTrellis()
 
-    suspend fun updateFlow(id: String, name: String, criteria: String, requiresStaging: Boolean): Flow =
-        JSONObject(put("/api/flows/$id",
+    suspend fun updateTrellis(id: String, name: String, criteria: String, requiresStaging: Boolean): Trellis =
+        JSONObject(put("/api/trellises/$id",
             """{"name":${name.jsonEsc()},"criteria":$criteria,"requiresStaging":$requiresStaging}"""
-        )).toFlow()
+        )).toTrellis()
 
-    suspend fun deleteFlow(id: String) {
+    suspend fun deleteTrellis(id: String) {
         withContext(Dispatchers.IO) {
             val request = Request.Builder()
-                .url("$baseUrl/api/flows/$id")
+                .url("$baseUrl/api/trellises/$id")
                 .withAuth().delete().build()
             client.newCall(request).execute().use { if (!it.isSuccessful) throw IOException("HTTP ${it.code}") }
         }
     }
 
+    // Backward-compat aliases
+    suspend fun listFlows(): List<Trellis> = listTrellises()
+    suspend fun createFlow(name: String, criteria: String, targetPlotId: String, requiresStaging: Boolean): Trellis = createTrellis(name, criteria, targetPlotId, requiresStaging)
+    suspend fun updateFlow(id: String, name: String, criteria: String, requiresStaging: Boolean): Trellis = updateTrellis(id, name, criteria, requiresStaging)
+    suspend fun deleteFlow(id: String) = deleteTrellis(id)
+
     // ── Staging ──────────────────────────────────────────────────────────────
 
-    suspend fun getFlowStaging(flowId: String): List<StagingItem> {
-        val arr = JSONArray(get("/api/flows/$flowId/staging"))
+    suspend fun getTrellisStaging(trellisId: String): List<StagingItem> {
+        val arr = JSONArray(get("/api/trellises/$trellisId/staging"))
         return (0 until arr.length()).map { StagingItem(arr.getJSONObject(it).toUpload()) }
     }
+
+    // Backward-compat alias
+    suspend fun getFlowStaging(trellisId: String): List<StagingItem> = getTrellisStaging(trellisId)
 
     suspend fun getPlotStaging(plotId: String): List<StagingItem> {
         val arr = JSONArray(get("/api/plots/$plotId/staging"))
@@ -839,13 +848,16 @@ class HeirloomsApi(
         tombstonedBy = optString("tombstonedBy").takeIf { it.isNotEmpty() && it != "null" },
     )
 
-    private fun JSONObject.toFlow() = Flow(
+    private fun JSONObject.toTrellis() = Trellis(
         id = getString("id"),
         name = getString("name"),
         criteria = opt("criteria")?.toString() ?: "{}",
         targetPlotId = getString("targetPlotId"),
         requiresStaging = optBoolean("requiresStaging", true),
     )
+
+    // Backward-compat alias
+    private fun JSONObject.toFlow() = toTrellis()
 
     private fun JSONObject.toPlotItem() = PlotItem(
         upload = toUpload(),

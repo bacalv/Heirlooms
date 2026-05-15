@@ -81,7 +81,7 @@ export function StagingPanel({ plotId, flowId, apiKey, onItemActioned, isSharedP
   const [approveError, setApproveError] = useState(null)
 
   const stagingUrl = flowId
-    ? `/api/flows/${flowId}/staging`
+    ? `/api/trellises/${flowId}/staging`
     : `/api/plots/${plotId}/staging`
 
   function reload() {

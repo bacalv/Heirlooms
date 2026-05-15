@@ -15,14 +15,17 @@ import digital.heirlooms.server.repository.diag.DiagRepository
 import digital.heirlooms.server.repository.diag.PostgresDiagRepository
 import digital.heirlooms.server.repository.keys.KeyRepository
 import digital.heirlooms.server.repository.keys.PostgresKeyRepository
-import digital.heirlooms.server.repository.plot.FlowRepository
+import digital.heirlooms.server.repository.plot.TrellisRepository
 import digital.heirlooms.server.repository.plot.PlotItemRepository
 import digital.heirlooms.server.repository.plot.PlotMemberRepository
 import digital.heirlooms.server.repository.plot.PlotRepository
-import digital.heirlooms.server.repository.plot.PostgresFlowRepository
+import digital.heirlooms.server.repository.plot.PostgresTrellisRepository
 import digital.heirlooms.server.repository.plot.PostgresPlotItemRepository
 import digital.heirlooms.server.repository.plot.PostgresPlotMemberRepository
 import digital.heirlooms.server.repository.plot.PostgresPlotRepository
+// Backward-compat imports for test code and external references
+import digital.heirlooms.server.repository.plot.FlowRepository
+import digital.heirlooms.server.repository.plot.PostgresFlowRepository
 import digital.heirlooms.server.repository.social.SocialRepository
 import digital.heirlooms.server.repository.social.PostgresSocialRepository
 import digital.heirlooms.server.repository.storage.BlobRepository
@@ -35,10 +38,12 @@ import digital.heirlooms.server.routes.auth.authRoutes
 import digital.heirlooms.server.routes.capsule.capsuleReverseLookupRoute
 import digital.heirlooms.server.routes.capsule.capsuleRoutes
 import digital.heirlooms.server.routes.keys.keysRoutes
-import digital.heirlooms.server.routes.plot.flowRoutes
+import digital.heirlooms.server.routes.plot.trellisRoutes
 import digital.heirlooms.server.routes.plot.plotItemRoutes
 import digital.heirlooms.server.routes.plot.plotRoutes
 import digital.heirlooms.server.routes.plot.sharedPlotRoutes
+// Backward-compat import
+import digital.heirlooms.server.routes.plot.flowRoutes
 import digital.heirlooms.server.routes.social.friendsRoutes
 import digital.heirlooms.server.routes.social.sharingKeyRoutes
 import digital.heirlooms.server.routes.upload.checkContentHashContractRoute
@@ -117,7 +122,7 @@ fun buildApp(
     authRepo = PostgresAuthRepository(database.dataSource),
     capsuleRepo = PostgresCapsuleRepository(database.dataSource),
     plotRepo = PostgresPlotRepository(database.dataSource),
-    flowRepo = PostgresFlowRepository(database.dataSource),
+    flowRepo = PostgresTrellisRepository(database.dataSource),
     itemRepo = PostgresPlotItemRepository(database.dataSource),
     memberRepo = PostgresPlotMemberRepository(database.dataSource),
     keyRepo = PostgresKeyRepository(database.dataSource),
@@ -136,7 +141,7 @@ internal fun buildApp(
     authRepo: AuthRepository,
     capsuleRepo: CapsuleRepository,
     plotRepo: PlotRepository,
-    flowRepo: FlowRepository,
+    flowRepo: TrellisRepository,
     itemRepo: PlotItemRepository,
     memberRepo: PlotMemberRepository,
     keyRepo: KeyRepository,
@@ -155,7 +160,7 @@ internal fun buildApp(
     val authService = digital.heirlooms.server.service.auth.AuthService(authRepo, keyRepo, socialRepo, plotRepo, authSecret)
     val capsuleService = digital.heirlooms.server.service.capsule.CapsuleService(capsuleRepo)
     val plotService = digital.heirlooms.server.service.plot.PlotService(plotRepo)
-    val flowService = digital.heirlooms.server.service.plot.FlowService(flowRepo, plotRepo, itemRepo, uploadRepo)
+    val flowService = digital.heirlooms.server.service.plot.TrellisService(flowRepo, plotRepo, itemRepo, uploadRepo)
     val sharedPlotService = digital.heirlooms.server.service.plot.SharedPlotService(plotRepo, memberRepo)
     val keyService = digital.heirlooms.server.service.keys.KeyService(keyRepo)
     val socialService = digital.heirlooms.server.service.social.SocialService(socialRepo)
@@ -192,7 +197,7 @@ internal fun buildApp(
     val capsuleContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
         descriptionPath = "/openapi.json"
-        routes += capsuleRoutes(capsuleService) + plotRoutes(plotService) + flowRoutes(flowService) + plotItemRoutes(flowService) + sharedPlotRoutes(sharedPlotService)
+        routes += capsuleRoutes(capsuleService) + plotRoutes(plotService) + trellisRoutes(flowService) + plotItemRoutes(flowService) + sharedPlotRoutes(sharedPlotService)
     }
 
     val keysContract = contract {

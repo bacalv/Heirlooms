@@ -1,4 +1,4 @@
-package digital.heirlooms.ui.flows
+package digital.heirlooms.ui.trellises
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,7 +52,7 @@ import digital.heirlooms.ui.theme.TextMuted
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StagingScreen(
-    flowId: String,
+    trellisId: String,
     plotId: String,
     isSharedPlot: Boolean = false,
     onBack: () -> Unit,
@@ -61,7 +61,7 @@ fun StagingScreen(
     val api = LocalHeirloomsApi.current
     val state by vm.state.collectAsState()
 
-    LaunchedEffect(flowId, plotId) { vm.load(api, flowId, plotId) }
+    LaunchedEffect(trellisId, plotId) { vm.load(api, trellisId, plotId) }
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
@@ -105,8 +105,8 @@ fun StagingScreen(
                     items(state.pending, key = { "p_${it.id}" }) { upload ->
                         StagingTile(
                             upload = upload,
-                            onApprove = { vm.approve(api, flowId, plotId, upload.id, upload, isSharedPlot) },
-                            onReject = { vm.reject(api, flowId, plotId, upload.id) },
+                            onApprove = { vm.approve(api, trellisId, plotId, upload.id, upload, isSharedPlot) },
+                            onReject = { vm.reject(api, trellisId, plotId, upload.id) },
                         )
                     }
                 }
@@ -124,7 +124,7 @@ fun StagingScreen(
                     items(state.rejected, key = { "r_${it.id}" }) { upload ->
                         RejectedTile(
                             upload = upload,
-                            onRestore = { vm.restore(api, flowId, plotId, upload.id) },
+                            onRestore = { vm.restore(api, trellisId, plotId, upload.id) },
                         )
                     }
                 }

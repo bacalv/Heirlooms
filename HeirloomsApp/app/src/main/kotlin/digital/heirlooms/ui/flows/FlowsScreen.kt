@@ -1,4 +1,4 @@
-package digital.heirlooms.ui.flows
+package digital.heirlooms.ui.trellises
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -61,10 +61,10 @@ import digital.heirlooms.ui.theme.TextMuted
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FlowsScreen(
+fun TrellisesScreen(
     onBack: () -> Unit,
-    onStagingTap: (flowId: String, plotId: String, isSharedPlot: Boolean) -> Unit,
-    vm: FlowsViewModel = viewModel(),
+    onStagingTap: (trellisId: String, plotId: String, isSharedPlot: Boolean) -> Unit,
+    vm: TrellisesViewModel = viewModel(),
 ) {
     val api = LocalHeirloomsApi.current
     val state by vm.state.collectAsState()
@@ -74,20 +74,20 @@ fun FlowsScreen(
     var showCreateDialog by remember { mutableStateOf(false) }
 
     if (showCreateDialog) {
-        val plots = (state as? FlowsState.Ready)?.plots?.filter { !it.isSystemDefined } ?: emptyList()
-        CreateFlowDialog(
+        val plots = (state as? TrellisesState.Ready)?.plots?.filter { !it.isSystemDefined } ?: emptyList()
+        CreateTrellisDialog(
             plots = plots,
             onDismiss = { showCreateDialog = false },
             onCreate = { name, plotId, staging, criteria ->
                 showCreateDialog = false
-                vm.createFlow(api, name, plotId, staging, criteria)
+                vm.createTrellis(api, name, plotId, staging, criteria)
             },
         )
     }
 
     Column(Modifier.fillMaxSize().background(Parchment)) {
         TopAppBar(
-            title = { Text("Flows", style = MaterialTheme.typography.titleLarge.copy(color = Forest)) },
+            title = { Text("Trellises", style = MaterialTheme.typography.titleLarge.copy(color = Forest)) },
             navigationIcon = {
                 IconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Forest)
@@ -98,27 +98,27 @@ fun FlowsScreen(
 
         Box(Modifier.weight(1f)) {
             when (val s = state) {
-                is FlowsState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                is TrellisesState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Forest)
                 }
-                is FlowsState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                is TrellisesState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(s.message, color = TextMuted)
                 }
-                is FlowsState.Ready -> {
-                    if (s.flows.isEmpty()) {
+                is TrellisesState.Ready -> {
+                    if (s.trellises.isEmpty()) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("No flows yet. Flows route items to plots automatically.", color = TextMuted,
+                            Text("No trellises yet. Trellises route items to plots automatically.", color = TextMuted,
                                 modifier = Modifier.padding(32.dp),
                                 style = MaterialTheme.typography.bodyMedium)
                         }
                     } else {
                         LazyColumn(Modifier.fillMaxSize()) {
-                            items(s.flows, key = { it.flow.id }) { fwc ->
-                                FlowCard(
-                                    flowWithCount = fwc,
-                                    targetPlot = s.plots.find { it.id == fwc.flow.targetPlotId },
-                                    onStagingTap = { onStagingTap(fwc.flow.id, fwc.flow.targetPlotId, s.plots.find { it.id == fwc.flow.targetPlotId }?.visibility == "shared") },
-                                    onDelete = { vm.deleteFlow(api, fwc.flow.id) },
+                            items(s.trellises, key = { it.trellis.id }) { twc ->
+                                TrellisCard(
+                                    trellisWithCount = twc,
+                                    targetPlot = s.plots.find { it.id == twc.trellis.targetPlotId },
+                                    onStagingTap = { onStagingTap(twc.trellis.id, twc.trellis.targetPlotId, s.plots.find { it.id == twc.trellis.targetPlotId }?.visibility == "shared") },
+                                    onDelete = { vm.deleteTrellis(api, twc.trellis.id) },
                                 )
                             }
                         }
@@ -131,15 +131,15 @@ fun FlowsScreen(
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
                 containerColor = Forest,
             ) {
-                Icon(Icons.Filled.Add, contentDescription = "Add flow", tint = Parchment)
+                Icon(Icons.Filled.Add, contentDescription = "Add trellis", tint = Parchment)
             }
         }
     }
 }
 
 @Composable
-private fun FlowCard(
-    flowWithCount: FlowWithCount,
+private fun TrellisCard(
+    trellisWithCount: TrellisWithCount,
     targetPlot: Plot?,
     onStagingTap: () -> Unit,
     onDelete: () -> Unit,
@@ -149,8 +149,8 @@ private fun FlowCard(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete flow?") },
-            text = { Text("\"${flowWithCount.flow.name}\" will be removed.") },
+            title = { Text("Delete trellis?") },
+            text = { Text("\"${trellisWithCount.trellis.name}\" will be removed.") },
             confirmButton = {
                 TextButton(onClick = { showDeleteConfirm = false; onDelete() }) {
                     Text("Delete", color = androidx.compose.ui.graphics.Color.Red)
@@ -174,18 +174,18 @@ private fun FlowCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(flowWithCount.flow.name, style = MaterialTheme.typography.bodyLarge, color = Forest)
+                Text(trellisWithCount.trellis.name, style = MaterialTheme.typography.bodyLarge, color = Forest)
                 if (targetPlot != null) {
                     Text("→ ${targetPlot.name}", style = MaterialTheme.typography.bodySmall, color = TextMuted)
                 }
-                if (flowWithCount.flow.requiresStaging) {
+                if (trellisWithCount.trellis.requiresStaging) {
                     Text("Requires approval", style = MaterialTheme.typography.bodySmall, color = TextMuted)
                 }
             }
-            if (flowWithCount.flow.requiresStaging && flowWithCount.pendingCount > 0) {
+            if (trellisWithCount.trellis.requiresStaging && trellisWithCount.pendingCount > 0) {
                 TextButton(onClick = onStagingTap) {
                     Badge(containerColor = Forest) {
-                        Text("${flowWithCount.pendingCount}", color = Parchment)
+                        Text("${trellisWithCount.pendingCount}", color = Parchment)
                     }
                     Text("  Review", color = Forest)
                 }
@@ -217,7 +217,7 @@ internal fun buildCriteria(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun CreateFlowDialog(
+internal fun CreateTrellisDialog(
     plots: List<Plot>,
     onDismiss: () -> Unit,
     onCreate: (name: String, plotId: String, requiresStaging: Boolean, criteria: String) -> Unit,
@@ -242,7 +242,7 @@ internal fun CreateFlowDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("New flow", style = MaterialTheme.typography.titleLarge.copy(color = Forest)) },
+        title = { Text("New trellis", style = MaterialTheme.typography.titleLarge.copy(color = Forest)) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -251,7 +251,7 @@ internal fun CreateFlowDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Flow name") },
+                    label = { Text("Trellis name") },
                     placeholder = { Text("e.g. Photos of Sadaar → Family", color = TextMuted) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -273,7 +273,7 @@ internal fun CreateFlowDialog(
                     }
                 }
 
-                Text("Criteria — items matching these enter the flow", style = MaterialTheme.typography.labelMedium, color = TextMuted)
+                Text("Criteria — items matching these enter the trellis", style = MaterialTheme.typography.labelMedium, color = TextMuted)
 
                 // Tags
                 Text("Tags (all must match)", style = MaterialTheme.typography.bodySmall, color = Forest)

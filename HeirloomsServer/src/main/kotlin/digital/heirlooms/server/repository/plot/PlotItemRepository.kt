@@ -40,10 +40,10 @@ interface PlotItemRepository {
         object Forbidden : RemoveItemResult()
     }
 
-    fun getStagingItems(flowId: UUID, flow: digital.heirlooms.server.domain.plot.FlowRecord, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): List<digital.heirlooms.server.domain.upload.UploadRecord>
-    fun getStagingItemsForPlot(plotId: UUID, flows: List<digital.heirlooms.server.domain.plot.FlowRecord>, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): List<digital.heirlooms.server.domain.upload.UploadRecord>
-    fun approveStagingItem(plot: PlotRecord, uploadId: UUID, sourceFlowId: UUID?, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID, wrappedItemDekBytes: ByteArray? = null, itemDekFormat: String? = null, wrappedThumbnailDekBytes: ByteArray? = null, thumbnailDekFormat: String? = null): ApproveResult
-    fun rejectStagingItem(plot: PlotRecord, uploadId: UUID, sourceFlowId: UUID?, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): RejectResult
+    fun getStagingItems(trellisId: UUID, trellis: digital.heirlooms.server.domain.plot.TrellisRecord, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): List<digital.heirlooms.server.domain.upload.UploadRecord>
+    fun getStagingItemsForPlot(plotId: UUID, trellises: List<digital.heirlooms.server.domain.plot.TrellisRecord>, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): List<digital.heirlooms.server.domain.upload.UploadRecord>
+    fun approveStagingItem(plot: PlotRecord, uploadId: UUID, sourceTrellisId: UUID?, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID, wrappedItemDekBytes: ByteArray? = null, itemDekFormat: String? = null, wrappedThumbnailDekBytes: ByteArray? = null, thumbnailDekFormat: String? = null): ApproveResult
+    fun rejectStagingItem(plot: PlotRecord, uploadId: UUID, sourceTrellisId: UUID?, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): RejectResult
     fun deleteDecision(plot: PlotRecord, uploadId: UUID, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): Boolean
     fun getRejectedItems(plot: PlotRecord, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID): List<digital.heirlooms.server.domain.upload.UploadRecord>
     fun getPlotItems(plotId: UUID, userId: UUID = digital.heirlooms.server.domain.auth.FOUNDING_USER_ID, plot: PlotRecord?): List<digital.heirlooms.server.domain.plot.PlotItemWithUpload>
@@ -56,14 +56,14 @@ class PostgresPlotItemRepository(private val dataSource: DataSource) : PlotItemR
     // ── Staging operations ────────────────────────────────────────────────────
 
     override fun getStagingItems(
-        flowId: UUID,
-        flow: digital.heirlooms.server.domain.plot.FlowRecord,
+        trellisId: UUID,
+        trellis: digital.heirlooms.server.domain.plot.TrellisRecord,
         userId: UUID,
     ): List<UploadRecord> {
-        val plotId = flow.targetPlotId
+        val plotId = trellis.targetPlotId
 
         dataSource.connection.use { conn ->
-            val fragment = CriteriaEvaluator.evaluate(flow.criteria, userId, conn)
+            val fragment = CriteriaEvaluator.evaluate(trellis.criteria, userId, conn)
             val sql = buildString {
                 append("""SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash,
                                   thumbnail_key, taken_at, latitude, longitude, altitude,
@@ -101,16 +101,16 @@ class PostgresPlotItemRepository(private val dataSource: DataSource) : PlotItemR
 
     override fun getStagingItemsForPlot(
         plotId: UUID,
-        flows: List<digital.heirlooms.server.domain.plot.FlowRecord>,
+        trellises: List<digital.heirlooms.server.domain.plot.TrellisRecord>,
         userId: UUID,
     ): List<UploadRecord> {
-        if (flows.isEmpty()) return emptyList()
+        if (trellises.isEmpty()) return emptyList()
 
         dataSource.connection.use { conn ->
             val allItems = mutableMapOf<UUID, UploadRecord>()
-            for (flow in flows) {
+            for (trellis in trellises) {
                 try {
-                    val fragment = CriteriaEvaluator.evaluate(flow.criteria, userId, conn)
+                    val fragment = CriteriaEvaluator.evaluate(trellis.criteria, userId, conn)
                     val sql = buildString {
                         append("""SELECT id, storage_key, mime_type, file_size, uploaded_at, content_hash,
                                           thumbnail_key, taken_at, latitude, longitude, altitude,
@@ -144,7 +144,7 @@ class PostgresPlotItemRepository(private val dataSource: DataSource) : PlotItemR
                             allItems[u.id] = u
                         }
                     }
-                } catch (_: CriteriaValidationException) { /* skip invalid flow */ }
+                } catch (_: CriteriaValidationException) { /* skip invalid trellis */ }
             }
             return allItems.values.sortedByDescending { it.uploadedAt }
         }
@@ -153,7 +153,7 @@ class PostgresPlotItemRepository(private val dataSource: DataSource) : PlotItemR
     override fun approveStagingItem(
         plot: PlotRecord,
         uploadId: UUID,
-        sourceFlowId: UUID?,
+        sourceTrellisId: UUID?,
         userId: UUID,
         wrappedItemDekBytes: ByteArray?,
         itemDekFormat: String?,
@@ -195,11 +195,11 @@ class PostgresPlotItemRepository(private val dataSource: DataSource) : PlotItemR
                     }
                     if (isDuplicate) {
                         conn.prepareStatement(
-                            """INSERT INTO plot_staging_decisions (plot_id, upload_id, decision, source_flow_id)
+                            """INSERT INTO plot_staging_decisions (plot_id, upload_id, decision, source_trellis_id)
                                VALUES (?, ?, 'approved', ?)
                                ON CONFLICT (plot_id, upload_id) DO UPDATE SET decision = 'approved', decided_at = NOW()"""
                         ).use { stmt ->
-                            stmt.setObject(1, plotId); stmt.setObject(2, uploadId); stmt.setObject(3, sourceFlowId)
+                            stmt.setObject(1, plotId); stmt.setObject(2, uploadId); stmt.setObject(3, sourceTrellisId)
                             stmt.executeUpdate()
                         }
                         return PlotItemRepository.ApproveResult.DuplicateContent
@@ -208,30 +208,30 @@ class PostgresPlotItemRepository(private val dataSource: DataSource) : PlotItemR
             }
 
             conn.prepareStatement(
-                """INSERT INTO plot_items (plot_id, upload_id, added_by, source_flow_id,
+                """INSERT INTO plot_items (plot_id, upload_id, added_by, source_trellis_id,
                    wrapped_item_dek, item_dek_format, wrapped_thumbnail_dek, thumbnail_dek_format, added_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())"""
             ).use { stmt ->
                 stmt.setObject(1, plotId); stmt.setObject(2, uploadId)
-                stmt.setObject(3, userId); stmt.setObject(4, sourceFlowId)
+                stmt.setObject(3, userId); stmt.setObject(4, sourceTrellisId)
                 stmt.setBytes(5, wrappedItemDekBytes); stmt.setString(6, itemDekFormat)
                 stmt.setBytes(7, wrappedThumbnailDekBytes); stmt.setString(8, thumbnailDekFormat)
                 stmt.executeUpdate()
             }
 
             conn.prepareStatement(
-                """INSERT INTO plot_staging_decisions (plot_id, upload_id, decision, source_flow_id)
+                """INSERT INTO plot_staging_decisions (plot_id, upload_id, decision, source_trellis_id)
                    VALUES (?, ?, 'approved', ?)
                    ON CONFLICT (plot_id, upload_id) DO UPDATE SET decision = 'approved', decided_at = NOW()"""
             ).use { stmt ->
-                stmt.setObject(1, plotId); stmt.setObject(2, uploadId); stmt.setObject(3, sourceFlowId)
+                stmt.setObject(1, plotId); stmt.setObject(2, uploadId); stmt.setObject(3, sourceTrellisId)
                 stmt.executeUpdate()
             }
         }
         return PlotItemRepository.ApproveResult.Success
     }
 
-    override fun rejectStagingItem(plot: PlotRecord, uploadId: UUID, sourceFlowId: UUID?, userId: UUID): PlotItemRepository.RejectResult {
+    override fun rejectStagingItem(plot: PlotRecord, uploadId: UUID, sourceTrellisId: UUID?, userId: UUID): PlotItemRepository.RejectResult {
         if (plot.ownerUserId != userId) return PlotItemRepository.RejectResult.PlotNotOwned
 
         dataSource.connection.use { conn ->
@@ -244,11 +244,11 @@ class PostgresPlotItemRepository(private val dataSource: DataSource) : PlotItemR
             if (approved) return PlotItemRepository.RejectResult.AlreadyApproved
 
             conn.prepareStatement(
-                """INSERT INTO plot_staging_decisions (plot_id, upload_id, decision, source_flow_id)
+                """INSERT INTO plot_staging_decisions (plot_id, upload_id, decision, source_trellis_id)
                    VALUES (?, ?, 'rejected', ?)
                    ON CONFLICT (plot_id, upload_id) DO UPDATE SET decision = 'rejected', decided_at = NOW()"""
             ).use { stmt ->
-                stmt.setObject(1, plot.id); stmt.setObject(2, uploadId); stmt.setObject(3, sourceFlowId)
+                stmt.setObject(1, plot.id); stmt.setObject(2, uploadId); stmt.setObject(3, sourceTrellisId)
                 stmt.executeUpdate()
             }
         }

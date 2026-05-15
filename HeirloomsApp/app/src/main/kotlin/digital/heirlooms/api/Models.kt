@@ -81,13 +81,16 @@ data class PlotMember(
     val localName: String? = null,
 )
 
-data class Flow(
+data class Trellis(
     val id: String,
     val name: String,
     val criteria: String,           // JSON string
     val targetPlotId: String,
     val requiresStaging: Boolean,
 )
+
+// Backward-compat alias
+typealias Flow = Trellis
 
 data class StagingItem(
     val upload: Upload,

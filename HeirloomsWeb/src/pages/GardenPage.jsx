@@ -1336,7 +1336,7 @@ export function GardenPage() {
       <div className="mt-12 flex flex-col gap-2">
         <Link to="/flows"
           className="text-sm font-sans text-text-muted hover:text-forest transition-colors">
-          Flows
+          Trellises
         </Link>
         <Link
           to="/compost"

@@ -42,7 +42,7 @@ fun BurgerPanel(
     onDiagnosticsTap: () -> Unit = {},
     onDevicesAccessTap: () -> Unit = {},
     onFriendsTap: () -> Unit = {},
-    onFlowsTap: () -> Unit = {},
+    onTrellisesTap: () -> Unit = {},
     displayName: String = "",
 ) {
     ModalBottomSheet(
@@ -61,7 +61,7 @@ fun BurgerPanel(
             }
             BurgerRow(label = "Settings", onClick = { onDismiss(); onSettingsTap() })
             HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Forest15)
-            BurgerRow(label = "Flows", onClick = { onDismiss(); onFlowsTap() })
+            BurgerRow(label = "Trellises", onClick = { onDismiss(); onTrellisesTap() })
             HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Forest15)
             BurgerRow(label = "Friends", onClick = { onDismiss(); onFriendsTap() })
             HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Forest15)

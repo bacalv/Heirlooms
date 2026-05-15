@@ -97,7 +97,7 @@ function FlowCard({ flow, plotName, isSharedPlot, onEdit, onDelete }) {
 
   useEffect(() => {
     if (!flow.requiresStaging) return
-    apiFetch(`/api/flows/${flow.id}/staging`, apiKey)
+    apiFetch(`/api/trellises/${flow.id}/staging`, apiKey)
       .then((r) => r.ok ? r.json() : [])
       .then((items) => setPendingCount(Array.isArray(items) ? items.length : 0))
       .catch(() => {})
@@ -158,7 +158,7 @@ export function FlowsPage() {
 
   function reload() {
     Promise.all([
-      apiFetch('/api/flows', apiKey).then((r) => r.ok ? r.json() : []),
+      apiFetch('/api/trellises', apiKey).then((r) => r.ok ? r.json() : []),
       apiFetch('/api/plots', apiKey).then((r) => r.ok ? r.json() : []),
     ])
       .then(([f, p]) => {
@@ -170,14 +170,14 @@ export function FlowsPage() {
   }
 
   useEffect(() => {
-    document.title = 'Flows · Heirlooms'
+    document.title = 'Trellises · Heirlooms'
     reload()
   }, [apiKey])
 
   async function handleCreate({ name, criteria, targetPlotId, requiresStaging }) {
     setSaving(true); setSaveError(null)
     try {
-      const r = await apiFetch('/api/flows', apiKey, {
+      const r = await apiFetch('/api/trellises', apiKey, {
         method: 'POST',
         body: JSON.stringify({ name, criteria, targetPlotId, requiresStaging }),
       })
@@ -194,7 +194,7 @@ export function FlowsPage() {
     if (!editFlow) return
     setSaving(true); setSaveError(null)
     try {
-      const r = await apiFetch(`/api/flows/${editFlow.id}`, apiKey, {
+      const r = await apiFetch(`/api/trellises/${editFlow.id}`, apiKey, {
         method: 'PUT',
         body: JSON.stringify({ name, criteria, requiresStaging }),
       })
@@ -209,7 +209,7 @@ export function FlowsPage() {
 
   async function handleDelete(id) {
     try {
-      await apiFetch(`/api/flows/${id}`, apiKey, { method: 'DELETE' })
+      await apiFetch(`/api/trellises/${id}`, apiKey, { method: 'DELETE' })
       setDeleteConfirm(null)
       reload()
     } catch (_) {}
@@ -226,17 +226,17 @@ export function FlowsPage() {
   return (
     <main className="max-w-3xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="font-serif italic text-forest text-xl">Flows</h1>
+        <h1 className="font-serif italic text-forest text-xl">Trellises</h1>
         <button onClick={() => { setShowCreate(true); setSaveError(null) }}
           className="px-3 py-1.5 text-sm bg-forest text-parchment rounded-button hover:opacity-90 transition-opacity">
-          New flow
+          New trellis
         </button>
       </div>
 
       {showCreate && (
         <BrandModal onClose={() => setShowCreate(false)} width="max-w-lg">
           <div className="p-6">
-            <h2 className="font-serif italic text-forest text-lg mb-4 mt-0">New flow</h2>
+            <h2 className="font-serif italic text-forest text-lg mb-4 mt-0">New trellis</h2>
             <FlowForm plots={plots} onSave={handleCreate} onCancel={() => setShowCreate(false)}
               saving={saving} error={saveError} />
           </div>
@@ -275,7 +275,7 @@ export function FlowsPage() {
 
       {flows.length === 0 ? (
         <p className="text-text-muted text-sm font-sans text-center py-16">
-          No flows yet. Create one to automatically route items into a collection plot.
+          No trellises yet. Create one to automatically route items into a collection plot.
         </p>
       ) : (
         <div className="space-y-3">

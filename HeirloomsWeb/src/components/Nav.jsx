@@ -39,7 +39,7 @@ export function Nav() {
             <NavLink to="/explore" className={navLinkClass}>Explore</NavLink>
             <NavLink to="/capsules" className={navLinkClass}>Capsules</NavLink>
             <NavLink to="/shared" className={navLinkClass}>Shared</NavLink>
-            <NavLink to="/flows" className={navLinkClass}>Flows</NavLink>
+            <NavLink to="/flows" className={navLinkClass}>Trellises</NavLink>
           </nav>
 
           <div className="hidden sm:flex items-center gap-6">
@@ -122,7 +122,7 @@ export function Nav() {
                 }
                 onClick={() => setMenuOpen(false)}
               >
-                Flows
+                Trellises
               </NavLink>
               <NavLink
                 to="/access"
