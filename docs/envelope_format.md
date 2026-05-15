@@ -79,21 +79,52 @@ Minimum size: `1 + 1 + 1 + 65 + 12 + 0 + 16 = 96` bytes.
 
 ---
 
-## Algorithm identifiers (M7)
+## Algorithm identifiers
 
-| ID | Use |
+### Active (M7 + M10)
+
+| ID | Introduced | Use |
+|---|---|---|
+| `aes256gcm-v1` | M7 | Symmetric content encryption (DEK encrypts file bytes, thumbnail bytes, encrypted metadata, capsule message bodies) |
+| `master-aes256gcm-v1` | M7 | DEK wrap under master key (master key used directly as a 256-bit AES key) |
+| `p256-ecdh-hkdf-aes256gcm-v1` | M7 | Master key wrap to device pubkey (P-256 ECDH → HKDF-SHA256 → AES-256-GCM); also used for sharing-keypair wrapping in M9 and plot-key wrapping in M10 |
+| `argon2id-aes256gcm-v1` | M7 | Master key wrap under passphrase (Argon2id KDF → AES-256-GCM) |
+| `plot-aes256gcm-v1` | M10 | Item DEK wrapped under the shared plot group key (AES-256-GCM). Used in `plot_items.wrapped_item_dek` and `plot_items.wrapped_thumbnail_dek`. The plot group key itself is wrapped to each member's sharing pubkey using `p256-ecdh-hkdf-aes256gcm-v1` and stored in `plot_members.wrapped_plot_key`. |
+
+### Reserved (M11) — TBD by ARCH-003
+
+The following IDs are reserved to prevent independent naming collisions during M11
+development. Their binary layouts and KDF parameters are not yet defined; they will
+be specified in full in `docs/briefs/ARCH-003_m11-capsule-crypto-brief.md` before
+any M11 developer touches crypto code.
+
+| ID | Intended use |
 |---|---|
-| `aes256gcm-v1` | Symmetric content encryption (DEK encrypts file bytes, thumbnail bytes, encrypted metadata, capsule message bodies) |
-| `master-aes256gcm-v1` | DEK wrap under master key (master key used directly as a 256-bit AES key) |
-| `p256-ecdh-hkdf-aes256gcm-v1` | Master key wrap to device pubkey (P-256 ECDH → HKDF-SHA256 → AES-256-GCM) |
-| `argon2id-aes256gcm-v1` | Master key wrap under passphrase (Argon2id KDF → AES-256-GCM) |
+| `capsule-ecdh-aes256gcm-v1` | Per-capsule DEK wrapped to a recipient's P-256 sharing pubkey at sealing time. Makes "sealed" a cryptographic property, not just a database flag. |
+| `shamir-share-v1` | A single Shamir Secret Sharing share of a capsule key (or master key), distributed to a nominated executor. Encoding format TBD by ARCH-003. |
+| `tlock-bls12381-v1` | Per-capsule DEK time-locked via drand's tlock scheme over BLS12-381. The round number and chain ID are stored alongside the envelope (not inside it). |
 
 **Unknown IDs must fail loudly.** Decryption code must not silently skip or ignore an
 unrecognised algorithm ID — throw an exception with the unrecognised ID in the message.
 
-The format is open to new identifiers. Adding a new algorithm ID in a future milestone
-does not require a version bump of the envelope format itself. Old clients that encounter
-an unknown ID will correctly fail loudly rather than silently misinterpreting the bytes.
+---
+
+## Versioning policy
+
+The envelope format version (currently `0x01`) identifies the **binary wire layout**:
+the positions and lengths of `envelope_version`, `alg_id_len`, `alg_id`, `nonce`,
+`ciphertext`, and `auth_tag` (plus `ephemeral_pubkey` in the asymmetric variant).
+
+**Adding a new algorithm ID does not require a version bump.** The version byte
+describes the container structure, not the cryptographic algorithm inside it. New
+algorithms are introduced by registering a new string in the table above and
+implementing the corresponding codec. Old clients that encounter an unknown ID will
+correctly fail loudly rather than silently misinterpreting the bytes — which is the
+safe failure mode.
+
+A version bump (to `0x02`) would only be required if the binary layout itself
+changed — for example, if a field were added, removed, or reordered in the wire
+format. That has not happened and is not anticipated for M11.
 
 ---
 
