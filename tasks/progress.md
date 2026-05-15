@@ -12,6 +12,9 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |----|-------|----------|----------|-------------|------------|
+| [BUG-022](queue/BUG-022_web-detail-view-blank-for-shared-plot-image.md) | Web detail view blank for shared plot items — full image DEK not decrypted with plot key | Bug Fix | High | Developer | — |
+| [BUG-021](queue/BUG-021_video-duration-zero-on-detail-view.md) | Video detail view shows 0-second duration — metadata not extracted on upload | Bug Fix | Medium | Developer | — |
+| [BUG-020](queue/BUG-020_shared-plot-auto-approve-needs-client-dek-rewrap.md) | Shared plot trellis auto-approve — client-side DEK re-wrap to avoid mandatory staging | Bug Fix | Medium | Developer | — |
 | [FEAT-004](queue/FEAT-004_android-invite-friend-from-friends-screen.md) | Android — invite a friend from the Friends screen | Feature | Medium | Developer | — |
 | [SEC-011](queue/SEC-011_device-revocation.md) | Device revocation — allow users to remove old devices from Devices & Access | Security | Medium | SecurityManager | — |
 | [BUG-019](queue/BUG-019_register-duplicate-device-id-wrong-error-message.md) | Registration shows "Username already exists" for duplicate device_id (409) collision | Bug Fix | Low | Developer | — |
