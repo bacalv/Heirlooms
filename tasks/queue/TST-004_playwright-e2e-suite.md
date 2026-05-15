@@ -48,7 +48,7 @@ Each test is fully isolated — actors register fresh accounts using invite toke
 
 ## Key design decisions
 
-- Use the staging API key (`k71CFcf59rdvmFqfV_nZhBd4W7DUao4jAvRvmTE4neA`) to generate invites and seed state without going through the UI
+- Use the staging API key (fetch from Secret Manager: `heirlooms-test-api-key`) to generate invites and seed state without going through the UI
 - Tests run against the real browser (Chromium via Playwright) — not PhantomJS/headless-only
 - For CI builds without a screen: `playwright test --headed=false` — Playwright handles this natively, no PhantomJS needed
 - Tests should be runnable locally against `localhost` too (with a local server + docker-compose)

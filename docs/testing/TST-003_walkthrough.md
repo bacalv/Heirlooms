@@ -14,10 +14,10 @@
 | API base | `https://test.api.heirlooms.digital` |
 | Web | `https://test.heirlooms.digital` |
 | Android app | **Heirlooms Test** (burnt-orange icon, staging flavor) |
-| API key | `k71CFcf59rdvmFqfV_nZhBd4W7DUao4jAvRvmTE4neA` |
+| API key | `(rotated 2026-05-15 — fetch from Secret Manager: heirlooms-test-api-key)` |
 
 Throughout this document:
-- `$KEY` = `k71CFcf59rdvmFqfV_nZhBd4W7DUao4jAvRvmTE4neA`
+- `$KEY` = fetch via `gcloud secrets versions access latest --secret=heirlooms-test-api-key --project heirlooms-495416`
 - **User A** = the first user created in TST-002 (already exists)
 - **User B** = the second user you will create in Journey 2
 
@@ -29,7 +29,7 @@ All curl commands send `X-Api-Key: $KEY` unless stated otherwise. Once you have 
 
 ```bash
 # API-key auth (admin/setup calls)
--H "X-Api-Key: k71CFcf59rdvmFqfV_nZhBd4W7DUao4jAvRvmTE4neA"
+-H "X-Api-Key: $KEY"
 
 # Session-token auth (user calls — substitute the token from login/register)
 -H "X-Api-Key: <session_token>"
@@ -90,7 +90,7 @@ All curl commands send `X-Api-Key: $KEY` unless stated otherwise. Once you have 
 
 ```bash
 curl -s \
-  -H "X-Api-Key: k71CFcf59rdvmFqfV_nZhBd4W7DUao4jAvRvmTE4neA" \
+  -H "X-Api-Key: $KEY" \
   "https://test.api.heirlooms.digital/api/content/uploads?limit=5" \
   | python3 -m json.tool
 ```

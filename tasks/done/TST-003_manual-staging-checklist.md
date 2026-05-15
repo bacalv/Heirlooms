@@ -26,7 +26,7 @@ Walk through the key user journeys on the staging environment to validate the fu
 - API: https://test.api.heirlooms.digital
 - Web: https://test.heirlooms.digital
 - Android: Heirlooms Test (burnt-orange icon)
-- API key (for setup): `k71CFcf59rdvmFqfV_nZhBd4W7DUao4jAvRvmTE4neA`
+- API key (for setup): `(rotated 2026-05-15 — fetch from Secret Manager: heirlooms-test-api-key)`
 
 **Pre-flight:** confirm staging is up before starting.
 ```
@@ -58,7 +58,7 @@ Expected: `{"status":"ok"}` (or similar). If it fails, stop — ping OpsManager.
 
 - [x] Generate invite token via API:
   ```
-  curl -H "X-API-Key: k71CFcf59rdvmFqfV_nZhBd4W7DUao4jAvRvmTE4neA" \
+  curl -H "X-API-Key: $(gcloud secrets versions access latest --secret=heirlooms-test-api-key --project heirlooms-495416)" \
        https://test.api.heirlooms.digital/api/auth/invites
   ```
 - [x] Copy the invite token from the response
