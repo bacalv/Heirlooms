@@ -74,6 +74,18 @@ class SharedPlotsViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 api.acceptPlotInvite(plotId, localName)
+                // Eagerly load the plot key so Garden items decrypt without a restart
+                val privkey = VaultSession.sharingPrivkey
+                if (privkey != null) {
+                    try {
+                        val (wrappedKey, _) = api.getPlotKey(plotId)
+                        val rawKey = VaultCrypto.unwrapPlotKey(
+                            android.util.Base64.decode(wrappedKey, android.util.Base64.DEFAULT),
+                            privkey,
+                        )
+                        VaultSession.setPlotKey(plotId, rawKey)
+                    } catch (_: Exception) { }
+                }
                 refresh(api)
                 onDone()
             } catch (e: Exception) {
