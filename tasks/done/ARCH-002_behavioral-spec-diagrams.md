@@ -87,4 +87,30 @@ operations) for complex flows; swim-lane style for simple reads. Specifically:
 
 ## Completion notes
 
-<!-- Agent appends here and moves file to tasks/done/ -->
+**Completed:** 2026-05-15 by TechnicalArchitect
+
+**All 9 `docs/specs/` files created:**
+- `onboarding.md` — 6 use cases, 6 sequence diagrams (register, login, setup-existing, QR pairing, device link, friend invite)
+- `garden-explore.md` — 7 use cases, 6 diagrams (garden load, just arrived, photo detail, explore filter, plot row, hash check)
+- `uploading.md` — 8 use cases, 6 diagrams (E2EE initiate/confirm, Android share-sheet, web drag-drop, iOS background, resumable, legacy)
+- `plots.md` — 8 use cases + full criteria atom type table, 7 diagrams (list, create private, create shared, edit, delete, reorder, cycle detection)
+- `flows-trellises.md` — 12 use cases, 9 diagrams (create flow, auto-routing, staging view, approve private, approve shared with DEK re-wrap, reject, un-reject, manual add/remove, requires_staging=false bypass)
+- `shared-plots.md` — 11 use cases, 7 diagrams (create, invite direct, join via link async, member adds item, list memberships, transfer ownership, open/close)
+- `sending-receiving.md` — 6 use cases, 4 diagrams (share DEK re-wrap full crypto detail, receive in Just Arrived, attribution, sharing key upload/restore)
+- `capsules.md` — 8 use cases + state machine, 9 diagrams (create open/sealed, edit, seal, cancel, list/view, reverse lookup, delivery stub M12, posthumous unlock stub M13)
+- `settings-compost.md` — 10 use cases, 8 diagrams (account info, passphrase change, get/delete recovery, list/retire devices, compost, view/restore composted, set tags, logout)
+
+**Discrepancies between briefs/roadmap and code:**
+
+1. **Passphrase change flow is incomplete**: There is no dedicated "change auth credentials" endpoint. `POST /setup-existing` sets auth for the first time only (returns 409 if already set). A passphrase change therefore only updates the recovery blob (`PUT /passphrase`) but cannot update the login auth_verifier/auth_salt in the current codebase. Noted as a gap in `settings-compost.md`.
+
+2. **`plot-aes256gcm-v1` algorithm ID not in `envelope_format.md`**: The code (both `vaultCrypto.js` and `EnvelopeCrypto.swift`) defines `ALG_PLOT_AES256GCM_V1 = "plot-aes256gcm-v1"` for plot key wrapping of DEKs. This algorithm ID does not appear in `docs/envelope_format.md` (which only lists `aes256gcm-v1`, `master-aes256gcm-v1`, `p256-ecdh-hkdf-aes256gcm-v1`, and `argon2id-aes256gcm-v1`). The envelope spec should be updated to include this M10 algorithm.
+
+3. **Pairing flow uses both `/pairing/*` and `/link/*` endpoints**: The QR pairing (Android→Web) uses `/pairing/initiate`, `/pairing/qr`, `/pairing/complete`, `/pairing/status`. The native device link uses `/link/initiate`, `/link/{id}/register`, `/link/{id}/status`, `/link/{id}/wrap`. These are two separate flows but are easy to conflate; both documented separately in onboarding.md.
+
+4. **`pending_plot_key_requests` table name**: The task brief refers to "async pending_plot_key_requests" but the code uses the method names `listPendingInvites` / `confirmInvite` and the route is `/plots/{id}/members/pending/{inviteId}/confirm`. The underlying table name is not directly visible from the routes, but the API surface uses "pending" invite terminology rather than "plot_key_requests".
+
+5. **REF-001 (Flow → Trellis rename)** is not yet applied. All spec diagrams use "Flow/Trellis" terminology and the `/flows` endpoints as they exist in code.
+
+6. **`required_staging` default**: `FlowRoutes.kt` line 78 shows `requiresStaging` defaults to `true` if not provided in the create body. The task brief mentions public plots always require staging (`requires_staging=true`); this is enforced in `FlowService` by checking plot visibility when routing uploads.
+
