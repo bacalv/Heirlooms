@@ -159,6 +159,14 @@ export async function getInvite(sessionToken) {
   return r.json() // { token, expires_at }
 }
 
+export async function authInviteConnect(sessionToken, inviteToken) {
+  return fetch(`${API_URL}/api/auth/invites/${encodeURIComponent(inviteToken)}/connect`, {
+    method: 'POST',
+    headers: { 'X-Api-Key': sessionToken },
+  })
+  // caller checks status
+}
+
 export async function pairingQr(code) {
   const r = await fetch(`${API_URL}/api/auth/pairing/qr`, {
     method: 'POST',
