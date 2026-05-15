@@ -95,24 +95,26 @@ To create one:
 
 Agent naming convention: `developer-1`, `developer-2`, `security`, `test-manager`, `ops`, `architect`.
 
+## Architecture decisions (2026-05-15)
+
+- **ARCH-003/004/005 approved** — M11 capsule crypto spec, connections model, envelope format amendment all reviewed and approved by Bret.
+- **ARCH-006 produced and approved** — TimeLock provider interface: `TimeLockProvider` Kotlin interface, `StubTimeLockProvider` for M11 (HMAC-based fake keys), real drand via Go sidecar for M12. See `docs/briefs/ARCH-006_tlock-provider-interface.md`.
+- **tlock blinding scheme approved** — Instead of server re-encrypting the DEK (which would let Heirlooms read capsules post-unlock), the client splits the DEK into two halves at sealing: `DEK_client` (ECDH-wrapped per recipient in `wrapped_capsule_key`) and `DEK_tlock = DEK XOR DEK_client` (IBE-sealed). Server returns `DEK_tlock` at delivery; client XORs. Server never has the full DEK. "Heirlooms cannot read your capsule, ever" holds.
+- **iOS compatibility (Option A)**: `wrapped_capsule_key` always wraps the real `DEK` (for iOS). New `wrapped_blinding_mask` wraps `DEK_client` for Android/web blinded path. iOS uses only the ECDH path unchanged.
+- **Shamir + tlock**: Shamir shares are always over `DEK`, never `DEK_client`. Executor recovery does not require `/tlock-key`.
+- **tlock risk flag**: drand/BLS12-381 integration is M12 scope. M11 uses the stub. Dev Manager should size the Go sidecar task before M12 dispatch.
+
 ## Pending actions (requires Bret)
 
 - **SEC-009 Part 2 — biometric gate**: review Options A/B/C in the SEC-009 task file and decide before next iteration dispatch.
 
-- **v0.54 iteration — Phase 6 → 7**:
-  1. ✅ Docker Desktop restart — done 2026-05-15
-  2. ✅ Deploy v0.54 server + web to staging — done 2026-05-15 (server rev 00004-gjv, web rev 00003-z6z)
-  3. ✅ Old staging API key version 1 disabled — done 2026-05-15
-  4. ✅ Prevention hook activated (`git config core.hooksPath .githooks`) — done 2026-05-15
-  5. **Review manager/architect outputs** before activating TST-007:
-     - `docs/briefs/ARCH-003_m11-capsule-crypto-brief.md` — M11 capsule crypto spec
-     - `docs/briefs/ARCH-004_connections-data-model.md` — connections schema design
-     - `docs/envelope_format.md` — envelope format amendment (ARCH-005 changes)
-     - `docs/ops/runbook.md` — deployment runbook (OPS-001) *(already reviewed)*
-  6. Activate TST-007 (12-journey v0.54 staging checklist)
-  7. Triage bugs → critical re-enter iteration, minor go to queue
-  8. Once staging green → Operations Manager prepares v0.54 production release plan
-  9. Bret approves and promotes to production
+- **v0.54 production release** (next session):
+  1. ✅ TST-007 complete — conditional pass (2026-05-15)
+  2. ✅ All 5 blocking/non-blocking bugs fixed and deployed to staging (2026-05-15): BUG-013, BUG-014, BUG-015, BUG-016, UX-003
+  3. **Retest BUG-013 and BUG-016 on staging** (photo detail rotation + shared plot E2EE decryption for member)
+  4. Install updated APK on Fire tablet and retest BUG-016 with Fire 1
+  5. Once both pass → Operations Manager prepares v0.54 production release plan
+  6. Bret approves and promotes to production
 
 ## Task system
 
