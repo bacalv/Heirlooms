@@ -21,4 +21,4 @@ completed: 2026-05-14
 
 - Test API: https://test.api.heirlooms.digital
 - Test web: https://test.heirlooms.digital
-- Generate invite: `curl -H "X-Api-Key: k71CFcf59rdvmFqfV_nZhBd4W7DUao4jAvRvmTE4neA" https://test.api.heirlooms.digital/api/auth/invites`
+- Generate invite: `curl -H "X-Api-Key: <REDACTED_ROTATE_PENDING>" https://test.api.heirlooms.digital/api/auth/invites`

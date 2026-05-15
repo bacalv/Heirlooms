@@ -20,7 +20,7 @@ multiple committed files across the git history. Bret flagged this for a securit
 
 ## Confirmed exposure
 
-**Staging API key** (`k71CFcf59rdvmFqfV_nZhBd4W7DUao4jAvRvmTE4neA`) appears in the git
+**Staging API key** (`<REDACTED_ROTATE_PENDING>`) appears in the git
 history in at minimum:
 
 - `tasks/queue/TST-005_playwright-infrastructure.md`
@@ -39,7 +39,7 @@ Run a thorough scan across all commits and all branches for any hardcoded secret
 
 ```bash
 # Known staging key
-git log --all -p | grep -E "k71CFcf59"
+git log --all -p | grep -E "k71CFcf59"  # (pattern-only; key value not logged)
 
 # Broader patterns: anything resembling a real secret value
 git log --all -p | grep -E "^\+" | grep -iE \
@@ -110,4 +110,44 @@ sufficient. Document the decision either way.
 
 ## Completion notes
 
-<!-- SecurityManager appends here and moves file to tasks/done/ -->
+**Completed:** 2026-05-15  
+**Agent:** SecurityManager (SEC-010)
+
+### Summary of work done
+
+1. **Full git history scan** — scanned all 401 commits across all branches using
+   `git log --all -S` (pickaxe) and broad grep patterns. Found the staging API key
+   (`heirlooms-test-api-key` value) in 5 commits across 6 distinct file paths.
+   No other credentials (passwords, private keys, production API keys, GCS JSON)
+   were found anywhere in history.
+
+2. **Working-tree redaction** — redacted the exposed key value from all 6 affected
+   working-tree files. Replaced with `<REDACTED_ROTATE_PENDING>` plus a note to
+   fetch from Secret Manager. Verified with `grep -r` that no occurrences remain.
+
+3. **Pre-commit hook** — installed `.githooks/pre-commit` (tracked file, executable).
+   Blocks 5 categories of credential patterns. Configured via `git config
+   core.hooksPath .githooks`. Hook is active in the security worktree; must be
+   run in each worktree.
+
+4. **Scan report** — written to `docs/security/sec-010-scan-report.md`. Lists all
+   commit SHAs, affected files, redactions performed, history rewrite decision
+   (no rewrite — repo is private, key will be rotated), and recommendations.
+
+### Outstanding actions (Bret — manual)
+
+- Rotate the staging API key in Secret Manager (add new version, disable old)
+- Verify staging API works with new key
+- Add `git config core.hooksPath .githooks` to `scripts/create-agent-workspace.sh`
+- Add no-hardcoding rule to CLAUDE.md and agent persona files
+
+### Files changed
+
+- `tasks/done/DONE-004_staging-environment.md` — 1 redaction
+- `tasks/done/TST-003_manual-staging-checklist.md` — 2 redactions
+- `tasks/queue/TST-004_playwright-e2e-suite.md` — 1 redaction
+- `tasks/queue/TST-005_playwright-infrastructure.md` — 1 redaction (removed hardcoded fallback guidance)
+- `docs/testing/TST-003_walkthrough.md` — 3 redactions
+- `tasks/queue/SEC-010_git-history-secret-scan.md` — 1 redaction (this file)
+- `.githooks/pre-commit` — new tracked hook file
+- `docs/security/sec-010-scan-report.md` — new scan report

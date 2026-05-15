@@ -122,9 +122,9 @@ separate task.
 
 - Check `HeirloomsWeb/package.json` for existing Playwright or testing deps before
   installing — avoid duplicate installs or version conflicts.
-- The staging API key is `k71CFcf59rdvmFqfV_nZhBd4W7DUao4jAvRvmTE4neA`. In code,
-  read it from `process.env.PLAYWRIGHT_STAGING_API_KEY` with that value as the
-  default for local runs. Do not hardcode it in config.ts — use env with fallback.
+- The staging API key must be fetched from Secret Manager (`heirlooms-test-api-key`).
+  In code, read it from `process.env.PLAYWRIGHT_STAGING_API_KEY` — do not hardcode
+  a fallback value in config.ts. Set the env var from Secret Manager for local runs.
 - TypeScript config: check whether `HeirloomsWeb/tsconfig.json` covers `e2e/` or
   if a separate `e2e/tsconfig.json` is needed (Playwright recommends the latter).
 - Target Node version: whatever `HeirloomsWeb/` already uses.
