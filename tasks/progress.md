@@ -12,6 +12,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |----|-------|----------|----------|-------------|------------|
+| [BUG-018](queue/BUG-018_shared-plot-trellis-no-staging-dek-not-rewrapped.md) | Shared plot trellis without staging — items auto-flow with original DEK, members can't decrypt | Bug Fix | High | Developer | — |
 | [BUG-017](queue/BUG-017_android-plot-key-not-loaded-after-accept-invite.md) | Android — shared plot items don't decrypt after accepting invite until app restart | Bug Fix | High | Developer | — |
 | [FEAT-003](queue/FEAT-003_android-account-pairing-recovery.md) | Android account pairing / recovery — pair a fresh Android install to an existing account | Feature | Medium | Developer | — |
 | [TST-006](queue/TST-006_android-remote-control-investigation.md) | Investigate remote-controlled Android testing for E2E automation | Testing | Medium | TestManager | — |
