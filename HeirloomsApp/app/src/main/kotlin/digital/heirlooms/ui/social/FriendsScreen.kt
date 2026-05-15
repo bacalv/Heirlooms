@@ -30,7 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import digital.heirlooms.api.HeirloomsApi
 import digital.heirlooms.ui.common.LocalHeirloomsApi
-import digital.heirlooms.ui.garden.DidntTake
+import digital.heirlooms.ui.garden.LoadError
 import digital.heirlooms.ui.theme.Forest
 import digital.heirlooms.ui.theme.HeirloomsSerifItalic
 import digital.heirlooms.ui.theme.Parchment
@@ -63,7 +63,7 @@ fun FriendsScreen(onBack: () -> Unit) {
         )
 
         when {
-            error -> DidntTake(onRetry = {
+            error -> LoadError(onRetry = {
                 error = false
                 friends = null
             })

@@ -48,7 +48,7 @@ import digital.heirlooms.api.CapsuleSummary
 import digital.heirlooms.ui.brand.WaxSealOlive
 import digital.heirlooms.ui.common.LocalHeirloomsApi
 import digital.heirlooms.ui.common.formatOffsetDate
-import digital.heirlooms.ui.garden.DidntTake
+import digital.heirlooms.ui.garden.LoadError
 import digital.heirlooms.ui.theme.Bloom
 import digital.heirlooms.ui.theme.Earth
 import digital.heirlooms.ui.theme.Forest
@@ -118,7 +118,7 @@ fun CapsulesScreen(
                 is CapsulesState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Forest)
                 }
-                is CapsulesState.Error -> DidntTake(onRetry = { vm.load(api, filter.stateParam) })
+                is CapsulesState.Error -> LoadError(onRetry = { vm.load(api, filter.stateParam) })
                 else -> LazyColumn(
                     Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),

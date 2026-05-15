@@ -110,7 +110,7 @@ class UploadWorker(
         val (title, text) = if (success)
             context.getString(R.string.notif_planted) to context.getString(R.string.upload_success_one)
         else
-            context.getString(R.string.notif_didnt_take) to context.getString(R.string.upload_failed)
+            context.getString(R.string.notif_upload_failed) to context.getString(R.string.upload_failed)
         val n = NotificationCompat.Builder(context, CHANNEL_RESULT)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(title)

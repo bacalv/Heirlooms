@@ -124,7 +124,7 @@ private fun DrawScope.drawOliveArrival(t: Float, s: Float) {
     )
 }
 
-// ── Shared helpers used by both Arrival and DidntTake ──────────────────────
+// ── Shared helpers used by both Arrival and UploadFailed animations ──────────────────────
 
 internal data class LeafSpec(
     val cx: Float, val cy: Float,
@@ -160,7 +160,7 @@ internal val ArrivalBranchPath = BranchPathSpec(
     endX = 70f, endY =  58f,
 )
 
-internal val DidntTakeBranchPath = BranchPathSpec(
+internal val UploadFailedBranchPath = BranchPathSpec(
     startX = 70f, startY = 140f,
     c1X = 73f, c1Y = 128f,
     c2X = 69f, c2Y = 118f,

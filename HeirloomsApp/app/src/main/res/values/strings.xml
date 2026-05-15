@@ -14,7 +14,7 @@
     <string name="upload_success">Something has been planted.</string>
     <string name="upload_success_one">1 photo saved to your garden.</string>
     <string name="upload_success_many">%1$d photos saved to your garden.</string>
-    <string name="upload_failed">didn\'t take</string>
+    <string name="upload_failed">Upload failed</string>
     <string name="upload_retry">try again</string>
     <string name="upload_dismiss">dismiss</string>
 
@@ -22,7 +22,7 @@
     <string name="notif_channel_uploads">Uploads</string>
     <string name="notif_uploading">Planting your photos…</string>
     <string name="notif_planted">Something has been planted.</string>
-    <string name="notif_didnt_take">didn\'t take</string>
+    <string name="notif_upload_failed">Upload failed</string>
     <string name="notif_already_in_garden">Already in your garden</string>
     <string name="notif_already_in_garden_text">This photo is already in your garden.</string>
 

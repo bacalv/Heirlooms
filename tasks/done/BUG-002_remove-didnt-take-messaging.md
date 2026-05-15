@@ -78,4 +78,27 @@ All hits must be resolved.
 
 ## Completion notes
 
-<!-- Agent appends here and moves file to tasks/done/ -->
+Completed 2026-05-15 by Developer-2.
+
+### Changes made
+
+1. **`strings.xml`** — Changed `upload_failed` value from `didn't take` to `Upload failed`. Renamed `notif_didnt_take` key to `notif_upload_failed` with value `Upload failed`.
+
+2. **`UploadWorker.kt`** — Updated `notifyResult(success = false)` to reference `R.string.notif_upload_failed` instead of the old `R.string.notif_didnt_take`.
+
+3. **`OliveBranchDidntTake.kt` + `OliveBranchDidntTakeTest.kt`** — Confirmed no production callers (only the composable's own test referenced it). Both files deleted.
+
+4. **`OliveBranchArrival.kt`** — Renamed `DidntTakeBranchPath` to `UploadFailedBranchPath` (was used only by the now-deleted `OliveBranchDidntTake.kt`). Updated the shared-helpers comment to remove the "DidntTake" reference.
+
+5. **`GardenScreen.kt`** — Renamed `internal fun DidntTake` composable to `LoadError` (the displayed text was already "Couldn't load." — only the function name was stale brand language).
+
+6. **Additional callers of `DidntTake`** — Updated all screens that imported/used the renamed composable: `FriendsScreen.kt`, `CompostHeapScreen.kt`, `PhotoDetailScreen.kt`, `ExploreScreen.kt`, `CapsulesScreen.kt`, `CapsuleDetailScreen.kt`.
+
+### Verification
+
+Post-change grep sweep returned zero hits:
+```
+grep -rn "didn.*take|didnt.take|DidntTake" HeirloomsApp HeirloomsServer HeirloomsWeb HeirloomsiOS
+```
+
+Unit tests passed: `./gradlew :app:testProdDebugUnitTest --no-daemon` → BUILD SUCCESSFUL.
