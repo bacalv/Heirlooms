@@ -1,6 +1,9 @@
 package digital.heirlooms.app
 
 import android.content.Context
+import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 
 /**
  * Minimal key/value persistence interface — the only operations EndpointStore needs.
@@ -14,6 +17,9 @@ interface PreferenceStore {
 
 /**
  * Production [PreferenceStore] backed by Android SharedPreferences.
+ *
+ * NOTE: This store is retained only for the one-time plaintext-to-encrypted migration
+ * in [EndpointStore.create]. All new writes go through [EncryptedSharedPreferenceStore].
  */
 class SharedPreferenceStore(context: Context) : PreferenceStore {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -27,8 +33,49 @@ class SharedPreferenceStore(context: Context) : PreferenceStore {
         prefs.edit().putString(key, value).commit()
     }
 
+    /** Removes [key] from the plaintext store. Used during migration. */
+    fun remove(key: String) {
+        prefs.edit().remove(key).commit()
+    }
+
+    /** True if the underlying prefs file contains [key]. Used during migration. */
+    fun contains(key: String): Boolean = prefs.contains(key)
+
     companion object {
-        private const val PREFS_NAME = "heirloom_prefs"
+        const val PREFS_NAME = "heirloom_prefs"
+    }
+}
+
+/**
+ * Production [PreferenceStore] backed by [EncryptedSharedPreferences] (Android Keystore
+ * AES-256-GCM). Values are opaque to any filesystem reader, including rooted/forensic access.
+ */
+class EncryptedSharedPreferenceStore(context: Context) : PreferenceStore {
+    private val prefs: SharedPreferences
+
+    init {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+
+        prefs = EncryptedSharedPreferences.create(
+            context,
+            ENCRYPTED_PREFS_NAME,
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+        )
+    }
+
+    override fun getString(key: String, default: String): String =
+        prefs.getString(key, default) ?: default
+
+    override fun putString(key: String, value: String) {
+        prefs.edit().putString(key, value).commit()
+    }
+
+    companion object {
+        private const val ENCRYPTED_PREFS_NAME = "heirloom_prefs_enc"
     }
 }
 
@@ -86,8 +133,39 @@ class EndpointStore(private val store: PreferenceStore) {
         private const val KEY_VIDEO_THRESHOLD = "video_playback_threshold"
         const val DEFAULT_VIDEO_THRESHOLD = 300  // 5 minutes
 
-        /** Convenience factory for use in Activities and Services. */
-        fun create(context: Context): EndpointStore =
-            EndpointStore(SharedPreferenceStore(context))
+        /**
+         * Convenience factory for use in Activities and Services.
+         *
+         * On first call after the SEC-007 upgrade the session token (and any other values)
+         * present in the old plaintext [SharedPreferenceStore] are migrated into the new
+         * [EncryptedSharedPreferenceStore] and then deleted from the plaintext file so that
+         * no sensitive data remains accessible via root or forensic extraction.
+         */
+        fun create(context: Context): EndpointStore {
+            val plainStore = SharedPreferenceStore(context)
+            val encStore = EncryptedSharedPreferenceStore(context)
+
+            // One-time migration: copy every key that still lives in the plaintext prefs
+            // into the encrypted prefs, then remove it from plaintext storage.
+            val migrationKeys = listOf(
+                KEY_SESSION_TOKEN,
+                KEY_API_KEY,
+                KEY_USERNAME,
+                KEY_DISPLAY_NAME,
+                KEY_AUTH_SALT,
+                KEY_WIFI_ONLY,
+                KEY_WELCOMED,
+                KEY_VIDEO_THRESHOLD,
+            )
+            for (key in migrationKeys) {
+                if (plainStore.contains(key)) {
+                    val value = plainStore.getString(key, "")
+                    encStore.putString(key, value)
+                    plainStore.remove(key)
+                }
+            }
+
+            return EndpointStore(encStore)
+        }
     }
 }

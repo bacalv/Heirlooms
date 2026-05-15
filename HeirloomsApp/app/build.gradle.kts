@@ -107,6 +107,9 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
+    // Jetpack Security — EncryptedSharedPreferences backed by Android Keystore AES-GCM.
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.bouncycastle:bcprov-jdk18on:1.79")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
