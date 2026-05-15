@@ -3,7 +3,7 @@ id: BUG-006
 title: Android nav back-stack not cleared when navigating to top-level destinations from burger menu
 category: Bug Fix
 priority: Medium
-status: queued
+status: done
 depends_on: []
 touches:
   - HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/main/AppNavigation.kt
@@ -57,4 +57,34 @@ destination (Garden, Shared, Friends, Settings, etc.).
 
 ## Completion notes
 
-<!-- Agent appends here and moves file to tasks/done/ -->
+**Completed: 2026-05-15 by developer-1**
+
+### What was done
+
+Added a `navigateFromBurger()` extension function on `NavController` in `AppNavigation.kt`:
+
+```kotlin
+private fun NavController.navigateFromBurger(route: String) {
+    navigate(route) {
+        popUpTo(graph.findStartDestination().id) { inclusive = false }
+        launchSingleTop = true
+    }
+}
+```
+
+All eight burger menu `navigate()` call-sites in `MainNavigation` (Settings, Compost, Uploads,
+Diagnostics, Devices Access, Friends, Trellises) were updated to use `navigateFromBurger()` instead
+of plain `navigate()`.
+
+The function pops the back-stack to the start destination (Garden) — `inclusive = false` keeps Garden
+in the stack so pressing Back from the burger-launched screen returns cleanly to Garden rather than
+exiting the app. `launchSingleTop = true` prevents duplicate entries if the user is already on that
+screen.
+
+`BurgerPanel.kt` required no changes — the nav callbacks are wired in `AppNavigation.kt`.
+
+### Tests
+
+`./gradlew :app:testProdDebugUnitTest --no-daemon` — BUILD SUCCESSFUL, 24 tests executed.
+
+No new bugs discovered.

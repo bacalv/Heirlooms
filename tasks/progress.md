@@ -17,7 +17,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [BUG-016](queue/BUG-016_shared-plot-items-not-decrypting-for-member.md) | Shared plot items uploaded from web not decrypting for Android member (Fire 1) | Bug Fix | High | Developer | — |
 | [UX-003](queue/UX-003_garden-polling-interval.md) | Garden polling interval — 5s default, Android configurable (2/5/10/30s) | UX | Medium | Developer | — |
 | [ARCH-006](queue/ARCH-006_tlock-provider-interface.md) | TimeLock provider interface — stub first, drand later | Architecture | High | TechnicalArchitect | ARCH-003 |
-| [BUG-006](queue/BUG-006_android-nav-backstack.md) | Android nav back-stack not cleared from burger menu | Bug Fix | Medium | Developer | — |
 | [TST-006](queue/TST-006_android-remote-control-investigation.md) | Investigate remote-controlled Android testing for E2E automation | Testing | Medium | TestManager | — |
 | [UX-002](queue/UX-002_closed-plot-visual-indicator.md) | Closed plots should show a locked state — disable approve/share actions | UX | Medium | Developer | — |
 | [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | Developer | — |
@@ -91,6 +90,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [BUG-014](done/developer-3_BUG-014_register-500-duplicate-device-id.md) | Register 409 for duplicate device_id + atomic transaction | Bug Fix | 2026-05-15 |
 | [BUG-016](done/developer-2_BUG-016_shared-plot-items-not-decrypting-for-member.md) | Shared plot items not decrypting — sharing key overwrite on web pairing fixed | Bug Fix | 2026-05-15 |
 | [BUG-013](done/developer-1_BUG-013_detail-view-triggers-rotation.md) | Detail view EXIF rotation no longer silently staged as server save | Bug Fix | 2026-05-15 |
+| [BUG-006](done/developer-1_BUG-006_android-nav-backstack.md) | Android burger menu nav clears back-stack via navigateFromBurger() | Bug Fix | 2026-05-15 |
 
 ## Brainstorming
 
