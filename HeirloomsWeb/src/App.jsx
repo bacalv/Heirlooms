@@ -17,9 +17,9 @@ import { ExplorePage } from './pages/ExplorePage'
 import { FlowsPage } from './pages/FlowsPage'
 import { PlotJoinPage } from './pages/PlotJoinPage'
 import { SharedPlotsPage } from './pages/SharedPlotsPage'
-import { lock, unlock, setSharingPrivkey } from './crypto/vaultSession'
-import { authLogout, authMe, API_URL } from './api'
-import { unwrapMasterKeyForDevice, unwrapDekWithMasterKey, fromB64, importSharingPrivkey } from './crypto/vaultCrypto'
+import { lock, unlock, setSharingPrivkey, getSharingPrivkey } from './crypto/vaultSession'
+import { authLogout, authMe, API_URL, putSharingKey } from './api'
+import { unwrapMasterKeyForDevice, unwrapDekWithMasterKey, fromB64, importSharingPrivkey, generateSharingKeypair, wrapDekUnderMasterKey, toB64, ALG_MASTER_AES256GCM_V1 } from './crypto/vaultCrypto'
 import { loadPairingMaterial, clearPairingMaterial } from './crypto/webPairingStore'
 
 async function loadSharingKey(token, masterKey) {
@@ -32,6 +32,19 @@ async function loadSharingKey(token, masterKey) {
     const cryptoKey = await importSharingPrivkey(pkcs8Bytes)
     setSharingPrivkey(cryptoKey)
   } catch { /* sharing key not yet set up — fine */ }
+}
+
+// Generates and uploads a sharing keypair if none exists yet.
+// Safe to call after loadSharingKey — skips generation if the key is already loaded.
+async function ensureSharingKey(token, masterKey) {
+  if (getSharingPrivkey() !== null) return
+  try {
+    const { privkeyPkcs8, pubkeySpki } = await generateSharingKeypair()
+    const wrappedPrivkey = await wrapDekUnderMasterKey(privkeyPkcs8, masterKey)
+    await putSharingKey(token, toB64(pubkeySpki), toB64(wrappedPrivkey), ALG_MASTER_AES256GCM_V1)
+    const cryptoKey = await importSharingPrivkey(privkeyPkcs8)
+    setSharingPrivkey(cryptoKey)
+  } catch { /* best-effort; will retry on next unlock */ }
 }
 
 const LS_TOKEN        = 'heirlooms_session_token'
@@ -85,6 +98,7 @@ export default function App() {
         const masterKey = await unwrapMasterKeyForDevice(material.wrappedMasterKey, material.privateKey)
         unlock(masterKey)
         await loadSharingKey(token, masterKey)
+        await ensureSharingKey(token, masterKey)
         setVaultUnlocked(true)
       } catch {
         // Network error — don't force logout; let the user interact normally
@@ -114,7 +128,9 @@ export default function App() {
     setSession(token)
     if (masterKey) {
       unlock(masterKey)
-      loadSharingKey(token, masterKey).then(() => setVaultUnlocked(true))
+      loadSharingKey(token, masterKey)
+        .then(() => ensureSharingKey(token, masterKey))
+        .then(() => setVaultUnlocked(true))
     }
     authMe(token).then(r => r.ok ? r.json() : null).then(data => {
       if (data?.display_name) {

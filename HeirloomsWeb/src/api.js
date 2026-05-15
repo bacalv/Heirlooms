@@ -175,6 +175,14 @@ export async function pairingStatus(sessionId) {
 
 // ---- Keys API ---------------------------------------------------------------
 
+export async function putSharingKey(apiKey, pubkeyB64, wrappedPrivkeyB64, wrapFormat) {
+  const r = await apiFetch('/api/keys/sharing', apiKey, {
+    method: 'PUT',
+    body: JSON.stringify({ pubkey: pubkeyB64, wrappedPrivkey: wrappedPrivkeyB64, wrapFormat }),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+}
+
 export async function getFriends(apiKey) {
   const r = await apiFetch('/api/friends', apiKey)
   if (!r.ok) throw new Error(`HTTP ${r.status}`)
