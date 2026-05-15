@@ -124,6 +124,7 @@ fun PhotoDetailScreen(
     val availableTags by vm.availableTags.collectAsState()
     val stagedTags by vm.stagedTags.collectAsState()
     val stagedRotation by vm.stagedRotation.collectAsState()
+    val exifRotation by vm.exifRotation.collectAsState()
     val isDirty by vm.isDirty.collectAsState()
     val decryptedBitmap by vm.decryptedBitmap.collectAsState()
     val decryptedVideoUri by vm.decryptedVideoUri.collectAsState()
@@ -303,8 +304,10 @@ fun PhotoDetailScreen(
             is PhotoDetailState.Ready -> {
                 val u = s.upload
                 val effectiveTags = stagedTags ?: u.tags
-                // stagedRotation is collected as state so any rotate press triggers recomposition.
-                val effectiveRotation = stagedRotation ?: u.rotation
+                // Combine the staged/server rotation with any display-only EXIF offset.
+                // exifRotation is never saved to the server — it is cleared when the user
+                // explicitly presses rotate (stageRotate absorbs it into the staged value).
+                val effectiveRotation = ((stagedRotation ?: u.rotation) + exifRotation) % 360
                 when (from) {
                     "compost" -> CompostFlavour(
                         upload = u,

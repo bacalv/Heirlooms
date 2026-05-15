@@ -65,6 +65,11 @@ class PhotoDetailViewModel(
     private val _stagedRotation = MutableStateFlow<Int?>(null)
     val stagedRotation: StateFlow<Int?> = _stagedRotation.asStateFlow()
 
+    // EXIF-derived visual rotation — applied on top of the server rotation for display only.
+    // Never staged for server persistence; reset to 0 on each load.
+    private val _exifRotation = MutableStateFlow(0)
+    val exifRotation: StateFlow<Int> = _exifRotation.asStateFlow()
+
     val isDirty: StateFlow<Boolean> = combine(_stagedTags, _stagedRotation) { t, r ->
         t != null || r != null
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
@@ -76,6 +81,7 @@ class PhotoDetailViewModel(
             _state.value = PhotoDetailState.Loading
             _stagedTags.value = null
             _stagedRotation.value = null
+            _exifRotation.value = 0
             _decryptedBitmap.value = null
             _decryptedVideoUri.value = null
             _contentDek.value = null
@@ -173,9 +179,9 @@ class PhotoDetailViewModel(
                     _decryptedVideoUri.value = Uri.fromFile(tempFile)
                 } else {
                     val exif = exifRotationDegrees(decryptedBytes)
-                    val ready = _state.value as? PhotoDetailState.Ready
-                    if (exif != 0 && ready?.upload?.rotation == 0 && _stagedRotation.value == null) {
-                        _stagedRotation.value = exif
+                    // Apply EXIF orientation visually only — never stage for server persistence.
+                    if (exif != 0) {
+                        _exifRotation.value = exif
                     }
                     val bmp = BitmapFactory.decodeByteArray(decryptedBytes, 0, decryptedBytes.size)
                     _decryptedBitmap.value = bmp?.asImageBitmap()
@@ -245,8 +251,13 @@ class PhotoDetailViewModel(
 
     fun stageRotate() {
         val current = _state.value as? PhotoDetailState.Ready ?: return
-        val currentRotation = _stagedRotation.value ?: current.upload.rotation
-        _stagedRotation.value = (currentRotation + 90) % 360
+        // Start from the full effective rotation (server + any EXIF offset) so the
+        // user's 90° tap is relative to what they see on screen. Once the user
+        // explicitly rotates, absorb the EXIF offset into the staged server value
+        // and clear the display-only EXIF rotation.
+        val currentEffective = (_stagedRotation.value ?: current.upload.rotation) + _exifRotation.value
+        _stagedRotation.value = (currentEffective + 90) % 360
+        _exifRotation.value = 0
     }
 
     // Effective values to display — staged if present, server value otherwise.
@@ -257,7 +268,8 @@ class PhotoDetailViewModel(
 
     fun effectiveRotation(): Int {
         val ready = _state.value as? PhotoDetailState.Ready ?: return 0
-        return _stagedRotation.value ?: ready.upload.rotation
+        val serverRotation = _stagedRotation.value ?: ready.upload.rotation
+        return (serverRotation + _exifRotation.value) % 360
     }
 
     suspend fun saveChanges(api: HeirloomsApi, uploadId: String) {
