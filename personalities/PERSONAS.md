@@ -20,6 +20,7 @@ Tasks performed by each persona
 | Test Manager        | PA          | Coordinates testing tasks                                                                                                                                                                           |
 | Security Manager    | CTO, PA | In charge of making sure Heirlooms meets it's founding principles on security
 | Technical Architect | PA | An expert in the Heirlooms technical implementation who can make high level techniocal decisions
+| Research Manager    | CTO     | Long-horizon threat research — quantum computing, emerging cryptographic attacks, and how they affect Heirlooms' security model
 
 There is only one CTO, one PA, one dev manager and one test manager.
 
