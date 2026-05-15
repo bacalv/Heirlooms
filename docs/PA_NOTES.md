@@ -112,6 +112,7 @@ Agent naming convention: `developer-1`, `developer-2`, `security`, `test-manager
      - `docs/briefs/ARCH-004_connections-data-model.md` — connections schema design
      - `docs/envelope_format.md` — envelope format amendment (ARCH-005 changes)
      - `docs/ops/runbook.md` — deployment runbook (OPS-001)
+     - `docs/testing/TST-007_journey-diagrams.md` — Mermaid journey diagrams for all 12 test journeys (being generated now by Architect on branch agent/architect/TST-007-diagrams — merge before review)
   4. Activate TST-007 (12-journey v0.54 staging checklist)
   5. Triage any bugs found → critical re-enter iteration, minor go to queue
   6. Once staging green + manager outputs approved → Operations Manager prepares production release plan for v0.54
