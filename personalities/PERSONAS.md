@@ -64,3 +64,8 @@ The PA consolidates into a joint recommendation and presents it to the CTO.
 The CTO approves the sprint plan.
 The PA dispatches agents and monitors progress via `tasks/in-progress/`.
 On completion, the PA updates `tasks/progress.md` and reports to the CTO.
+
+Session protocol (all agents)
+-----------------------------
+
+**"Let's wrap up"** — session is ending. Write a session log to `personalities/session-logs/<Persona>/` (see README there for format), commit all open changes, and summarise tasks created and completed. Bret will push.
