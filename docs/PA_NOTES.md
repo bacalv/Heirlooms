@@ -97,10 +97,27 @@ Agent naming convention: `developer-1`, `developer-2`, `security`, `test-manager
 
 ## Pending actions (requires Bret)
 
-- **SEC-010 — Staging API key rotation** (deferred 2026-05-15): Bret to run manually when ready.
-  Reminder set for ~16:32 BST — check https://claude.ai/code/routines/trig_01VBPtZTxhB1icNVTDnrTiJA
-  Command: `gcloud secrets versions add heirlooms-test-api-key --data-file=<(openssl rand -base64 32) --project heirlooms-495416`
-  After rotating: tell PA so SecurityManager can complete the rest of SEC-010 (scan, redaction, prevention hook).
+- **Disable old staging API key version 1** (2026-05-15): version 2 is live; disable version 1:
+  `gcloud secrets versions disable 1 --secret=heirlooms-test-api-key --project heirlooms-495416`
+
+- **Activate prevention hook in main worktree** (2026-05-15):
+  `git config core.hooksPath .githooks`
+  Also add this line to `scripts/create-agent-workspace.sh` so new worktrees get it automatically.
+
+- **v0.54 iteration — next session checklist** (Phase 5 → 7):
+  1. Docker Desktop restart
+  2. Build + deploy v0.54 server and web images to staging
+  3. **Review manager/architect outputs** before activating TST-007:
+     - `docs/briefs/ARCH-003_m11-capsule-crypto-brief.md` — M11 capsule crypto spec
+     - `docs/briefs/ARCH-004_connections-data-model.md` — connections schema design
+     - `docs/envelope_format.md` — envelope format amendment (ARCH-005 changes)
+     - `docs/ops/runbook.md` — deployment runbook (OPS-001)
+  4. Activate TST-007 (12-journey v0.54 staging checklist)
+  5. Triage any bugs found → critical re-enter iteration, minor go to queue
+  6. Once staging green + manager outputs approved → Operations Manager prepares production release plan for v0.54
+  7. Bret approves and promotes to production
+
+- **SEC-009 Part 2 — biometric gate**: review Options A/B/C in the SEC-009 task file and decide before next iteration dispatch.
 
 ## Task system
 
