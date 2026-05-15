@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { OliveBranchIcon } from '../brand/OliveBranchIcon'
 import { WorkingDots } from '../brand/WorkingDots'
-import { API_URL } from '../api'
+import { API_URL, putSharingKey } from '../api'
 import * as vault from '../crypto/vaultCrypto'
 import * as vaultSession from '../crypto/vaultSession'
 import * as deviceKeyManager from '../crypto/deviceKeyManager'
@@ -16,6 +16,19 @@ async function loadSharingKey(apiKey, masterKey) {
     const cryptoKey = await vault.importSharingPrivkey(pkcs8Bytes)
     vaultSession.setSharingPrivkey(cryptoKey)
   } catch { /* sharing key not set up yet — fine */ }
+}
+
+// Generates and uploads a sharing keypair if none exists yet.
+// Safe to call after loadSharingKey — skips generation if the key is already loaded.
+async function ensureSharingKey(apiKey, masterKey) {
+  if (vaultSession.getSharingPrivkey() !== null) return
+  try {
+    const { privkeyPkcs8, pubkeySpki } = await vault.generateSharingKeypair()
+    const wrappedPrivkey = await vault.wrapDekUnderMasterKey(privkeyPkcs8, masterKey)
+    await putSharingKey(apiKey, vault.toB64(pubkeySpki), vault.toB64(wrappedPrivkey), vault.ALG_MASTER_AES256GCM_V1)
+    const cryptoKey = await vault.importSharingPrivkey(privkeyPkcs8)
+    vaultSession.setSharingPrivkey(cryptoKey)
+  } catch { /* best-effort; will retry on next unlock */ }
 }
 
 async function registerDevice(apiKey, masterKey, spki) {
@@ -100,6 +113,7 @@ export function VaultUnlockPage({ apiKey, onUnlocked }) {
 
       vaultSession.unlock(masterKey)
       await loadSharingKey(apiKey, masterKey)
+      await ensureSharingKey(apiKey, masterKey)
       onUnlocked()
     } catch (err) {
       setErrorMsg(err.message?.includes('passphrase') ? 'Incorrect passphrase.' : 'Incorrect passphrase.')
@@ -135,6 +149,7 @@ export function VaultUnlockPage({ apiKey, onUnlocked }) {
       deviceKeyManager.markVaultSetUp()
 
       vaultSession.unlock(masterKey)
+      await ensureSharingKey(apiKey, masterKey)
       onUnlocked()
     } catch {
       setErrorMsg('Something went wrong. Please try again.')

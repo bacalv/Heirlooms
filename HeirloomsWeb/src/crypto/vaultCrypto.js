@@ -233,6 +233,15 @@ export async function wrapDekForFriend(dek, friendPubkeySpkiBytes) {
   return buildAsymmetricEnvelope(ALG_P256_ECDH_HKDF_V1, ephemeralPubkeyBytes, nonce, ct)
 }
 
+export async function generateSharingKeypair() {
+  const keypair = await crypto.subtle.generateKey(
+    { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'],
+  )
+  const privkeyPkcs8 = new Uint8Array(await crypto.subtle.exportKey('pkcs8', keypair.privateKey))
+  const pubkeySpki = new Uint8Array(await crypto.subtle.exportKey('spki', keypair.publicKey))
+  return { privkeyPkcs8, pubkeySpki }
+}
+
 export async function importSharingPrivkey(pkcs8Bytes) {
   return crypto.subtle.importKey(
     'pkcs8', pkcs8Bytes, { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits'],

@@ -73,3 +73,4 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | ID | Title | Category |
 |----|-------|----------|
 | [IDEA-001](brainstorming/IDEA-001_trellis-naming.md) | Flow → Trellis naming research | Brainstorming |
+| [BUG-007](done/BUG-007_web-no-sharing-key-generation.md) | Web app never generates sharing key — web-only users can't be invited to shared plots | Bug Fix | 2026-05-15 |
