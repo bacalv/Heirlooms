@@ -49,6 +49,14 @@ personalities/       Persona files for each agent role
 scripts/             create-agent-workspace.sh and helpers
 ```
 
+## Agent constraints (CRITICAL)
+
+- **Do not use any skills** (slash commands like `/fewer-permission-prompts`, `/simplify`, etc.). Skills are for PA/CTO sessions only.
+- **Do not touch any settings files** — never read or write `.claude/settings.json` or `.claude/settings.local.json`. That is the PA's responsibility.
+- **Do not modify `~/IdeaProjects/Heirlooms/`** — all writes go to your assigned workspace only.
+
+---
+
 ## Task system
 
 Tasks live in `tasks/`. Agents claim a task by reading it, doing the work, appending `## Completion notes`, and moving the file from `in-progress/` to `done/`. Update `tasks/progress.md` when done.
