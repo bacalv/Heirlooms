@@ -9,6 +9,7 @@ import { apiFetch, daysUntilPurge, formatCompactDate, formatUploadDate, capsuleT
 import { WaxSealOlive } from '../brand/WaxSealOlive'
 import { WorkingDots } from '../brand/WorkingDots'
 import { AddToCapsuleModal } from '../components/AddToCapsuleModal'
+import { AddToPlotModal } from '../components/AddToPlotModal'
 import { Toast } from '../components/Toast'
 import { getMasterKey, getSharingPrivkey } from '../crypto/vaultSession'
 import { unwrapDekWithMasterKey, unwrapWithSharingKey, decryptSymmetric, decryptStreamingContent, fromB64, ALG_P256_ECDH_HKDF_V1 } from '../crypto/vaultCrypto'
@@ -249,7 +250,8 @@ function PreviewVideoPlayer({ upload, blobUrl, onDownload, downloading, maxHeigh
 function GardenFlavour({ upload, blobUrl, capsules, isComposted, composting, compostError,
   restoring, restoreError, compostDisabled, onCompost, onRestore, onOpenAddModal, onOpenShareModal,
   onRotate, onUpdateTags, onDownload, downloading,
-  previewEnded, setPreviewEnded, previewPosition, setPreviewPosition, previewVideoRef }) {
+  previewEnded, setPreviewEnded, previewPosition, setPreviewPosition, previewVideoRef,
+  onAddToPlot }) {
 
   const isImage = upload.mimeType?.startsWith('image/')
   const isVideo = upload.mimeType?.startsWith('video/')
@@ -373,6 +375,13 @@ function GardenFlavour({ upload, blobUrl, capsules, isComposted, composting, com
             className="px-4 py-2 rounded-button text-sm bg-forest text-parchment hover:opacity-90 transition-opacity">
             Add this to a capsule
           </button>
+
+          {onAddToPlot && (
+            <button onClick={onAddToPlot}
+              className="px-4 py-2 rounded-button text-sm border border-forest text-forest hover:bg-forest-04 transition-colors">
+              Add to a shared plot
+            </button>
+          )}
 
           {/* Negative-action separation: Compost is visually isolated below a divider */}
           <div className="pt-2 border-t border-forest-08">
@@ -506,6 +515,7 @@ export function PhotoDetailPage() {
   const [capsules, setCapsules] = useState([])
   const [loadingUpload, setLoadingUpload] = useState(!location.state?.upload)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showAddToPlotModal, setShowAddToPlotModal] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
   const [sharedFromDisplayName, setSharedFromDisplayName] = useState(null)
   const [toast, setToast] = useState(null)
@@ -799,6 +809,8 @@ export function PhotoDetailPage() {
     ? { ...upload, sharedFromDisplayName }
     : upload
 
+  const isEncrypted = upload.storageClass === 'encrypted'
+
   const sharedProps = {
     upload: uploadWithName, blobUrl, capsules, isComposted,
     composting, compostError, compostDisabled, onCompost: handleCompost,
@@ -809,6 +821,8 @@ export function PhotoDetailPage() {
     onUpdateTags: handleUpdateTags,
     onDownload: handleDownload, downloading,
     previewEnded, setPreviewEnded, previewPosition, setPreviewPosition, previewVideoRef,
+    // Only show "Add to shared plot" for encrypted uploads (need DEK to re-wrap).
+    onAddToPlot: isEncrypted && !isComposted ? () => setShowAddToPlotModal(true) : undefined,
   }
 
   return (
@@ -828,6 +842,14 @@ export function PhotoDetailPage() {
           uploadId={upload.id}
           onSuccess={handleAddSuccess}
           onCancel={() => setShowAddModal(false)}
+        />
+      )}
+
+      {showAddToPlotModal && (
+        <AddToPlotModal
+          upload={upload}
+          onSuccess={(msg) => { setShowAddToPlotModal(false); setToast(msg) }}
+          onCancel={() => setShowAddToPlotModal(false)}
         />
       )}
 

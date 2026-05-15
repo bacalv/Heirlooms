@@ -110,6 +110,15 @@ export async function updatePlot(apiKey, id, { name, criteria, showInGarden, sor
   return r.json()
 }
 
+export async function addPlotItem(apiKey, plotId, body) {
+  const r = await apiFetch(`/api/plots/${plotId}/items`, apiKey, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+  if (r.status === 409) throw new Error('already_present')
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+}
+
 // ---- Auth API ---------------------------------------------------------------
 
 export async function authChallenge(username) {

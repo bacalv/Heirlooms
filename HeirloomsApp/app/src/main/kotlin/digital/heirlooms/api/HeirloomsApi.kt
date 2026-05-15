@@ -313,11 +313,17 @@ class HeirloomsApi(
         uploadId: String,
         wrappedItemDek: String,
         itemDekFormat: String,
-        wrappedThumbnailDek: String,
-        thumbnailDekFormat: String,
+        wrappedThumbnailDek: String? = null,
+        thumbnailDekFormat: String? = null,
     ) {
-        post("/api/plots/$plotId/items",
-            """{"uploadId":${uploadId.jsonEsc()},"wrappedItemDek":${wrappedItemDek.jsonEsc()},"itemDekFormat":${itemDekFormat.jsonEsc()},"wrappedThumbnailDek":${wrappedThumbnailDek.jsonEsc()},"thumbnailDekFormat":${thumbnailDekFormat.jsonEsc()}}""")
+        val parts = mutableListOf(
+            """"uploadId":${uploadId.jsonEsc()}""",
+            """"wrappedItemDek":${wrappedItemDek.jsonEsc()}""",
+            """"itemDekFormat":${itemDekFormat.jsonEsc()}""",
+        )
+        wrappedThumbnailDek?.let { parts.add(""""wrappedThumbnailDek":${it.jsonEsc()}""") }
+        thumbnailDekFormat?.let { parts.add(""""thumbnailDekFormat":${it.jsonEsc()}""") }
+        post("/api/plots/$plotId/items", "{${parts.joinToString(",")}}")
     }
 
     suspend fun removePlotItem(plotId: String, uploadId: String) {

@@ -85,6 +85,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import digital.heirlooms.api.CapsuleRef
 import digital.heirlooms.api.CapsuleSummary
+import digital.heirlooms.api.Plot
 import digital.heirlooms.api.Upload
 import digital.heirlooms.ui.common.HeirloomsImage
 import digital.heirlooms.ui.common.LocalHeirloomsApi
@@ -139,6 +140,29 @@ fun PhotoDetailScreen(
 
     var shareSheetUpload by remember { mutableStateOf<digital.heirlooms.api.Upload?>(null) }
     shareSheetUpload?.let { ShareSheet(upload = it, onDismiss = { shareSheetUpload = null }) }
+
+    // Add-to-plot sheet state
+    var showAddToPlotSheet by remember { mutableStateOf(false) }
+    val addToPlotResult by vm.addToPlotResult.collectAsState()
+
+    // Show a toast on add-to-plot completion and reset the result.
+    LaunchedEffect(addToPlotResult) {
+        when (val r = addToPlotResult) {
+            is PhotoDetailViewModel.AddToPlotResult.Success -> {
+                Toast.makeText(context, "Added to shared plot", Toast.LENGTH_SHORT).show()
+                vm.resetAddToPlotResult()
+            }
+            is PhotoDetailViewModel.AddToPlotResult.AlreadyPresent -> {
+                Toast.makeText(context, "Already in this plot", Toast.LENGTH_SHORT).show()
+                vm.resetAddToPlotResult()
+            }
+            is PhotoDetailViewModel.AddToPlotResult.Error -> {
+                Toast.makeText(context, r.message, Toast.LENGTH_LONG).show()
+                vm.resetAddToPlotResult()
+            }
+            else -> Unit
+        }
+    }
 
     var preparingShare by remember { mutableStateOf(false) }
 
@@ -334,9 +358,26 @@ fun PhotoDetailScreen(
                                 try { api.compostUpload(uploadId); onBack() } catch (_: Exception) {}
                             }
                         },
+                        // Only show for encrypted uploads (need DEK to re-wrap)
+                        onAddToPlot = if (u.isEncrypted) { -> showAddToPlotSheet = true } else null,
                     )
                 }
             }
+        }
+    }
+
+    // Add-to-plot bottom sheet
+    if (showAddToPlotSheet) {
+        val currentUpload = (state as? PhotoDetailState.Ready)?.upload
+        if (currentUpload != null) {
+            AddToPlotSheet(
+                onDismiss = { showAddToPlotSheet = false },
+                onAddToPlot = { plotId ->
+                    showAddToPlotSheet = false
+                    vm.addToPlot(api, plotId, currentUpload)
+                },
+                vm = vm,
+            )
         }
     }
 }
@@ -578,6 +619,7 @@ internal fun GardenFlavour(
     onShareWithFriend: (() -> Unit)? = null,
     onShareToApp: (() -> Unit)? = null,
     isPreparingShare: Boolean = false,
+    onAddToPlot: (() -> Unit)? = null,
 ) {
     var showAddToCapsule by remember { mutableStateOf(false) }
     var showCompostConfirm by remember { mutableStateOf(false) }
@@ -652,6 +694,19 @@ internal fun GardenFlavour(
                 border = BorderStroke(1.dp, Forest),
             ) {
                 Text("Add this to a capsule", color = Forest)
+            }
+
+            if (onAddToPlot != null) {
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = Forest15)
+                Spacer(Modifier.height(16.dp))
+                OutlinedButton(
+                    onClick = onAddToPlot,
+                    modifier = Modifier.fillMaxWidth(),
+                    border = BorderStroke(1.dp, Forest),
+                ) {
+                    Text("Add to a shared plot", color = Forest)
+                }
             }
 
             if (onShareWithFriend != null) {
@@ -1011,6 +1066,83 @@ private fun AddToCapsuleDialog(
                     enabled = selectedId != null && !saving,
                     colors = ButtonDefaults.buttonColors(containerColor = Forest, contentColor = Parchment),
                 ) { Text(if (saving) "Adding…" else "Add") }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel", color = TextMuted) }
+        },
+    )
+}
+
+// ── Add to shared plot sheet ──────────────────────────────────────────────────
+
+@Composable
+private fun AddToPlotSheet(
+    onDismiss: () -> Unit,
+    onAddToPlot: (plotId: String) -> Unit,
+    vm: PhotoDetailViewModel,
+) {
+    val api = LocalHeirloomsApi.current
+
+    var plots by remember { mutableStateOf<List<Plot>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var selectedId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        plots = vm.listSharedPlots(api)
+        loading = false
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Parchment,
+        title = { Text("Add to a shared plot", style = MaterialTheme.typography.titleMedium) },
+        text = {
+            when {
+                loading -> Box(
+                    Modifier.fillMaxWidth().padding(16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(color = Forest)
+                }
+                plots.isEmpty() -> Text(
+                    "You're not a member of any shared plots yet.",
+                    style = HeirloomsSerifItalic.copy(fontSize = 16.sp, color = Forest),
+                )
+                else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    plots.forEach { plot ->
+                        val isSelected = selectedId == plot.id
+                        val displayName = plot.localName ?: plot.name
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .background(if (isSelected) Forest08 else Parchment, RoundedCornerShape(8.dp))
+                                .clickable { selectedId = plot.id }
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column {
+                                Text(displayName, style = HeirloomsSerifItalic.copy(color = Forest))
+                                if (plot.localName != null && plot.name != plot.localName) {
+                                    Text(plot.name, style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (plots.isNotEmpty()) {
+                Button(
+                    onClick = {
+                        val id = selectedId ?: return@Button
+                        onAddToPlot(id)
+                    },
+                    enabled = selectedId != null,
+                    colors = ButtonDefaults.buttonColors(containerColor = Forest, contentColor = Parchment),
+                ) { Text("Add") }
             }
         },
         dismissButton = {
