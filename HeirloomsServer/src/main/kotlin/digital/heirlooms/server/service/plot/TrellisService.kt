@@ -66,7 +66,9 @@ class TrellisService(
         }
         val targetPlot = plotRepo.getPlotById(targetPlotId)
             ?: return CreateTrellisResult.Invalid("Target plot not found")
-        if (targetPlot.ownerUserId != userId)
+        val userIsOwner = targetPlot.ownerUserId == userId
+        val userIsMember = targetPlot.visibility == "shared" && plotRepo.isMember(targetPlotId, userId)
+        if (!userIsOwner && !userIsMember)
             return CreateTrellisResult.Invalid("Target plot not found")
         return when (val result = trellisRepo.createTrellis(name, criteriaJson, targetPlotId, requiresStaging, targetPlot, userId)) {
             is TrellisRepository.TrellisCreateResult.Success -> CreateTrellisResult.Created(result.trellis)
