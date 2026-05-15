@@ -21,4 +21,4 @@ completed: 2026-05-14
 
 - Test API: https://test.api.heirlooms.digital
 - Test web: https://test.heirlooms.digital
-- Generate invite: `curl -H "X-Api-Key: $(gcloud secrets versions access latest --secret=heirlooms-test-api-key --project heirlooms-495416)" https://test.api.heirlooms.digital/api/auth/invites`
+- Generate invite: `curl -H "X-Api-Key: <REDACTED_ROTATE_PENDING>" https://test.api.heirlooms.digital/api/auth/invites`

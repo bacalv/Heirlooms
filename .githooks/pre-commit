@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# pre-commit — Heirlooms secret scanner
+#
+# Blocks commits that contain obvious plaintext credentials.
+# Install: git config core.hooksPath .githooks
+#
+# Checks performed:
+#   1. Known staging API key pattern (heirlooms-test-api-key value shape)
+#   2. Known secret name used as a literal value in task/doc files
+#   3. Base64url-like strings of 40+ chars that look like API keys
+#   4. Private key PEM headers
+#   5. Known Secret Manager secret names appearing with an inline value
+#      (pattern: secret_name followed by actual 40-char string on the same line)
+#
+# This hook scans only staged content (git diff --cached).
+# It does NOT block references to Secret Manager secret *names* — only values.
+
+set -euo pipefail
+
+# Collect staged file content (added/modified lines only)
+STAGED_DIFF=$(git diff --cached --diff-filter=ACMR -U0 2>/dev/null) || true
+
+if [ -z "$STAGED_DIFF" ]; then
+  exit 0
+fi
+
+FAILED=0
+
+# ------------------------------------------------------------------
+# 1. Known staging API key prefix (first 9 chars are stable across
+#    any key that starts with "k71CFcf59" — the exposed key prefix).
+#    After rotation this pattern will no longer match the new key,
+#    but it catches the old value if accidentally re-introduced.
+# ------------------------------------------------------------------
+if echo "$STAGED_DIFF" | grep -qE '^\+.*k71CFcf59[A-Za-z0-9_\-]{30,}'; then
+  echo "ERROR [pre-commit]: Possible exposed staging API key detected in staged changes." >&2
+  echo "       The key value must not appear in committed files." >&2
+  echo "       Use the Secret Manager secret name instead: heirlooms-test-api-key" >&2
+  FAILED=1
+fi
+
+# ------------------------------------------------------------------
+# 2. Generic base64url token ≥40 chars preceded by api.key or token
+#    context on the same line — catches new API keys if embedded.
+# ------------------------------------------------------------------
+if echo "$STAGED_DIFF" | grep -qiE '^\+.*(api.?key|x.api.key|api_key|bearer|token)\s*[=:\"` ]+[A-Za-z0-9_\-]{40,}'; then
+  echo "ERROR [pre-commit]: Possible API key or token value (40+ chars) detected in staged changes." >&2
+  echo "       Store secrets in Secret Manager and reference by secret name only." >&2
+  echo "       If this is a false positive, inspect the diff and contact the SecurityManager." >&2
+  FAILED=1
+fi
+
+# ------------------------------------------------------------------
+# 3. PEM private key material
+# ------------------------------------------------------------------
+if echo "$STAGED_DIFF" | grep -qE '^\+-----BEGIN (RSA|EC|OPENSSH|PRIVATE|CERTIFICATE)'; then
+  echo "ERROR [pre-commit]: PEM key or certificate material detected in staged changes." >&2
+  echo "       Never commit private keys or certificates to the repository." >&2
+  FAILED=1
+fi
+
+# ------------------------------------------------------------------
+# 4. Passwords in .env-style assignments
+# ------------------------------------------------------------------
+if echo "$STAGED_DIFF" | grep -qiE '^\+(DB_PASS|DATABASE_PASSWORD|POSTGRES_PASSWORD|JWT_SECRET|SECRET_KEY)\s*=\s*[^$(<]{6,}'; then
+  echo "ERROR [pre-commit]: Possible plaintext password or JWT secret in staged changes." >&2
+  echo "       Use Secret Manager. Do not hardcode passwords in committed files." >&2
+  FAILED=1
+fi
+
+# ------------------------------------------------------------------
+# 5. GCS service account JSON embedded in code/docs
+#    Pattern split across two vars to avoid self-matching when this
+#    hook file is staged for commit.
+# ------------------------------------------------------------------
+GCS_JSON_KEY='"private_key"'
+GCS_JSON_VAL='"-----BEGIN'
+if echo "$STAGED_DIFF" | grep -qE "^\+.*${GCS_JSON_KEY}[[:space:]]*:[[:space:]]*${GCS_JSON_VAL}"; then
+  echo "ERROR [pre-commit]: GCS/GCP service account JSON (private_key field) detected." >&2
+  echo "       Never commit service account JSON. Use Workload Identity or Secret Manager." >&2
+  FAILED=1
+fi
+
+if [ "$FAILED" -ne 0 ]; then
+  echo "" >&2
+  echo "Commit blocked. Fix the issues above, then stage the corrected files and retry." >&2
+  echo "To install this hook permanently: git config core.hooksPath .githooks" >&2
+  exit 1
+fi
+
+exit 0
