@@ -95,6 +95,13 @@ To create one:
 
 Agent naming convention: `developer-1`, `developer-2`, `security`, `test-manager`, `ops`, `architect`.
 
+## Pending actions (requires Bret)
+
+- **SEC-010 — Staging API key rotation** (deferred 2026-05-15): Bret to run manually when ready.
+  Reminder set for ~16:32 BST — check https://claude.ai/code/routines/trig_01VBPtZTxhB1icNVTDnrTiJA
+  Command: `gcloud secrets versions add heirlooms-test-api-key --data-file=<(openssl rand -base64 32) --project heirlooms-495416`
+  After rotating: tell PA so SecurityManager can complete the rest of SEC-010 (scan, redaction, prevention hook).
+
 ## Task system
 
 See `tasks/progress.md` for the full queue.
