@@ -15,24 +15,11 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |---|---|---|---|---|---|
 | [STR-001](queue/STR-001_strategic-synthesis-top-20-features-direction-brief.md) | Strategic synthesis — top 20 features and direction brief for CTO | Strategy | Medium | PA | ARCH-008 |
-| [ARCH-008](queue/ARCH-008_chained-capsule-feasibility-and-care-mode-architecture.md) | Chained capsule feasibility and Care Mode architecture assessment | Architecture | Medium | TechnicalArchitect | — |
-| [ARCH-009](queue/ARCH-009_executor-revocation-and-key-rotation-brief.md) | Executor nomination — revocation and key rotation architecture brief | Architecture | High | TechnicalArchitect | ARCH-004 |
-| [ARCH-010](queue/ARCH-010_m11-api-surface-and-migration-sequencing.md) | M11 API surface and migration sequencing brief | Architecture | High | TechnicalArchitect | ARCH-003 |
-| [OPS-004](queue/OPS-004_v055-test-environment-deployment.md) | v0.55 test environment deployment | Operations | High | OpsManager | — |
-| [TST-010](queue/TST-010_manual-staging-checklist-v055.md) | Manual staging checklist v0.55 — **held until staging ready** | Testing | High | TestManager | — |
-| [TST-009](queue/TST-009_android-device-farm-design.md) | Android device farm design — 3-device automated test infrastructure | Testing | High | TestManager | — |
-| [WEB-002](queue/WEB-002_web-invite-generation.md) | Web — generate and share invite links | Feature | Medium | Developer | — |
+| [OPS-004](queue/OPS-004_v055-test-environment-deployment.md) | v0.55 test environment deployment | Operations | High | OpsManager | all code branches merged |
+| [TST-010](queue/TST-010_manual-staging-checklist-v055.md) | Manual staging checklist v0.55 — **held until staging ready** | Testing | High | TestManager | OPS-004 |
 | [OPS-003](queue/OPS-003_pre-production-staging-environment.md) | Pre-production staging environment — prod-snapshot + anonymisation pipeline | Operations | Low | OpsManager | — |
-| [TST-008](queue/TST-008_shared-plot-e2e-smoke-test.md) | Shared plot E2E smoke test — formalise spec and identify automation strategy | Testing | High | TestManager | — |
-| [SEC-012](queue/SEC-012_tag-metadata-leakage-accepted-risk.md) | Tag metadata leakage — document and disclose accepted residual risk | Security | Medium | SecurityManager | ARCH-007 |
-| [BUG-021](queue/BUG-021_video-duration-zero-on-detail-view.md) | Video detail view shows 0-second duration — metadata not extracted on upload | Bug Fix | Medium | Developer | — |
-| [FEAT-004](queue/FEAT-004_android-invite-friend-from-friends-screen.md) | Android — invite a friend from the Friends screen | Feature | Medium | Developer | — |
-| [SEC-011](queue/SEC-011_device-revocation.md) | Device revocation — allow users to remove old devices from Devices & Access | Security | Medium | SecurityManager | — |
-| [BUG-019](queue/BUG-019_register-duplicate-device-id-wrong-error-message.md) | Registration shows "Username already exists" for duplicate device_id (409) collision | Bug Fix | Low | Developer | — |
 | [FEAT-003](queue/FEAT-003_android-account-pairing-recovery.md) | Android account pairing / recovery — pair a fresh Android install to an existing account | Feature | Medium | Developer | FEAT-003a |
-| [FEAT-003a](queue/FEAT-003a_android-pairing-recovery-spike.md) | Android account pairing/recovery — design spike (4 open questions) | Feature | Medium | Developer | — |
 | [TST-006](queue/TST-006_android-remote-control-investigation.md) | Investigate remote-controlled Android testing for E2E automation | Testing | Medium | TestManager | — |
-| [UX-002](queue/UX-002_closed-plot-visual-indicator.md) | Closed plots should show a locked state — disable approve/share actions | UX | Medium | Developer | — |
 | [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | Developer | — |
 | [SEC-002](queue/SEC-002_auth-crypto-coverage.md) | 100% coverage plan for auth/crypto paths | Security | High | SecurityManager | TST-004 |
 | [SEC-013](queue/SEC-013_ios-client-security-review.md) | iOS client security review — parity with SEC-003 | Security | Medium | SecurityManager | — |
@@ -44,9 +31,21 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 ## In Progress
 
-| ID | Title | Category | Priority | Assigned to |
-|---|---|---|---|---|
-*(none)*
+| ID | Title | Category | Priority | Assigned to | Agent |
+|---|---|---|---|---|---|
+| [ARCH-008](in-progress/ARCH-008_chained-capsule-feasibility-and-care-mode-architecture.md) | Chained capsule feasibility and Care Mode architecture assessment | Architecture | Medium | TechnicalArchitect | architect |
+| [ARCH-009](in-progress/ARCH-009_executor-revocation-and-key-rotation-brief.md) | Executor nomination — revocation and key rotation architecture brief | Architecture | High | TechnicalArchitect | architect-2 |
+| [ARCH-010](in-progress/ARCH-010_m11-api-surface-and-migration-sequencing.md) | M11 API surface and migration sequencing brief | Architecture | High | TechnicalArchitect | architect-3 |
+| [TST-008](in-progress/TST-008_shared-plot-e2e-smoke-test.md) | Shared plot E2E smoke test — formalise spec and identify automation strategy | Testing | High | TestManager | test-manager |
+| [TST-009](in-progress/TST-009_android-device-farm-design.md) | Android device farm design — 3-device automated test infrastructure | Testing | High | TestManager | test-manager-2 |
+| [WEB-002](in-progress/WEB-002_web-invite-generation.md) | Web — generate and share invite links | Feature | Medium | Developer | developer-1 |
+| [BUG-021](in-progress/BUG-021_video-duration-zero-on-detail-view.md) | Video detail view shows 0-second duration — metadata not extracted on upload | Bug Fix | Medium | Developer | developer-2 |
+| [FEAT-004](in-progress/FEAT-004_android-invite-friend-from-friends-screen.md) | Android — invite a friend from the Friends screen | Feature | Medium | Developer | developer-3 |
+| [FEAT-003a](in-progress/FEAT-003a_android-pairing-recovery-spike.md) | Android account pairing/recovery — design spike (4 open questions) | Feature | Medium | Developer | developer-4 |
+| [UX-002](in-progress/UX-002_closed-plot-visual-indicator.md) | Closed plots should show a locked state — disable approve/share actions | UX | Medium | Developer | developer-5 |
+| [SEC-011](in-progress/SEC-011_device-revocation.md) | Device revocation — allow users to remove old devices from Devices & Access | Security | Medium | SecurityManager | security |
+| [BUG-019](in-progress/BUG-019_register-duplicate-device-id-wrong-error-message.md) | Registration shows "Username already exists" for duplicate device_id (409) collision | Bug Fix | Low | SecurityManager | security (batched with SEC-011) |
+| [SEC-012](in-progress/SEC-012_tag-metadata-leakage-accepted-risk.md) | Tag metadata leakage — document and disclose accepted residual risk | Security | Medium | SecurityManager | security-2 |
 
 ## Done
 
