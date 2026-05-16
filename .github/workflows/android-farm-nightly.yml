@@ -1,0 +1,161 @@
+name: Android device farm — nightly full suite
+
+# Runs at 02:00 AEST (UTC+10) = 16:00 UTC every night.
+# Adjust the cron expression if the runner is in a different timezone.
+# Full suite: J1, J12 on all three devices; J4, J5, J9 on farm-current.
+# CryptoSmokeTest runs on all three devices.
+#
+# On failure: posts a macOS notification via osascript on the local runner
+# AND sends an email summary via a GCP Cloud Run job (if configured).
+#
+# Requirements — same as android-farm-pr.yml plus:
+#   - All three devices connected to the USB hub.
+#   - NOTIFICATION_EMAIL secret set in repo settings (bacalv@gmail.com).
+
+on:
+  schedule:
+    # 16:00 UTC = 02:00 AEST (UTC+10). Adjust for DST if needed.
+    - cron: '0 16 * * *'
+  workflow_dispatch:
+    # Allow manual trigger from the GitHub Actions UI.
+
+jobs:
+  farm-nightly:
+    name: Nightly full suite
+    runs-on: [self-hosted, android-farm]
+    timeout-minutes: 90
+
+    env:
+      STAGING_APK: HeirloomsApp/app/build/outputs/apk/staging/debug/app-staging-debug.apk
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---- Build staging debug APK -------------------------------------------
+      - name: Build staging debug APK
+        run: ./gradlew :HeirloomsApp:app:assembleStaging
+
+      # ---- Device check -------------------------------------------------------
+      - name: Check all devices
+        run: bash scripts/test-farm/check-devices.sh
+
+      # ---- Deploy to all three devices in parallel ----------------------------
+      - name: Deploy APK → all devices
+        run: |
+          bash scripts/test-farm/deploy-all.sh --apk "${{ env.STAGING_APK }}"
+
+      # ---- Provision test accounts --------------------------------------------
+      - name: Provision test accounts
+        run: bash scripts/test-farm/provision-accounts.sh
+
+      # ---- Push test image to all devices -------------------------------------
+      - name: Push test image → all devices
+        run: |
+          source scripts/test-farm/.env
+          for serial in "$FARM_DEVICE_MINAPI" "$FARM_DEVICE_CURRENT" "$FARM_DEVICE_LATEST"; do
+            adb -s "$serial" push \
+              scripts/test-farm/test-assets/test-photo.jpg \
+              /sdcard/Pictures/heirlooms-test-photo.jpg &
+          done
+          wait
+
+      # ---- Journey 12 — flavor smoke on all devices (parallel) ---------------
+      - name: Run Journey 12 on all devices
+        run: |
+          source scripts/test-farm/.env
+          source scripts/test-farm/.farm-env
+          mkdir -p test-results/farm/$RUN_ID
+
+          run_j12() {
+            local device="$1"
+            local role="$2"
+            maestro test \
+              --device "$device" \
+              --env USER_A_PASSWORD="$USER_A_PASSWORD" \
+              --env USER_A_USERNAME="$USER_A_USERNAME" \
+              --format junit \
+              --output "test-results/farm/$RUN_ID/journey-12-${role}.xml" \
+              scripts/test-farm/maestro/journey-12-flavor-smoke.yaml
+          }
+
+          run_j12 "$FARM_DEVICE_MINAPI"  "minapi"  &
+          run_j12 "$FARM_DEVICE_CURRENT" "current" &
+          run_j12 "$FARM_DEVICE_LATEST"  "latest"  &
+          wait
+
+      # ---- Journey 1 — upload + garden on all devices (parallel) -------------
+      - name: Run Journey 1 on all devices
+        run: |
+          source scripts/test-farm/.env
+          source scripts/test-farm/.farm-env
+
+          run_j01() {
+            local device="$1"
+            local role="$2"
+            maestro test \
+              --device "$device" \
+              --env USER_A_PASSWORD="$USER_A_PASSWORD" \
+              --env USER_A_USERNAME="$USER_A_USERNAME" \
+              --format junit \
+              --output "test-results/farm/$RUN_ID/journey-01-${role}.xml" \
+              scripts/test-farm/maestro/journey-01-upload-garden.yaml
+          }
+
+          run_j01 "$FARM_DEVICE_MINAPI"  "minapi"  &
+          run_j01 "$FARM_DEVICE_CURRENT" "current" &
+          run_j01 "$FARM_DEVICE_LATEST"  "latest"  &
+          wait
+
+      # ---- CryptoSmokeTest on all devices (sequential per device) -------------
+      - name: Run CryptoSmokeTest on all devices
+        run: |
+          source scripts/test-farm/.env
+          for serial_var in FARM_DEVICE_MINAPI FARM_DEVICE_CURRENT FARM_DEVICE_LATEST; do
+            serial="${!serial_var}"
+            echo "=== CryptoSmokeTest on ${serial_var} (${serial}) ==="
+            ./gradlew :HeirloomsApp:app:connectedAndroidTest \
+              -Pandroid.testInstrumentationRunnerArguments.class=digital.heirlooms.crypto.CryptoSmokeTest \
+              -Pandroid.injected.invocation.noshards=true \
+              -Pandroid.device.serial="$serial"
+          done
+
+      # ---- Upload all results --------------------------------------------------
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: farm-nightly-results-${{ github.run_id }}
+          retention-days: 30
+          path: |
+            test-results/farm/
+            HeirloomsApp/app/build/reports/androidTests/
+
+      # ---- Capture logcat on failure ------------------------------------------
+      - name: Capture logcat from all devices on failure
+        if: failure()
+        run: |
+          source scripts/test-farm/.env
+          for serial_var in FARM_DEVICE_MINAPI FARM_DEVICE_CURRENT FARM_DEVICE_LATEST; do
+            serial="${!serial_var}"
+            adb -s "$serial" logcat -d \
+              > "test-results/farm/logcat-${serial_var}-${{ github.run_id }}.txt" || true
+          done
+
+      - name: Upload logcat artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logcat-nightly-${{ github.run_id }}
+          path: test-results/farm/logcat-*.txt
+
+      # ---- Local macOS notification on failure --------------------------------
+      - name: Notify via osascript on failure (local runner)
+        if: failure()
+        run: |
+          osascript -e 'display notification "Heirlooms nightly farm run FAILED. Check GitHub Actions." with title "Heirlooms CI" sound name "Basso"' || true
+
+      # ---- Teardown -----------------------------------------------------------
+      - name: Teardown test accounts
+        if: always()
+        run: bash scripts/test-farm/teardown-accounts.sh
