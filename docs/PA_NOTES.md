@@ -110,6 +110,14 @@ Agent naming convention: `developer-1`, `developer-2`, `security`, `test-manager
 - **Shamir + tlock**: Shamir shares are always over `DEK`, never `DEK_client`. Executor recovery does not require `/tlock-key`.
 - **tlock risk flag**: drand/BLS12-381 integration is M12 scope. M11 uses the stub. Dev Manager should size the Go sidecar task before M12 dispatch.
 
+## Key decisions (2026-05-16 iteration planning session)
+
+- **Biometric gate (SEC-015)**: account-level server-synced `require_biometric` boolean. Default OFF (opt-in). Gates the vault Activity/screen — no Keystore key migration. Web shows info note only. iOS and Android both respect the flag. Task SEC-015 queued for next iteration.
+- **SEC-011 timing**: approved to ship this iteration as scoped (delete wrapped_keys row, no rotation). ARCH-009 will confirm pattern compatibility retrospectively. BUG-019 batched into SEC-011 worktree (both touch auth server files).
+- **FEAT-003 split**: FEAT-003a (design spike — answer 4 open questions, produce decision doc) dispatched this iteration. FEAT-003b (implementation) deferred to next iteration pending spike output.
+- **iOS security**: SEC-013 (iOS security review) and SEC-014 (privacy screen on backgrounding) created and queued — next iteration.
+- **v0.55 iteration scope approved** — see iteration plan below.
+
 ## Pending actions (requires Bret)
 
 - **SEC-009 Part 2 — biometric gate**: review Options A/B/C in the SEC-009 task file and decide before next iteration dispatch.

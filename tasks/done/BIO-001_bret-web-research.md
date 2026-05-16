@@ -68,4 +68,32 @@ compelling narrative needs that only Bret can provide.
 
 ## Completion notes
 
-<!-- Biographer appends here and moves file to tasks/done/ -->
+**Completed:** 2026-05-16  
+**Completed by:** Biographer
+
+### Research conducted
+
+- Searched publicly for "Bret Calvey" across multiple query combinations (developer, UK contractor, JUXT, Colchester, Milton Keynes, GitHub, conference)
+- Attempted LinkedIn profile fetch (https://www.linkedin.com/in/bret-calvey-45192510/) — WebFetch denied for authenticated site; key details (recommendation text, location, employer, connection count) extracted from search result snippets
+- Discovered and confirmed BAC IT SERVICES LIMITED via Companies House public records (company number 07247888, incorporated 10 May 2010, dissolved 22 April 2025) — aligned with project notes about Bret's dormant limited company
+- Confirmed JUXT association and gathered public profile of JUXT as a Clojure/functional programming consultancy in Milton Keynes
+- Confirmed University of Essex connection via LinkedIn search result metadata
+- Read all PA session logs (pa-2026-05-15T04-31, pa-2026-05-15T09-00, pa-2026-05-15T14-00, pa-2026-05-16T00-00, pa-2026-05-16T08-00, pa-2026-05-16T14-00)
+- Read Marketing Director inaugural session log
+- Read Research Manager inception session log
+- Read docs/PA_NOTES.md, docs/ROADMAP.md, tasks/done/RET-001 completion notes
+
+### Key findings
+
+- BAC IT SERVICES LIMITED is confirmed as Bret's contracting vehicle (initials BAC = Bret Adam Calvey), operational 2010–2025
+- JUXT (Clojure consultancy, Milton Keynes) is the only named employer in the public record
+- University of Essex confirmed as alma mater; subject not confirmed in public sources
+- No public blog, conference talks, or GitHub activity found — consistent with a developer who built privately throughout contracting years
+- One strong recommendation found in LinkedIn search results: "highly productive programmer with first class problem solving capabilities… valuable insight for long term architectural changes"
+- Heirlooms repo is private (github.com/bacalv/Heirlooms) — no public GitHub presence identified
+
+### Output
+
+Profile written to `docs/biography/BIO-001_bret-profile.md` (seven sections per task spec).
+
+The most critical gap remains the founding story — the specific personal trigger that made Heirlooms feel necessary. Ten direct interview questions prepared to fill this and other narrative gaps.

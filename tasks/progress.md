@@ -14,17 +14,13 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |---|---|---|---|---|---|
-| [STR-001](queue/STR-001_strategic-synthesis-top-20-features-direction-brief.md) | Strategic synthesis — top 20 features and direction brief for CTO | Strategy | Medium | PA | MKT-001, RES-004, ARCH-008, LEG-002, PSY-001, PHI-001, RET-002 |
-| [MKT-001](queue/MKT-001_strategic-direction-thinking-report.md) | Strategic direction thinking report — platform reframe, three segments, chained capsules | Marketing | Medium | MarketingDirector | — |
-| [RES-004](queue/RES-004_chained-capsule-cryptographic-assessment.md) | Chained capsule — cryptographic novelty assessment and conditional delivery literature review | Research | Medium | ResearchManager | RES-002 |
-| [ARCH-008](queue/ARCH-008_chained-capsule-feasibility-and-care-mode-architecture.md) | Chained capsule feasibility and Care Mode architecture assessment | Architecture | Medium | TechnicalArchitect | RES-004 |
-| [LEG-002](queue/LEG-002_care-mode-consent-chained-capsule-ip.md) | Care Mode consent framework, chained capsule IP, and white-label licensing | Legal | Medium | Legal | LEG-001 |
-| [PSY-001](queue/PSY-001_grief-reframe-care-mode-and-experience-psychology.md) | Grief reframe, Care Mode dignity, and Experience segment psychology | Psychology | Medium | Psychologist | — |
-| [PHI-001](queue/PHI-001_ethics-of-conditional-delivery-consent-and-digital-legacy.md) | Ethics of conditional delivery, consent before capacity loss, and the long-horizon promise | Philosophy | Medium | Philosopher | — |
-| [RET-002](queue/RET-002_three-segment-valuation-and-retirement-implications.md) | Three-segment valuation — Care Mode, Experience segment, and retirement implications | Retirement | Medium | RetirementPlanner | RET-001 |
-| [BIO-001](queue/BIO-001_bret-web-research.md) | Bret — brief web research and biographical profile | Biography | Low | Biographer | — |
+| [STR-001](queue/STR-001_strategic-synthesis-top-20-features-direction-brief.md) | Strategic synthesis — top 20 features and direction brief for CTO | Strategy | Medium | PA | ARCH-008 |
+| [ARCH-008](queue/ARCH-008_chained-capsule-feasibility-and-care-mode-architecture.md) | Chained capsule feasibility and Care Mode architecture assessment | Architecture | Medium | TechnicalArchitect | — |
+| [ARCH-009](queue/ARCH-009_executor-revocation-and-key-rotation-brief.md) | Executor nomination — revocation and key rotation architecture brief | Architecture | High | TechnicalArchitect | ARCH-004 |
+| [ARCH-010](queue/ARCH-010_m11-api-surface-and-migration-sequencing.md) | M11 API surface and migration sequencing brief | Architecture | High | TechnicalArchitect | ARCH-003 |
+| [OPS-004](queue/OPS-004_v055-test-environment-deployment.md) | v0.55 test environment deployment | Operations | High | OpsManager | — |
+| [TST-010](queue/TST-010_manual-staging-checklist-v055.md) | Manual staging checklist v0.55 — **held until staging ready** | Testing | High | TestManager | — |
 | [TST-009](queue/TST-009_android-device-farm-design.md) | Android device farm design — 3-device automated test infrastructure | Testing | High | TestManager | — |
-| [SIM-001](queue/SIM-001_trustless-expiry-impossibility.md) | Simulation: trustless expiry — weakest possible construction without custodians | Simulation | Low | ResearchManager | RES-002 |
 | [WEB-002](queue/WEB-002_web-invite-generation.md) | Web — generate and share invite links | Feature | Medium | Developer | — |
 | [OPS-003](queue/OPS-003_pre-production-staging-environment.md) | Pre-production staging environment — prod-snapshot + anonymisation pipeline | Operations | Low | OpsManager | — |
 | [TST-008](queue/TST-008_shared-plot-e2e-smoke-test.md) | Shared plot E2E smoke test — formalise spec and identify automation strategy | Testing | High | TestManager | — |
@@ -33,11 +29,15 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [FEAT-004](queue/FEAT-004_android-invite-friend-from-friends-screen.md) | Android — invite a friend from the Friends screen | Feature | Medium | Developer | — |
 | [SEC-011](queue/SEC-011_device-revocation.md) | Device revocation — allow users to remove old devices from Devices & Access | Security | Medium | SecurityManager | — |
 | [BUG-019](queue/BUG-019_register-duplicate-device-id-wrong-error-message.md) | Registration shows "Username already exists" for duplicate device_id (409) collision | Bug Fix | Low | Developer | — |
-| [FEAT-003](queue/FEAT-003_android-account-pairing-recovery.md) | Android account pairing / recovery — pair a fresh Android install to an existing account | Feature | Medium | Developer | — |
+| [FEAT-003](queue/FEAT-003_android-account-pairing-recovery.md) | Android account pairing / recovery — pair a fresh Android install to an existing account | Feature | Medium | Developer | FEAT-003a |
+| [FEAT-003a](queue/FEAT-003a_android-pairing-recovery-spike.md) | Android account pairing/recovery — design spike (4 open questions) | Feature | Medium | Developer | — |
 | [TST-006](queue/TST-006_android-remote-control-investigation.md) | Investigate remote-controlled Android testing for E2E automation | Testing | Medium | TestManager | — |
 | [UX-002](queue/UX-002_closed-plot-visual-indicator.md) | Closed plots should show a locked state — disable approve/share actions | UX | Medium | Developer | — |
 | [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | Developer | — |
 | [SEC-002](queue/SEC-002_auth-crypto-coverage.md) | 100% coverage plan for auth/crypto paths | Security | High | SecurityManager | TST-004 |
+| [SEC-013](queue/SEC-013_ios-client-security-review.md) | iOS client security review — parity with SEC-003 | Security | Medium | SecurityManager | — |
+| [SEC-014](queue/SEC-014_ios-vault-background-privacy-screen.md) | iOS vault — privacy screen on backgrounding | Security | Medium | Developer | SEC-013 |
+| [SEC-015](queue/SEC-015_biometric-gate-account-setting.md) | Biometric gate — account-level setting synced via server | Security | Medium | Developer | — |
 | [UX-001](queue/UX-001_shared-plot-button-tap-targets.md) | Android: shared plot action buttons have insufficient tap targets | UX | Low | Developer | — |
 | [DOC-001](queue/DOC-001_uml-sequence-diagrams.md) | UML sequence diagrams from test output | Docs | Low | Developer | TST-004 |
 | [OPS-002](queue/OPS-002_new-environment-setup-guide.md) | New environment setup guide | Operations | Low | OpsManager | — |
@@ -52,6 +52,9 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
+| [PUB-001](done/PUB-001_academic-paper-temporal-e2ee-capsule-construction.md) | Academic paper — temporal E2EE capsule with multi-layer recovery | Publication | 2026-05-16 |
+| [SIM-001](done/SIM-001_trustless-expiry-impossibility.md) | Simulation: trustless expiry — weakest possible construction without custodians | Simulation | 2026-05-16 |
+| [BIO-001](done/BIO-001_bret-web-research.md) | Bret — brief web research and biographical profile | Biography | 2026-05-16 |
 | [RES-004](done/RES-004_chained-capsule-cryptographic-assessment.md) | Chained capsule — cryptographic novelty assessment | Research | 2026-05-16 |
 | [MKT-001](done/MKT-001_strategic-direction-thinking-report.md) | Strategic direction thinking report | Marketing | 2026-05-16 |
 | [PSY-001](done/PSY-001_grief-reframe-care-mode-and-experience-psychology.md) | Grief reframe, Care Mode dignity, Experience psychology | Psychology | 2026-05-16 |

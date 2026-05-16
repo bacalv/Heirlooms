@@ -82,3 +82,20 @@ A short (1–2 page) note summarising:
 
 **This note is throw-away. It does not feed RES-002 or any downstream tasks.**
 Save to session log only — not to `docs/research/`.
+
+## Completion notes
+
+**Completed:** 2026-05-16  
+**Agent:** Research Manager
+
+Simulation complete. Simulation output saved to:
+`personalities/session-logs/ResearchManager/SIM-001_trustless-expiry-simulation.md`
+
+**Findings summary:**
+- Classical trustless expiry is provably impossible by an information-theoretic argument: no classical operation can compel an adversary to forget a retained bit string.
+- The minimum viable trust assumption is threshold-honest custodians (M-of-N Shamir deletion) — exactly the Heirlooms window capsule construction. There is no weaker classical assumption that produces a meaningful guarantee.
+- Quantum certified deletion (Bartusek-Raizes 2024, Katz-Sela 2024) provides a theoretically trustless alternative for the custodian tier but requires quantum infrastructure unavailable at consumer scale for 10–20 years.
+- Trusted hardware (SGX, Nitro) shifts trust from human custodians to hardware manufacturers — a different threat surface, not a weaker trust assumption in the formal sense.
+- Computational expiry and memory-hard functions are useful for short-horizon timing enhancements but do not solve the fundamental problem over decade-scale time horizons.
+- Physical analogues (dissolving keys, self-voiding contracts) all reduce to trusted-party enforcement; none have rigorous trustless cryptographic counterparts.
+- The CTO's intuition is fully correct. No follow-on tasks generated (per task instructions).

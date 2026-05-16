@@ -26,7 +26,7 @@ the web client this is a dead end.
 
 Add an "Invite a friend" button to the Android Friends screen that:
 
-1. Calls `GET /api/auth/invites` to generate a short-lived invite token
+1. Calls `POST /api/auth/invites` to generate a short-lived invite token
 2. Constructs the invite URL: `https://heirlooms.digital/invite?token={token}`
 3. Opens the Android share sheet so the user can send it via any app (Messages,
    WhatsApp, email, etc.)

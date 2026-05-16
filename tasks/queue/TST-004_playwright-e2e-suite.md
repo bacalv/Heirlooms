@@ -4,7 +4,7 @@ title: Playwright E2E suite (actor-based, against staging)
 category: Testing
 priority: Medium
 status: queued
-depends_on: [TST-005]
+depends_on: []
 touches: [HeirloomsWeb/]
 assigned_to: Developer
 estimated: 1-2 days (agent)
