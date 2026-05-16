@@ -45,7 +45,31 @@ yet. You need to create a new app target manually:
 
 2. **Delete the auto-generated ContentView.swift** that Xcode creates.
 
-3. **Add the existing source files** to the new target:
+3. **Apply the build configuration files (xcconfig)** — this wires the committed
+   `Info.plist` into the project and activates the ATS policy (SEC-016):
+
+   a. In the project navigator, click the **project** root (the blue icon, not a target).
+   b. Select the **Info** tab.
+   c. Under **Configurations**, expand **Debug**:
+      - Click the disclosure arrow next to `HeirloomsApp`.
+      - From the dropdown, choose **Debug** (`Configurations/Debug.xcconfig`).
+   d. Repeat for **Release**, choosing **Release** (`Configurations/Release.xcconfig`).
+
+   The xcconfig files set `INFOPLIST_FILE = HeirloomsApp/Info.plist`.  If you
+   need to confirm the setting was applied: select the `HeirloomsApp` target →
+   **Build Settings → search "Info.plist File"** — it should show
+   `HeirloomsApp/Info.plist`.
+
+   **What the xcconfig files do:**
+   - `Debug.xcconfig` sets `INFOPLIST_PREPROCESSOR_DEFINITIONS = DEBUG=1`.
+     This tells Xcode to preprocess `Info.plist` and include the `#if DEBUG`
+     ATS exception block for `localhost` and `192.168.*.*`, so local development
+     against a dev server works without disabling ATS globally.
+   - `Release.xcconfig` does not set `DEBUG=1`, so the localhost/192.168 ATS
+     exceptions are stripped from the compiled plist in App Store builds.
+   - `NSAllowsArbitraryLoads` is `false` in all configurations.
+
+4. **Add the existing source files** to the new target:
    - Drag `HeirloomsApp/App.swift` into the Xcode project navigator.
    - Drag `HeirloomsApp/Views/ActivateView.swift` → same target.
    - Drag `HeirloomsApp/Views/HomeView.swift` → same target.
@@ -197,6 +221,9 @@ The Share Extension is a separate Xcode target. To add it:
 HeirloomsiOS/
 ├── Package.swift                    ← Swift Package (HeirloomsCore library + tests)
 ├── SETUP.md                         ← this file
+├── Configurations/                  ← Xcode build configuration files (SEC-016)
+│   ├── Debug.xcconfig               ← Debug build: INFOPLIST_FILE + DEBUG=1 preprocessor
+│   └── Release.xcconfig             ← Release build: INFOPLIST_FILE (no DEBUG flag)
 ├── Sources/
 │   └── HeirloomsCore/
 │       ├── Crypto/
@@ -212,6 +239,7 @@ HeirloomsiOS/
 │       ├── EnvelopeCryptoTests.swift
 │       └── APIClientTests.swift
 └── HeirloomsApp/                    ← Xcode app target sources (added manually)
+    ├── Info.plist                   ← Committed main app Info.plist with ATS policy (SEC-016)
     ├── App.swift
     └── Views/
         ├── ActivateView.swift

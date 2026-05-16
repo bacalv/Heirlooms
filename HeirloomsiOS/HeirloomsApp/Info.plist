@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Main app Info.plist for HeirloomsApp.
+
+  ATS POLICY (iOS-03 / SEC-016)
+  ─────────────────────────────
+  NSAllowsArbitraryLoads is false — all outbound connections must use TLS.
+  NSExceptionDomains tightens the system default for the two Heirlooms
+  backends by mandating TLS 1.3 and forward secrecy (the system default is
+  TLS 1.2).  This does NOT weaken ATS; it strengthens it.
+
+  DEBUG LOCAL NETWORK OVERRIDE
+  ────────────────────────────
+  Xcode preprocesses Info.plist when INFOPLIST_PREPROCESSOR_DEFINITIONS
+  contains DEBUG=1 (set in Configurations/Debug.xcconfig).  The #if / #endif
+  block below adds NSExceptionDomains entries for localhost and the
+  192.168.0.0/16 private range so developers can point the app at a local
+  server without disabling ATS globally.  These entries are stripped from
+  Release builds.
+
+  WIRING INTO XCODE
+  ─────────────────
+  When creating the Xcode project (see SETUP.md), apply the xcconfig files
+  shipped in HeirloomsiOS/Configurations/ and set:
+
+    Build Settings → Info.plist File  →  HeirloomsApp/Info.plist
+
+  If you set up the xcconfig files that value is already inherited; set it
+  explicitly only if Build Settings shows a different path.
+
+  URL SCHEME
+  ──────────
+  The heirlooms:// deep-link scheme must match the value registered in
+  Build Settings → URL Types (see SETUP.md §Step 2.6).
+-->
+<plist version="1.0">
+<dict>
+
+    <!-- ── Standard bundle keys ──────────────────────────────────────── -->
+
+    <key>CFBundleDevelopmentRegion</key>
+    <string>$(DEVELOPMENT_LANGUAGE)</string>
+
+    <key>CFBundleDisplayName</key>
+    <string>Heirlooms</string>
+
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+
+    <key>CFBundlePackageType</key>
+    <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+
+    <key>CFBundleShortVersionString</key>
+    <string>$(MARKETING_VERSION)</string>
+
+    <key>CFBundleVersion</key>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
+
+    <!-- ── URL scheme — heirlooms:// deep links ──────────────────────── -->
+
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>CFBundleURLName</key>
+            <string>digital.heirlooms.ios</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>heirlooms</string>
+            </array>
+        </dict>
+    </array>
+
+    <!-- ── App Transport Security ────────────────────────────────────── -->
+    <!--
+      Policy rationale (SEC-016 / iOS-03):
+        • NSAllowsArbitraryLoads = false  — no plain-HTTP connections allowed.
+        • NSExceptionDomains for the two production backends mandate TLS 1.3
+          and forward secrecy, overriding the system default of TLS 1.2.
+        • In DEBUG builds only (preprocessed by Xcode when DEBUG=1):
+          localhost and 192.168.*.* are added as local-development exceptions
+          with NSExceptionAllowsInsecureHTTPLoads = true so developers can
+          run against a local server.  These keys are absent in Release builds.
+    -->
+
+    <key>NSAppTransportSecurity</key>
+    <dict>
+
+        <key>NSAllowsArbitraryLoads</key>
+        <false/>
+
+        <key>NSExceptionDomains</key>
+        <dict>
+
+            <!-- Production API -->
+            <key>heirlooms.digital</key>
+            <dict>
+                <!--
+                  TLS 1.3 is stricter than the ATS default (TLS 1.2).
+                  NSExceptionMinimumTLSVersion tightens, not loosens, the
+                  requirement when set to TLSv1.3.
+                -->
+                <key>NSExceptionMinimumTLSVersion</key>
+                <string>TLSv1.3</string>
+                <!--
+                  Require an ECDHE or DHE cipher suite — eliminates static RSA
+                  key-exchange suites that do not provide forward secrecy.
+                -->
+                <key>NSExceptionRequiresForwardSecrecy</key>
+                <true/>
+            </dict>
+
+            <!-- Staging / test environment -->
+            <key>test.heirlooms.digital</key>
+            <dict>
+                <key>NSExceptionMinimumTLSVersion</key>
+                <string>TLSv1.3</string>
+                <key>NSExceptionRequiresForwardSecrecy</key>
+                <true/>
+            </dict>
+
+#if DEBUG
+            <!--
+              DEBUG-ONLY local development exceptions.
+              Stripped from Release builds by the Xcode plist pre-processor.
+              These allow the app to talk to a local server (e.g. on port 8080)
+              without a TLS certificate.  Do NOT include in Release builds.
+            -->
+
+            <!-- Loopback — http://localhost:<port> -->
+            <key>localhost</key>
+            <dict>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+            </dict>
+
+            <!-- Local network (192.168.x.x) — http://192.168.1.x:<port> -->
+            <key>192.168.0.0</key>
+            <dict>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+            </dict>
+#endif
+
+        </dict>
+    </dict>
+
+    <!-- ── Privacy usage strings ─────────────────────────────────────── -->
+    <!--
+      NSPhotoLibraryUsageDescription is required for PHPhotoLibrary access
+      used when saving media from the vault to the Camera Roll.
+    -->
+
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Heirlooms needs access to your photo library to let you upload memories and save them back to your Camera Roll.</string>
+
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Heirlooms needs permission to save photos and videos to your Camera Roll.</string>
+
+    <key>NSCameraUsageDescription</key>
+    <string>Heirlooms uses the camera so you can capture new memories directly in the app.</string>
+
+</dict>
+</plist>

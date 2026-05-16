@@ -1,0 +1,27 @@
+// Release.xcconfig — HeirloomsApp Release build configuration
+//
+// Apply this file to the HeirloomsApp target's Release configuration in Xcode:
+//   Project navigator → HeirloomsApp.xcodeproj → PROJECT (not target) →
+//   Info → Configurations → Release → click the disclosure triangle next to
+//   HeirloomsApp → select "Release" (this file).
+//
+// What this file sets:
+//
+//   INFOPLIST_FILE
+//     Points the build system at the committed Info.plist.  In Release builds
+//     INFOPLIST_PREPROCESSOR_DEFINITIONS is intentionally absent, so the
+//     #if DEBUG / #endif blocks (localhost / 192.168 ATS exceptions) are
+//     stripped before the plist is compiled into the app bundle.
+//
+//   PRODUCT_BUNDLE_IDENTIFIER
+//     Uses the canonical production bundle ID for App Store / TestFlight.
+
+INFOPLIST_FILE = HeirloomsApp/Info.plist
+
+// Do NOT set INFOPLIST_PREPROCESSOR_DEFINITIONS here — the absence of DEBUG=1
+// causes Xcode to strip the #if DEBUG ATS exceptions from the compiled plist.
+
+MARKETING_VERSION = 1.0
+CURRENT_PROJECT_VERSION = 1
+
+PRODUCT_BUNDLE_IDENTIFIER = digital.heirlooms.ios
