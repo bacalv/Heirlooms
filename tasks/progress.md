@@ -13,7 +13,9 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 ## Queue
 
 | ID | Title | Category | Priority | Assigned to | Depends on |
-|----|-------|----------|----------|-------------|------------|
+|---|---|---|---|---|---|
+| [RES-002](queue/RES-002_window-capsule-expiry-cryptography.md) | Window capsule — cryptographic expiry, literature review and construction brief | Research | High | ResearchManager | — |
+| [SIM-001](queue/SIM-001_trustless-expiry-impossibility.md) | Simulation: trustless expiry — weakest possible construction without custodians | Simulation | Low | ResearchManager | RES-002 |
 | [OPS-003](queue/OPS-003_pre-production-staging-environment.md) | Pre-production staging environment — prod-snapshot + anonymisation pipeline | Operations | Low | OpsManager | — |
 | [TST-008](queue/TST-008_shared-plot-e2e-smoke-test.md) | Shared plot E2E smoke test — formalise spec and identify automation strategy | Testing | High | TestManager | — |
 | [ARCH-007](queue/ARCH-007_e2ee-tag-scheme.md) | E2EE tag scheme — HMAC token identifiers + encrypted display names | Architecture | High | TechnicalArchitect | — |
