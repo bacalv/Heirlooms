@@ -3,7 +3,7 @@ id: FEAT-003a
 title: Android account pairing/recovery — design spike
 category: Feature
 priority: Medium
-status: queued
+status: done
 assigned_to: Developer
 depends_on: []
 touches:
@@ -50,4 +50,27 @@ A decision document at `docs/briefs/FEAT-003a_pairing-recovery-decision.md` answ
 
 ## Completion notes
 
-<!-- Agent appends here and moves file to tasks/done/ -->
+Completed 2026-05-16 by developer-4.
+
+All four questions answered. Decision document produced at
+`docs/briefs/FEAT-003a_pairing-recovery-decision.md`.
+
+**Q1 answer:** Option C (server-assisted passphrase recovery) is the recommended
+primary path. It is the same flow as the web login — the user authenticates with
+their passphrase, fetches the server-held `argon2id-aes256gcm-v1` blob via
+`GET /api/keys/passphrase`, and unwraps it locally. The existing device link flow
+(`/api/keys/link/*`) provides a secondary path (device-to-device) that requires no
+new server code.
+
+**Q2 answer:** Parameters match exactly on both platforms — **m=65536, t=3, p=1**.
+Android: `VaultCrypto.kt:131`. Web: `VaultCrypto.js:132` and `LoginPage.jsx:10`.
+A fresh Android install can unwrap the passphrase blob stored by web (or by Android
+itself) without any parameter mismatch.
+
+**Q3 answer:** No new server endpoints are required for either recovery option. The
+existing `GET /api/keys/passphrase` endpoint (KeysRoutes.kt) and the existing device
+link flow already cover both paths. FEAT-003b is purely a client-side Android task.
+
+**Q4 answer:** FEAT-003b does not need to wait for ARCH-010. The recovery flow uses
+only pre-existing auth and key management endpoints (M8-era). ARCH-010 covers M11
+capsule crypto endpoints and the connections model — zero overlap.
