@@ -891,23 +891,17 @@ class Uploader(
         return ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.JPEG, 80, it) }.toByteArray()
     }
 
-    // Extracts video duration in seconds from a file using MediaExtractor.
+    // Extracts video duration in seconds from a file using MediaMetadataRetriever,
+    // which is more reliable than MediaExtractor.getTrackFormat(KEY_DURATION) across devices.
     private fun extractFileDurationSeconds(file: File): Int? {
         return try {
-            val extractor = android.media.MediaExtractor()
-            extractor.setDataSource(file.absolutePath)
-            var durationUs = -1L
-            for (i in 0 until extractor.trackCount) {
-                val format = extractor.getTrackFormat(i)
-                if (format.getString(android.media.MediaFormat.KEY_MIME)?.startsWith("video/") == true) {
-                    if (format.containsKey(android.media.MediaFormat.KEY_DURATION)) {
-                        durationUs = format.getLong(android.media.MediaFormat.KEY_DURATION)
-                    }
-                    break
-                }
-            }
-            extractor.release()
-            if (durationUs > 0) (durationUs / 1_000_000L).toInt() else null
+            val retriever = android.media.MediaMetadataRetriever()
+            retriever.setDataSource(file.absolutePath)
+            val durationMs = retriever.extractMetadata(
+                android.media.MediaMetadataRetriever.METADATA_KEY_DURATION
+            )?.toLongOrNull() ?: -1L
+            retriever.release()
+            if (durationMs > 0) (durationMs / 1000L).toInt() else null
         } catch (_: Exception) { null }
     }
 

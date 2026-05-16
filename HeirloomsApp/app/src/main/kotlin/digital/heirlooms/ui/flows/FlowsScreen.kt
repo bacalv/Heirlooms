@@ -230,8 +230,6 @@ internal fun CreateTrellisDialog(
         )
     }
     var requiresStaging by remember { mutableStateOf(true) }
-    // autoApprove is the UI-facing inversion: autoApprove=true means requiresStaging=false
-    var autoApprove by remember { mutableStateOf(false) }
     var tags by remember { mutableStateOf(listOf<String>()) }
     var tagInput by remember { mutableStateOf("") }
     var mediaType by remember { mutableStateOf<String?>(null) }
@@ -356,7 +354,7 @@ internal fun CreateTrellisDialog(
                     Switch(checked = isReceived, onCheckedChange = { isReceived = it })
                 }
 
-                // Auto-approve toggle (inverted: autoApprove=true → requiresStaging=false)
+                // Auto-approve toggle (checked = !requiresStaging)
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Column(Modifier.weight(1f)) {
                         Text("Auto-approve", style = MaterialTheme.typography.bodySmall, color = Forest)
@@ -366,8 +364,8 @@ internal fun CreateTrellisDialog(
                         )
                     }
                     Switch(
-                        checked = autoApprove,
-                        onCheckedChange = { autoApprove = it; requiresStaging = !it },
+                        checked = !requiresStaging,
+                        onCheckedChange = { requiresStaging = !it },
                     )
                 }
             }

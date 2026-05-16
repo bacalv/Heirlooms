@@ -574,13 +574,17 @@ private fun VideoPlayer(
     val context = LocalContext.current
     val apiKey = LocalHeirloomsApi.current.apiKey
     val player = remember {
-        val factory = dataSourceFactory ?: OkHttpDataSource.Factory(
-            OkHttpClient.Builder()
-                .addInterceptor { chain ->
-                    chain.proceed(chain.request().newBuilder().header("X-Api-Key", apiKey).build())
-                }
-                .build()
-        )
+        val factory = dataSourceFactory ?: if (videoUrl.startsWith("file://")) {
+            androidx.media3.datasource.DefaultDataSource.Factory(context)
+        } else {
+            OkHttpDataSource.Factory(
+                OkHttpClient.Builder()
+                    .addInterceptor { chain ->
+                        chain.proceed(chain.request().newBuilder().header("X-Api-Key", apiKey).build())
+                    }
+                    .build()
+            )
+        }
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(DefaultMediaSourceFactory(factory))
             .build()

@@ -104,12 +104,12 @@ class PostgresTrellisRepository(private val dataSource: DataSource) : TrellisRep
         if (targetPlot.criteria != null) return TrellisRepository.TrellisCreateResult.Error("Target plot must be a collection plot (criteria IS NULL)")
 
         // Staging policy: private plots never need staging (your own content);
-        // public and shared plots always require staging (shared plots need DEK re-wrapping
-        // for members — BUG-018).
+        // public plots always require staging; shared plots default to staging but the
+        // user may override (auto-approve performs client-side DEK re-wrap — BUG-018/BUG-020).
         val effectiveStaging = when (targetPlot.visibility) {
-            "private"          -> false
-            "public", "shared" -> true
-            else               -> requiresStaging
+            "private" -> false
+            "public"  -> true
+            else      -> requiresStaging
         }
 
         val id = UUID.randomUUID()
