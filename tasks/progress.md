@@ -4,7 +4,9 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 **Agent coordination:** To claim a task, move its file from `queue/` to `in-progress/` and prefix the filename with your agent ID (e.g. `in-progress/agent-abc123_TST-003.md`). Before claiming, check `in-progress/` for `touches:` conflicts. Each completed task appends `## Completion notes` and moves to `done/`.
 
-**Persona files:** `personalities/` — PA, Developer, DevManager, TestManager, OpsManager, SecurityManager, TechnicalArchitect.
+**Persona files:** `personalities/` — PA, Developer, DevManager, TestManager, OpsManager, SecurityManager, TechnicalArchitect, ResearchManager.
+
+**Research tasks** use the `RES-` prefix and are owned by the ResearchManager. Research briefs are written to `docs/research/`. Simulation tasks use `SIM-` prefix and produce throw-away session notes only — they do not feed the task queue.
 
 ---
 
@@ -102,6 +104,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [BUG-005](done/developer-3_BUG-005_thumbnail-rotation.md) | Thumbnail generator now applies EXIF orientation — rotation baked into pixels | Bug Fix | 2026-05-15 |
 | [BUG-017](done/developer-4_BUG-017_android-plot-key-not-loaded-after-accept-invite.md) | Android: eagerly fetch plot key after accepting invite so thumbnails decrypt without restart | Bug Fix | 2026-05-15 |
 | [BUG-018](done/developer-1_BUG-018_shared-plot-trellis-no-staging-dek-not-rewrapped.md) | Shared-plot trellis always requires staging — prevent items flowing without DEK re-wrap | Bug Fix | 2026-05-15 |
+| [RES-001](done/RES-001_crypto-threat-horizon-40kft.md) | Cryptographic threat horizon — initial 40,000ft survey for CTO | Research | 2026-05-16 |
 
 ## Brainstorming
 
