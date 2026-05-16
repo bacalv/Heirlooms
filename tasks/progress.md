@@ -52,6 +52,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
+| [TAU-001](done/TAU-001_capsule-construction-guide.md) | Capsule construction guide — formal notation, diagrams, print viz, Manim scripts | Documentation | 2026-05-16 |
 | [PUB-001](done/PUB-001_academic-paper-temporal-e2ee-capsule-construction.md) | Academic paper — temporal E2EE capsule with multi-layer recovery | Publication | 2026-05-16 |
 | [SIM-001](done/SIM-001_trustless-expiry-impossibility.md) | Simulation: trustless expiry — weakest possible construction without custodians | Simulation | 2026-05-16 |
 | [BIO-001](done/BIO-001_bret-web-research.md) | Bret — brief web research and biographical profile | Biography | 2026-05-16 |
