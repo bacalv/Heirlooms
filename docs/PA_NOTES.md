@@ -123,8 +123,37 @@ Agent naming convention: `developer-1`, `developer-2`, `security`, `test-manager
   session (BUG-019 through BUG-022, FEAT-003/004, SEC-011/012, ARCH-007, TST-008,
   OPS-003). Run "Let's plan the next iteration" to prioritise.
 
+## Research Manager
+
+Established 2026-05-16. Reports directly to CTO. Start a session: `@personalities/ResearchManager.md`. Trigger research: say **"do research"**.
+
+**Research outputs:**
+- `docs/research/GLOSSARY.md` — cryptographic term glossary (maintained per task)
+- `docs/research/REFERENCES.md` — numbered source log (`[RES-NNN-NNN]` citation scheme)
+- `docs/research/RES-NNN_*.md` — research briefs (each ends with PA Summary section)
+- `docs/research/horizon/` — idle-queue horizon scan digests
+
+**Completed research:**
+- [RES-001](../docs/research/RES-001_crypto-threat-horizon-40kft.md) — 40,000ft cryptographic threat horizon brief. Key finding: P-256 has a credible 8-year window; HNDL is a present threat; Heirlooms' envelope format and DEK-per-file model are strong PQC migration foundations.
+
+**Queued research:**
+- [RES-002](../tasks/queue/RES-002_window-capsule-expiry-cryptography.md) — Window capsule (unlock + expire time) cryptographic construction and literature review
+- [RES-003](../tasks/queue/RES-003_pqc-migration-readiness-brief.md) — PQC migration readiness brief for Technical Architect (three-layer attack window, migration phases, re-wrap service spec)
+- [SIM-001](../tasks/queue/SIM-001_trustless-expiry-impossibility.md) — Simulation: trustless expiry impossibility (throw-away, depends on RES-002)
+
+**Open questions for CTO from RES-001 (unresolved — route at next check-in):**
+1. Should the Technical Architect begin specifying the hybrid P-256+ML-KEM migration path now, or after M11 ships?
+2. Is there appetite to de-emphasise tlock as a user-facing guarantee given its quantum vulnerability?
+3. At what point does Heirlooms communicate post-quantum migration to users?
+4. Should Heirlooms pursue regulatory/enterprise positioning (NIST mandate, financial services) as a trust signal?
+
+**Persona recommendations from Research Manager (CTO decision pending):**
+- Add Psychologist persona — grief-aware UX, executor psychology; no current owner
+- Add Brand Guardian persona — BRAND.md exists but has no defending persona
+- Add Philosopher persona — ethics of posthumous consent, long-horizon product questions
+
 ## Task system
 
 See `tasks/progress.md` for the full queue.
-Persona files: `personalities/` — PA, Developer, DevManager, TestManager, OpsManager, SecurityManager, TechnicalArchitect.
+Persona files: `personalities/` — PA, Developer, DevManager, TestManager, OpsManager, SecurityManager, TechnicalArchitect, ResearchManager.
 Start any session: `@personalities/PA.md`

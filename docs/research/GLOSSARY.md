@@ -1,12 +1,15 @@
 # Heirlooms Research — Cryptographic Glossary
 
 **Maintained by:** Research Manager  
-**Last updated:** 2026-05-16 (RES-001)  
+**Last updated:** 2026-05-16 (RES-001, session wrap-up)  
 **Purpose:** Plain-language definitions of terms used in research briefs. Updated at the end of every research task. Intended for any team member, not just cryptographers.
 
 ---
 
 ## A
+
+**Attack window**
+The period during which encrypted data is vulnerable following the compromise of a cryptographic algorithm. In Heirlooms' context, the attack window has three layers: (1) future data — closed the day hybrid keys are deployed; (2) existing key wrapping — closed when each user's device re-wraps their master key under a quantum-safe algorithm; (3) HNDL for already-harvested data — cannot be retroactively closed for data captured before hybrid deployment. Minimising the attack window is the primary goal of the PQC migration plan. See also *HNDL*, *Key rotation*, *Re-wrap*.
 
 **AES-256-GCM** (Advanced Encryption Standard, 256-bit key, Galois/Counter Mode)  
 The symmetric encryption algorithm used throughout Heirlooms to encrypt file content, thumbnails, metadata, and wrapped keys. AES-256 means the key is 256 bits long. GCM is an authenticated mode — it simultaneously encrypts and produces an authentication tag, so any tampering with the ciphertext is detected on decryption. Considered quantum-safe under Grover's algorithm (effective security drops to 128 bits, which remains computationally infeasible). Used in Heirlooms via the `aes256gcm-v1` algorithm identifier.
@@ -33,6 +36,9 @@ A digital signature scheme built on pairing-based cryptography. Used by drand's 
 
 ## C
 
+**Custodian**
+In the window capsule design, a party that holds one Shamir share of K_b (the expiry half of the window key). Custodians release their share only to an authenticated receiver during the valid [unlock_time, expire_time] window, and destroy it at expire_time. Custodians can be individuals, legal entities (law firms, banks, notaries), or distributed Heirlooms nodes. The expiry guarantee is only as strong as the honesty of more than (N − M) custodians in a (M, N) threshold scheme. See also *Shamir's Secret Sharing*, *Window capsule*, *Verifiable deletion*.
+
 **Cat-qubit**  
 A type of physical qubit that encodes quantum information in superpositions of coherent states of a microwave resonator. Cat qubits have biased noise properties — one type of error is exponentially suppressed — making them potentially more resource-efficient for fault-tolerant quantum computation than surface-code qubits. Recent 2025–2026 papers using cat-qubit architectures have materially reduced physical qubit estimates for breaking P-256.
 
@@ -56,6 +62,9 @@ A distributed randomness beacon operated by the League of Entropy, a consortium 
 ---
 
 ## E
+
+**Expire time**
+In a window capsule, the upper time bound after which the capsule becomes permanently undecryptable. Distinct from the *unlock time* (lower bound). After expire_time, custodians destroy their Shamir shares of K_b, making K_window irrecoverable even though K_a (the tlock component) remains permanently public. A receiver who did not access the capsule during [unlock_time, expire_time] can never access it. A receiver who did access it during the window holds K_window locally and is unaffected by the expiry. See also *Window capsule*, *Unlock time*, *Custodian*.
 
 **ECDH** (Elliptic Curve Diffie-Hellman)  
 A key agreement protocol in which two parties each have a keypair on an elliptic curve. They exchange public keys and each independently derives the same shared secret from their own private key and the other party's public key. In Heirlooms, P-256 ECDH is used to wrap the master key to each device's public key (`p256-ecdh-hkdf-aes256gcm-v1`). **Broken by Shor's algorithm** on a quantum computer.
@@ -118,6 +127,9 @@ A form of public-key encryption where the public key can be an arbitrary string 
 ---
 
 ## K
+
+**Key rotation**
+The process of generating new cryptographic keys and migrating all key-wrapped material to use them, then deleting the old keys. In Heirlooms' PQC migration context, key rotation has two levels: (1) shallow rotation — re-wrapping the master key under a new algorithm while keeping the same master key value; (2) full rotation — generating a new master key and re-wrapping every DEK under it. Only full rotation closes the HNDL attack window for already-harvested data. See also *Re-wrap*, *Attack window*.
 
 **KEM** (Key Encapsulation Mechanism)  
 A cryptographic primitive used to securely transmit a symmetric key from one party to another using public-key cryptography. The sender encapsulates a random key using the recipient's public key; only the recipient can decapsulate it using their private key. ML-KEM is the post-quantum KEM standardised in FIPS 203, intended to replace ECDH in key exchange protocols.
@@ -198,6 +210,13 @@ The fundamental unit of quantum information. Unlike a classical bit (0 or 1), a 
 
 ---
 
+## R
+
+**Re-wrap**
+The operation of decrypting a wrapped key using the current algorithm and re-encrypting it under a new algorithm, without ever exposing the key's plaintext value outside the client device. In Heirlooms, re-wrapping a master key means: (1) the device decrypts the existing P-256-wrapped master key using its local private key; (2) immediately re-encrypts the master key under the new ML-KEM-768 public key; (3) uploads the new wrapped key. The master key value never leaves the device. Re-wrap cost is O(keys), not O(files) — this is the architectural property that makes PQC migration tractable. See also *Key rotation*, *DEK*, *Attack window*.
+
+---
+
 ## S
 
 **Shamir's Secret Sharing**  
@@ -216,11 +235,35 @@ The most widely studied quantum error correction code. Requires approximately 1,
 
 ## T
 
+**Time-windowed trust envelope**
+The Research Manager's working name for the conceptual primitive that Heirlooms is building towards: an encrypted object that is mathematically inaccessible before an unlock time, enforced-unavailable after an expire time, recoverable only by a named recipient through a quorum of independent custodians, on a server that is architecturally incapable of reading it. No standardised name exists for this combination in the academic literature as of 2026. Related to *tlock*, *Window capsule*, *Shamir's Secret Sharing*, *Custodian*.
+
 **tlock**  
 A time-lock encryption scheme built on drand's randomness beacon and IBE over BLS12-381. A sender encrypts data to a future drand round number; the ciphertext can only be decrypted once that round's threshold BLS signature is published. Planned for Heirlooms M11 as one of three unlock paths for sealed capsules. Not quantum-safe — a quantum break of BLS12-381 would enable retroactive decryption of all historically tlock-encrypted data.
 
 **Threshold signature**  
 A signature produced collaboratively by K-of-N parties, where no single party holds the full private key. drand uses threshold BLS signatures across League of Entropy nodes to produce its randomness — K nodes must cooperate to produce each round's signature, preventing any single node from biasing the output.
+
+---
+
+## U
+
+**Unlock time**
+In a window capsule, the lower time bound before which the capsule cannot be decrypted. Enforced cryptographically via tlock — the drand round corresponding to unlock_time has not yet published its randomness, so the IBE decryption key does not yet exist. Contrast with *Expire time* (upper bound). Together they define the access window [unlock_time, expire_time].
+
+---
+
+## V
+
+**Verifiable deletion**
+A cryptographic proof that a party has destroyed secret material (such as a Shamir share) without revealing the material itself. An open research problem as of 2026. In theory: a custodian commits to their share at sealing time; at expire_time they publish a proof of deletion derived from the commitment. Related to "proof of erasure." Solving this cleanly for the window capsule context would be a publishable research contribution and would make the expiry guarantee auditable rather than merely trusted. See also *Custodian*, *Window capsule*.
+
+---
+
+## W
+
+**Window capsule**
+A Heirlooms capsule construction (proposed by CTO, 2026-05-16) with both an unlock time (lower bound, enforced by tlock) and an expire time (upper bound, enforced by threshold custodian deletion). Content is permanently undecryptable by anyone — server, sender, receiver, or adversary — after expire_time, provided the threshold of custodians honestly destroys their Shamir shares of K_b. The construction is: K_window = K_a ⊕ K_b, where K_a is tlock-encrypted (trustless lower bound) and K_b is Shamir-split across N custodians (trust-bounded upper bound). The expiry guarantee is not trustless — see *Verifiable deletion*, *Custodian*. Formalisation is the subject of RES-002.
 
 ---
 
