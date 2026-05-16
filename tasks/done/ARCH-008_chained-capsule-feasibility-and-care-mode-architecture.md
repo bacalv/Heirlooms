@@ -3,7 +3,7 @@ id: ARCH-008
 title: Chained capsule feasibility and Care Mode architecture assessment
 category: Architecture
 priority: Medium
-status: queued
+status: done
 assigned_to: TechnicalArchitect
 depends_on: [RES-004]
 estimated: 1 session
@@ -112,3 +112,32 @@ The PA Summary must include:
 - Feasibility verdict for Care Mode (build on current foundation / significant new infrastructure / separate product)
 - Recommended sequencing relative to current roadmap (M11, M12, M13)
 - Any blockers that require CTO decisions before design can proceed
+
+## Completion notes
+
+**Completed:** 2026-05-16
+**Output:** `docs/briefs/ARCH-008_chained-capsule-and-care-mode-feasibility.md`
+
+**Key findings:**
+
+- **Chained capsules — Build on current foundation.** Two-capsule MVP is directly composable
+  from M11 primitives. Requires two new tables (`capsule_chain_links`, `capsule_puzzles`),
+  one new endpoint (`POST /api/capsules/{id}/claim`), and an additive sealing request
+  extension. No new cryptographic machinery. Recommended for M12 alongside the delivery
+  scheduler work.
+
+- **Care Mode — Significant new infrastructure, integrate within the platform (not a
+  separate product) for v1.** The cryptography is straightforward (shared-plot-key variant;
+  W3C VC for consent). The engineering cost is in background location services, push
+  notification infrastructure, and a new high-frequency data type. Client-side geofence
+  evaluation is the recommended v1 approach. Recommended for M13 alongside POA/executor
+  and push notification work.
+
+- **Envelope format:** No binary layout changes required. Three new algorithm IDs to
+  register (`capsule-chain-ref-v1`, `vtlp-groth16-v1`, `consent-vc-v1`).
+
+- **CTO decisions needed:** (1) VTLP-NP puzzle format adoption; (2) server-mediated vs.
+  on-chain first-solver-wins; (3) regulatory readiness for GDPR Art. 9 (Care Mode);
+  (4) Ed25519 signing key added to M11 identity model; (5) Care Mode pricing tier.
+
+**Status transition:** queue → done
