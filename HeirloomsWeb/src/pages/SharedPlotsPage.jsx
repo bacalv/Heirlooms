@@ -153,6 +153,17 @@ function PeopleIcon() {
   )
 }
 
+// ---- Lock icon --------------------------------------------------------------
+
+function LockIcon() {
+  return (
+    <svg className="w-3.5 h-3.5 text-text-muted flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+    </svg>
+  )
+}
+
 // ---- Shared plot card -------------------------------------------------------
 
 function MembershipCard({ membership, apiKey, onAction }) {
@@ -190,14 +201,23 @@ function MembershipCard({ membership, apiKey, onAction }) {
   }
 
   return (
-    <div className="border border-forest-15 rounded-card px-4 py-3 bg-white space-y-2">
+    <div className={`border rounded-card px-4 py-3 space-y-2 transition-opacity ${
+      isClosed
+        ? 'border-forest-08 bg-white/60 opacity-70'
+        : 'border-forest-15 bg-white'
+    }`}>
       <div className="flex items-start gap-2">
         <PeopleIcon />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="font-sans font-medium text-forest text-sm truncate">{displayName}</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className={`font-sans font-medium text-sm truncate ${isClosed ? 'text-forest/60' : 'text-forest'}`}>
+              {displayName}
+            </p>
             {isClosed && (
-              <span className="text-[10px] text-text-muted border border-forest-15 rounded px-1 flex-shrink-0">closed</span>
+              <span className="flex items-center gap-1 text-[10px] text-text-muted border border-forest-15 rounded px-1.5 py-0.5 flex-shrink-0">
+                <LockIcon />
+                Closed
+              </span>
             )}
             {isOwner && (
               <span className="text-[10px] text-forest/60 border border-forest-15 rounded px-1 flex-shrink-0">owner</span>
@@ -216,9 +236,16 @@ function MembershipCard({ membership, apiKey, onAction }) {
             {toggling ? '…' : isClosed ? 'Reopen' : 'Close plot'}
           </button>
         )}
-        {isOwner && (
+        {isOwner && !isClosed && (
           <button onClick={() => onAction('transfer', membership)}
             className="px-3 py-1 text-xs border border-forest-25 text-forest rounded-button hover:bg-forest-08 transition-colors">
+            Transfer ownership
+          </button>
+        )}
+        {isOwner && isClosed && (
+          <button disabled
+            title="Reopen the plot to transfer ownership"
+            className="px-3 py-1 text-xs border border-forest-08 text-text-muted rounded-button cursor-not-allowed opacity-40">
             Transfer ownership
           </button>
         )}

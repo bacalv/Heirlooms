@@ -132,6 +132,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [FEAT-003a](done/FEAT-003a_android-pairing-recovery-spike.md) | Android account pairing/recovery — design spike (4 open questions) | Feature | 2026-05-16 |
 | [RES-001](done/RES-001_crypto-threat-horizon-40kft.md) | Cryptographic threat horizon — initial 40,000ft survey for CTO | Research | 2026-05-16 |
 | [RET-001](done/RET-001_initial-retirement-assessment.md) | Initial retirement assessment — questionnaire, intelligence gathering, and key decisions | Retirement Planning | 2026-05-16 |
+| [UX-002](done/UX-002_closed-plot-visual-indicator.md) | Closed plots should show a locked state — disable approve/share actions | UX | 2026-05-16 |
 
 ## Brainstorming
 

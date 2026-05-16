@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PeopleAlt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FloatingActionButton
@@ -251,19 +252,28 @@ private fun JoinedCard(
         )
     }
 
+    val cardAlpha = if (isClosed) 0.55f else 1f
+
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        colors = CardDefaults.cardColors(containerColor = Parchment),
+        colors = CardDefaults.cardColors(containerColor = Parchment.copy(alpha = cardAlpha)),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.PeopleAlt, contentDescription = null, tint = Forest.copy(alpha = 0.5f), modifier = Modifier.size(14.dp))
+                Icon(Icons.Filled.PeopleAlt, contentDescription = null, tint = Forest.copy(alpha = 0.5f * cardAlpha), modifier = Modifier.size(14.dp))
                 Spacer(Modifier.padding(horizontal = 3.dp))
-                Text(displayName, style = MaterialTheme.typography.bodyMedium.copy(color = Forest))
+                Text(displayName, style = MaterialTheme.typography.bodyMedium.copy(color = Forest.copy(alpha = cardAlpha)))
                 if (isClosed) {
                     Spacer(Modifier.padding(horizontal = 4.dp))
-                    Text("closed", style = MaterialTheme.typography.labelSmall.copy(color = TextMuted))
+                    Icon(
+                        Icons.Filled.Lock,
+                        contentDescription = "Plot is closed",
+                        tint = TextMuted,
+                        modifier = Modifier.size(12.dp),
+                    )
+                    Spacer(Modifier.padding(horizontal = 2.dp))
+                    Text("Closed", style = MaterialTheme.typography.labelSmall.copy(color = TextMuted))
                 }
                 if (isOwner) {
                     Spacer(Modifier.padding(horizontal = 4.dp))
@@ -273,7 +283,7 @@ private fun JoinedCard(
             if (!isOwner && membership.ownerDisplayName != null) {
                 Text(
                     "Shared by ${membership.ownerDisplayName}",
-                    style = MaterialTheme.typography.bodySmall.copy(color = TextMuted),
+                    style = MaterialTheme.typography.bodySmall.copy(color = TextMuted.copy(alpha = cardAlpha)),
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
