@@ -17,7 +17,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [OPS-004](queue/OPS-004_v055-test-environment-deployment.md) | v0.55 test environment deployment | Operations | High | OpsManager | *(all branches merged — ready for Docker restart)* |
 | [TST-010](queue/TST-010_manual-staging-checklist-v055.md) | Manual staging checklist v0.55 — **held until staging ready** | Testing | High | TestManager | OPS-004 |
 | [STR-001](queue/STR-001_strategic-synthesis-top-20-features-direction-brief.md) | Strategic synthesis — top 20 features and direction brief for CTO | Strategy | Medium | PA | *(ARCH-008 done — unblocked)* |
-| [FEAT-003](queue/FEAT-003_android-account-pairing-recovery.md) | Android account pairing / recovery — pair a fresh Android install to an existing account | Feature | High | Developer | *(FEAT-003a done — unblocked)* |
 | [BIO-002](queue/BIO-002_hi-claude-book-and-blog-concept.md) | "Hi Claude..." — book and blog series concept development | Biography | Medium | Biographer | BIO-001 |
 | [TST-011](queue/TST-011_android-device-farm-setup.md) | Android device farm setup — implement 3-device local farm | Testing | High | Developer | TST-009 |
 | [TST-006](queue/TST-006_android-remote-control-investigation.md) | Investigate remote-controlled Android testing for E2E automation | Testing | Medium | TestManager | — |
@@ -46,6 +45,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [TST-008](done/TST-008_shared-plot-e2e-smoke-test.md) | Shared plot E2E smoke test — formalise spec and identify automation strategy | Testing | 2026-05-16 |
 | [TST-009](done/TST-009_android-device-farm-design.md) | Android device farm design — 3-device automated test infrastructure | Testing | 2026-05-16 |
 | [WEB-002](done/WEB-002_web-invite-generation.md) | Web — generate and share invite links | Feature | 2026-05-16 |
+| [FEAT-003](done/FEAT-003_android-account-pairing-recovery.md) | Android account pairing / recovery — pair a fresh Android install to an existing account | Feature | 2026-05-16 |
 | [FEAT-003a](done/FEAT-003a_android-pairing-recovery-spike.md) | Android account pairing/recovery — design spike (4 open questions) | Feature | 2026-05-16 |
 | [FEAT-004](done/FEAT-004_android-invite-friend-from-friends-screen.md) | Android — invite a friend from the Friends screen | Feature | 2026-05-16 |
 | [UX-002](done/UX-002_closed-plot-visual-indicator.md) | Closed plots should show a locked state — disable approve/share actions | UX | 2026-05-16 |
