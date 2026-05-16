@@ -15,7 +15,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |---|---|---|---|---|---|
 | [STR-001](queue/STR-001_strategic-synthesis-top-20-features-direction-brief.md) | Strategic synthesis — top 20 features and direction brief for CTO | Strategy | Medium | PA | ARCH-008 |
-| [ARCH-008](queue/ARCH-008_chained-capsule-feasibility-and-care-mode-architecture.md) | Chained capsule feasibility and Care Mode architecture assessment | Architecture | Medium | TechnicalArchitect | — |
 | [ARCH-009](queue/ARCH-009_executor-revocation-and-key-rotation-brief.md) | Executor nomination — revocation and key rotation architecture brief | Architecture | High | TechnicalArchitect | ARCH-004 |
 | [ARCH-010](queue/ARCH-010_m11-api-surface-and-migration-sequencing.md) | M11 API surface and migration sequencing brief | Architecture | High | TechnicalArchitect | ARCH-003 |
 | [OPS-004](queue/OPS-004_v055-test-environment-deployment.md) | v0.55 test environment deployment | Operations | High | OpsManager | — |
@@ -52,6 +51,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
+| [ARCH-008](done/ARCH-008_chained-capsule-feasibility-and-care-mode-architecture.md) | Chained capsule feasibility and Care Mode architecture assessment | Architecture | 2026-05-16 |
 | [PUB-001](done/PUB-001_academic-paper-temporal-e2ee-capsule-construction.md) | Academic paper — temporal E2EE capsule with multi-layer recovery | Publication | 2026-05-16 |
 | [SIM-001](done/SIM-001_trustless-expiry-impossibility.md) | Simulation: trustless expiry — weakest possible construction without custodians | Simulation | 2026-05-16 |
 | [BIO-001](done/BIO-001_bret-web-research.md) | Bret — brief web research and biographical profile | Biography | 2026-05-16 |
