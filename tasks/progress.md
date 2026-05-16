@@ -44,12 +44,13 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Priority | Assigned to |
 |---|---|---|---|---|
-| [RES-004](in-progress/RES-004_chained-capsule-cryptographic-assessment.md) | Chained capsule — cryptographic novelty assessment | Research | Medium | ResearchManager |
+*(none)*
 
 ## Done
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
+| [RES-004](done/RES-004_chained-capsule-cryptographic-assessment.md) | Chained capsule — cryptographic novelty assessment | Research | 2026-05-16 |
 | [MKT-001](done/MKT-001_strategic-direction-thinking-report.md) | Strategic direction thinking report | Marketing | 2026-05-16 |
 | [PSY-001](done/PSY-001_grief-reframe-care-mode-and-experience-psychology.md) | Grief reframe, Care Mode dignity, Experience psychology | Psychology | 2026-05-16 |
 | [PHI-001](done/PHI-001_ethics-of-conditional-delivery-consent-and-digital-legacy.md) | Ethics of conditional delivery, consent, long-horizon promise | Philosophy | 2026-05-16 |
