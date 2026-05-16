@@ -72,6 +72,14 @@ struct FullScreenMediaView: View {
                 ShareSheet(items: media.shareItems)
             }
         }
+        .onDisappear {
+            // Delete any decrypted video temp file and release state to avoid
+            // cleartext sitting on disk or in memory after the view is gone.
+            if case .video(let url) = media {
+                try? FileManager.default.removeItem(at: url)
+            }
+            media = nil
+        }
     }
 
     // MARK: - Media loading
@@ -131,9 +139,10 @@ struct FullScreenMediaView: View {
                 }
             } else if item.contentType.hasPrefix("video") {
                 // Write decrypted bytes to a temp file for AVPlayer.
+                // UUID filename avoids collisions if the same item is opened twice.
                 let ext = mimeTypeToExtension(item.contentType)
                 let tempURL = FileManager.default.temporaryDirectory
-                    .appendingPathComponent(item.id)
+                    .appendingPathComponent(UUID().uuidString)
                     .appendingPathExtension(ext)
                 try plaintext.write(to: tempURL)
                 media = .video(tempURL)

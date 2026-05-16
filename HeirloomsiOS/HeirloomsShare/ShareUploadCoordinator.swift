@@ -122,13 +122,15 @@ final class ShareUploadCoordinator: ObservableObject {
 
         // --- Wrap DEKs under plot key ---
         let plotAlgID = EnvelopeCrypto.algPlotSymmetric
-        let contentDekBytes = contentDek.withUnsafeBytes { Data($0) }
+        var contentDekBytes = contentDek.withUnsafeBytes { Data($0) }
+        defer { contentDekBytes.resetBytes(in: 0..<contentDekBytes.count) }
         let wrappedContentDek = try EnvelopeCrypto.wrapSymmetric(
             plaintext: contentDekBytes,
             wrappingKey: plotKey,
             algorithmID: plotAlgID
         )
-        let thumbDekBytes = thumbDek.withUnsafeBytes { Data($0) }
+        var thumbDekBytes = thumbDek.withUnsafeBytes { Data($0) }
+        defer { thumbDekBytes.resetBytes(in: 0..<thumbDekBytes.count) }
         let wrappedThumbDek = try EnvelopeCrypto.wrapSymmetric(
             plaintext: thumbDekBytes,
             wrappingKey: plotKey,
@@ -194,7 +196,8 @@ final class ShareUploadCoordinator: ObservableObject {
 
         // --- Wrap DEK under plot key ---
         let plotAlgID = EnvelopeCrypto.algPlotSymmetric
-        let contentDekBytes = contentDek.withUnsafeBytes { Data($0) }
+        var contentDekBytes = contentDek.withUnsafeBytes { Data($0) }
+        defer { contentDekBytes.resetBytes(in: 0..<contentDekBytes.count) }
         let wrappedContentDek = try EnvelopeCrypto.wrapSymmetric(
             plaintext: contentDekBytes,
             wrappingKey: plotKey,
