@@ -14,6 +14,13 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |---|---|---|---|---|---|
+| [BUG-023](queue/BUG-023_passphrase-save-409-after-web-pairing.md) | Passphrase save fails 409 after web pairing | Bug Fix | High | Developer | — |
+| [BUG-024](queue/BUG-024_garden-inline-tag-no-trellis-routing.md) | Garden inline tag edit doesn't trigger trellis routing | Bug Fix | Medium | Developer | — |
+| [BUG-027](queue/BUG-027_garden-not-loading-on-launch.md) | Garden not loading on launch — requires swipe to refresh | Bug Fix | Medium | Developer | — |
+| [BUG-028](queue/BUG-028_biometric-gate-not-enforcing.md) | Biometric gate flashes but doesn't block vault access | Bug Fix | Medium | Developer | — |
+| [BUG-029](queue/BUG-029_web-pairing-no-device-entry.md) | Web pairing session not registered as a device entry | Bug Fix | Medium | Developer | BUG-023 |
+| [BUG-025](queue/BUG-025_web-friends-no-nav-link.md) | Web Friends page has no navigation link | Bug Fix | Low | Developer | — |
+| [BUG-026](queue/BUG-026_invite-link-no-auto-route.md) | Invite link doesn't auto-route token for logged-in users | Bug Fix | Low | Developer | — |
 | [STR-001](queue/STR-001_strategic-synthesis-top-20-features-direction-brief.md) | Strategic synthesis — top 20 features and direction brief for CTO | Strategy | Medium | PA | *(ARCH-008 done — unblocked)* |
 | [BIO-002](queue/BIO-002_hi-claude-book-and-blog-concept.md) | "Hi Claude..." — book and blog series concept development | Biography | Medium | Biographer | BIO-001 |
 | [ARCH-011](queue/ARCH-011_unified-messaging-model.md) | Unified messaging model — capsule messages, shared plot messages, message trellises | Architecture | Medium | TechnicalArchitect | ARCH-003, ARCH-007 |
@@ -29,14 +36,13 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 ## In Progress
 
-| ID | Title | Category | Priority | Assigned to |
-|----|-------|----------|----------|-------------|
-| [TST-010](in-progress/TST-010_manual-staging-checklist-v055.md) | Manual staging checklist v0.55 — **held pending OpsManager staging sign-off** | Testing | High | TestManager |
+*(none)*
 
 ## Done
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
+| [TST-010](done/TST-010_manual-staging-checklist-v055.md) | Manual staging checklist v0.55 — conditional pass, 7 bugs logged | Testing | 2026-05-16 |
 | [OPS-004](done/OPS-004_v055-test-environment-deployment.md) | v0.55 test environment deployment | Operations | 2026-05-16 |
 | [SEC-016](done/SEC-016_ios-ats-infoplist.md) | iOS — add committed Info.plist with ATS domain restriction | Security | 2026-05-16 |
 | [SEC-017](done/SEC-017_ios-memory-zeroing-temp-file-cleanup.md) | iOS — zero DEK byte buffers after use, delete video temp files on dismiss | Security | 2026-05-16 |
