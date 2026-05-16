@@ -3,7 +3,7 @@ id: ARCH-007
 title: E2EE tag scheme — HMAC token identifiers + encrypted display names
 category: Architecture
 priority: High
-status: queued
+status: done
 depends_on: []
 touches:
   - HeirloomsServer/src/main/resources/db/migration/
@@ -91,4 +91,24 @@ This prevents auto-tags from re-triggering trellises and causing infinite loops.
 
 ## Completion notes
 
-<!-- Architect appends here and moves file to tasks/done/ -->
+**Completed: 2026-05-16 by TechnicalArchitect**
+
+Design brief produced at `docs/briefs/ARCH-007_e2ee-tag-scheme.md`.
+
+All three open questions resolved:
+
+1. **Display name storage:** Per (user, upload) tuple — parallel BYTEA arrays on
+   `uploads` (`tag_tokens[]`, `tag_display_ciphertexts[]`) and per-row on `member_tags`.
+   Avoids global dedup table and its garbage-collection complexity. Consistent with the
+   DEK-per-upload model.
+
+2. **Migration UX:** Brief, non-blocking "Securing your tags..." toast/snackbar during
+   background migration pass triggered at vault unlock. Not silent (stall risk); not
+   blocking (< 2s even at extreme scale). Platforms migrate independently.
+
+3. **Token versioning:** Yes — add `tag_token_version SMALLINT` to `uploads` and
+   `member_tags`. Enables clean key rotation without all-or-nothing schema re-migration.
+
+Schema: additive V32 migration (Phase 1); Phase 2 client re-encryption; Phase 3
+enforcement after 60-day grace period. No new envelope algorithm ID required
+(`aes256gcm-v1` covers tag display name encryption).
