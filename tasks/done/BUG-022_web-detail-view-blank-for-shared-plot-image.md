@@ -3,11 +3,11 @@ id: BUG-022
 title: Web detail view shows blank image for shared plot items — full image DEK not decrypted with plot key
 category: Bug Fix
 priority: High
-status: queued
+status: done
 depends_on: []
 touches:
   - HeirloomsWeb/src/pages/PhotoDetailPage.jsx
-  - HeirloomsWeb/src/crypto/vaultCrypto.js
+  - HeirloomsWeb/src/pages/GardenPage.jsx
 assigned_to: Developer
 estimated: 2 hours
 ---
@@ -50,4 +50,40 @@ In `PhotoDetailPage.jsx` (or the relevant full-image fetch/decrypt function):
 
 ## Completion notes
 
-<!-- Agent appends here and moves file to tasks/done/ -->
+### What was done
+
+**`HeirloomsWeb/src/pages/PhotoDetailPage.jsx`**
+
+- Added `loadPlotKey(plotId, apiKey)` helper — mirrors the same helper in `UploadThumb.jsx`.
+  Checks the session cache first (`getPlotKey`), then fetches `/api/plots/:plotId/plot-key`,
+  unwraps with the sharing private key, and stores in session (`setPlotKey`).
+- Updated the module-level `unwrapDek` function to accept `plotId` and `apiKey` as additional
+  parameters and handle the `ALG_PLOT_AES256GCM_V1` case by calling `loadPlotKey` then
+  `unwrapDekWithPlotKey`.
+- Added `plotId` extraction from `location.state?.plotId` (read-only, set at navigation time).
+- Updated all three `unwrapDek` call sites (MSE video path, full-download path in
+  `loadContent`, and `handleDownload`) to pass `plotId` and `apiKey`.
+- Updated imports: added `getPlotKey`, `setPlotKey` from `vaultSession`; added
+  `unwrapPlotKey`, `unwrapDekWithPlotKey`, `ALG_PLOT_AES256GCM_V1` from `vaultCrypto`.
+
+**`HeirloomsWeb/src/pages/GardenPage.jsx`**
+
+- Updated both navigation points in `PlotThumbCard` (the `<Link>` and the pencil button
+  `navigate()` call) to include `plotId` in `location.state`. The `plotId` is already
+  a prop of `PlotThumbCard` and is set to `plot.id` only for shared plots
+  (`plot.visibility === 'shared'`), so private-plot and non-plot navigation is unaffected
+  (`plotId` will be `undefined`, which becomes `null` in the detail page).
+
+### Decisions
+
+- The `plotId` is threaded via React Router `location.state` rather than added to the
+  upload API response. This avoids a server change and mirrors how `UploadThumb` receives
+  `plotId` as a prop from the list context.
+- No changes to `vaultCrypto.js` were needed — all required functions already existed.
+- The preview-clip decrypt path (for long videos) uses `unwrapDekWithMasterKey` directly
+  for `wrappedPreviewDek` and was left unchanged — preview DEKs are always master-key
+  wrapped per the current upload flow.
+
+### Spawned tasks
+
+None.

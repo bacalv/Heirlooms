@@ -11,16 +11,32 @@ import { WorkingDots } from '../brand/WorkingDots'
 import { AddToCapsuleModal } from '../components/AddToCapsuleModal'
 import { AddToPlotModal } from '../components/AddToPlotModal'
 import { Toast } from '../components/Toast'
-import { getMasterKey, getSharingPrivkey } from '../crypto/vaultSession'
-import { unwrapDekWithMasterKey, unwrapWithSharingKey, decryptSymmetric, decryptStreamingContent, fromB64, ALG_P256_ECDH_HKDF_V1 } from '../crypto/vaultCrypto'
+import { getMasterKey, getSharingPrivkey, getPlotKey, setPlotKey } from '../crypto/vaultSession'
+import { unwrapDekWithMasterKey, unwrapWithSharingKey, unwrapPlotKey, unwrapDekWithPlotKey, decryptSymmetric, decryptStreamingContent, fromB64, ALG_P256_ECDH_HKDF_V1, ALG_PLOT_AES256GCM_V1 } from '../crypto/vaultCrypto'
 import { ShareModal } from '../components/ShareModal'
 import { openEncryptedVideoStream } from '../crypto/encryptedVideoStream'
 
-async function unwrapDek(wrappedDek, dekFormat, masterKey) {
+async function loadPlotKey(plotId, apiKey) {
+  const cached = getPlotKey(plotId)
+  if (cached) return cached
+  const resp = await apiFetch(`/api/plots/${plotId}/plot-key`, apiKey)
+  if (!resp.ok) throw new Error('Could not fetch plot key')
+  const { wrappedPlotKey } = await resp.json()
+  const plotKeyBytes = await unwrapPlotKey(fromB64(wrappedPlotKey), getSharingPrivkey())
+  setPlotKey(plotId, plotKeyBytes)
+  return plotKeyBytes
+}
+
+async function unwrapDek(wrappedDek, dekFormat, masterKey, plotId, apiKey) {
   if (dekFormat === ALG_P256_ECDH_HKDF_V1) {
     const privkey = getSharingPrivkey()
     if (!privkey) throw new Error('Sharing key not available')
     return unwrapWithSharingKey(wrappedDek, privkey)
+  }
+  if (dekFormat === ALG_PLOT_AES256GCM_V1) {
+    if (!plotId) throw new Error('Plot ID required to decrypt plot-key-wrapped DEK')
+    const plotKey = await loadPlotKey(plotId, apiKey)
+    return unwrapDekWithPlotKey(wrappedDek, plotKey)
   }
   return unwrapDekWithMasterKey(wrappedDek, masterKey)
 }
@@ -509,6 +525,7 @@ export function PhotoDetailPage() {
   const { apiKey } = useAuth()
 
   const from = searchParams.get('from') ?? 'garden' // default to garden flavour
+  const plotId = location.state?.plotId ?? null
 
   const [upload, setUpload] = useState(location.state?.upload ?? null)
   const [blobUrl, setBlobUrl] = useState(null)
@@ -539,7 +556,7 @@ export function PhotoDetailPage() {
         const raw = upload.wrappedDek
         if (!raw) throw new Error('Missing wrappedDek')
         const wrappedDek = typeof raw === 'string' ? fromB64(raw) : raw
-        const dek = await unwrapDek(wrappedDek, upload.dekFormat, masterKey)
+        const dek = await unwrapDek(wrappedDek, upload.dekFormat, masterKey, plotId, apiKey)
         const r = await fetch(`${API_URL}/api/content/uploads/${upload.id}/file`, {
           headers: { 'X-Api-Key': apiKey },
         })
@@ -631,7 +648,7 @@ export function PhotoDetailPage() {
         const raw = upload.wrappedDek
         if (!raw) throw new Error('Missing wrappedDek')
         const wrappedDek = typeof raw === 'string' ? fromB64(raw) : raw
-        const dek = await unwrapDek(wrappedDek, upload.dekFormat, masterKey)
+        const dek = await unwrapDek(wrappedDek, upload.dekFormat, masterKey, plotId, apiKey)
         const result = await openEncryptedVideoStream(upload, apiKey, dek)
         if (result.type === 'mse') {
           streamCleanup = result.cleanup
@@ -652,7 +669,7 @@ export function PhotoDetailPage() {
         const raw = upload.wrappedDek
         if (!raw) throw new Error('Missing wrappedDek')
         const wrappedDek = typeof raw === 'string' ? fromB64(raw) : raw
-        const dek = await unwrapDek(wrappedDek, upload.dekFormat, masterKey)
+        const dek = await unwrapDek(wrappedDek, upload.dekFormat, masterKey, plotId, apiKey)
         // Envelope format starts with version byte 0x01; streaming chunk format starts with nonce bytes (never 0x01).
         const plainBytes = encBytes[0] === 0x01
           ? await decryptSymmetric(encBytes, dek)
