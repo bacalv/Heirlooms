@@ -3,7 +3,7 @@ id: TST-008
 title: Shared plot E2E smoke test — formalise spec and identify automation strategy
 category: Testing
 priority: High
-status: queued
+status: done
 depends_on: []
 touches:
   - docs/testing/
@@ -153,4 +153,33 @@ investigation). Playwright infrastructure is already in place (TST-005 done).
 
 ## Completion notes
 
-<!-- TestManager appends here and moves file to tasks/done/ -->
+Completed 2026-05-16 by TestManager on branch `agent/test-manager/TST-008`.
+
+### What was produced
+
+**`docs/testing/smoke_test_shared_plot.md`** — formal spec document covering:
+- All six smoke test steps with sub-step tables (action, expected result, platform)
+- Known gap status table (BUG-019–022, FEAT-004, WEB-001) with current resolution state
+- Pre-flight instructions (health check, API key retrieval)
+- Test account naming convention and BUG-019 workaround guidance
+- Per-step pass criteria
+
+### Automation assessment
+
+All web-side sub-steps (User B's journey — Steps 1.5, 2.2, 3.1–3.2, 4.1–4.3, 4.5–4.6, 5.1–5.4) are automatable now with the existing Playwright infrastructure (TST-005). Journey-specific `Actor` methods do not yet exist — those are TST-004 scope.
+
+Android-side sub-steps (Steps 1.1, 1.3, 3.3, 4.2–4.4, 5.5–5.6) are blocked on TST-006 (Android remote control investigation).
+
+### Test data strategy
+
+Dynamic account creation per run recommended. Fixed usernames (`smokeA`/`smokeB`) are suitable for manual smoke test sessions only. `ApiHelper.generateInviteToken()` already supports CI-safe dynamic token generation. Three `ApiHelper` method extensions identified for full API-side setup in TST-004.
+
+### New Playwright test files identified
+
+1. `HeirloomsWeb/e2e/journeys/shared-plot-smoke.spec.ts` — primary multi-step smoke journey (web side)
+2. `HeirloomsWeb/e2e/journeys/friends.spec.ts` — standalone friends list journey
+3. Extensions to `HeirloomsWeb/e2e/support/api.ts` — seven new API helper methods for seeding and assertion
+
+### Sequencing recommendation
+
+Verify BUG-020 and BUG-022 fixes in TST-010 (manual, v0.55 staging) before writing passing assertions for Steps 4.5–4.6. If TST-010 is delayed, use `test.fixme()` in Playwright to document intent without polluting the CI signal. Do not automate with unconditionally failing assertions.
