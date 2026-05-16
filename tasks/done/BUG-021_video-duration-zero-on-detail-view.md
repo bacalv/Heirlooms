@@ -138,3 +138,23 @@ included in the confirm request body as `"durationSeconds": <value>`.
 ### Spawned tasks
 
 None.
+
+---
+
+**Additional fixes: 2026-05-16 by developer-2 (second pass)**
+
+The previous completion note was partially incorrect: Android `PhotoDetailViewModel.kt` had a playback bug for large encrypted videos with no stored duration, and neither Android nor web showed duration in the detail metadata section.
+
+### Additional changes made
+
+**`HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/garden/PhotoDetailViewModel.kt`**
+
+Fixed a playback regression for large encrypted videos (> 10 MB) when `durationSeconds` is null and there is no preview clip. The previous code had three separate checks that resulted in an early `return@runCatching` before the streaming-decrypt path was reached. Consolidated those three checks into a single guard: if the video file exceeds `LARGE_VIDEO_THRESHOLD`, set `_contentDek` and return (enabling `DecryptingDataSource` streaming in the UI). This covers under-threshold large files, legacy uploads with no stored duration, and over-threshold uploads without a preview clip.
+
+**`HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/garden/PhotoDetailScreen.kt`**
+
+Added `"Duration: M:SS"` metadata line below the "Uploaded" timestamp in both `GardenFlavour` and `ExploreFlavour`. The line is only shown when `upload.isVideo && upload.durationSeconds != null`. Uses the existing `formatDuration()` helper.
+
+**`HeirloomsWeb/src/pages/PhotoDetailPage.jsx`**
+
+Added `"Duration: M:SS"` metadata line in both `GardenFlavour` and `ExploreFlavour`. Shown only when `isVideo && upload.durationSeconds != null`. Uses the existing `formatDuration()` helper already in scope.

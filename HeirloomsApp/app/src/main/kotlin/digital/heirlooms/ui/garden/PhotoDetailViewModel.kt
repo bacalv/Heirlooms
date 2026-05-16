@@ -141,19 +141,10 @@ class PhotoDetailViewModel(
                     else -> VaultCrypto.unwrapDekWithMasterKey(wrappedDek, mk)
                 }
 
-                if (upload.isVideo && exceedsThreshold && upload.previewStorageKey == null) {
-                    // Exceeds threshold but no preview clip — show nothing (thumbnail displays).
-                    return@runCatching
-                }
-
-                if (upload.isVideo && upload.fileSize > LARGE_VIDEO_THRESHOLD && !exceedsThreshold) {
-                    // Under threshold but large file: stream-decrypt via DecryptingDataSource.
-                    _contentDek.value = dek
-                    return@runCatching
-                }
-
                 if (upload.isVideo && upload.fileSize > LARGE_VIDEO_THRESHOLD) {
-                    // Legacy large video (no duration stored): stream-decrypt via DecryptingDataSource.
+                    // Large video (with or without duration): stream-decrypt via DecryptingDataSource.
+                    // This handles: under-threshold large files, legacy uploads with no duration,
+                    // and over-threshold uploads that have no preview clip.
                     _contentDek.value = dek
                     return@runCatching
                 }
