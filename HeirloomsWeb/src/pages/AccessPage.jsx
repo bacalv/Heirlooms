@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
-import { getInvite, listDevices, deleteDevice } from '../api'
+import { getAccount, getInvite, listDevices, deleteDevice } from '../api'
 
 const INVITE_BASE = typeof window !== 'undefined' ? window.location.origin : 'https://heirlooms.digital'
 
@@ -20,6 +20,15 @@ export function AccessPage() {
   const [inviteError, setInviteError] = useState(null)
   const [inviteWorking, setInviteWorking] = useState(false)
   const [copied, setCopied] = useState(false)
+  // SEC-015: biometric info note.
+  const [requireBiometric, setRequireBiometric] = useState(false)
+
+  useEffect(() => {
+    if (!sessionToken) return
+    getAccount(sessionToken)
+      .then(data => setRequireBiometric(data.require_biometric ?? false))
+      .catch(() => {})
+  }, [sessionToken])
 
   const [devices, setDevices] = useState([])
   const [devicesLoading, setDevicesLoading] = useState(false)
@@ -87,6 +96,17 @@ export function AccessPage() {
   return (
     <div className="max-w-lg mx-auto px-4 py-8 space-y-10">
       <h1 className="font-serif text-2xl text-forest">Devices &amp; Access</h1>
+
+      {/* SEC-015: biometric info note */}
+      {requireBiometric && (
+        <section className="flex items-start gap-3 px-4 py-3 bg-forest-08 border border-forest-15 rounded-lg">
+          <span className="text-lg leading-none mt-0.5">&#x1F512;</span>
+          <p className="text-sm text-forest">
+            <strong>Biometric protection is active</strong> — your vault requires biometric authentication
+            on your mobile devices. This setting can only be changed from the Heirlooms mobile app.
+          </p>
+        </section>
+      )}
 
       {/* Invite someone */}
       <section className="space-y-3">

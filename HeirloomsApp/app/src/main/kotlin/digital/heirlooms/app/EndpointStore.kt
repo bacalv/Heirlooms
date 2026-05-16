@@ -105,6 +105,13 @@ class EndpointStore(private val store: PreferenceStore) {
     fun getAuthSalt(): String = store.getString(KEY_AUTH_SALT, "")
     fun setAuthSalt(salt: String) = store.putString(KEY_AUTH_SALT, salt)
 
+    // ---- Biometric setting ---------------------------------------------------
+
+    /** Cached server-side biometric requirement. Default false (opt-in). */
+    fun getRequireBiometric(): Boolean = store.getString(KEY_REQUIRE_BIOMETRIC, "false") == "true"
+    fun setRequireBiometric(enabled: Boolean) =
+        store.putString(KEY_REQUIRE_BIOMETRIC, if (enabled) "true" else "false")
+
     // ---- Other settings ------------------------------------------------------
 
     fun getWifiOnly(): Boolean = store.getString(KEY_WIFI_ONLY, "false") == "true"
@@ -135,6 +142,7 @@ class EndpointStore(private val store: PreferenceStore) {
         private const val KEY_USERNAME = "username"
         private const val KEY_DISPLAY_NAME = "display_name"
         private const val KEY_AUTH_SALT = "auth_salt"
+        private const val KEY_REQUIRE_BIOMETRIC = "require_biometric"
         private const val KEY_WIFI_ONLY = "wifi_only"
         private const val KEY_WELCOMED = "welcomed"
         private const val KEY_VIDEO_THRESHOLD = "video_playback_threshold"

@@ -110,6 +110,9 @@ dependencies {
     // Jetpack Security — EncryptedSharedPreferences backed by Android Keystore AES-GCM.
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
+    // Biometric — BiometricPrompt for vault gate (SEC-015).
+    implementation("androidx.biometric:biometric:1.2.0-alpha05")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.bouncycastle:bcprov-jdk18on:1.79")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")

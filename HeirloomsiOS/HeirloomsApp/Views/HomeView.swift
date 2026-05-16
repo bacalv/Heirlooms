@@ -1,6 +1,7 @@
 import SwiftUI
 import PhotosUI
 import AVFoundation
+import LocalAuthentication
 import UniformTypeIdentifiers
 import HeirloomsCore
 
@@ -433,10 +434,72 @@ struct ThumbnailCell: View {
     }
 }
 
+// MARK: - BiometricGateView (SEC-015)
+
+/// Full-screen biometric prompt. Uses LAContext to evaluate biometric or device credential.
+/// If no credential is enrolled, bypasses the gate by calling `onAuthenticated` immediately.
+struct BiometricGateView: View {
+    let onAuthenticated: () -> Void
+
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            Image(systemName: "faceid")
+                .font(.system(size: 64))
+                .foregroundStyle(.secondary)
+            Text("Biometric required")
+                .font(.title.bold())
+            Text("Authenticate to open your vault.")
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+                Button("Try again") {
+                    authenticate()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            Spacer()
+        }
+        .task { authenticate() }
+    }
+
+    private func authenticate() {
+        let context = LAContext()
+        var policyError: NSError?
+        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &policyError) else {
+            // No biometric and no passcode — bypass gate.
+            onAuthenticated()
+            return
+        }
+        context.evaluatePolicy(
+            .deviceOwnerAuthentication,
+            localizedReason: "Open your Heirlooms vault"
+        ) { success, error in
+            DispatchQueue.main.async {
+                if success {
+                    onAuthenticated()
+                } else {
+                    errorMessage = error?.localizedDescription ?? "Authentication failed."
+                }
+            }
+        }
+    }
+}
+
 // MARK: - SettingsView stub
 
 struct SettingsView: View {
     @EnvironmentObject private var appState: AppState
+    @State private var requireBiometric: Bool = false
+    @State private var biometricWorking: Bool = false
 
     var body: some View {
         List {
@@ -445,6 +508,29 @@ struct SettingsView: View {
                 Button("API Key Reset") {
                     // TODO: API key reset semantics TBD (see brief).
                 }
+                // SEC-015: biometric gate toggle.
+                Toggle("Require biometric to open vault", isOn: Binding(
+                    get: { requireBiometric },
+                    set: { newValue in
+                        guard !biometricWorking else { return }
+                        biometricWorking = true
+                        Task {
+                            do {
+                                let api = HeirloomsAPI()
+                                let updated = try await api.patchAccount(requireBiometric: newValue)
+                                await MainActor.run {
+                                    requireBiometric = updated.requireBiometric
+                                    appState.requireBiometric = updated.requireBiometric
+                                    UserDefaults.standard.set(updated.requireBiometric, forKey: "require_biometric")
+                                    biometricWorking = false
+                                }
+                            } catch {
+                                await MainActor.run { biometricWorking = false }
+                            }
+                        }
+                    }
+                ))
+                .disabled(biometricWorking)
             }
             Section("Devices") {
                 NavigationLink("Devices & Access") {
@@ -465,6 +551,9 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+        .onAppear {
+            requireBiometric = appState.requireBiometric
+        }
     }
 }
 

@@ -168,6 +168,31 @@ public struct SharedMembership: Codable {
     }
 }
 
+// MARK: - AccountResponse
+
+/// Decoded from GET /api/auth/account and PATCH /api/auth/account.
+public struct AccountResponse: Codable {
+    public let userId: String
+    public let username: String
+    public let displayName: String
+    /// Whether the user requires biometric authentication to open the vault.
+    public let requireBiometric: Bool
+
+    public init(userId: String, username: String, displayName: String, requireBiometric: Bool) {
+        self.userId = userId
+        self.username = username
+        self.displayName = displayName
+        self.requireBiometric = requireBiometric
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case userId         = "user_id"
+        case username
+        case displayName    = "display_name"
+        case requireBiometric = "require_biometric"
+    }
+}
+
 // MARK: - HeirloomsError
 
 /// Domain errors surfaced to callers.

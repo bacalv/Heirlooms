@@ -18,6 +18,7 @@ interface AuthRepository {
     fun findUserById(id: UUID): UserRecord?
     fun setUserAuth(userId: UUID, authVerifier: ByteArray, authSalt: ByteArray)
     fun resetUserAuth(userId: UUID)
+    fun setRequireBiometric(userId: UUID, requireBiometric: Boolean)
     fun createSession(userId: UUID, tokenHash: ByteArray, deviceKind: String): UserSessionRecord
     fun findSessionByTokenHash(tokenHash: ByteArray): UserSessionRecord?
     fun deleteSession(id: UUID)
@@ -65,7 +66,7 @@ class PostgresAuthRepository(private val dataSource: DataSource) : AuthRepositor
     override fun findUserByUsername(username: String): UserRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
-                "SELECT id, username, display_name, auth_verifier, auth_salt, created_at FROM users WHERE username = ?"
+                "SELECT id, username, display_name, auth_verifier, auth_salt, created_at, require_biometric FROM users WHERE username = ?"
             ).use { stmt ->
                 stmt.setString(1, username)
                 val rs = stmt.executeQuery()
@@ -78,12 +79,24 @@ class PostgresAuthRepository(private val dataSource: DataSource) : AuthRepositor
     override fun findUserById(id: UUID): UserRecord? {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
-                "SELECT id, username, display_name, auth_verifier, auth_salt, created_at FROM users WHERE id = ?"
+                "SELECT id, username, display_name, auth_verifier, auth_salt, created_at, require_biometric FROM users WHERE id = ?"
             ).use { stmt ->
                 stmt.setObject(1, id)
                 val rs = stmt.executeQuery()
                 if (!rs.next()) return null
                 return rs.toUserRecord()
+            }
+        }
+    }
+
+    override fun setRequireBiometric(userId: UUID, requireBiometric: Boolean) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "UPDATE users SET require_biometric = ? WHERE id = ?"
+            ).use { stmt ->
+                stmt.setBoolean(1, requireBiometric)
+                stmt.setObject(2, userId)
+                stmt.executeUpdate()
             }
         }
     }
@@ -344,6 +357,7 @@ class PostgresAuthRepository(private val dataSource: DataSource) : AuthRepositor
         authVerifier = getBytes("auth_verifier"),
         authSalt = getBytes("auth_salt"),
         createdAt = getTimestamp("created_at").toInstant(),
+        requireBiometric = getBoolean("require_biometric"),
     )
 
     private fun ResultSet.toUserSessionRecord() = UserSessionRecord(

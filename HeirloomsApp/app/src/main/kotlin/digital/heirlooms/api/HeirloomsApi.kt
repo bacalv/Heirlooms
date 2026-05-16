@@ -575,6 +575,37 @@ class HeirloomsApi(
         return MeResponse(json.getString("user_id"), json.getString("username"), json.getString("display_name"))
     }
 
+    data class AccountResponse(
+        val userId: String,
+        val username: String,
+        val displayName: String,
+        val requireBiometric: Boolean,
+    )
+
+    /** Returns the authenticated user's account settings including require_biometric. */
+    suspend fun getAccount(): AccountResponse {
+        val body = get("/api/auth/account")
+        val json = JSONObject(body)
+        return AccountResponse(
+            userId = json.getString("user_id"),
+            username = json.getString("username"),
+            displayName = json.getString("display_name"),
+            requireBiometric = json.optBoolean("require_biometric", false),
+        )
+    }
+
+    /** Updates the authenticated user's account settings. Returns updated account. */
+    suspend fun patchAccount(requireBiometric: Boolean): AccountResponse {
+        val body = patch("/api/auth/account", """{"require_biometric":$requireBiometric}""")
+        val json = JSONObject(body)
+        return AccountResponse(
+            userId = json.getString("user_id"),
+            username = json.getString("username"),
+            displayName = json.getString("display_name"),
+            requireBiometric = json.optBoolean("require_biometric", false),
+        )
+    }
+
     /** Returns the stored auth_salt (base64url) for the given username. */
     suspend fun authChallenge(username: String): ChallengeResponse = withContext(Dispatchers.IO) {
         val body = """{"username":"${username.jsonEsc().drop(1).dropLast(1)}"}"""

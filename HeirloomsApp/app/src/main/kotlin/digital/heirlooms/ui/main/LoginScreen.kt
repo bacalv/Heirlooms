@@ -106,8 +106,14 @@ fun LoginScreen(
                         store.setUsername(u)
                         store.setAuthSalt(saltB64url)
                         try {
-                            val me = HeirloomsApi(apiKey = resp.sessionToken).authMe()
+                            val authedApi = HeirloomsApi(apiKey = resp.sessionToken)
+                            val me = authedApi.authMe()
                             store.setDisplayName(me.displayName)
+                            // SEC-015: sync require_biometric from server on login.
+                            try {
+                                val account = authedApi.getAccount()
+                                store.setRequireBiometric(account.requireBiometric)
+                            } catch (_: Exception) {}
                         } catch (_: Exception) {}
                         onLoginSuccess(resp.sessionToken)
                     } catch (e: Exception) {

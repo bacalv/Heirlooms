@@ -10,4 +10,5 @@ data class UserRecord(
     val authVerifier: ByteArray?,
     val authSalt: ByteArray?,
     val createdAt: Instant,
+    val requireBiometric: Boolean = false,
 )
