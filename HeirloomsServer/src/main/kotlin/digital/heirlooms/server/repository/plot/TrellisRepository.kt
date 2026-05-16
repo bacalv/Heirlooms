@@ -11,6 +11,18 @@ import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
 
+/**
+ * Pre-wrapped plot DEK supplied by the Android client when it already holds
+ * the plot key and can perform the DEK re-wrap locally before upload confirmation.
+ * Enables direct plot_items insertion without requiring the staging flow.
+ */
+data class PrewrappedPlotDek(
+    val wrappedItemDek: ByteArray,
+    val itemDekFormat: String,
+    val wrappedThumbnailDek: ByteArray?,
+    val thumbnailDekFormat: String?,
+)
+
 interface TrellisRepository {
     sealed class TrellisCreateResult {
         data class Success(val trellis: TrellisRecord) : TrellisCreateResult()
@@ -27,6 +39,20 @@ interface TrellisRepository {
     fun updateTrellis(id: UUID, name: String?, criteriaJson: String?, requiresStaging: Boolean?, targetPlot: PlotRecord?, userId: UUID = FOUNDING_USER_ID): TrellisUpdateResult
     fun deleteTrellis(id: UUID, userId: UUID = FOUNDING_USER_ID): Boolean
     fun runUnstagedTrellisesForUpload(conn: java.sql.Connection, uploadId: UUID, userId: UUID)
+
+    /**
+     * Same as [runUnstagedTrellisesForUpload] but also handles shared-plot trellises when
+     * the client has supplied pre-wrapped plot DEKs.  For each trellis whose target plot has
+     * a matching entry in [prewrappedDeks], the item is inserted directly into plot_items
+     * (no staging row is written), bypassing the BUG-018 defensive guard for that plot only.
+     * Trellises targeting plots not present in [prewrappedDeks] keep their existing behaviour.
+     */
+    fun runUnstagedTrellisesForUploadWithPrewrappedDeks(
+        conn: java.sql.Connection,
+        uploadId: UUID,
+        userId: UUID,
+        prewrappedDeks: Map<UUID, PrewrappedPlotDek>,
+    )
 }
 
 class PostgresTrellisRepository(private val dataSource: DataSource) : TrellisRepository {
@@ -183,6 +209,78 @@ class PostgresTrellisRepository(private val dataSource: DataSource) : TrellisRep
                     stmt.setObject(idx++, trellis.targetPlotId)
                     stmt.setObject(idx++, trellis.id)
                     stmt.setObject(idx++, userId)
+                    stmt.setObject(idx++, uploadId)
+                    stmt.setObject(idx++, userId)
+                    for (setter in fragment.setters) idx = setter(stmt, idx)
+                    stmt.executeUpdate()
+                }
+            } catch (_: Exception) { /* best-effort; bad criteria skipped */ }
+        }
+    }
+
+    /**
+     * Inserts upload into plot_items for every unstaged trellis whose criteria it satisfies,
+     * and additionally handles shared-plot trellises when the client has provided pre-wrapped
+     * DEKs for those plots (BUG-020 fix).
+     *
+     * For non-shared (private/public) trellises: same behaviour as [runUnstagedTrellisesForUpload].
+     * For shared-plot trellises: only inserted directly when a [PrewrappedPlotDek] is present for
+     * that plot in [prewrappedDeks]; otherwise the trellis is skipped (item stays in staging).
+     */
+    override fun runUnstagedTrellisesForUploadWithPrewrappedDeks(
+        conn: Connection,
+        uploadId: UUID,
+        userId: UUID,
+        prewrappedDeks: Map<UUID, PrewrappedPlotDek>,
+    ) {
+        val allUnstaged = listTrellises(userId).filter { !it.requiresStaging }
+
+        // Non-shared trellises: same as original runUnstagedTrellisesForUpload.
+        val nonSharedTrellises = allUnstaged.filter { it.targetPlotVisibility != "shared" }
+        for (trellis in nonSharedTrellises) {
+            try {
+                val fragment = CriteriaEvaluator.evaluate(trellis.criteria, userId, conn)
+                conn.prepareStatement(
+                    """INSERT INTO plot_items (upload_id, plot_id, source_trellis_id, added_by)
+                       SELECT id, ?, ?, ?
+                       FROM uploads
+                       WHERE id = ? AND user_id = ? AND (${fragment.sql})
+                       ON CONFLICT (plot_id, upload_id) DO NOTHING"""
+                ).use { stmt ->
+                    var idx = 1
+                    stmt.setObject(idx++, trellis.targetPlotId)
+                    stmt.setObject(idx++, trellis.id)
+                    stmt.setObject(idx++, userId)
+                    stmt.setObject(idx++, uploadId)
+                    stmt.setObject(idx++, userId)
+                    for (setter in fragment.setters) idx = setter(stmt, idx)
+                    stmt.executeUpdate()
+                }
+            } catch (_: Exception) { /* best-effort; bad criteria skipped */ }
+        }
+
+        // Shared-plot trellises: only when caller supplied pre-wrapped DEKs for that plot.
+        val sharedTrellises = allUnstaged.filter { it.targetPlotVisibility == "shared" }
+        for (trellis in sharedTrellises) {
+            val dek = prewrappedDeks[trellis.targetPlotId] ?: continue  // no key → skip (stays in staging)
+            try {
+                val fragment = CriteriaEvaluator.evaluate(trellis.criteria, userId, conn)
+                conn.prepareStatement(
+                    """INSERT INTO plot_items (upload_id, plot_id, source_trellis_id, added_by,
+                       wrapped_item_dek, item_dek_format, wrapped_thumbnail_dek, thumbnail_dek_format)
+                       SELECT id, ?, ?, ?, ?, ?, ?, ?
+                       FROM uploads
+                       WHERE id = ? AND user_id = ? AND (${fragment.sql})
+                       ON CONFLICT (plot_id, upload_id) DO NOTHING"""
+                ).use { stmt ->
+                    var idx = 1
+                    stmt.setObject(idx++, trellis.targetPlotId)
+                    stmt.setObject(idx++, trellis.id)
+                    stmt.setObject(idx++, userId)
+                    stmt.setBytes(idx++, dek.wrappedItemDek)
+                    stmt.setString(idx++, dek.itemDekFormat)
+                    stmt.setBytes(idx++, dek.wrappedThumbnailDek)
+                    stmt.setString(idx++, dek.thumbnailDekFormat)
                     stmt.setObject(idx++, uploadId)
                     stmt.setObject(idx++, userId)
                     for (setter in fragment.setters) idx = setter(stmt, idx)

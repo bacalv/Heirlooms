@@ -10,6 +10,7 @@ import digital.heirlooms.server.storage.FileStore
 import digital.heirlooms.server.storage.StorageKey
 import digital.heirlooms.server.repository.plot.TrellisRepository
 import digital.heirlooms.server.repository.plot.PlotRepository
+import digital.heirlooms.server.repository.plot.PrewrappedPlotDek
 import digital.heirlooms.server.repository.social.SocialRepository
 import digital.heirlooms.server.repository.storage.BlobRepository
 import digital.heirlooms.server.repository.upload.UploadRepository
@@ -461,8 +462,18 @@ class UploadService(
 
     fun recordView(id: java.util.UUID, userId: java.util.UUID) = uploadRepo.recordView(id, userId)
 
-    fun updateTags(id: java.util.UUID, tags: List<String>, userId: java.util.UUID) =
-        uploadRepo.updateTags(id, tags, userId) { conn, uploadId, uid -> flowRepo.runUnstagedTrellisesForUpload(conn, uploadId, uid) }
+    fun updateTags(
+        id: java.util.UUID,
+        tags: List<String>,
+        userId: java.util.UUID,
+        prewrappedDeks: Map<java.util.UUID, PrewrappedPlotDek> = emptyMap(),
+    ) = uploadRepo.updateTags(id, tags, userId) { conn, uploadId, uid ->
+        if (prewrappedDeks.isEmpty()) {
+            flowRepo.runUnstagedTrellisesForUpload(conn, uploadId, uid)
+        } else {
+            flowRepo.runUnstagedTrellisesForUploadWithPrewrappedDeks(conn, uploadId, uid, prewrappedDeks)
+        }
+    }
 
     // ---- Compost cleanup (background) --------------------------------------
 

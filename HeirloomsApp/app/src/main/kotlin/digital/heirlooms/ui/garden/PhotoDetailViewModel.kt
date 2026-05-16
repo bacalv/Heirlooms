@@ -278,8 +278,13 @@ class PhotoDetailViewModel(
         if (tagsToSave == null && rotationToSave == null) return
         try {
             if (tagsToSave != null) {
-                val updated = api.updateTags(uploadId, tagsToSave)
-                (_state.value as? PhotoDetailState.Ready)?.let {
+                val ready = _state.value as? PhotoDetailState.Ready
+                val upload = ready?.upload
+                // BUG-020: if we hold plot keys, pre-wrap the DEK for each shared plot so the
+                // server can insert directly into plot_items without requiring staging.
+                val prewrappedDeks = if (upload != null) buildPrewrappedDeks(upload) else emptyList()
+                val updated = api.updateTags(uploadId, tagsToSave, prewrappedDeks)
+                ready?.let {
                     _state.value = it.copy(upload = updated)
                 }
                 _stagedTags.value = null
@@ -292,6 +297,77 @@ class PhotoDetailViewModel(
                 _stagedRotation.value = null
             }
         } catch (_: Exception) {}
+    }
+
+    /**
+     * Builds a list of pre-wrapped plot DEKs for all shared plots where the user currently
+     * holds the plot key in VaultSession.  The server will use whichever entries match a
+     * firing trellis, discarding the rest.  Returns an empty list when the upload has no
+     * wrapped DEK or when the vault holds no plot keys.
+     */
+    private fun buildPrewrappedDeks(upload: Upload): List<HeirloomsApi.PrewrappedPlotDek> {
+        val wrappedDek = upload.wrappedDek ?: return emptyList()
+        val plotKeys = VaultSession.plotKeys
+        if (plotKeys.isEmpty()) return emptyList()
+
+        return try {
+            // Unwrap the raw DEK once using the appropriate envelope format.
+            val rawDek = when (upload.dekFormat) {
+                VaultCrypto.ALG_P256_ECDH_HKDF_V1 -> {
+                    val privkey = VaultSession.sharingPrivkey ?: return emptyList()
+                    VaultCrypto.unwrapWithSharingKey(wrappedDek, privkey)
+                }
+                VaultCrypto.ALG_PLOT_AES256GCM_V1 -> {
+                    val sourceKey = plotKeys.values.firstOrNull { key ->
+                        runCatching { VaultCrypto.unwrapDekWithPlotKey(wrappedDek, key) }.isSuccess
+                    } ?: return emptyList()
+                    VaultCrypto.unwrapDekWithPlotKey(wrappedDek, sourceKey)
+                }
+                else -> VaultCrypto.unwrapDekWithMasterKey(wrappedDek, VaultSession.masterKey)
+            }
+
+            // Unwrap the thumbnail DEK once (best-effort; null if not available).
+            val rawThumbDek: ByteArray? = upload.wrappedThumbnailDek?.let { wrappedThumb ->
+                runCatching {
+                    when (upload.thumbnailDekFormat) {
+                        VaultCrypto.ALG_P256_ECDH_HKDF_V1 -> {
+                            val privkey = VaultSession.sharingPrivkey ?: return@runCatching null
+                            VaultCrypto.unwrapWithSharingKey(wrappedThumb, privkey)
+                        }
+                        VaultCrypto.ALG_PLOT_AES256GCM_V1 -> {
+                            val sourceKey = plotKeys.values.firstOrNull { key ->
+                                runCatching { VaultCrypto.unwrapDekWithPlotKey(wrappedThumb, key) }.isSuccess
+                            } ?: return@runCatching null
+                            VaultCrypto.unwrapDekWithPlotKey(wrappedThumb, sourceKey)
+                        }
+                        else -> VaultCrypto.unwrapDekWithMasterKey(wrappedThumb, VaultSession.masterKey)
+                    }
+                }.getOrNull()
+            }
+
+            // Re-wrap under every plot key we hold.
+            plotKeys.mapNotNull { (plotId, plotKey) ->
+                runCatching {
+                    val rewrappedItem = VaultCrypto.wrapDekWithPlotKey(rawDek, plotKey)
+                    val rewrappedItemB64 = Base64.encodeToString(rewrappedItem, Base64.NO_WRAP)
+                    val (rewrappedThumbB64, thumbFormat) = if (rawThumbDek != null) {
+                        val rewrapped = VaultCrypto.wrapDekWithPlotKey(rawThumbDek, plotKey)
+                        Base64.encodeToString(rewrapped, Base64.NO_WRAP) to VaultCrypto.ALG_PLOT_AES256GCM_V1
+                    } else {
+                        null to null
+                    }
+                    HeirloomsApi.PrewrappedPlotDek(
+                        plotId = plotId,
+                        wrappedItemDek = rewrappedItemB64,
+                        itemDekFormat = VaultCrypto.ALG_PLOT_AES256GCM_V1,
+                        wrappedThumbnailDek = rewrappedThumbB64,
+                        thumbnailDekFormat = thumbFormat,
+                    )
+                }.getOrNull()
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
 
     fun reload(api: HeirloomsApi, uploadId: String) {
