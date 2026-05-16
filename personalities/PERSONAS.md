@@ -26,6 +26,8 @@ Tasks performed by each persona
 | Legal               | CTO     | Patent strategy (UK IPO, PCT), UK GDPR compliance, company law, IP ownership, terms of service, international law; works closely with Retirement Planner and Research Manager on exit-readiness and patentability
 | Psychologist        | CTO     | Grief-aware UX, executor psychology, digital legacy design, trauma-informed product decisions — ensures Heirlooms does not harm the people it is trying to help
 | Philosopher         | CTO     | Ethics of posthumous consent, digital personhood, long-horizon product ethics, privacy as a value — asks the questions no other persona asks
+| Technical Author    | TechnicalArchitect + PA | Technical documentation, academic paper drafts, formal mathematical notation, presentation decks, legal claims annexes; runs documentation sweep at end of every iteration
+| Biographer          | Bret (personal) | Narrative biography of Bret's journey creating Heirlooms; presentation scripts; blog/article drafts in Bret's voice; runs biographical sweep alongside Technical Author at iteration wrap-up
 
 There is only one CTO, one PA, one dev manager and one test manager.
 
