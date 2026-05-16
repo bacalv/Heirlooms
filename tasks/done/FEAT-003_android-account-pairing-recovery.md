@@ -78,4 +78,43 @@ requires both ends to support the new flow.
 
 ## Completion notes
 
-<!-- Agent appends here and moves file to tasks/done/ -->
+Completed 2026-05-16 by developer-7.
+
+**Approach:** Implemented Option C (server-assisted passphrase recovery) as recommended by
+FEAT-003a spike. No new server endpoints required — the existing `GET /api/keys/passphrase`
+and `POST /api/auth/login` endpoints handle the full flow.
+
+**Files changed (all in HeirloomsApp):**
+
+- `ui/main/AccountRecoveryViewModel.kt` — NEW. State machine for the recovery flow:
+  `authChallenge` → `authLogin` → `getPassphrase` → `unwrapMasterKeyWithPassphrase` →
+  `setupVault` → `registerDevice`. Derives the master key from the passphrase-wrapped
+  blob stored on the server using Argon2id with confirmed-matching parameters (m=65536,
+  t=3, p=1 on both Android and web per the spike).
+
+- `ui/main/AccountRecoveryScreen.kt` — NEW. Compose screen with username + passphrase
+  fields and a "Back to registration" link. Wired to `AccountRecoveryViewModel`.
+
+- `ui/main/InviteRedemptionScreen.kt` — Added `onRecoverAccount: () -> Unit` parameter
+  (defaults to no-op for backward compat) and "Already have an account? Recover access"
+  `TextButton` at the bottom of the registration form.
+
+- `ui/main/MainApp.kt` — Added `recovering: Boolean` state variable and a new `when`
+  branch that shows `AccountRecoveryScreen` when `recovering == true`. The branch sits
+  above the invite-redemption branch so it takes priority. `onRecovered` sets
+  `welcomed = true` so the welcome screen is skipped on successful recovery.
+
+**Tests added** in `app/src/test/kotlin/digital/heirlooms/app/AuthTest.kt`:
+- `recoveryFlow_challengeAndLogin_returnSessionToken` — verifies the auth exchange sequence.
+- `recoveryFlow_wrongPassphrase_throwsAEADBadTagException` — wrong passphrase causes AEAD failure.
+- `recoveryFlow_correctPassphrase_recoversMasterKey` — correct passphrase restores the master key.
+- `recoveryFlow_noPassphraseBackup_getPassphraseReturnsNull` — 404 from server returns null.
+- `recoveryFlow_badCredentials_loginThrowsUnauthorized` — 401 login throws "UNAUTHORIZED".
+
+**No server changes** — the spike confirmed all required endpoints already exist.
+
+**Tests passed:** `./gradlew :app:testProdDebugUnitTest --no-daemon` (24 tasks, BUILD SUCCESSFUL)
+and `./gradlew test --no-daemon` in HeirloomsServer (BUILD SUCCESSFUL).
+
+**SEC-015 note:** No biometric logic was added. The recovery screen is intentionally plain
+(username + passphrase only) to leave SEC-015's biometric gate as a clean addition.
