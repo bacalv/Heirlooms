@@ -35,9 +35,10 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [UX-002](queue/UX-002_closed-plot-visual-indicator.md) | Closed plots should show a locked state — disable approve/share actions | UX | Medium | Developer | — |
 | [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | Developer | — |
 | [SEC-002](queue/SEC-002_auth-crypto-coverage.md) | 100% coverage plan for auth/crypto paths | Security | High | SecurityManager | TST-004 |
-| [SEC-013](queue/SEC-013_ios-client-security-review.md) | iOS client security review — parity with SEC-003 | Security | Medium | SecurityManager | — |
 | [SEC-014](queue/SEC-014_ios-vault-background-privacy-screen.md) | iOS vault — privacy screen on backgrounding | Security | Medium | Developer | SEC-013 |
 | [SEC-015](queue/SEC-015_biometric-gate-account-setting.md) | Biometric gate — account-level setting synced via server | Security | Medium | Developer | — |
+| [SEC-016](queue/SEC-016_ios-ats-infoplist.md) | iOS — add committed Info.plist with ATS domain restriction | Security | High | Developer | SEC-013 |
+| [SEC-017](queue/SEC-017_ios-memory-zeroing-temp-file-cleanup.md) | iOS — zero DEK byte buffers after use and delete decrypted video temp files | Security | High | Developer | SEC-013 |
 | [UX-001](queue/UX-001_shared-plot-button-tap-targets.md) | Android: shared plot action buttons have insufficient tap targets | UX | Low | Developer | — |
 | [DOC-001](queue/DOC-001_uml-sequence-diagrams.md) | UML sequence diagrams from test output | Docs | Low | Developer | TST-004 |
 | [OPS-002](queue/OPS-002_new-environment-setup-guide.md) | New environment setup guide | Operations | Low | OpsManager | — |
@@ -128,6 +129,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [BUG-005](done/developer-3_BUG-005_thumbnail-rotation.md) | Thumbnail generator now applies EXIF orientation — rotation baked into pixels | Bug Fix | 2026-05-15 |
 | [BUG-017](done/developer-4_BUG-017_android-plot-key-not-loaded-after-accept-invite.md) | Android: eagerly fetch plot key after accepting invite so thumbnails decrypt without restart | Bug Fix | 2026-05-15 |
 | [BUG-018](done/developer-1_BUG-018_shared-plot-trellis-no-staging-dek-not-rewrapped.md) | Shared-plot trellis always requires staging — prevent items flowing without DEK re-wrap | Bug Fix | 2026-05-15 |
+| [SEC-013](done/SEC-013_ios-client-security-review.md) | iOS client security review — parity with SEC-003 | Security | 2026-05-16 |
 | [RES-001](done/RES-001_crypto-threat-horizon-40kft.md) | Cryptographic threat horizon — initial 40,000ft survey for CTO | Research | 2026-05-16 |
 | [RET-001](done/RET-001_initial-retirement-assessment.md) | Initial retirement assessment — questionnaire, intelligence gathering, and key decisions | Retirement Planning | 2026-05-16 |
 
