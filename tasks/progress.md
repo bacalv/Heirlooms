@@ -14,6 +14,8 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |---|---|---|---|---|---|
+| [ARCH-012](queue/ARCH-012_android-package-restructure-brief.md) | Android app — package restructure and refactor brief | Architecture | High | TechnicalArchitect | — |
+| [ARCH-013](queue/ARCH-013_web-app-restructure-brief.md) | Web app — module restructure and refactor brief | Architecture | High | TechnicalArchitect | — |
 | [BUG-023](queue/BUG-023_passphrase-save-409-after-web-pairing.md) | Passphrase save fails 409 after web pairing | Bug Fix | High | Developer | — |
 | [BUG-024](queue/BUG-024_garden-inline-tag-no-trellis-routing.md) | Garden inline tag edit doesn't trigger trellis routing | Bug Fix | Medium | Developer | — |
 | [BUG-027](queue/BUG-027_garden-not-loading-on-launch.md) | Garden not loading on launch — requires swipe to refresh | Bug Fix | Medium | Developer | — |
