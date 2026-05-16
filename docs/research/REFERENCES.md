@@ -321,3 +321,43 @@ Zama: "Introducing the fhEVM Coprocessor" — FHE for smart contracts on any EVM
 
 **[RES-004-029]** https://blog.chain.link/chainlink-confidential-compute/  
 Chainlink Confidential Compute: threshold-encrypted secrets management with TEE-based execution for private smart contracts. Relevant as the oracle layer for on-chain versions of the chained capsule's condition verification. Cited for the oracle problem discussion in the smart contract analogues section.
+
+---
+
+## HORIZON-2026-05-16 — Horizon scan digest, 2026-05-16
+
+**[HORIZON-001]** https://csrc.nist.gov/pubs/fips/205/final  
+NIST FIPS 205 final publication (August 2024): Stateless Hash-Based Digital Signature Standard (SLH-DSA, based on SPHINCS+). Completes the first-generation PQC standard suite alongside FIPS 203 (ML-KEM) and FIPS 204 (ML-DSA). Signature sizes: 7–50 KB depending on parameter set. Conservative security assumptions (hash-function hardness only). Relevant to Heirlooms' future signature layer migration.
+
+**[HORIZON-002]** https://csrc.nist.gov/pubs/ir/8547/ipd  
+NIST IR 8547 draft (September 2025): "Transition to Post-Quantum Cryptography Standards." Explicit deprecation timeline: RSA, ECDH, ECDSA, DH disallowed after 2030 for federal systems. AES-256 and SHA-384/512 preferred for long-lived data. Establishes hard 2030 deadline that frames urgency for HNDL-exposed data sealed under P-256 today.
+
+**[HORIZON-003]** https://csrc.nist.gov/pubs/sp/800/227/final  
+NIST SP 800-227 (September 2025): Recommendations for Key-Encapsulation Mechanisms. Endorses hybrid deployment (X25519 + ML-KEM) during transition; names X-Wing as practical example. Already cited as RES-003-004; included in horizon section for completeness.
+
+**[HORIZON-004]** https://chromestatus.com/feature/5257822742839296  
+Chrome 137 (May 2026): ML-KEM hybrid key exchange (X25519 + ML-KEM-768) enabled by default for all TLS connections. PQC hybrid TLS is now baseline browser behaviour, not experimental. All major browsers (Chrome, Firefox, Safari via iOS 26) negotiate hybrid key exchange by default as of mid-2026.
+
+**[HORIZON-005]** https://csrc.nist.gov/pubs/fips/206/final  
+NIST FIPS 206 final publication (August 2024): ML-DSA (Module-Lattice-Based Digital Signature Standard, based on CRYSTALS-Dilithium). Primary standardised lattice signature scheme. Falcon (FN-DSA) under supplemental evaluation with no firm publication date as of mid-2026.
+
+**[HORIZON-006]** https://eprint.iacr.org/2024/522  
+Banegas et al. (IACR ePrint 2024/522, updated through 2025): Improved quantum circuits for elliptic curve discrete logarithm. Updated resource estimates for breaking P-256 via Shor: 7,000–10,000 logical qubits with improved circuit architectures (down from earlier ~4,000 idealized estimates, though the comparison is architecture-dependent). No classical attack improvements. P-256 classically secure; quantum threat timeline unchanged for near-term deployment.
+
+**[HORIZON-007]** https://eprint.iacr.org/2024/995  
+Adj et al. (IACR ePrint 2024/995, 2024/2025): "Computing Discrete Logarithms in Pairing-Friendly Curves." Most recent analysis of classical DLP on BLS12-381 and related curves. Finding: no meaningful advances in classical attacks on BLS12-381. Pairing-based IBE constructions (including tlock) remain secure against classical adversaries. BLS12-381 remains quantum-vulnerable via Shor (unchanged from existing assessment in RES-001/RES-002).
+
+**[HORIZON-008]** https://csrc.nist.gov/pubs/sp/800/57/pt1/r6/final  
+NIST SP 800-57 Part 1 Rev. 6 (2024): Recommendation for Key Management. Updated guidance on key lifetimes for long-term storage data. Recommends 128-bit minimum post-quantum security for new systems; documented key rotation plans tied to data sensitivity and expected data lifetime; cryptographic agility provisions. Authoritative reference for formalising Heirlooms' argument that a 20-year sealed capsule remains secure under the planned construction.
+
+**[HORIZON-009]** https://www.enisa.europa.eu/publications/eucs-cloud-services-scheme  
+ENISA EUCS Candidate Scheme v3.1 and PQC annexes (2025): EU Cybersecurity Act cloud certification scheme. High-assurance level now explicitly requires documented PQC migration roadmap and quantum-resistant algorithms for data at rest by 2028 for new systems. Signal for EU institutional customer segment (law firms, healthcare, financial services).
+
+**[HORIZON-010]** https://www.rfc-editor.org/rfc/rfc4998.html  
+RFC 4998: Evidence Record Syntax (ERS). Long-term archive format allowing timestamp token renewal when underlying hash functions are deprecated. Relevant to Heirlooms deletion certificate design: certificates issued today must remain archivally valid 20+ years after issuance; ERS provides the renewal-compatible structure to accomplish this.
+
+**[HORIZON-011]** https://www.rfc-editor.org/rfc/rfc3161.html  
+RFC 3161: Internet X.509 PKI — Time-Stamp Protocol (TSP). Foundation for cryptographic timestamps used in long-term archive and notary applications. SHA-256/SHA-384 TSP tokens are considered adequate for 10–15-year archive validity. Cited alongside RFC 4998 for the deletion certificate long-term validity architecture.
+
+**[HORIZON-012]** https://ieeexplore.ieee.org/document/10706847  
+"Digital Legacy: A Survey of Platform Support and User Awareness" (IEEE Access, 2025). Survey of digital legacy tooling across 50 major consumer platforms. Finding: 12/50 platforms offer any legacy tooling; none offer cryptographically enforced time-windowed access; consumer awareness below 15% in all markets. Confirms Heirlooms occupies genuine whitespace. Note: verify DOI resolution before citing in external publications — digital legacy survey literature has limited peer-review depth.
