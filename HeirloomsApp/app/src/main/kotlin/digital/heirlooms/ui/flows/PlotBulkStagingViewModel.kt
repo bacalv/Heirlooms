@@ -20,6 +20,7 @@ data class PlotBulkStagingState(
     val working: Boolean = false,
     val error: String? = null,
     val doneCount: Int = 0,
+    val plotClosed: Boolean = false,
 )
 
 val PlotBulkStagingState.allSelected: Boolean
@@ -35,7 +36,12 @@ class PlotBulkStagingViewModel : ViewModel() {
             _state.value = _state.value.copy(loading = true, error = null)
             try {
                 val items = api.getPlotStaging(plotId).map { it.upload }
-                _state.value = _state.value.copy(items = items, loading = false)
+                // Check whether this plot is closed so the UI can show the banner
+                // and disable approve/reject before any 403 errors occur.
+                val plotClosed = try {
+                    api.listPlots().find { it.id == plotId }?.plotStatus == "closed"
+                } catch (_: Exception) { false }
+                _state.value = _state.value.copy(items = items, loading = false, plotClosed = plotClosed)
             } catch (e: Exception) {
                 _state.value = _state.value.copy(loading = false, error = e.message ?: "Couldn't load")
             }

@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -63,11 +64,14 @@ import digital.heirlooms.ui.theme.TextMuted
 fun PlotBulkStagingScreen(
     plotId: String,
     plotName: String,
+    plotClosed: Boolean = false,
     onBack: () -> Unit,
     vm: PlotBulkStagingViewModel = viewModel(),
 ) {
     val api = LocalHeirloomsApi.current
     val state by vm.state.collectAsState()
+    // Use the VM state as the source of truth; the parameter is an optional early hint.
+    val isClosed = state.plotClosed || plotClosed
 
     LaunchedEffect(plotId) { vm.load(api, plotId) }
 
@@ -81,6 +85,29 @@ fun PlotBulkStagingScreen(
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Parchment),
         )
+
+        // Closed-plot inline banner — prevents silent 403 on approve/reject
+        if (isClosed) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(TextMuted.copy(alpha = 0.12f))
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Filled.Lock,
+                    contentDescription = null,
+                    tint = TextMuted,
+                    modifier = Modifier.size(14.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "This plot is closed — reopen it to approve items",
+                    style = MaterialTheme.typography.bodySmall.copy(color = TextMuted),
+                )
+            }
+        }
 
         if (state.error != null) {
             Text(
@@ -175,7 +202,7 @@ fun PlotBulkStagingScreen(
                     val hasSelection = state.selected.isNotEmpty()
                     OutlinedButton(
                         onClick = { vm.rejectSelected(api, plotId) },
-                        enabled = hasSelection && !state.working,
+                        enabled = hasSelection && !state.working && !isClosed,
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
                     ) {
@@ -187,7 +214,7 @@ fun PlotBulkStagingScreen(
                     }
                     Button(
                         onClick = { vm.approveSelected(api, plotId) },
-                        enabled = hasSelection && !state.working,
+                        enabled = hasSelection && !state.working && !isClosed,
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = Forest),
                     ) {

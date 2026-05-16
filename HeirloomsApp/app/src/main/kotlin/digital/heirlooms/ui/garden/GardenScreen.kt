@@ -99,6 +99,7 @@ import digital.heirlooms.app.UploadWorker
 import digital.heirlooms.ui.main.DiagnosticsStore
 import digital.heirlooms.ui.social.ShareSheet
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.RateReview
@@ -535,6 +536,9 @@ private fun PlotRowSection(
         if (isJustArrived && newlyArrivedIds.isNotEmpty()) listState.scrollToItem(0)
     }
 
+    val plotIsClosed = plot?.plotStatus == "closed"
+    val rowAlpha = if (plotIsClosed) 0.5f else 1f
+
     Column(Modifier.padding(top = 16.dp)) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -546,23 +550,30 @@ private fun PlotRowSection(
                         Icon(
                             Icons.Filled.PeopleAlt,
                             contentDescription = null,
-                            tint = Forest.copy(alpha = 0.45f),
+                            tint = Forest.copy(alpha = 0.45f * rowAlpha),
                             modifier = Modifier.size(13.dp),
                         )
                         Spacer(Modifier.width(3.dp))
                     }
-                    Text(label, style = MaterialTheme.typography.titleSmall.copy(color = Forest))
+                    Text(label, style = MaterialTheme.typography.titleSmall.copy(color = Forest.copy(alpha = rowAlpha)))
                     Spacer(Modifier.width(4.dp))
-                    Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Forest.copy(alpha = 0.5f), modifier = Modifier.size(16.dp))
-                    if (plot?.plotStatus == "closed") {
+                    Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Forest.copy(alpha = 0.5f * rowAlpha), modifier = Modifier.size(16.dp))
+                    if (plotIsClosed) {
                         Spacer(Modifier.width(4.dp))
+                        Icon(
+                            Icons.Filled.Lock,
+                            contentDescription = "Plot is closed",
+                            tint = TextMuted,
+                            modifier = Modifier.size(12.dp),
+                        )
+                        Spacer(Modifier.width(2.dp))
                         Text("closed", style = MaterialTheme.typography.labelSmall.copy(color = TextMuted))
                     }
                 }
                 if (ownerDisplayName != null) {
                     Text(
                         "Shared by $ownerDisplayName",
-                        style = MaterialTheme.typography.bodySmall.copy(color = TextMuted, fontSize = 11.sp),
+                        style = MaterialTheme.typography.bodySmall.copy(color = TextMuted.copy(alpha = rowAlpha), fontSize = 11.sp),
                     )
                 }
             }
@@ -572,14 +583,14 @@ private fun PlotRowSection(
                 IconButton(
                     onClick = onNewFlow,
                     modifier = Modifier.size(28.dp),
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = Forest.copy(alpha = 0.5f)),
+                    colors = IconButtonDefaults.iconButtonColors(contentColor = Forest.copy(alpha = 0.5f * rowAlpha)),
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = "New flow", modifier = Modifier.size(16.dp))
                 }
-                // Bulk staging review badge
+                // Bulk staging review badge — disabled and hidden badge when plot is closed
                 BadgedBox(
                     badge = {
-                        if (pendingStagingCount > 0) {
+                        if (pendingStagingCount > 0 && !plotIsClosed) {
                             Badge(containerColor = Forest) {
                                 Text("$pendingStagingCount", color = Parchment, style = MaterialTheme.typography.labelSmall)
                             }
@@ -588,13 +599,19 @@ private fun PlotRowSection(
                     modifier = Modifier.padding(end = 4.dp),
                 ) {
                     IconButton(
-                        onClick = onBulkStaging,
+                        onClick = { if (!plotIsClosed) onBulkStaging() },
+                        enabled = !plotIsClosed,
                         modifier = Modifier.size(28.dp),
                         colors = IconButtonDefaults.iconButtonColors(
-                            contentColor = if (pendingStagingCount > 0) Forest else Forest.copy(alpha = 0.4f)
+                            contentColor = when {
+                                plotIsClosed -> Forest.copy(alpha = 0.2f)
+                                pendingStagingCount > 0 -> Forest
+                                else -> Forest.copy(alpha = 0.4f)
+                            },
+                            disabledContentColor = Forest.copy(alpha = 0.2f),
                         ),
                     ) {
-                        Icon(Icons.Filled.RateReview, contentDescription = "Review pending", modifier = Modifier.size(16.dp))
+                        Icon(Icons.Filled.RateReview, contentDescription = if (plotIsClosed) "Plot is closed" else "Review pending", modifier = Modifier.size(16.dp))
                     }
                 }
             }
