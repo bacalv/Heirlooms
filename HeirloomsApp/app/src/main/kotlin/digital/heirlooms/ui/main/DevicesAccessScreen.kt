@@ -4,6 +4,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,16 +23,19 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -89,7 +93,11 @@ private fun formatExpiry(iso: String): String = try {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DevicesAccessScreen(onBack: () -> Unit, onNavigateToPairing: () -> Unit) {
+fun DevicesAccessScreen(
+    onBack: () -> Unit,
+    onNavigateToPairing: () -> Unit,
+    currentDeviceId: String = "",
+) {
     val context = LocalContext.current
     val api = LocalHeirloomsApi.current
     val scope = rememberCoroutineScope()
@@ -104,6 +112,27 @@ fun DevicesAccessScreen(onBack: () -> Unit, onNavigateToPairing: () -> Unit) {
     var pairingExpiry by remember { mutableStateOf("") }
     var pairingWorking by remember { mutableStateOf(false) }
     var pairingError by remember { mutableStateOf<String?>(null) }
+
+    var devices by remember { mutableStateOf<List<HeirloomsApi.DeviceRecord>>(emptyList()) }
+    var devicesLoading by remember { mutableStateOf(false) }
+    var devicesError by remember { mutableStateOf<String?>(null) }
+    var removeError by remember { mutableStateOf<String?>(null) }
+
+    fun loadDevices() {
+        scope.launch {
+            devicesLoading = true
+            devicesError = null
+            try {
+                devices = api.listDevices()
+            } catch (e: Exception) {
+                devicesError = e.message ?: "Could not load devices."
+            } finally {
+                devicesLoading = false
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) { loadDevices() }
 
     Scaffold(
         containerColor = Parchment,
@@ -226,6 +255,67 @@ fun DevicesAccessScreen(onBack: () -> Unit, onNavigateToPairing: () -> Unit) {
                     onClick = onNavigateToPairing,
                     colors = ButtonDefaults.buttonColors(containerColor = Forest, contentColor = Parchment),
                 ) { Text("Scan QR code") }
+            }
+
+            Spacer(Modifier.height(24.dp))
+            HorizontalDivider(color = Forest15)
+            Spacer(Modifier.height(24.dp))
+
+            // ── Manage devices ──────────────────────────────────────────────
+            Text("Manage devices", style = HeirloomsSerifItalic.copy(fontSize = 18.sp, color = Forest))
+            Spacer(Modifier.height(8.dp))
+            Text("Devices that have access to your Heirlooms account.",
+                style = MaterialTheme.typography.bodySmall, color = Forest)
+            Spacer(Modifier.height(12.dp))
+
+            removeError?.let { Text(it, color = Earth, style = MaterialTheme.typography.bodySmall) }
+            devicesError?.let { Text(it, color = Earth, style = MaterialTheme.typography.bodySmall) }
+
+            if (devicesLoading) {
+                Text("Loading devices…", style = MaterialTheme.typography.bodySmall, color = Forest)
+            } else {
+                devices.forEach { device ->
+                    val isCurrent = currentDeviceId.isNotEmpty() && device.deviceId == currentDeviceId
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                device.deviceLabel + if (isCurrent) " (this device)" else "",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Forest,
+                            )
+                            Text(
+                                device.deviceKind,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Forest.copy(alpha = 0.6f),
+                            )
+                        }
+                        if (!isCurrent) {
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        removeError = null
+                                        try {
+                                            api.deleteDevice(device.deviceId)
+                                            loadDevices()
+                                        } catch (e: Exception) {
+                                            removeError = when {
+                                                e.message?.contains("403") == true ->
+                                                    "Cannot remove the current device."
+                                                else -> "Could not remove device: ${e.message}"
+                                            }
+                                        }
+                                    }
+                                },
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Earth),
+                            ) { Text("Remove", style = MaterialTheme.typography.bodySmall) }
+                        }
+                    }
+                    HorizontalDivider(color = Forest15)
+                }
             }
 
             Spacer(Modifier.height(32.dp))

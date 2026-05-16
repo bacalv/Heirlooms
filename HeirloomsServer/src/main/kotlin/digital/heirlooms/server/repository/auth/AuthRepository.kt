@@ -22,6 +22,7 @@ interface AuthRepository {
     fun findSessionByTokenHash(tokenHash: ByteArray): UserSessionRecord?
     fun deleteSession(id: UUID)
     fun deleteAllSessionsForUser(userId: UUID)
+    fun deleteSessionsByDeviceKind(userId: UUID, deviceKind: String)
     fun refreshSession(id: UUID)
     fun deleteExpiredSessions()
     fun createInvite(createdBy: UUID, rawToken: String): InviteRecord
@@ -162,6 +163,16 @@ class PostgresAuthRepository(private val dataSource: DataSource) : AuthRepositor
         dataSource.connection.use { conn ->
             conn.prepareStatement("DELETE FROM user_sessions WHERE user_id = ?").use { stmt ->
                 stmt.setObject(1, userId)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    override fun deleteSessionsByDeviceKind(userId: UUID, deviceKind: String) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement("DELETE FROM user_sessions WHERE user_id = ? AND device_kind = ?").use { stmt ->
+                stmt.setObject(1, userId)
+                stmt.setString(2, deviceKind)
                 stmt.executeUpdate()
             }
         }

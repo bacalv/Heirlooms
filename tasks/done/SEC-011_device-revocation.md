@@ -3,14 +3,19 @@ id: SEC-011
 title: Device revocation — allow users to remove old devices from Devices & Access
 category: Security
 priority: Medium
-status: queued
+status: done
 depends_on: []
 touches:
   - HeirloomsServer/src/main/kotlin/digital/heirlooms/server/routes/auth/AuthRoutes.kt
   - HeirloomsServer/src/main/kotlin/digital/heirlooms/server/service/auth/AuthService.kt
   - HeirloomsServer/src/main/kotlin/digital/heirlooms/server/repository/auth/AuthRepository.kt
-  - HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/auth/DevicesAccessScreen.kt
-  - HeirloomsWeb/src/pages/DevicesAccessPage.jsx (or equivalent)
+  - HeirloomsServer/src/main/kotlin/digital/heirlooms/server/repository/keys/KeyRepository.kt
+  - HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/main/DevicesAccessScreen.kt
+  - HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/main/AppNavigation.kt
+  - HeirloomsApp/app/src/main/kotlin/digital/heirlooms/api/HeirloomsApi.kt
+  - HeirloomsWeb/src/pages/AccessPage.jsx
+  - HeirloomsWeb/src/api.js
+  - HeirloomsServer/src/test/kotlin/digital/heirlooms/server/service/auth/DeviceRevocationServiceTest.kt
 assigned_to: SecurityManager
 estimated: half day
 ---
@@ -89,4 +94,39 @@ When a user removes a device from Devices & Access:
 
 ## Completion notes
 
-<!-- Agent appends here and moves file to tasks/done/ -->
+Completed 2026-05-16 by SecurityManager.
+
+### Implementation summary
+
+**Server (`DELETE /api/auth/devices/{deviceId}`):**
+- Added `deleteDeviceRoute` to `AuthRoutes.kt` — authenticated, path param `deviceId`.
+- Added `revokeDevice(userId, deviceId, callerApiKey)` to `AuthService` returning
+  `RevokeDeviceResult` (Success / NotFound / Forbidden).
+- Self-revocation guard: resolves calling session, checks if the target device's
+  `device_kind` matches the session's `device_kind` AND is the only active device of
+  that kind — returns 403 in that case.
+- Added `deleteWrappedKeyByDeviceId(deviceId, userId)` to `KeyRepository` (hard DELETE).
+- Added `deleteSessionsByDeviceKind(userId, deviceKind)` to `AuthRepository`.
+- Session invalidation is by `device_kind` (the current schema has no `device_id` FK
+  on `user_sessions`). This is the finest granularity available; in a single-device-
+  per-kind deployment it invalidates exactly the right sessions. ARCH-009 may revisit
+  adding a `device_id` column to `user_sessions` if stricter isolation is required.
+
+**Android:**
+- Added `listDevices()` and `deleteDevice(deviceId)` to `HeirloomsApi`.
+- Updated `DevicesAccessScreen` to accept `currentDeviceId` parameter, fetch the
+  device list on load, and show a "Remove" button for each non-current device.
+- Updated `AppNavigation.kt` to pass `DeviceKeyManager.deviceId` to the screen.
+
+**Web:**
+- Added `listDevices(sessionToken)` and `deleteDevice(sessionToken, deviceId)` to `api.js`.
+- Updated `AccessPage.jsx` to load and display devices, with a "Remove" button for
+  each. The web client cannot determine its own device_id from local state, so all
+  devices show the remove button; the server returns 403 for self-revocation, which is
+  shown as a user-friendly error message.
+
+**Tests:**
+- `DeviceRevocationServiceTest.kt` — 5 unit tests covering NotFound, Forbidden
+  (single android device = current), Success (two android devices — removes other),
+  Success (android removes web device), and Forbidden (unresolvable session). Uses
+  mockk; no Docker required.

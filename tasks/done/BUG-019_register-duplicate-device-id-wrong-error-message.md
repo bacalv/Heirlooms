@@ -3,12 +3,12 @@ id: BUG-019
 title: Registration shows "Username already exists" for duplicate device_id (409) collision
 category: Bug Fix
 priority: Low
-status: queued
+status: done
 depends_on: []
 touches:
-  - HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/auth/RegisterScreen.kt
+  - HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/main/InviteRedemptionScreen.kt
   - HeirloomsApp/app/src/main/kotlin/digital/heirlooms/api/HeirloomsApi.kt
-assigned_to: Developer
+assigned_to: SecurityManager
 estimated: 30 minutes
 ---
 
@@ -42,4 +42,24 @@ duplicate username and map accordingly.
 
 ## Completion notes
 
-<!-- Agent appends here and moves file to tasks/done/ -->
+Completed 2026-05-16 by SecurityManager.
+
+### Implementation
+
+**Server 409 bodies (from `AuthRoutes.kt`):**
+- Duplicate username → `{"error":"Username already taken"}`
+- Duplicate device_id → `{"error":"This device is already registered to another account"}`
+
+**`HeirloomsApi.kt` — `authRegister()`:**
+- On 409, reads the response body.
+- If the body contains "device" (case-insensitive) → throws `IOException("409_DEVICE_ID")`
+- Otherwise → throws `IOException("409_USERNAME")`
+
+**`InviteRedemptionScreen.kt` — `submit()` catch block:**
+- `"409_DEVICE_ID"` → "This device is already linked to an account. Please contact support."
+- `"409_USERNAME"` or any other 409 → "Username already exists."
+- 410 → "Invite is invalid or expired."
+
+The existing task file was in `tasks/queue/` — `RegisterScreen.kt` referenced in the
+task file does not exist under that path; the actual file is `InviteRedemptionScreen.kt`
+which is the first-run registration composable in `digital.heirlooms.ui.main`.

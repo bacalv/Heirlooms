@@ -637,7 +637,46 @@ class HeirloomsApi(
         PairingInitiateResponse(json.getString("code"), json.getString("expires_at"))
     }
 
+    /** Lists all active (non-retired) devices for the authenticated user. */
+    suspend fun listDevices(): List<DeviceRecord> = withContext(Dispatchers.IO) {
+        val arr = JSONArray(get("/api/keys/devices"))
+        (0 until arr.length()).map {
+            val o = arr.getJSONObject(it)
+            DeviceRecord(
+                deviceId = o.getString("deviceId"),
+                deviceLabel = o.getString("deviceLabel"),
+                deviceKind = o.getString("deviceKind"),
+                createdAt = o.getString("createdAt"),
+                lastUsedAt = o.getString("lastUsedAt"),
+            )
+        }
+    }
+
+    /** Revokes a device. Throws IOException on error; caller must handle 403 (current device). */
+    suspend fun deleteDevice(deviceId: String) = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$baseUrl/api/auth/devices/${deviceId.encodeParam()}")
+            .withAuth()
+            .delete()
+            .build()
+        client.newCall(request).execute().use { response ->
+            when (response.code) {
+                403 -> throw IOException("403 Cannot remove the current device")
+                404 -> throw IOException("404 Device not found")
+                else -> if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+            }
+        }
+    }
+
     data class RegisterResponse(val sessionToken: String)
+
+    data class DeviceRecord(
+        val deviceId: String,
+        val deviceLabel: String,
+        val deviceKind: String,
+        val createdAt: String,
+        val lastUsedAt: String,
+    )
 
     suspend fun authRegister(
         inviteToken: String,
@@ -657,7 +696,15 @@ class HeirloomsApi(
             .build()
         client.newCall(request).execute().use { response ->
             when (response.code) {
-                409 -> throw IOException("409 Username already taken")
+                409 -> {
+                    val body = response.body?.string() ?: ""
+                    // BUG-019: distinguish duplicate device_id from duplicate username.
+                    if (body.contains("device", ignoreCase = true)) {
+                        throw IOException("409_DEVICE_ID")
+                    } else {
+                        throw IOException("409_USERNAME")
+                    }
+                }
                 410 -> throw IOException("410 Invite invalid or expired")
                 else -> {
                     if (!response.isSuccessful) throw IOException("HTTP ${response.code}")

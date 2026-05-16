@@ -27,8 +27,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [SEC-012](queue/SEC-012_tag-metadata-leakage-accepted-risk.md) | Tag metadata leakage — document and disclose accepted residual risk | Security | Medium | SecurityManager | ARCH-007 |
 | [BUG-021](queue/BUG-021_video-duration-zero-on-detail-view.md) | Video detail view shows 0-second duration — metadata not extracted on upload | Bug Fix | Medium | Developer | — |
 | [FEAT-004](queue/FEAT-004_android-invite-friend-from-friends-screen.md) | Android — invite a friend from the Friends screen | Feature | Medium | Developer | — |
-| [SEC-011](queue/SEC-011_device-revocation.md) | Device revocation — allow users to remove old devices from Devices & Access | Security | Medium | SecurityManager | — |
-| [BUG-019](queue/BUG-019_register-duplicate-device-id-wrong-error-message.md) | Registration shows "Username already exists" for duplicate device_id (409) collision | Bug Fix | Low | Developer | — |
 | [FEAT-003](queue/FEAT-003_android-account-pairing-recovery.md) | Android account pairing / recovery — pair a fresh Android install to an existing account | Feature | Medium | Developer | FEAT-003a |
 | [FEAT-003a](queue/FEAT-003a_android-pairing-recovery-spike.md) | Android account pairing/recovery — design spike (4 open questions) | Feature | Medium | Developer | — |
 | [TST-006](queue/TST-006_android-remote-control-investigation.md) | Investigate remote-controlled Android testing for E2E automation | Testing | Medium | TestManager | — |
@@ -52,6 +50,8 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
+| [SEC-011](done/SEC-011_device-revocation.md) | Device revocation — allow users to remove old devices from Devices & Access | Security | 2026-05-16 |
+| [BUG-019](done/BUG-019_register-duplicate-device-id-wrong-error-message.md) | Registration shows "Username already exists" for duplicate device_id (409) collision | Bug Fix | 2026-05-16 |
 | [PUB-001](done/PUB-001_academic-paper-temporal-e2ee-capsule-construction.md) | Academic paper — temporal E2EE capsule with multi-layer recovery | Publication | 2026-05-16 |
 | [SIM-001](done/SIM-001_trustless-expiry-impossibility.md) | Simulation: trustless expiry — weakest possible construction without custodians | Simulation | 2026-05-16 |
 | [BIO-001](done/BIO-001_bret-web-research.md) | Bret — brief web research and biographical profile | Biography | 2026-05-16 |

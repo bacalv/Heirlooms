@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
-import { getInvite } from '../api'
+import { getInvite, listDevices, deleteDevice } from '../api'
 
 const INVITE_BASE = typeof window !== 'undefined' ? window.location.origin : 'https://heirlooms.digital'
 
@@ -20,6 +20,44 @@ export function AccessPage() {
   const [inviteError, setInviteError] = useState(null)
   const [inviteWorking, setInviteWorking] = useState(false)
   const [copied, setCopied] = useState(false)
+
+  const [devices, setDevices] = useState([])
+  const [devicesLoading, setDevicesLoading] = useState(false)
+  const [devicesError, setDevicesError] = useState(null)
+  const [removeError, setRemoveError] = useState(null)
+  const [removingId, setRemovingId] = useState(null)
+
+  const loadDevices = useCallback(async () => {
+    setDevicesLoading(true)
+    setDevicesError(null)
+    try {
+      const data = await listDevices(sessionToken)
+      setDevices(data)
+    } catch {
+      setDevicesError('Could not load devices. Please try again.')
+    } finally {
+      setDevicesLoading(false)
+    }
+  }, [sessionToken])
+
+  useEffect(() => { loadDevices() }, [loadDevices])
+
+  async function handleRemoveDevice(deviceId) {
+    setRemovingId(deviceId)
+    setRemoveError(null)
+    try {
+      await deleteDevice(sessionToken, deviceId)
+      await loadDevices()
+    } catch (err) {
+      if (err.message === 'current_device') {
+        setRemoveError('Cannot remove the device associated with your current session.')
+      } else {
+        setRemoveError('Could not remove device. Please try again.')
+      }
+    } finally {
+      setRemovingId(null)
+    }
+  }
 
   async function handleGenerateInvite() {
     setInviteWorking(true)
@@ -98,6 +136,36 @@ export function AccessPage() {
         >
           Pair with phone
         </Link>
+      </section>
+
+      {/* Manage devices */}
+      <section className="space-y-3">
+        <h2 className="text-base font-medium text-forest">Manage devices</h2>
+        <p className="text-sm text-text-muted">
+          Devices that have access to your Heirlooms account.
+        </p>
+        {devicesLoading && <p className="text-sm text-text-muted">Loading devices…</p>}
+        {devicesError && <p className="text-sm text-earth">{devicesError}</p>}
+        {removeError && <p className="text-sm text-earth">{removeError}</p>}
+        {!devicesLoading && devices.length > 0 && (
+          <ul className="divide-y divide-forest-15 border border-forest-15 rounded-button overflow-hidden">
+            {devices.map((device) => (
+              <li key={device.deviceId} className="flex items-center justify-between px-3 py-2 bg-parchment/50">
+                <div>
+                  <p className="text-sm font-medium text-forest">{device.deviceLabel}</p>
+                  <p className="text-xs text-text-muted capitalize">{device.deviceKind}</p>
+                </div>
+                <button
+                  onClick={() => handleRemoveDevice(device.deviceId)}
+                  disabled={removingId === device.deviceId}
+                  className="text-xs px-2 py-1 border border-earth text-earth rounded hover:bg-earth/10 transition-colors disabled:opacity-40"
+                >
+                  {removingId === device.deviceId ? 'Removing…' : 'Remove'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   )
