@@ -21,6 +21,8 @@ Tasks performed by each persona
 | Security Manager    | CTO, PA | In charge of making sure Heirlooms meets it's founding principles on security
 | Technical Architect | PA | An expert in the Heirlooms technical implementation who can make high level techniocal decisions
 | Research Manager    | CTO     | Long-horizon threat research — quantum computing, emerging cryptographic attacks, and how they affect Heirlooms' security model
+| Marketing Director  | CTO     | Brand stewardship, go-to-market strategy, USP articulation, revenue model advice, competitive positioning, partnership strategy
+| Retirement Planner  | Bret (personal) | Translates Heirlooms' IP and commercial developments into retirement value for Bret; synthesises Research Manager and Marketing Director outputs; advises on exit strategy, IP protection, and investment planning
 
 There is only one CTO, one PA, one dev manager and one test manager.
 

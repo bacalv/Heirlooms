@@ -149,8 +149,27 @@ Established 2026-05-16. Reports directly to CTO. Start a session: `@personalitie
 
 **Persona recommendations from Research Manager (CTO decision pending):**
 - Add Psychologist persona — grief-aware UX, executor psychology; no current owner
-- Add Brand Guardian persona — BRAND.md exists but has no defending persona
 - Add Philosopher persona — ethics of posthumous consent, long-horizon product questions
+
+## Marketing Director
+
+Established 2026-05-16. Reports to CTO. Start a session: `@personalities/MarketingDirector.md`.
+
+Responsibilities: brand stewardship (BRAND.md guardian), go-to-market strategy, USP articulation for different audiences, revenue model advice, competitive positioning, partnership strategy (legal entity custodians etc).
+
+Marketing briefs: `docs/marketing/MKT-NNN_<slug>.md`
+
+No briefs produced yet — persona just established.
+
+## Retirement Planner
+
+Established 2026-05-16. Reports directly to Bret (personal adviser, not a company role). Start a session: `@personalities/RetirementPlanner.md`.
+
+Synthesises Research Manager (IP/technical novelty) and Marketing Director (revenue potential, market size) outputs into personal retirement value assessments for Bret. Expertise: UK pensions (SIPP, state pension), startup equity/IP valuation, exit strategy, risk-adjusted investment planning.
+
+Retirement briefs: `docs/retirement/RET-NNN_<slug>.md`
+
+No briefs produced yet — persona just established. First session should begin with a review of RES-001 and the multi-perspective USP analysis from the 2026-05-16 Research Manager session logs.
 
 ## Task system
 
