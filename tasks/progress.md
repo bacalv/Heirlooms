@@ -25,7 +25,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [OPS-003](queue/OPS-003_pre-production-staging-environment.md) | Pre-production staging environment — prod-snapshot + anonymisation pipeline | Operations | Low | OpsManager | — |
 | [TST-008](queue/TST-008_shared-plot-e2e-smoke-test.md) | Shared plot E2E smoke test — formalise spec and identify automation strategy | Testing | High | TestManager | — |
 | [SEC-012](queue/SEC-012_tag-metadata-leakage-accepted-risk.md) | Tag metadata leakage — document and disclose accepted residual risk | Security | Medium | SecurityManager | ARCH-007 |
-| [BUG-021](queue/BUG-021_video-duration-zero-on-detail-view.md) | Video detail view shows 0-second duration — metadata not extracted on upload | Bug Fix | Medium | Developer | — |
 | [FEAT-004](queue/FEAT-004_android-invite-friend-from-friends-screen.md) | Android — invite a friend from the Friends screen | Feature | Medium | Developer | — |
 | [SEC-011](queue/SEC-011_device-revocation.md) | Device revocation — allow users to remove old devices from Devices & Access | Security | Medium | SecurityManager | — |
 | [BUG-019](queue/BUG-019_register-duplicate-device-id-wrong-error-message.md) | Registration shows "Username already exists" for duplicate device_id (409) collision | Bug Fix | Low | Developer | — |
@@ -63,6 +62,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [RET-002](done/RET-002_three-segment-valuation-and-retirement-implications.md) | Three-segment valuation and retirement implications | Retirement | 2026-05-16 |
 | [LEG-001](done/LEG-001_patent-assessment-window-capsule.md) | Patent assessment — window capsule construction and related novel IP | Legal | 2026-05-16 |
 | [ARCH-007](done/ARCH-007_e2ee-tag-scheme.md) | E2EE tag scheme — HMAC token identifiers + encrypted display names | Architecture | 2026-05-16 |
+| [BUG-021](done/BUG-021_video-duration-zero-on-detail-view.md) | Video detail view shows 0-second duration — metadata not extracted on upload | Bug Fix | 2026-05-16 |
 | [BUG-022](done/BUG-022_web-detail-view-blank-for-shared-plot-image.md) | Web detail view blank for shared plot items — full image DEK not decrypted with plot key | Bug Fix | 2026-05-16 |
 | [BUG-020](done/BUG-020_shared-plot-auto-approve-needs-client-dek-rewrap.md) | Shared plot trellis auto-approve — client-side DEK re-wrap to avoid mandatory staging | Bug Fix | 2026-05-16 |
 | [RES-002](done/RES-002_window-capsule-expiry-cryptography.md) | Window capsule — cryptographic expiry, literature review and construction brief | Research | 2026-05-16 |

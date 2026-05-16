@@ -96,7 +96,8 @@ public final class HeirloomsAPI {
         dekFormat: String = EnvelopeCrypto.algMasterSymmetric,
         thumbDekFormat: String? = nil,
         contentHash: String? = nil,
-        takenAt: Date? = nil
+        takenAt: Date? = nil,
+        durationSeconds: Int? = nil
     ) async throws {
         let resolvedThumbDekFormat = thumbDekFormat ?? dekFormat
         var body: [String: Any] = [
@@ -121,6 +122,9 @@ public final class HeirloomsAPI {
         if let takenAt {
             let iso = ISO8601DateFormatter()
             body["takenAt"] = iso.string(from: takenAt)
+        }
+        if let durationSeconds {
+            body["durationSeconds"] = durationSeconds
         }
 
         let url = baseURL.appendingPathComponent("api/content/uploads/confirm")
