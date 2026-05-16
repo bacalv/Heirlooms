@@ -23,7 +23,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [TST-009](queue/TST-009_android-device-farm-design.md) | Android device farm design — 3-device automated test infrastructure | Testing | High | TestManager | — |
 | [WEB-002](queue/WEB-002_web-invite-generation.md) | Web — generate and share invite links | Feature | Medium | Developer | — |
 | [OPS-003](queue/OPS-003_pre-production-staging-environment.md) | Pre-production staging environment — prod-snapshot + anonymisation pipeline | Operations | Low | OpsManager | — |
-| [TST-008](queue/TST-008_shared-plot-e2e-smoke-test.md) | Shared plot E2E smoke test — formalise spec and identify automation strategy | Testing | High | TestManager | — |
 | [SEC-012](queue/SEC-012_tag-metadata-leakage-accepted-risk.md) | Tag metadata leakage — document and disclose accepted residual risk | Security | Medium | SecurityManager | ARCH-007 |
 | [BUG-021](queue/BUG-021_video-duration-zero-on-detail-view.md) | Video detail view shows 0-second duration — metadata not extracted on upload | Bug Fix | Medium | Developer | — |
 | [FEAT-004](queue/FEAT-004_android-invite-friend-from-friends-screen.md) | Android — invite a friend from the Friends screen | Feature | Medium | Developer | — |
@@ -110,6 +109,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [ARCH-005](done/ARCH-005_envelope-format-amendment.md) | Envelope format amendment — add plot key algo, reserve M11 IDs | Architecture | 2026-05-15 |
 | [ARCH-004](done/ARCH-004_connections-data-model.md) | Connections data model brief — identity layer for M11 | Architecture | 2026-05-15 |
 | [ARCH-003](done/ARCH-003_m11-capsule-crypto-brief.md) | M11 capsule cryptography brief | Architecture | 2026-05-15 |
+| [TST-008](done/TST-008_shared-plot-e2e-smoke-test.md) | Shared plot E2E smoke test — formal spec and automation assessment | Testing | 2026-05-16 |
 | [TST-007](done/TST-007_manual-staging-checklist-v054.md) | Manual staging checklist v0.54 — conditional pass, 4 new bugs logged | Testing | 2026-05-15 |
 | [BUG-010](done/BUG-010_members-cant-create-trellis-for-shared-plot.md) | Members can't create trellis for shared plot | Bug Fix | 2026-05-15 |
 | [BUG-011](done/BUG-011_web-trellis-form-partial-rename.md) | Web trellis form "Flow name" / "Create flow" label fix | Bug Fix | 2026-05-15 |
