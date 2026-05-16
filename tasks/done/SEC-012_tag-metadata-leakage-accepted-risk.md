@@ -3,7 +3,7 @@ id: SEC-012
 title: Tag metadata leakage — document and disclose accepted residual risk
 category: Security
 priority: Medium
-status: queued
+status: done
 depends_on: [ARCH-007]
 touches:
   - docs/security/
@@ -61,4 +61,40 @@ same address 500 times without reading the letters.
 
 ## Completion notes
 
-<!-- SecurityManager appends here and moves file to tasks/done/ -->
+Completed 2026-05-16 by SecurityManager.
+
+### Files created
+
+- `docs/security/tag-metadata-leakage.md` — the primary deliverable.
+
+### What the document covers
+
+1. **Residual leakage catalogue** — five specific leakage vectors are documented:
+   token equality within a vault, tag frequency, tag co-occurrence, tag count per
+   item (array length), and trellis criteria correlation. The last two were implicit
+   in ARCH-007 but not explicitly called out in the task brief; both are real and
+   included for completeness.
+
+2. **Privacy guarantees** — formally verified that (a) semantic meaning cannot be
+   recovered from tokens, (b) cross-user correlation is impossible because tokens
+   are keyed per user's master key, (c) display names are confidential via
+   AES-256-GCM, and (d) auto-tag namespace isolation holds.
+
+3. **Threat model verification table** — each of the five ARCH-007 privacy claims
+   is checked against the scheme design and confirmed.
+
+4. **Formal risk acceptance** — Risk ID SEC-012-TAG-METADATA, severity Low,
+   accepted with rationale (practical privacy is preserved; server-side evaluation
+   is a current architectural requirement). Heirlooms' four commitments restated.
+
+5. **User-facing disclosure wording** — verbatim from the task brief, plus
+   placement guidance (Settings privacy notice, privacy policy, tagging onboarding).
+
+6. **Future work note** — client-side tag evaluation documented as a long-term
+   aspiration, with the three blockers (no local sync architecture, trellis routing
+   contract, engineering cost) and three re-evaluation triggers stated explicitly.
+
+### No code changes
+
+SEC-012 is a documentation and risk-acceptance task only. No production code was
+modified.
