@@ -401,6 +401,63 @@ class AuthService(
     }
 
 
+    // ---- Device revocation (SEC-011) -------------------------------------------
+
+    sealed class RevokeDeviceResult {
+        object Success : RevokeDeviceResult()
+        /** The requested device does not exist for this user. */
+        object NotFound : RevokeDeviceResult()
+        /** Cannot revoke the device that owns the calling session. */
+        object Forbidden : RevokeDeviceResult()
+    }
+
+    /**
+     * Revokes a device for the authenticated user:
+     * - Returns [RevokeDeviceResult.Forbidden] if [deviceId] belongs to the current session's
+     *   device kind and is the only device of that kind (i.e. it IS the current device).
+     * - Deletes the [wrapped_keys] row for [deviceId].
+     * - Deletes all [user_sessions] rows whose [device_kind] matches the revoked device's kind.
+     *
+     * Note: [user_sessions] has no direct FK to [wrapped_keys]. Sessions are invalidated by
+     * device_kind, which is the finest granularity available in the current schema. In the
+     * common single-device-per-kind deployment this is equivalent to exactly the right set.
+     */
+    fun revokeDevice(
+        userId: UUID,
+        deviceId: String,
+        callerApiKey: String?,
+        callerDeviceKindHint: String? = null,
+    ): RevokeDeviceResult {
+        // Resolve the calling session to get device_kind. Fall back to the X-Auth-Device-Kind
+        // header hint stamped by the session filter (covers static API-key integration tests).
+        val callerSession = resolveSession(callerApiKey)
+        val callerDeviceKind = callerSession?.deviceKind ?: callerDeviceKindHint
+            ?: return RevokeDeviceResult.Forbidden   // no session and no hint — should not reach production
+
+        // Look up the target device — must belong to the calling user.
+        val targetKey = keyRepo.getWrappedKeyByDeviceIdForUser(deviceId, userId)
+            ?: return RevokeDeviceResult.NotFound
+
+        // Block self-revocation: reject if the target device's kind matches the calling session's
+        // device_kind AND there is exactly one active (non-retired) device of that kind for the user.
+        // This is the best guard available without a device_id column on user_sessions.
+        if (targetKey.deviceKind == callerDeviceKind) {
+            val sameKindDevices = keyRepo.listWrappedKeys(userId)
+                .filter { it.deviceKind == targetKey.deviceKind && it.retiredAt == null }
+            if (sameKindDevices.size == 1 && sameKindDevices.single().deviceId == deviceId) {
+                return RevokeDeviceResult.Forbidden
+            }
+        }
+
+        // Hard-delete the wrapped_keys row.
+        keyRepo.deleteWrappedKeyByDeviceId(deviceId, userId)
+
+        // Invalidate all sessions of the same device_kind for this user.
+        authRepo.deleteSessionsByDeviceKind(userId, targetKey.deviceKind)
+
+        return RevokeDeviceResult.Success
+    }
+
     // ---- Invite connect (existing user → friend) --------------------------------
 
     sealed class ConnectViaInviteResult {

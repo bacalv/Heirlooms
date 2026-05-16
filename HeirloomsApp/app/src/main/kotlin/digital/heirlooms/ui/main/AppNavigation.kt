@@ -422,9 +422,12 @@ private fun AppNavHost(navController: NavController, apiKey: String, onApiKeyRes
             DiagnosticsScreen(apiKey = apiKey, onBack = { navController.popBackStack() })
         }
         composable(Routes.DEVICES_ACCESS) {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val deviceKeyManager = remember { digital.heirlooms.crypto.DeviceKeyManager(context) }
             DevicesAccessScreen(
                 onBack = { navController.popBackStack() },
                 onNavigateToPairing = { navController.navigate(Routes.PAIRING) },
+                currentDeviceId = deviceKeyManager.deviceId,
             )
         }
         composable(Routes.PAIRING) {

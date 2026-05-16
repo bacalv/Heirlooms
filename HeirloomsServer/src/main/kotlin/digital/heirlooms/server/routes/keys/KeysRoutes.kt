@@ -87,12 +87,24 @@ private fun registerDeviceRoute(keyService: KeyService): ContractRoute =
 private fun listDevicesRoute(keyService: KeyService): ContractRoute =
     "/devices" meta {
         summary = "List active devices"
-        description = "Returns all non-retired wrapped_keys rows."
+        description = "Returns all non-retired wrapped_keys rows. isCurrent=true marks the device " +
+            "associated with the calling session (same deviceKind, sole active device of that kind)."
     } bindContract GET to { request: Request ->
         try {
-            val keys = keyService.listDevices(request.authUserId())
+            val userId = request.authUserId()
+            val callerDeviceKind = request.header("X-Auth-Device-Kind")
+            val keys = keyService.listDevices(userId)
+            // Mark isCurrent: a device is "current" when its kind matches the calling session's
+            // device_kind AND it is the only active (non-retired) device of that kind.
+            // This mirrors the self-revocation guard in AuthService.revokeDevice.
+            val soleOfKind = if (callerDeviceKind != null) {
+                keys.count { it.deviceKind == callerDeviceKind && it.retiredAt == null } == 1
+            } else false
             val node = JsonNodeFactory.instance.arrayNode()
-            keys.forEach { node.add(keysMapper.readTree(it.toJson())) }
+            keys.forEach { key ->
+                val isCurrent = soleOfKind && key.deviceKind == callerDeviceKind
+                node.add(keysMapper.readTree(key.toJson(isCurrent = isCurrent)))
+            }
             Response(OK).header("Content-Type", "application/json").body(node.toString())
         } catch (e: Exception) {
             Response(INTERNAL_SERVER_ERROR).body("Failed to list devices: ${e.message}")

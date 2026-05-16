@@ -18,6 +18,7 @@ interface KeyRepository {
     fun getWrappedKeyByDeviceIdForUser(deviceId: String, userId: UUID): WrappedKeyRecord?
     fun getWrappedKeyByDeviceIdAndUser(deviceId: String, userId: UUID): WrappedKeyRecord?
     fun retireWrappedKey(id: UUID, retiredAt: Instant = Instant.now())
+    fun deleteWrappedKeyByDeviceId(deviceId: String, userId: UUID)
     fun touchWrappedKey(id: UUID)
     fun retireDormantWrappedKeys(dormantBefore: Instant): Int
     fun getRecoveryPassphrase(userId: UUID = FOUNDING_USER_ID): RecoveryPassphraseRecord?
@@ -124,6 +125,16 @@ class PostgresKeyRepository(private val dataSource: DataSource) : KeyRepository 
             conn.prepareStatement("UPDATE wrapped_keys SET retired_at = ? WHERE id = ?").use { stmt ->
                 stmt.setTimestamp(1, Timestamp.from(retiredAt))
                 stmt.setObject(2, id)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    override fun deleteWrappedKeyByDeviceId(deviceId: String, userId: UUID) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement("DELETE FROM wrapped_keys WHERE device_id = ? AND user_id = ?").use { stmt ->
+                stmt.setString(1, deviceId)
+                stmt.setObject(2, userId)
                 stmt.executeUpdate()
             }
         }

@@ -10,6 +10,7 @@ import digital.heirlooms.server.service.auth.AuthService
 import org.http4k.contract.ContractRoute
 import org.http4k.contract.div
 import org.http4k.contract.meta
+import org.http4k.core.Method.DELETE
 import org.http4k.core.Method.GET
 import org.http4k.core.Method.POST
 import org.http4k.core.Request
@@ -43,6 +44,7 @@ fun authRoutes(authService: AuthService): List<ContractRoute> = listOf(
     pairingQrRoute(authService),
     pairingCompleteRoute(authService),
     pairingStatusRoute(authService),
+    deleteDeviceRoute(authService),
 )
 
 // ---- POST /challenge -------------------------------------------------------
@@ -402,3 +404,35 @@ private fun pairingStatusRoute(authService: AuthService): ContractRoute =
             Response(INTERNAL_SERVER_ERROR).body("Internal server error")
         }
     }
+
+// ---- DELETE /devices/{deviceId} (SEC-011) ----------------------------------
+
+private fun deleteDeviceRoute(authService: AuthService): ContractRoute {
+    val deviceIdPath = Path.of("deviceId")
+    return "/devices" / deviceIdPath meta {
+        summary = "Revoke a device (delete wrapped key and invalidate its sessions)"
+    } bindContract DELETE to { deviceId: String ->
+        { request: Request ->
+            try {
+                val userId = request.authUserId()
+                // Pass both the API key (for session resolution) and the stamped device kind
+                // as fallback for static-key integration test scenarios.
+                val apiKey = request.header("X-Api-Key")
+                val callerDeviceKind = request.header("X-Auth-Device-Kind")
+                when (authService.revokeDevice(userId, deviceId, apiKey, callerDeviceKind)) {
+                    AuthService.RevokeDeviceResult.Success ->
+                        Response(NO_CONTENT)
+                    AuthService.RevokeDeviceResult.NotFound ->
+                        Response(NOT_FOUND).header("Content-Type", "application/json")
+                            .body("""{"error":"Device not found"}""")
+                    AuthService.RevokeDeviceResult.Forbidden ->
+                        Response(FORBIDDEN).header("Content-Type", "application/json")
+                            .body("""{"error":"Cannot revoke the device associated with the current session"}""")
+                }
+            } catch (e: Exception) {
+                authLogger.error("devices/delete error", e)
+                Response(INTERNAL_SERVER_ERROR).body("Internal server error")
+            }
+        }
+    }
+}

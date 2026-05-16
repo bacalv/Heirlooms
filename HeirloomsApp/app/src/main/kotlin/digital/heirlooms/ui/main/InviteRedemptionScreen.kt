@@ -125,7 +125,10 @@ fun InviteRedemptionScreen(onRegistered: (sessionToken: String) -> Unit) {
                 onRegistered(r.sessionToken)
             } catch (e: Exception) {
                 error = when {
-                    e.message?.contains("409") == true -> "Username already taken."
+                    e.message?.contains("409_DEVICE_ID") == true ->
+                        "This device is already linked to an account. Please contact support."
+                    e.message?.contains("409_USERNAME") == true ||
+                    e.message?.contains("409") == true -> "Username already exists."
                     e.message?.contains("410") == true -> "Invite is invalid or expired."
                     else -> e.message ?: "Something went wrong."
                 }

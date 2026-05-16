@@ -191,6 +191,21 @@ export async function authInviteConnect(sessionToken, inviteToken) {
   // caller checks status
 }
 
+export async function listDevices(sessionToken) {
+  const r = await apiFetch('/api/keys/devices', sessionToken)
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json() // [{ deviceId, deviceLabel, deviceKind, createdAt, lastUsedAt }]
+}
+
+export async function deleteDevice(sessionToken, deviceId) {
+  const r = await apiFetch(`/api/auth/devices/${encodeURIComponent(deviceId)}`, sessionToken, {
+    method: 'DELETE',
+  })
+  if (r.status === 403) throw new Error('current_device')
+  if (r.status === 404) throw new Error('not_found')
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+}
+
 export async function pairingQr(code) {
   const r = await fetch(`${API_URL}/api/auth/pairing/qr`, {
     method: 'POST',
