@@ -120,16 +120,24 @@ Agent naming convention: `developer-1`, `developer-2`, `security`, `test-manager
 
 ## Pending actions (requires Bret)
 
-- **SEC-009 Part 2 — biometric gate**: review Options A/B/C in the SEC-009 task file and decide before next iteration dispatch.
+- **TST-010 manual staging checklist**: test environment is live and pre-setup is done
+  (accounts `tst010_user_a` / `tst010_user_b` created, friendship confirmed). Bret needs
+  to work through the 17 journeys with physical devices (Android staging APK + web).
+  Annotated checklist: `tasks/in-progress/TST-010_manual-staging-checklist-v055.md`.
+  Note: journeys 11 (BUG-021) and 12 (BUG-019) are pre-skipped — fixes deployed but not
+  yet redeployed to test environment.
 
-- **v0.54 production release — ON HOLD (2026-05-16)**: Bret decided to hold production
-  at v0.53.1 and accumulate more fixes before promoting. Too many gaps found during the
-  smoke test session to justify a release now. Revisit when BUG-020, BUG-022, and WEB-001
-  are resolved and another smoke test cycle passes.
+- **Xcode toolchain mismatch**: SourceKit shows "SDK not supported by compiler" errors
+  (swiftlang-6.0.3.1.5 vs 6.0.3.1.10). Fix: Xcode → Settings → Locations →
+  Command Line Tools — select the matching toolchain. Not blocking any agent work.
 
-- **Next iteration planning**: large backlog of new tasks created during the smoke test
-  session (BUG-019 through BUG-022, FEAT-003/004, SEC-011/012, ARCH-007, TST-008,
-  OPS-003). Run "Let's plan the next iteration" to prioritise.
+- **Tag → Label rename scope decision**: REF-002 queued. Bret approved full rename
+  (user-facing, API, code, docs). Dispatch when TAU-001 documentation updates are ready
+  to be included in the same pass. See task: `tasks/queue/REF-002_tag-to-label-rename.md`.
+
+- **v0.55 production release**: BUG-020, BUG-022, WEB-001 all resolved. SEC-011, SEC-015,
+  FEAT-003/004, BUG-019/021 all merged. iOS security hardening (SEC-013–017) merged.
+  TST-010 staging checklist must pass before promoting to production.
 
 ## Legal
 
@@ -155,6 +163,25 @@ Responsibilities: grief-aware UX, executor psychology, digital legacy design, tr
 Established 2026-05-16. Reports to CTO. Start a session: `@personalities/Philosopher.md`.
 
 Responsibilities: ethics of posthumous consent, digital personhood, long-horizon product ethics, privacy as a value. Produces briefs to `docs/philosophy/PHI-NNN_<slug>.md`.
+
+## Key decisions (2026-05-16 session — continued)
+
+- **Tag → Label rename**: approved. Full rename across UI, API, code, and docs. REF-002 queued.
+- **Unified messaging model**: ARCH-011 queued for TechnicalArchitect investigation.
+  Three concepts: capsule item messages (per-message visibility/E2EE), shared plot messages
+  (owner moderation — auto-approve vs owner-decides), message trellises (trellis concept
+  applied to message visibility; labels govern access).
+- **Docker web image**: must build with `--platform linux/amd64` flag. Without it, Docker
+  buildx produces an OCI manifest index that Cloud Run rejects.
+- **Task file moves**: always use `git mv` (or stage the move) when moving task files
+  between queue/in-progress/done in the main workspace. Raw `mv` leaves deletions unstaged.
+- **GCS bucket separated**: `gs://heirlooms-uploads-test` created and wired to
+  `heirlooms-server-test` Cloud Run. Test environment no longer shares production GCS bucket.
+- **PAP-001 NARRATIVE_PLACEHOLDER**: TAU-001 guide (docs/papers/PAP-001) has a placeholder
+  for PHI-002 narrative (now in docs/philosophy/PHI-002). TechnicalAuthor needs one more pass
+  to weave them together before PAP-001 is publication-ready.
+- **Mermaid special chars**: Mermaid parses commas (`,`) and semicolons (`;`) as statement
+  separators/terminators in message labels and Note text. Escape as `&#44;` and `&#59;`.
 
 ## Key decisions (2026-05-16 session)
 
