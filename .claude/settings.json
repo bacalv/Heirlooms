@@ -24,7 +24,10 @@
       "Bash(chmod *)",
       "Bash(touch *)",
       "Bash(which *)",
-      "Bash(./scripts/*)"
+      "Bash(./scripts/*)",
+      "Bash(./gradlew *)",
+      "Bash(curl *)",
+      "Bash(open *)"
     ]
   }
 }
