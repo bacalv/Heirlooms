@@ -22,6 +22,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [PSY-001](queue/PSY-001_grief-reframe-care-mode-and-experience-psychology.md) | Grief reframe, Care Mode dignity, and Experience segment psychology | Psychology | Medium | Psychologist | — |
 | [PHI-001](queue/PHI-001_ethics-of-conditional-delivery-consent-and-digital-legacy.md) | Ethics of conditional delivery, consent before capacity loss, and the long-horizon promise | Philosophy | Medium | Philosopher | — |
 | [RET-002](queue/RET-002_three-segment-valuation-and-retirement-implications.md) | Three-segment valuation — Care Mode, Experience segment, and retirement implications | Retirement | Medium | RetirementPlanner | RET-001 |
+| [BIO-001](queue/BIO-001_bret-web-research.md) | Bret — brief web research and biographical profile | Biography | Low | Biographer | — |
 | [TST-009](queue/TST-009_android-device-farm-design.md) | Android device farm design — 3-device automated test infrastructure | Testing | High | TestManager | — |
 | [SIM-001](queue/SIM-001_trustless-expiry-impossibility.md) | Simulation: trustless expiry — weakest possible construction without custodians | Simulation | Low | ResearchManager | RES-002 |
 | [WEB-002](queue/WEB-002_web-invite-generation.md) | Web — generate and share invite links | Feature | Medium | Developer | — |
