@@ -1,7 +1,7 @@
 # Heirlooms Research — Cryptographic Glossary
 
 **Maintained by:** Research Manager  
-**Last updated:** 2026-05-16 (RES-001, session wrap-up)  
+**Last updated:** 2026-05-16 (RES-003, PQC migration readiness)  
 **Purpose:** Plain-language definitions of terms used in research briefs. Updated at the end of every research task. Intended for any team member, not just cryptographers.
 
 ---
@@ -15,6 +15,9 @@ The period during which encrypted data is vulnerable following the compromise of
 The symmetric encryption algorithm used throughout Heirlooms to encrypt file content, thumbnails, metadata, and wrapped keys. AES-256 means the key is 256 bits long. GCM is an authenticated mode — it simultaneously encrypts and produces an authentication tag, so any tampering with the ciphertext is detected on decryption. Considered quantum-safe under Grover's algorithm (effective security drops to 128 bits, which remains computationally infeasible). Used in Heirlooms via the `aes256gcm-v1` algorithm identifier.
 
 **Algorithm agility** — see *Cryptographic agility*.
+
+**Asynchronous Proactive Secret Sharing (APSS)**
+A variant of Proactive Secret Sharing designed for networks where shareholders cannot be guaranteed to be online simultaneously. Standard PSS requires synchronised refresh epochs; APSS relaxes this requirement, allowing share refresh to proceed even when some shareholders are temporarily offline. Relevant for long-duration Heirlooms window capsules where custodian availability cannot be tightly coordinated. See also *Proactive Secret Sharing (PSS)*.
 
 **Argon2id**  
 A password-based key derivation function (KDF) designed to be memory-hard: it requires a large amount of RAM to compute, making it expensive to parallelise on GPUs or ASICs. Heirlooms uses Argon2id to derive an encryption key from a user's recovery passphrase (m=64MiB, t=3, p=1). Winner of the Password Hashing Competition (2015). Considered quantum-safe — memory-hardness is not known to be weakened by quantum speedups.
@@ -39,6 +42,12 @@ A digital signature scheme built on pairing-based cryptography. Used by drand's 
 **Custodian**
 In the window capsule design, a party that holds one Shamir share of K_b (the expiry half of the window key). Custodians release their share only to an authenticated receiver during the valid [unlock_time, expire_time] window, and destroy it at expire_time. Custodians can be individuals, legal entities (law firms, banks, notaries), or distributed Heirlooms nodes. The expiry guarantee is only as strong as the honesty of more than (N − M) custodians in a (M, N) threshold scheme. See also *Shamir's Secret Sharing*, *Window capsule*, *Verifiable deletion*.
 
+**Certified Deletion**
+A cryptographic proof that a piece of information has been destroyed, in a way that is mathematically binding — the prover cannot have retained the data and still produce the proof. Provably impossible with classical cryptography alone: any classical deletion proof can be faked by a party who keeps a copy. Achievable with quantum information: quantum states have the property that measuring or copying them disturbs them irreversibly, so a valid deletion certificate implies the data is gone. Applied to Heirlooms window capsules: quantum certified deletion would provide a trustless expiry guarantee (custodians cannot fake deletion), but requires quantum communication infrastructure not available in production today. See also *Window capsule*, *Verifiable deletion*, *Proactive Secret Sharing (PSS)*.
+
+**Commitment Scheme**
+A two-phase cryptographic protocol in which a party commits to a value (the "commit" phase) without revealing it, and later reveals it (the "open" phase). The commitment is binding (the party cannot change the value after committing) and hiding (the commitment reveals nothing about the value). Used in Heirlooms window capsules: custodians commit to their Shamir shares at sealing time, providing an audit trail. At expire_time, they publish a deletion certificate — though classical commitment-based deletion certificates can be faked (a party can retain the share and still pretend to delete it). Contrast with *Certified Deletion* (which is binding). See also *Verifiable deletion*.
+
 **Cat-qubit**  
 A type of physical qubit that encodes quantum information in superpositions of coherent states of a microwave resonator. Cat qubits have biased noise properties — one type of error is exponentially suppressed — making them potentially more resource-efficient for fault-tolerant quantum computation than surface-code qubits. Recent 2025–2026 papers using cat-qubit architectures have materially reduced physical qubit estimates for breaking P-256.
 
@@ -53,8 +62,14 @@ The property of a system that allows its underlying cryptographic algorithms to 
 
 ## D
 
+**Deletion Certificate**
+A statement (or cryptographic proof) published by a custodian after destroying their Shamir share, asserting that the deletion has taken place. Classical deletion certificates (e.g., a signed timestamped statement, or a hash preimage) are weak — a dishonest custodian can publish the certificate while secretly retaining the share. Quantum certified deletion eliminates this weakness. In the absence of quantum infrastructure, Heirlooms relies on institutional accountability (named custodians), on-chain audit trails, and hardware enforcement (Nitro/HSM) as defence-in-depth. See also *Certified Deletion*, *Verifiable deletion*, *Custodian*.
+
 **DEK** (Data Encryption Key)  
 A random symmetric key generated per uploaded file. Each file's bytes, thumbnail, and encrypted metadata are encrypted under their DEK using AES-256-GCM. The DEK itself is then wrapped (encrypted) under the user's master key, also using AES-256-GCM. This two-layer model means the master key never directly encrypts file content, and a PQC migration of the key-wrapping layer does not require re-encrypting file content.
+
+**DEK re-wrap**
+The operation of decrypting a Data Encryption Key that was wrapped under one algorithm (e.g. AES-256-GCM under the old master key) and immediately re-encrypting it under the new algorithm (e.g. AES-256-GCM under the new master key). The DEK plaintext value is transiently in memory on the client device but never transmitted. Re-wrap cost is O(DEKs), not O(file bytes) — this is what makes PQC migration tractable even for large vaults. See also *Re-wrap*, *Migration phase*.
 
 **drand** (Distributed Randomness)  
 A distributed randomness beacon operated by the League of Entropy, a consortium of organisations including Cloudflare, EPFL, and others. Nodes use threshold BLS signatures over BLS12-381 to collaboratively produce publicly verifiable, unbiasable random values at regular intervals ("rounds"). Used as the foundation for the tlock time-lock scheme. drand acknowledges that BLS12-381 is not quantum-safe but estimates the threat is at least 5 years away.
@@ -65,6 +80,9 @@ A distributed randomness beacon operated by the League of Entropy, a consortium 
 
 **Expire time**
 In a window capsule, the upper time bound after which the capsule becomes permanently undecryptable. Distinct from the *unlock time* (lower bound). After expire_time, custodians destroy their Shamir shares of K_b, making K_window irrecoverable even though K_a (the tlock component) remains permanently public. A receiver who did not access the capsule during [unlock_time, expire_time] can never access it. A receiver who did access it during the window holds K_window locally and is unaffected by the expiry. See also *Window capsule*, *Unlock time*, *Custodian*.
+
+**Epoch (secret sharing context)**
+A time period in Proactive Secret Sharing during which a fixed set of shares is valid. At the end of each epoch, shareholders execute a share refresh protocol, generating new shares of the same underlying secret. Old shares are deleted and become useless. A mobile adversary that compromises fewer than the threshold of shareholders within a single epoch cannot reconstruct the secret, even if it compromises different shareholders in different epochs. The epoch length is a security parameter — shorter epochs provide stronger security against slow-moving adversaries but require more frequent protocol executions. See also *Proactive Secret Sharing (PSS)*, *Mobile adversary*.
 
 **ECDH** (Elliptic Curve Diffie-Hellman)  
 A key agreement protocol in which two parties each have a keypair on an elliptic curve. They exchange public keys and each independently derives the same shared secret from their own private key and the other party's public key. In Heirlooms, P-256 ECDH is used to wrap the master key to each device's public key (`p256-ecdh-hkdf-aes256gcm-v1`). **Broken by Shor's algorithm** on a quantum computer.
@@ -78,6 +96,9 @@ Heirlooms' versioned binary container for all encrypted blobs. Contains: version
 ---
 
 ## F
+
+**Forward-secure encryption**
+An encryption scheme where compromise of a key at time T does not enable decryption of messages encrypted before T. Achieved by evolving the key forward in time — each new time period uses a new key derived from the previous one, and the previous key is deleted. Forward security protects past messages from future key compromise. It is distinct from the expiry problem in window capsules (where the goal is to prevent access *after* a time, not to protect past data from future key exposure). See also *Puncturable encryption*, *Window capsule*.
 
 **FIPS 203** (Federal Information Processing Standard 203)  
 The NIST standard published August 2024 specifying ML-KEM (Module-Lattice-based Key Encapsulation Mechanism, derived from CRYSTALS-Kyber). The primary post-quantum replacement for ECDH key agreement. Final and implementable.
@@ -98,6 +119,9 @@ A quantum computer that uses error correction to suppress the high error rates o
 
 ## G
 
+**Gradual release (timed secret sharing)**
+One of the two strategies proposed by Kavousi et al. (2024) for enforcing an upper time bound in Timed Secret Sharing. Under gradual release, the shares required to reconstruct the secret are released incrementally over time. After the expire_time, enough shares have been released that reconstruction becomes possible — but this is not the Heirlooms model. Heirlooms uses the opposite strategy: shares are *deleted* at expire_time, making reconstruction impossible thereafter. See also *Timed Secret Sharing (TSS)*, *Window capsule*, *Short-lived proofs*.
+
 **Grover's algorithm**  
 A quantum algorithm that provides a quadratic speedup for unstructured search. Applied to symmetric cryptography, it halves the effective key length: AES-256 becomes equivalent to AES-128 under Grover. 128-bit effective security is still considered computationally infeasible. This is why AES-256-GCM, HKDF-SHA-256, and Argon2id are considered quantum-safe, while P-256 (broken by Shor, not Grover) is not.
 
@@ -105,8 +129,14 @@ A quantum algorithm that provides a quadratic speedup for unstructured search. A
 
 ## H
 
+**Hardware Security Module (HSM)**
+A dedicated, physically tamper-resistant device for storing cryptographic keys and executing cryptographic operations. HSMs automatically zeroize (destroy) key material when tamper is detected (e.g., if the device is opened). Certified under FIPS 140-2/3 Level 3. In the context of window capsules, an HSM at a custodian node could hold Shamir shares and be programmed to zeroize them at expire_time, providing hardware-enforced deletion with physical tamper evidence. HSMs do not provide cryptographic proof of deletion (anyone who tampers with the device would see zeroization evidence), but they provide the strongest currently practical hardware guarantee. Contrast with *Intel SGX* (software enclave, more flexible but more vulnerable) and *AWS Nitro Enclaves* (cloud-hosted TEE).
+
 **HKDF** (HMAC-based Key Derivation Function)  
 A key derivation function that takes a shared secret (e.g. the output of ECDH) and derives one or more cryptographic keys of any desired length. Heirlooms uses HKDF-SHA-256 as part of the `p256-ecdh-hkdf-aes256gcm-v1` algorithm. Considered quantum-safe under Grover.
+
+**HPKE** (Hybrid Public Key Encryption)
+A standardised public-key encryption framework (RFC 9180) that combines a Key Encapsulation Mechanism (KEM), a Key Derivation Function (KDF), and an Authenticated Encryption with Associated Data (AEAD) scheme. HPKE is the recommended compositional framework for post-quantum-hybrid encryption. Apple's CryptoKit (iOS 26) high-level PQ API is based on HPKE with X-Wing as the KEM component. For Heirlooms, HPKE is the conceptual model underlying the `hybrid-p256-mlkem768-hkdf-aes256gcm-v1` algorithm ID.
 
 **HNDL** (Harvest Now, Decrypt Later)  
 A surveillance strategy in which an adversary captures and stores encrypted traffic today, intending to decrypt it when a sufficiently powerful quantum computer becomes available. Particularly relevant for long-lived data: a family photo archive encrypted today may still be sensitive in 30 years. Multiple intelligence and cybersecurity agencies (US DHS, UK NCSC, ENISA, ACSC) base their post-quantum migration guidance on the assumption that nation-state actors are actively conducting HNDL operations. This is the most immediate reason Heirlooms needs a P-256 migration plan — the threat is not future, it is present.
@@ -121,12 +151,24 @@ A key agreement scheme that combines a classical algorithm (e.g. X25519 or P-256
 
 ## I
 
+**Intel SGX** (Software Guard Extensions)
+A set of CPU instructions that create hardware-isolated memory regions ("enclaves") for sensitive code and data. Code running inside an SGX enclave is protected from inspection by the operating system, hypervisor, or physical attackers (with caveats). SGX provides a trusted time source (coarse-grained, from the Platform Services Enclave) and monotonic counters. In the window capsule context, Heirlooms-operated custodian nodes running in SGX enclaves could be programmed to zeroize shares at expire_time, with the enclave code attested via remote attestation. Limitations: (1) SGX's trusted time depends on the Intel ME and is not calendar-precise; (2) SGX has a significant published vulnerability history (Spectre variants, Foreshadow, SGAxe, Plundervolt); (3) attestation proves the enclave ran specific code, but not that shares were not exfiltrated before the enclave ran. Use as defence-in-depth, not as a sole enforcement mechanism. See also *Nitro Enclave (AWS)*, *Hardware Security Module (HSM)*.
+
+**i-TiRE** (Incremental Timed-Release Encryption)
+A practical timed-release encryption scheme for blockchain environments (CCS 2022). Allows efficient updating of ciphertexts across time periods without re-encryption of the underlying data. Addresses the lower-bound problem only (when decryption becomes available, not when it expires). Not a direct prior art for the window capsule upper bound.
+
 **IBE** (Identity-Based Encryption)  
 A form of public-key encryption where the public key can be an arbitrary string (e.g. an email address or a future date). A trusted authority holds a master secret and issues private keys corresponding to identities on request. The tlock scheme uses IBE over BLS12-381 to encrypt to a future drand round identifier — only when that round's private key (the threshold BLS signature) is published can the ciphertext be decrypted.
 
 ---
 
 ## K
+
+**K_a, K_b, K_window**
+The three key components in the Heirlooms window capsule construction. K_window = K_a ⊕ K_b is the 256-bit key used to wrap the DEK. K_a is a 256-bit random value encrypted via tlock — it is revealed trustlessly after the drand round corresponding to unlock_time, and remains permanently public thereafter. K_b is a 256-bit random value Shamir-split among custodians — it is reconstructable from a threshold of shares during [unlock_time, expire_time], and becomes irrecoverable after custodians delete their shares at expire_time. Neither K_a alone nor K_b alone can reconstruct K_window. See also *Window capsule*, *tlock*, *Shamir's Secret Sharing*, *Custodian*.
+
+**KDF** (Key Derivation Function)
+A function that derives one or more secret keys from a shared secret (e.g. a Diffie-Hellman or KEM output). In Heirlooms, HKDF-SHA-256 is the KDF in `p256-ecdh-hkdf-aes256gcm-v1`. For hybrid key exchange, the KDF combines both the P-256 ECDH shared secret and the ML-KEM-768 shared secret into a single derived key — an attacker must break both algorithms to recover the result.
 
 **Key rotation**
 The process of generating new cryptographic keys and migrating all key-wrapped material to use them, then deleting the old keys. In Heirlooms' PQC migration context, key rotation has two levels: (1) shallow rotation — re-wrapping the master key under a new algorithm while keeping the same master key value; (2) full rotation — generating a new master key and re-wrapping every DEK under it. Only full rotation closes the HNDL attack window for already-harvested data. See also *Re-wrap*, *Attack window*.
@@ -137,6 +179,8 @@ A cryptographic primitive used to securely transmit a symmetric key from one par
 ---
 
 ## L
+
+**League of Entropy** — see existing entry (previously defined in RES-001 section).
 
 **Lattice-based cryptography**  
 A family of cryptographic schemes whose security rests on the hardness of problems in high-dimensional lattices (e.g. Learning With Errors, Module-LWE). Believed to be resistant to both classical and quantum attacks. The basis of ML-KEM (FIPS 203) and ML-DSA (FIPS 204).
@@ -157,12 +201,24 @@ Post-quantum digital signature standard (FIPS 204). Derived from CRYSTALS-Dilith
 **ML-KEM** (Module-Lattice-based Key Encapsulation Mechanism)  
 Post-quantum key encapsulation standard (FIPS 203). Derived from CRYSTALS-Kyber. The primary post-quantum replacement for ECDH key agreement. In the context of a Heirlooms migration, ML-KEM-768 (offering ~192-bit classical security) would replace P-256 in device key wrapping, plot key wrapping, and sharing key operations.
 
+**Mobile adversary**
+An adversary in a distributed system that does not remain fixed to a single set of corrupted parties over time, but can change which parties it has compromised between time epochs. In Proactive Secret Sharing, the mobile adversary model assumes the adversary corrupts at most a threshold t parties in any given epoch, but may corrupt entirely different parties in a later epoch. Over the full lifetime of the secret, the adversary may have compromised every party — but never simultaneously enough to reach the threshold in a single epoch. PSS is designed to remain secure against mobile adversaries. See also *Proactive Secret Sharing (PSS)*, *Epoch (secret sharing context)*.
+
 **Master key**  
 In Heirlooms, a 256-bit random symmetric key generated on a user's first device. Never leaves any device in plaintext. Each device holds its own copy, wrapped (encrypted) to that device's P-256 public key. The master key wraps per-plot keys; plot keys wrap per-file DEKs.
+
+**Migration phase**
+In the Heirlooms PQC migration, a numbered stage of the overall migration plan, tracked per-device in `devices.pqc_migration_phase`: Phase 0 — hybrid key codec implemented (no production impact); Phase 1 — ML-KEM keypair generated and uploaded; Phase 2 — master key re-wrapped from P-256 to hybrid scheme (silent, on next auth); Phase 3 — new master key generated, all DEKs re-wrapped (background service); Phase 4 — shared plot keys and item sharing DEKs re-wrapped. Each phase closes one layer of the HNDL attack window. See also *DEK re-wrap*, *Re-wrap*, *Attack window*.
+
+**ML-KEM-768 key sizes**
+ML-KEM-768 parameter sizes relevant for implementation and wire format planning: encapsulation key (public key) = 1184 bytes; decapsulation key (private key) = 2400 bytes; ciphertext = 1088 bytes; shared secret = 32 bytes. Compare to P-256: public key = 65 bytes (uncompressed SEC1), private key = 32 bytes, shared secret = 32 bytes. The larger key and ciphertext sizes require schema and envelope field length changes when adopting ML-KEM.
 
 ---
 
 ## N
+
+**Nitro Enclave (AWS)**
+An isolated compute environment on AWS EC2 instances, providing hardware-backed isolation for sensitive workloads. Nitro Enclaves produce cryptographic attestation documents (signed by the AWS Nitro Attestation PKI) that prove the exact code running inside the enclave. When combined with AWS KMS, KMS key policies can be conditioned on enclave attestation measurements — only the specific, attested enclave code can call KMS. In the window capsule context, Heirlooms-operated custodian nodes running inside Nitro Enclaves could use a KMS-managed share encryption key that is automatically deleted at expire_time via a scheduled KMS key deletion, providing hardware-backed expiry enforcement. This shifts trust from the custodian's software to AWS + the enclave code attestation. See also *Hardware Security Module (HSM)*, *Intel SGX*.
 
 **Neutral-atom quantum computer**  
 A type of quantum computer that uses individual neutral atoms (e.g. rubidium) trapped in optical tweezer arrays as qubits. Recent 2026 research suggests a neutral-atom machine with ~26,000 qubits could break ECC-256 in approximately 10 days.
@@ -195,6 +251,12 @@ Cryptographic algorithms designed to be secure against both classical and quantu
 **Plot key**  
 In Heirlooms, a 256-bit symmetric key specific to a shared plot. Wrapped to each member's sharing public key (P-256 ECDH) and stored in `plot_members.wrapped_plot_key`. The plot key wraps per-item DEKs via `plot-aes256gcm-v1`.
 
+**Proactive Secret Sharing (PSS)**
+A technique introduced by Herzberg, Jarecki, Krawczyk, and Yung (CRYPTO 1995) for refreshing Shamir shares periodically so that a slow-moving adversary cannot accumulate enough shares to reconstruct the secret. Time is divided into epochs. At each epoch boundary, shareholders run a re-sharing protocol that produces fresh shares of the same underlying secret, then delete their old shares. An adversary that compromises up to the threshold in each epoch — but never simultaneously across epochs — cannot recover the secret. The fundamental assumption is that honest parties actually delete their old shares. PSS does not solve the expiry problem (it is designed for indefinite longevity, not deliberate destruction), but it strengthens the trust assumption during the access window of a window capsule. Recommended for Heirlooms window capsules with windows longer than 12 months. See also *Shamir's Secret Sharing*, *Mobile adversary*, *Epoch (secret sharing context)*, *Window capsule*, *Asynchronous Proactive Secret Sharing (APSS)*.
+
+**Puncturable Encryption**
+A public-key encryption scheme where the secret key can be "punctured" on a specific ciphertext: the punctured key can decrypt all other ciphertexts but not the punctured one. Used to achieve forward secrecy in messaging (Signal-style), where each received message causes the decryption key to be punctured on that message's ciphertext, preventing retroactive decryption if the key is later compromised. Green and Miers (2015) proposed a practical construction using Bloom filter data structures. In the window capsule context, puncturable encryption provides a modelling analogy for share deletion. See also *Forward-secure encryption*.
+
 ---
 
 ## Q
@@ -220,7 +282,13 @@ The operation of decrypting a wrapped key using the current algorithm and re-enc
 ## S
 
 **Shamir's Secret Sharing**  
-A cryptographic scheme for splitting a secret into N shares such that any K shares (the threshold) can reconstruct the secret, but fewer than K shares reveal nothing. Used in Heirlooms M11 to distribute capsule key shares to nominated executors. The threshold-of-N design tolerates executor attrition over a multi-decade horizon.
+A cryptographic scheme for splitting a secret into N shares such that any K shares (the threshold) can reconstruct the secret, but fewer than K shares reveal nothing.
+
+**SPQR** (Sparse Post-Quantum Ratchet)
+Signal's implementation of a post-quantum ratchet mechanism, deployed October 2025. SPQR runs alongside the existing Double Ratchet protocol using ML-KEM-768, producing what Signal calls the Triple Ratchet. Both the classical DH ratchet and the ML-KEM ratchet must be broken simultaneously for an attacker to recover session keys. Relevant to Heirlooms as a reference design if messaging features are ever added; demonstrates that hybrid PQC protocols can be deployed in production without flag-day client migration. Used in Heirlooms M11 to distribute capsule key shares to nominated executors. The threshold-of-N design tolerates executor attrition over a multi-decade horizon.
+
+**Short-lived proofs (timed secret sharing)**
+One of the two strategies proposed by Kavousi et al. (2024) for enforcing an upper time bound in Timed Secret Sharing. Under the short-lived proofs strategy, custodians provide time-limited proofs of share validity that expire at T_expire. Receivers must obtain valid proofs before T_expire; after that point, shares are no longer accompanied by valid proofs and cannot be used for reconstruction. The Heirlooms approach is conceptually related — custodians refuse to release shares after expire_time — but enforces this via policy and hardware rather than cryptographic proof expiry. See also *Gradual release (timed secret sharing)*, *Timed Secret Sharing (TSS)*.
 
 **Shor's algorithm**  
 A quantum algorithm published by Peter Shor in 1994 that solves integer factorisation and the discrete logarithm problem (including ECDLP) in polynomial time. This is what makes RSA, Diffie-Hellman, and all elliptic curve cryptography (including P-256 and BLS12-381) quantum-vulnerable. Does not affect symmetric cryptography or hash functions.
@@ -234,6 +302,18 @@ The most widely studied quantum error correction code. Requires approximately 1,
 ---
 
 ## T
+
+**Timed Secret Sharing (TSS)**
+A cryptographic primitive introduced by Kavousi, Abadi, and Jovanovic (ASIACRYPT 2024) that generalises secret sharing with both a lower time bound (secret cannot be reconstructed before T_unlock) and an upper time bound (secret cannot be reconstructed after T_expire). The most directly relevant academic prior work to Heirlooms' window capsule construction. The paper proposes two strategies for the upper bound: short-lived proofs and gradual release. Heirlooms' construction is a distinct practical instantiation using drand/tlock for the lower bound and custodian deletion for the upper bound — an approach the paper acknowledges but does not implement. See also *Window capsule*, *Short-lived proofs (timed secret sharing)*, *Gradual release (timed secret sharing)*.
+
+**Timed-release encryption (TRE)**
+A family of encryption schemes guaranteeing that a ciphertext cannot be decrypted before a specified future time. The main classical approaches are: (1) time-lock puzzles (computational lower bound, no trusted party); (2) trusted time server with IBE (single trusted party releases the key at the right time); (3) distributed time server with threshold BLS, as in tlock/drand (distributed trust). All TRE schemes address the lower bound only. Combining TRE with an upper bound (expiry) is the subject of Timed Secret Sharing and the Heirlooms window capsule. See also *tlock*, *Timed Secret Sharing (TSS)*, *Time-Specific Encryption (TSE)*.
+
+**Time-lock puzzle**
+A computational puzzle designed to take a known amount of wall-clock time to solve, even on the fastest available hardware. Rivest, Shamir, and Wagner (1996) proposed the original construction based on repeated squaring modulo an RSA modulus — this computation cannot be parallelised. The puzzle forces a delay without requiring any trusted party. The weakness: calibrating puzzle hardness to a specific time duration is imprecise (hardware speeds change), and a legitimate receiver cannot solve the puzzle faster than an adversary. Used as the lower-bound mechanism in some TRE constructions; drand/tlock provides a superior alternative for Heirlooms because the lower bound is cryptographically exact (tied to a specific drand round) rather than computational.
+
+**Time-Specific Encryption (TSE)**
+A cryptographic primitive introduced by Paterson and Quaglia (SCN 2010) that allows a sender to specify a time interval [T1, T2] during encryption. A trusted Time Server broadcasts a Time Instant Key (TIK) at each time step; a receiver can only decrypt if they have a TIK corresponding to a time within the specified interval. Supports public-key and identity-based extensions. The most conceptually similar academic prior work to the window capsule: TSE explicitly models a time interval for access, not just a release time. However, TSE requires the Time Server to be online throughout the entire interval, and does not model a deletion mechanism — access is controlled by TIK distribution, not by destruction of key material. See also *Timed Secret Sharing (TSS)*, *Window capsule*.
 
 **Time-windowed trust envelope**
 The Research Manager's working name for the conceptual primitive that Heirlooms is building towards: an encrypted object that is mathematically inaccessible before an unlock time, enforced-unavailable after an expire time, recoverable only by a named recipient through a quorum of independent custodians, on a server that is architecturally incapable of reading it. No standardised name exists for this combination in the academic literature as of 2026. Related to *tlock*, *Window capsule*, *Shamir's Secret Sharing*, *Custodian*.
@@ -255,8 +335,11 @@ In a window capsule, the lower time bound before which the capsule cannot be dec
 
 ## V
 
+**Verifiable Delay Function (VDF)**
+A function that takes a specified minimum amount of time to compute (even with unlimited parallelism), and produces a unique output with a short proof that can be verified quickly. VDFs can serve as a trustless time-lock mechanism: the output is only available after the delay has elapsed. Boneh et al. (2018) formalised VDFs. Relevant to Heirlooms as an alternative or supplement to drand/tlock for the lower bound in window capsules. VDFs do not require a distributed network like drand, but require trusted setup for some constructions. Not currently used in Heirlooms.
+
 **Verifiable deletion**
-A cryptographic proof that a party has destroyed secret material (such as a Shamir share) without revealing the material itself. An open research problem as of 2026. In theory: a custodian commits to their share at sealing time; at expire_time they publish a proof of deletion derived from the commitment. Related to "proof of erasure." Solving this cleanly for the window capsule context would be a publishable research contribution and would make the expiry guarantee auditable rather than merely trusted. See also *Custodian*, *Window capsule*.
+A cryptographic proof that a party has destroyed secret material (such as a Shamir share) without revealing the material itself. An open research problem as of 2026. In theory: a custodian commits to their share at sealing time; at expire_time they publish a proof of deletion derived from the commitment. Related to "proof of erasure." Solving this cleanly for the window capsule context would be a publishable research contribution and would make the expiry guarantee auditable rather than merely trusted. See also *Custodian*, *Window capsule*, *Certified Deletion*, *Deletion Certificate*.
 
 ---
 
@@ -268,6 +351,12 @@ A Heirlooms capsule construction (proposed by CTO, 2026-05-16) with both an unlo
 ---
 
 ## X
+
+**Witness Encryption (WE)**
+A cryptographic scheme (Garg, Gentry, Sahai, Waters — STOC 2013) that allows encrypting a message to an NP statement: only a party holding a valid witness for the statement can decrypt. General-purpose WE is currently impractical (requires multilinear maps or obfuscation). Special-purpose WE for targeted applications is now closer to practical (Garg et al., CRYPTO 2025: WE from linearly verifiable SNARKs). In the window capsule context, WE could theoretically provide a trustless upper bound — the decryption witness could be "proof that no blockchain block exists with timestamp > expire_time" — eliminating the need for custodians. This remains a research horizon: no production-ready WE implementation capable of expressing time-window conditions exists as of 2026. Horizon estimate: 5–10 years for special-purpose practical deployment. See also *Window capsule*, *Timed Secret Sharing (TSS)*.
+
+**X-Wing**
+A general-purpose post-quantum hybrid KEM (draft-connolly-cfrg-xwing-kem-10, March 2026) combining X25519 and ML-KEM-768. An attacker must break both the classical X25519 component and the post-quantum ML-KEM-768 component simultaneously to recover the shared secret. Adopted by Apple in CryptoKit (iOS 26) as `XWingMLKEM768X25519`, with formal verification and Secure Enclave support. Internet-Draft status as of May 2026 (not yet an RFC). Heirlooms' Android/web hybrid scheme uses P-256 (not X25519) as the classical component — the Technical Architect must decide whether to adopt X25519 uniformly to enable X-Wing on all platforms.
 
 **X25519**  
 An elliptic curve Diffie-Hellman function using Curve25519 (a Montgomery curve). Widely used in TLS and other protocols. Like P-256, it is **not quantum-safe** (vulnerable to Shor's algorithm). The X25519+ML-KEM-768 hybrid key exchange is the current de facto standard for post-quantum TLS deployment.

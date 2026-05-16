@@ -90,3 +90,64 @@ Cloud Security Alliance, August 2024: FIPS 203/204/205 finalisation analysis.
 
 **[RES-001-028]** https://arxiv.org/html/2512.13333v1  
 arXiv 2512.13333, December 2025: "Quantum Disruption: An SoK of How Post-Quantum Attackers Reshape Blockchain Security and Performance" — BLS12-381 and blockchain PQC context.
+
+---
+
+## RES-003 — 2026-05-16 — PQC migration readiness brief
+
+**[RES-003-001]** https://csrc.nist.gov/pubs/fips/203/final  
+NIST FIPS 203 final publication (August 2024): ML-KEM (Module-Lattice-Based Key-Encapsulation Mechanism Standard). Final standard. Specifies ML-KEM-512, ML-KEM-768, ML-KEM-1024. ML-KEM-768 key sizes: ek = 1184 bytes, dk = 2400 bytes, ct = 1088 bytes, ss = 32 bytes.
+
+**[RES-003-002]** https://developer.apple.com/documentation/cryptokit/mlkem768  
+Apple Developer Documentation: `MLKEM768` in CryptoKit — key generation, encapsulation, decapsulation. Available iOS 26 / macOS Tahoe. Also `SecureEnclave.MLKEM768` for hardware-isolated execution.
+
+**[RES-003-003]** https://developer.apple.com/videos/play/wwdc2025/314/  
+Apple WWDC 2025 session 314: "Get ahead with quantum-secure cryptography." Covers CryptoKit ML-KEM API, X-Wing (`XWingMLKEM768X25519`), Secure Enclave support, formally verified ML-KEM implementation, iOS 26 TLS auto-negotiation of hybrid key exchange.
+
+**[RES-003-004]** https://csrc.nist.gov/pubs/sp/800/227/final  
+NIST SP 800-227: Recommendations for Key-Encapsulation Mechanisms (September 2025). Endorses hybrid deployment (X25519 + ML-KEM) during PQC transition; provides X-Wing as practical example. Recommends ephemeral key discard after single use. Final publication.
+
+**[RES-003-005]** https://www.encryptionconsulting.com/microsoft-and-apple-advance-post-quantum-cryptography-support-in-upcoming-os-releases/  
+Encryption Consulting, 2025: Apple iOS 26 and Microsoft Windows PQC support analysis. CryptoKit ML-KEM-768, X-Wing availability and deployment scope.
+
+**[RES-003-006]** https://github.com/dchest/mlkem-wasm  
+mlkem-wasm GitHub repository: ML-KEM-768 in WebAssembly. Single ES module, 17 KB gzipped, no external WASM files. WebCrypto-compatible API (matches WICG draft). Based on mlkem-native (memory-safe C). Stopgap for browser deployment before native WebCrypto support ships.
+
+**[RES-003-007]** https://proton.me/blog/introducing-post-quantum-encryption  
+Proton, May 2026: Post-quantum encryption rollout for all Proton Mail users (including free tier). Uses ML-KEM-768 + X25519 composite (OpenPGP v6 algorithm ID 35). Does not retroactively re-encrypt existing mailbox content; future re-encryption planned.
+
+**[RES-003-008]** https://www.helpnetsecurity.com/2026/05/06/proton-mail-post-quantum-protection-feature/  
+Help Net Security, May 2026: Technical details of Proton Mail PQC rollout. HNDL threat cited as primary motivation. Proton collaborating with Thunderbird for cross-provider PQC interoperability.
+
+**[RES-003-009]** https://signal.org/blog/spqr/  
+Signal Blog, October 2025: "Signal Protocol and Post-Quantum Ratchets." SPQR (Sparse Post-Quantum Ratchet) using ML-KEM-768 alongside Double Ratchet, forming Triple Ratchet. Gradual rollout, backward-compatible. Reference design for hybrid PQC protocol deployment without flag-day migration.
+
+**[RES-003-010]** https://engineering.fb.com/2026/04/16/security/post-quantum-cryptography-migration-at-meta-framework-lessons-and-takeaways/  
+Meta Engineering Blog, April 2026: PQC migration framework with five maturity levels (PQ-Unaware → PQ-Enabled). Six-step strategy: prioritise risks, inventory cryptographic assets, address dependencies, build PQC components, deploy, establish guardrails.
+
+**[RES-003-011]** https://datatracker.ietf.org/doc/draft-connolly-cfrg-xwing-kem/  
+IETF Datatracker: draft-connolly-cfrg-xwing-kem-10 (March 2026). X-Wing KEM specification — X25519 + ML-KEM-768. Informational I-D, expiry September 2026. Adopted by Apple in CryptoKit iOS 26.
+
+**[RES-003-012]** https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-02  
+IETF draft-ietf-hpke-pq-02: Post-Quantum and Post-Quantum/Traditional Hybrid Algorithms for HPKE. Defines ML-KEM-based and hybrid KEM algorithms for the HPKE framework (RFC 9180).
+
+**[RES-003-013]** https://wicg.github.io/webcrypto-modern-algos/  
+WICG: Modern Algorithms in the Web Cryptography API. Draft specification adding ML-KEM, ML-DSA, SLH-DSA, and other modern algorithms to the WebCrypto standard. Not yet implemented in browsers as of May 2026.
+
+**[RES-003-014]** https://csrc.nist.gov/pubs/sp/800/88/r2/final  
+NIST SP 800-88 Rev. 2: Guidelines for Media Sanitization (September 2025, supersedes Rev. 1). Cryptographic erasure (key deletion) is an approved sanitisation technique. Relevant to Heirlooms' obligation to hard-delete old P-256 wrapped key blobs after Phase 2 re-wrap.
+
+**[RES-003-015]** https://stateofsurveillance.org/news/harvest-now-decrypt-later-quantum-surveillance-threat-2026/  
+State of Surveillance, 2026: HNDL threat update — encrypted traffic captured in 2026 may be decryptable as early as 2032. Nation-state active harvesting confirmed by US DHS, UK NCSC, ENISA, ACSC.
+
+**[RES-003-016]** https://github.com/paulmillr/noble-post-quantum  
+noble-post-quantum GitHub repository: Auditable, minimal pure-JavaScript post-quantum cryptography. ML-KEM-768 support (ml_kem768 export). Audited by Trail of Bits. Alternative to mlkem-wasm for web platform — no WASM dependency, slightly larger bundle.
+
+**[RES-003-017]** https://www.bouncycastle.org/resources/new-releases-bouncy-castle-java-1-84-and-bouncy-castle-java-lts-2-73-11/  
+BouncyCastle release notes: Java 1.84 and LTS 2.73.11. ML-KEM accessible via `javax.crypto.KEM` API on Java 17+. ML-KEM, ML-DSA, SLH-DSA all available. Available on Maven Central.
+
+**[RES-003-018]** https://dchest.com/2025/08/09/mlkem-webcrypto/  
+dchest blog, August 2025: Status of ML-KEM in WebCrypto API — WICG draft exists, browsers have not yet implemented it, mlkem-wasm as production-suitable stopgap.
+
+**[RES-003-019]** https://hbr.org/sponsored/2026/01/why-your-post-quantum-cryptography-strategy-must-start-now  
+Harvard Business Review, January 2026: Enterprise PQC migration urgency. NSA CNSA 2.0 deadlines: new national security systems quantum-safe by January 2027; full application migration by 2030; infrastructure by 2035. Enterprise positioning signal for Heirlooms.

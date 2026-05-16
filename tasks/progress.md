@@ -17,23 +17,17 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [SIM-001](queue/SIM-001_trustless-expiry-impossibility.md) | Simulation: trustless expiry — weakest possible construction without custodians | Simulation | Low | ResearchManager | RES-002 |
 | [OPS-003](queue/OPS-003_pre-production-staging-environment.md) | Pre-production staging environment — prod-snapshot + anonymisation pipeline | Operations | Low | OpsManager | — |
 | [TST-008](queue/TST-008_shared-plot-e2e-smoke-test.md) | Shared plot E2E smoke test — formalise spec and identify automation strategy | Testing | High | TestManager | — |
-| [ARCH-007](queue/ARCH-007_e2ee-tag-scheme.md) | E2EE tag scheme — HMAC token identifiers + encrypted display names | Architecture | High | TechnicalArchitect | — |
 | [SEC-012](queue/SEC-012_tag-metadata-leakage-accepted-risk.md) | Tag metadata leakage — document and disclose accepted residual risk | Security | Medium | SecurityManager | ARCH-007 |
-| [BUG-022](queue/BUG-022_web-detail-view-blank-for-shared-plot-image.md) | Web detail view blank for shared plot items — full image DEK not decrypted with plot key | Bug Fix | High | Developer | — |
 | [BUG-021](queue/BUG-021_video-duration-zero-on-detail-view.md) | Video detail view shows 0-second duration — metadata not extracted on upload | Bug Fix | Medium | Developer | — |
-| [BUG-020](queue/BUG-020_shared-plot-auto-approve-needs-client-dek-rewrap.md) | Shared plot trellis auto-approve — client-side DEK re-wrap to avoid mandatory staging | Bug Fix | Medium | Developer | — |
 | [FEAT-004](queue/FEAT-004_android-invite-friend-from-friends-screen.md) | Android — invite a friend from the Friends screen | Feature | Medium | Developer | — |
 | [SEC-011](queue/SEC-011_device-revocation.md) | Device revocation — allow users to remove old devices from Devices & Access | Security | Medium | SecurityManager | — |
 | [BUG-019](queue/BUG-019_register-duplicate-device-id-wrong-error-message.md) | Registration shows "Username already exists" for duplicate device_id (409) collision | Bug Fix | Low | Developer | — |
-| [BUG-018](queue/BUG-018_shared-plot-trellis-no-staging-dek-not-rewrapped.md) | Shared plot trellis without staging — items auto-flow with original DEK, members can't decrypt | Bug Fix | High | Developer | — |
-| [BUG-017](queue/BUG-017_android-plot-key-not-loaded-after-accept-invite.md) | Android — shared plot items don't decrypt after accepting invite until app restart | Bug Fix | High | Developer | — |
 | [FEAT-003](queue/FEAT-003_android-account-pairing-recovery.md) | Android account pairing / recovery — pair a fresh Android install to an existing account | Feature | Medium | Developer | — |
 | [TST-006](queue/TST-006_android-remote-control-investigation.md) | Investigate remote-controlled Android testing for E2E automation | Testing | Medium | TestManager | — |
 | [UX-002](queue/UX-002_closed-plot-visual-indicator.md) | Closed plots should show a locked state — disable approve/share actions | UX | Medium | Developer | — |
 | [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | Developer | — |
 | [SEC-002](queue/SEC-002_auth-crypto-coverage.md) | 100% coverage plan for auth/crypto paths | Security | High | SecurityManager | TST-004 |
 | [UX-001](queue/UX-001_shared-plot-button-tap-targets.md) | Android: shared plot action buttons have insufficient tap targets | UX | Low | Developer | — |
-| [WEB-001](queue/WEB-001_friends-list-page.md) | Web: friends list page | Feature | Medium | Developer | — |
 | [DOC-001](queue/DOC-001_uml-sequence-diagrams.md) | UML sequence diagrams from test output | Docs | Low | Developer | TST-004 |
 | [OPS-002](queue/OPS-002_new-environment-setup-guide.md) | New environment setup guide | Operations | Low | OpsManager | — |
 
@@ -42,12 +36,16 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | ID | Title | Category | Priority | Assigned to |
 |---|---|---|---|---|
 | [RES-002](in-progress/RES-002_window-capsule-expiry-cryptography.md) | Window capsule — cryptographic expiry, literature review and construction brief | Research | High | ResearchManager |
-| [RES-003](in-progress/RES-003_pqc-migration-readiness-brief.md) | PQC migration readiness — algorithm break response plan for Technical Architect | Research | High | ResearchManager |
+| [ARCH-007](in-progress/ARCH-007_e2ee-tag-scheme.md) | E2EE tag scheme — HMAC token identifiers + encrypted display names | Architecture | High | architect |
+| [BUG-022](in-progress/BUG-022_web-detail-view-blank-for-shared-plot-image.md) | Web detail view blank for shared plot items — full image DEK not decrypted with plot key | Bug Fix | High | developer-1 |
+| [BUG-020](in-progress/BUG-020_shared-plot-auto-approve-needs-client-dek-rewrap.md) | Shared plot trellis auto-approve — client-side DEK re-wrap to avoid mandatory staging | Bug Fix | Medium | developer-2 |
 
 ## Done
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
+| [RES-003](done/RES-003_pqc-migration-readiness-brief.md) | PQC migration readiness — algorithm break response plan for Technical Architect | Research | 2026-05-16 |
+| [WEB-001](done/WEB-001_friends-list-page.md) | Web: friends list page | Feature | 2026-05-16 |
 | [DONE-001](done/DONE-001_server-refactor-phases-1-8.md) | Server refactor phases 1–8 | Refactoring | 2026-05-14 |
 | [DONE-002](done/DONE-002_logging-slf4j.md) | Replace println with SLF4J/Logback | Code Quality | 2026-05-14 |
 | [DONE-003](done/DONE-003_json-dto-serialisation.md) | Replace hand-rolled JSON with DTOs | Code Quality | 2026-05-14 |
