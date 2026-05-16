@@ -60,3 +60,13 @@ Thumbs.db
 # Test reports
 # -----------------------------------------------------------------------------
 HeirloomsTest/build/reports/
+
+# -----------------------------------------------------------------------------
+# Device farm — secrets and ephemeral run files
+# -----------------------------------------------------------------------------
+# Device serial mapping — contains hardware identifiers, never commit
+scripts/test-farm/.env
+# Per-run test account credentials — discarded after each run
+scripts/test-farm/.farm-env
+# Test run output (JUnit XML, screenshots, logcat dumps)
+test-results/farm/

@@ -1,0 +1,61 @@
+# Journey 12 — Android flavor smoke test
+#
+# Verifies that the staging flavor (digital.heirlooms.app.test) launches,
+# presents the vault unlock screen, successfully unlocks into the Garden,
+# and that the Trellises tab uses the correct "Trellis" label (not the old
+# "Flow" terminology).
+#
+# Run with:
+#   source scripts/test-farm/.farm-env
+#   source scripts/test-farm/.env
+#   maestro test \
+#     --device $FARM_DEVICE_CURRENT \
+#     --env USER_A_PASSWORD=$USER_A_PASSWORD \
+#     --env USER_A_USERNAME=$USER_A_USERNAME \
+#     --format junit \
+#     --output test-results/farm/$RUN_ID/journey-12.xml \
+#     scripts/test-farm/maestro/journey-12-flavor-smoke.yaml
+#
+# Prerequisites:
+#   - staging APK installed (deploy-apk.sh or deploy-all.sh)
+#   - App data cleared (deploy-apk.sh does this automatically)
+#   - User A registered via provision-accounts.sh
+#   - Passphrase vault set up on the device for USER_A_USERNAME
+#     (first-run: the script should start at the registration/vault-setup screen;
+#      if app data was cleared the vault setup flow will appear before unlock)
+#
+# NOTE: Selector names (assertVisible strings) must be verified against the actual
+# app UI before running in CI. Update them to match the exact text/content
+# description used in the Compose tree.
+
+appId: digital.heirlooms.app.test
+---
+# ---- Launch ----------------------------------------------------------------
+- launchApp:
+    clearState: false   # app data was already cleared by deploy-apk.sh
+
+# ---- Vault unlock screen ---------------------------------------------------
+# The app should present the passphrase unlock screen after a fresh data clear
+# followed by a registration. The exact label depends on whether the user has
+# previously set up a vault. Adjust the selector if the screen heading differs.
+- assertVisible: "Vault"
+
+- tapOn: "Passphrase"
+- inputText: ${USER_A_PASSWORD}
+- tapOn: "Unlock"
+
+# ---- Garden tab ------------------------------------------------------------
+# After successful unlock the Garden tab should be visible within a few seconds.
+- assertVisible:
+    text: "Garden"
+    timeout: 10000
+
+# ---- Trellises tab — label regression check --------------------------------
+# Verify the Trellises tab exists and uses the correct label.
+# This catches any accidental reversion to the old "Flow" terminology (BUG-021 class).
+- tapOn: "Trellises"
+- assertNotVisible: "Flow"
+- assertVisible: "Trellis"
+
+# ---- Done ------------------------------------------------------------------
+- stopApp
