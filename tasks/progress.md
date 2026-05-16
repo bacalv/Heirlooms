@@ -39,6 +39,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
+| [TAU-001](done/TAU-001_capsule-construction-guide.md) | Capsule construction guide — formal notation, diagrams, print viz, Manim scripts | Documentation | 2026-05-16 |
 | [ARCH-008](done/ARCH-008_chained-capsule-feasibility-and-care-mode-architecture.md) | Chained capsule feasibility and Care Mode architecture assessment | Architecture | 2026-05-16 |
 | [ARCH-009](done/ARCH-009_executor-revocation-and-key-rotation-brief.md) | Executor nomination — revocation and key rotation architecture brief | Architecture | 2026-05-16 |
 | [ARCH-010](done/ARCH-010_m11-api-surface-and-migration-sequencing.md) | M11 API surface and migration sequencing brief | Architecture | 2026-05-16 |
