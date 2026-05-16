@@ -17,7 +17,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [STR-001](queue/STR-001_strategic-synthesis-top-20-features-direction-brief.md) | Strategic synthesis — top 20 features and direction brief for CTO | Strategy | Medium | PA | ARCH-008 |
 | [ARCH-008](queue/ARCH-008_chained-capsule-feasibility-and-care-mode-architecture.md) | Chained capsule feasibility and Care Mode architecture assessment | Architecture | Medium | TechnicalArchitect | — |
 | [ARCH-009](queue/ARCH-009_executor-revocation-and-key-rotation-brief.md) | Executor nomination — revocation and key rotation architecture brief | Architecture | High | TechnicalArchitect | ARCH-004 |
-| [ARCH-010](queue/ARCH-010_m11-api-surface-and-migration-sequencing.md) | M11 API surface and migration sequencing brief | Architecture | High | TechnicalArchitect | ARCH-003 |
 | [OPS-004](queue/OPS-004_v055-test-environment-deployment.md) | v0.55 test environment deployment | Operations | High | OpsManager | — |
 | [TST-010](queue/TST-010_manual-staging-checklist-v055.md) | Manual staging checklist v0.55 — **held until staging ready** | Testing | High | TestManager | — |
 | [TST-009](queue/TST-009_android-device-farm-design.md) | Android device farm design — 3-device automated test infrastructure | Testing | High | TestManager | — |
@@ -128,6 +127,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [BUG-005](done/developer-3_BUG-005_thumbnail-rotation.md) | Thumbnail generator now applies EXIF orientation — rotation baked into pixels | Bug Fix | 2026-05-15 |
 | [BUG-017](done/developer-4_BUG-017_android-plot-key-not-loaded-after-accept-invite.md) | Android: eagerly fetch plot key after accepting invite so thumbnails decrypt without restart | Bug Fix | 2026-05-15 |
 | [BUG-018](done/developer-1_BUG-018_shared-plot-trellis-no-staging-dek-not-rewrapped.md) | Shared-plot trellis always requires staging — prevent items flowing without DEK re-wrap | Bug Fix | 2026-05-15 |
+| [ARCH-010](done/ARCH-010_m11-api-surface-and-migration-sequencing.md) | M11 API surface and migration sequencing brief | Architecture | 2026-05-16 |
 | [RES-001](done/RES-001_crypto-threat-horizon-40kft.md) | Cryptographic threat horizon — initial 40,000ft survey for CTO | Research | 2026-05-16 |
 | [RET-001](done/RET-001_initial-retirement-assessment.md) | Initial retirement assessment — questionnaire, intelligence gathering, and key decisions | Retirement Planning | 2026-05-16 |
 
