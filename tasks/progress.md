@@ -21,7 +21,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [OPS-004](queue/OPS-004_v055-test-environment-deployment.md) | v0.55 test environment deployment | Operations | High | OpsManager | — |
 | [TST-010](queue/TST-010_manual-staging-checklist-v055.md) | Manual staging checklist v0.55 — **held until staging ready** | Testing | High | TestManager | — |
 | [TST-009](queue/TST-009_android-device-farm-design.md) | Android device farm design — 3-device automated test infrastructure | Testing | High | TestManager | — |
-| [WEB-002](queue/WEB-002_web-invite-generation.md) | Web — generate and share invite links | Feature | Medium | Developer | — |
 | [OPS-003](queue/OPS-003_pre-production-staging-environment.md) | Pre-production staging environment — prod-snapshot + anonymisation pipeline | Operations | Low | OpsManager | — |
 | [TST-008](queue/TST-008_shared-plot-e2e-smoke-test.md) | Shared plot E2E smoke test — formalise spec and identify automation strategy | Testing | High | TestManager | — |
 | [SEC-012](queue/SEC-012_tag-metadata-leakage-accepted-risk.md) | Tag metadata leakage — document and disclose accepted residual risk | Security | Medium | SecurityManager | ARCH-007 |
@@ -67,6 +66,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [BUG-020](done/BUG-020_shared-plot-auto-approve-needs-client-dek-rewrap.md) | Shared plot trellis auto-approve — client-side DEK re-wrap to avoid mandatory staging | Bug Fix | 2026-05-16 |
 | [RES-002](done/RES-002_window-capsule-expiry-cryptography.md) | Window capsule — cryptographic expiry, literature review and construction brief | Research | 2026-05-16 |
 | [RES-003](done/RES-003_pqc-migration-readiness-brief.md) | PQC migration readiness — algorithm break response plan for Technical Architect | Research | 2026-05-16 |
+| [WEB-002](done/WEB-002_web-invite-generation.md) | Web: generate and share invite links | Feature | 2026-05-16 |
 | [WEB-001](done/WEB-001_friends-list-page.md) | Web: friends list page | Feature | 2026-05-16 |
 | [DONE-001](done/DONE-001_server-refactor-phases-1-8.md) | Server refactor phases 1–8 | Refactoring | 2026-05-14 |
 | [DONE-002](done/DONE-002_logging-slf4j.md) | Replace println with SLF4J/Logback | Code Quality | 2026-05-14 |

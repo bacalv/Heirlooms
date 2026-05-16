@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../AuthContext'
-import { getFriends } from '../api'
+import { getFriends, createInvite, buildInviteUrl } from '../api'
 import { WorkingDots } from '../brand/WorkingDots'
 
 // ---- Person icon ------------------------------------------------------------
@@ -30,6 +30,89 @@ function FriendRow({ friend }) {
   )
 }
 
+// ---- Invite section ---------------------------------------------------------
+
+function InviteSection({ apiKey }) {
+  const [inviteUrl, setInviteUrl] = useState(null)
+  const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState(null)
+  const [copied, setCopied] = useState(false)
+
+  async function handleGenerate() {
+    setGenerating(true)
+    setError(null)
+    setCopied(false)
+    try {
+      const { token } = await createInvite(apiKey)
+      setInviteUrl(buildInviteUrl(token))
+    } catch (e) {
+      setError('Could not generate an invite link. Please try again.')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(inviteUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    } catch {
+      // Fallback: select the text for manual copy
+    }
+  }
+
+  return (
+    <div className="border border-forest-15 rounded-card p-4 bg-white mb-6">
+      <div className="flex items-center gap-2 mb-1">
+        <svg className="w-4 h-4 text-forest/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+            d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+        </svg>
+        <h2 className="font-sans font-medium text-forest text-sm">Invite a friend</h2>
+      </div>
+      <p className="text-xs text-text-muted font-sans mb-3">
+        Generate a single-use invite link. It expires once redeemed.
+      </p>
+
+      {error && (
+        <p className="text-xs text-earth font-serif italic mb-3">{error}</p>
+      )}
+
+      {!inviteUrl ? (
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          className="bg-forest text-parchment text-sm font-medium px-4 py-2 rounded-button hover:opacity-90 disabled:opacity-40 transition-opacity"
+        >
+          {generating ? 'Generating…' : 'Generate invite link'}
+        </button>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 bg-parchment border border-forest-15 rounded-button px-3 py-2">
+            <span className="font-sans text-xs text-forest truncate flex-1 select-all">{inviteUrl}</span>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleCopy}
+              className="flex-1 bg-forest text-parchment text-sm font-medium px-4 py-2 rounded-button hover:opacity-90 transition-opacity"
+            >
+              {copied ? 'Copied!' : 'Copy link'}
+            </button>
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="text-xs text-text-muted font-sans px-3 py-2 border border-forest-15 rounded-button hover:text-forest disabled:opacity-40 transition-colors"
+            >
+              New link
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ---- Main page --------------------------------------------------------------
 
 export function FriendsPage() {
@@ -54,6 +137,8 @@ export function FriendsPage() {
           People you've connected with on Heirlooms.
         </p>
       </div>
+
+      <InviteSection apiKey={apiKey} />
 
       {loading && (
         <div className="flex justify-center py-16">

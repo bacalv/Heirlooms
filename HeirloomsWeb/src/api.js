@@ -168,6 +168,21 @@ export async function getInvite(sessionToken) {
   return r.json() // { token, expires_at }
 }
 
+export async function createInvite(sessionToken) {
+  const r = await apiFetch('/api/auth/invites', sessionToken, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json() // { token, expires_at }
+}
+
+export function buildInviteUrl(token) {
+  const isStaging = API_URL.includes('test.heirlooms.digital')
+  const base = isStaging ? 'https://test.heirlooms.digital' : 'https://heirlooms.digital'
+  return `${base}/join?token=${encodeURIComponent(token)}`
+}
+
 export async function authInviteConnect(sessionToken, inviteToken) {
   return fetch(`${API_URL}/api/auth/invites/${encodeURIComponent(inviteToken)}/connect`, {
     method: 'POST',
