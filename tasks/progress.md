@@ -58,6 +58,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [RES-004](done/RES-004_chained-capsule-cryptographic-assessment.md) | Chained capsule — cryptographic novelty assessment | Research | 2026-05-16 |
 | [MKT-001](done/MKT-001_strategic-direction-thinking-report.md) | Strategic direction thinking report | Marketing | 2026-05-16 |
 | [PSY-001](done/PSY-001_grief-reframe-care-mode-and-experience-psychology.md) | Grief reframe, Care Mode dignity, Experience psychology | Psychology | 2026-05-16 |
+| [PHI-002](done/PHI-002_capsule-narrative-framing.md) | Capsule narrative framing — consent, futurity, and the key ceremony | Philosophy | 2026-05-16 |
 | [PHI-001](done/PHI-001_ethics-of-conditional-delivery-consent-and-digital-legacy.md) | Ethics of conditional delivery, consent, long-horizon promise | Philosophy | 2026-05-16 |
 | [LEG-002](done/LEG-002_care-mode-consent-chained-capsule-ip.md) | Care Mode consent, chained capsule intellectual property, white-label | Legal | 2026-05-16 |
 | [RET-002](done/RET-002_three-segment-valuation-and-retirement-implications.md) | Three-segment valuation and retirement implications | Retirement | 2026-05-16 |
