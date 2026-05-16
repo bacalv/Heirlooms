@@ -181,6 +181,7 @@ struct HomeView: View {
         do {
             // --- Acquire plaintext bytes (stream video from disk; load images in memory) ---
             let plaintextURL: URL
+            var videoDurationSeconds: Int? = nil
             if isVideo {
                 // Load video as a file URL using AVAsset export to avoid loading full bytes into RAM.
                 guard let avAsset = try? await loadVideoAsset(from: pickerItem) else {
@@ -195,6 +196,12 @@ struct HomeView: View {
                     return
                 }
                 plaintextURL = exportedURL
+                // Extract duration from the exported file.
+                let exportedAsset = AVURLAsset(url: exportedURL)
+                let dur = CMTimeGetSeconds(exportedAsset.duration)
+                if dur.isFinite && dur > 0 {
+                    videoDurationSeconds = Int(dur.rounded())
+                }
             } else {
                 guard let data = try? await pickerItem.loadTransferable(type: Data.self) else {
                     print("[HomeView] Failed to load image data")
@@ -272,7 +279,8 @@ struct HomeView: View {
                 fileSize: Int64(encryptedContent.count),
                 wrappedDEK: wrappedContentDek,
                 wrappedThumbDEK: encryptedThumb != nil ? wrappedThumbDek : nil,
-                dekFormat: plotAlgID
+                dekFormat: plotAlgID,
+                durationSeconds: videoDurationSeconds
             )
         } catch {
             print("[HomeView] Upload failed: \(error.localizedDescription)")

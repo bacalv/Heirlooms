@@ -671,6 +671,10 @@ internal fun GardenFlavour(
                 Spacer(Modifier.height(4.dp))
             }
             Text("Uploaded ${formatInstantDate(upload.uploadedAt)}", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+            if (upload.isVideo && upload.durationSeconds != null) {
+                Spacer(Modifier.height(4.dp))
+                Text("Duration: ${formatDuration(upload.durationSeconds)}", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+            }
 
             upload.sharedFromDisplayName?.let { name ->
                 Spacer(Modifier.height(4.dp))
@@ -853,6 +857,10 @@ internal fun ExploreFlavour(
                 Spacer(Modifier.height(4.dp))
             }
             Text("Uploaded ${formatInstantDate(upload.uploadedAt)}", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+            if (upload.isVideo && upload.durationSeconds != null) {
+                Spacer(Modifier.height(4.dp))
+                Text("Duration: ${formatDuration(upload.durationSeconds)}", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+            }
 
             if (upload.latitude != null && upload.longitude != null) {
                 Spacer(Modifier.height(4.dp))

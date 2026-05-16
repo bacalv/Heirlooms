@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import UIKit
+import AVFoundation
 import HeirloomsCore
 
 /// Orchestrates the encrypt-and-upload pipeline inside the Share Extension.
@@ -185,6 +186,9 @@ final class ShareUploadCoordinator: ObservableObject {
         let videoData = try Data(contentsOf: fileURL)
         progress = 0.10
 
+        // --- Extract duration ---
+        let durationSeconds = extractVideoDuration(from: fileURL)
+
         // --- Generate DEK ---
         let contentDek = EnvelopeCrypto.generateDEK()
 
@@ -226,9 +230,20 @@ final class ShareUploadCoordinator: ObservableObject {
             fileSize: Int64(encryptedContent.count),
             wrappedDEK: wrappedContentDek,
             wrappedThumbDEK: nil,
-            dekFormat: plotAlgID
+            dekFormat: plotAlgID,
+            durationSeconds: durationSeconds
         )
         progress = 1.0
+    }
+
+    // MARK: - Private helper
+
+    /// Returns the duration of a video file in whole seconds, or nil on any error.
+    private func extractVideoDuration(from url: URL) -> Int? {
+        let asset = AVURLAsset(url: url)
+        let durationSeconds = CMTimeGetSeconds(asset.duration)
+        guard durationSeconds.isFinite, durationSeconds > 0 else { return nil }
+        return Int(durationSeconds.rounded())
     }
 
     // MARK: - Networking

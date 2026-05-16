@@ -127,6 +127,10 @@ class UploadService(
             val key = storage.save(body, mimeType)
             val thumbKey = tryStoreThumbnail(body, mimeType, key, storage, thumbnailGenerator)
             val metadata = try { metadataExtractor(body, mimeType) } catch (_: Exception) { MediaMetadata() }
+            val normalizedMime = mimeType.substringBefore(";").trim().lowercase()
+            val durationSeconds = if (normalizedMime.startsWith("video/"))
+                runCatching { extractVideoDuration(body, mimeType) }.getOrNull()
+            else null
             val record = UploadRecord(
                 id = id,
                 storageKey = key.value,
@@ -141,6 +145,7 @@ class UploadService(
                 altitude = metadata.altitude,
                 deviceMake = metadata.deviceMake,
                 deviceModel = metadata.deviceModel,
+                durationSeconds = durationSeconds,
             )
             uploadRepo.recordUpload(record, userId)
             UploadResult.Created(record)

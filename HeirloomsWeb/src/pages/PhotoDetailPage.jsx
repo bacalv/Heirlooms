@@ -332,6 +332,9 @@ function GardenFlavour({ upload, blobUrl, capsules, isComposted, composting, com
         </div>
         <p className="text-sm text-text-muted">{upload.mimeType} · {formatBytes(upload.fileSize)}</p>
         <p className="text-sm text-text-muted">Added {formatUploadDate(upload.uploadedAt)}</p>
+        {isVideo && upload.durationSeconds != null && (
+          <p className="text-sm text-text-muted">Duration: {formatDuration(upload.durationSeconds)}</p>
+        )}
         {upload.sharedFromDisplayName && (
           <p className="text-sm text-text-muted">Shared by {upload.sharedFromDisplayName}</p>
         )}
@@ -479,6 +482,9 @@ function ExploreFlavour({ upload, blobUrl, capsules, isComposted, composting, co
           </p>
         )}
         <p className="text-sm text-text-muted">{upload.mimeType} · {formatBytes(upload.fileSize)}</p>
+        {isVideo && upload.durationSeconds != null && (
+          <p className="text-sm text-text-muted">Duration: {formatDuration(upload.durationSeconds)}</p>
+        )}
       </div>
 
       {/* Tags (read-only) with link to Garden flavour to edit */}
