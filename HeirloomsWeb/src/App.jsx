@@ -17,6 +17,7 @@ import { ExplorePage } from './pages/ExplorePage'
 import { FlowsPage } from './pages/FlowsPage'
 import { PlotJoinPage } from './pages/PlotJoinPage'
 import { SharedPlotsPage } from './pages/SharedPlotsPage'
+import { FriendsPage } from './pages/FriendsPage'
 import { lock, unlock, setSharingPrivkey, getSharingPrivkey } from './crypto/vaultSession'
 import { authLogout, authMe, API_URL, putSharingKey } from './api'
 import { unwrapMasterKeyForDevice, unwrapDekWithMasterKey, fromB64, importSharingPrivkey, generateSharingKeypair, wrapDekUnderMasterKey, toB64, ALG_MASTER_AES256GCM_V1 } from './crypto/vaultCrypto'
@@ -193,6 +194,7 @@ export default function App() {
             <Route path="compost" element={<CompostHeapPage />} />
             <Route path="flows" element={<FlowsPage />} />
             <Route path="shared" element={<SharedPlotsPage />} />
+            <Route path="friends" element={<FriendsPage />} />
             <Route path="plots/join" element={<PlotJoinPage />} />
             <Route path="access" element={<AccessPage />} />
             <Route path="access/pair" element={<PairPage onPaired={handleLogin} />} />

@@ -40,6 +40,7 @@ export function Nav() {
             <NavLink to="/capsules" className={navLinkClass}>Capsules</NavLink>
             <NavLink to="/shared" className={navLinkClass}>Shared</NavLink>
             <NavLink to="/flows" className={navLinkClass}>Trellises</NavLink>
+            <NavLink to="/friends" className={navLinkClass}>Friends</NavLink>
           </nav>
 
           <div className="hidden sm:flex items-center gap-6">
@@ -123,6 +124,15 @@ export function Nav() {
                 onClick={() => setMenuOpen(false)}
               >
                 Trellises
+              </NavLink>
+              <NavLink
+                to="/friends"
+                className={({ isActive }) =>
+                  `font-sans ${isActive ? 'text-forest border-b-2 border-earth pb-0.5 self-start' : 'text-forest-75'}`
+                }
+                onClick={() => setMenuOpen(false)}
+              >
+                Friends
               </NavLink>
               <NavLink
                 to="/access"
