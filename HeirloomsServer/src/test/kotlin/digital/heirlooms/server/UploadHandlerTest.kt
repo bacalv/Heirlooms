@@ -924,6 +924,25 @@ class FinUploadHandlerTest {
         assertEquals(BAD_REQUEST, response.status)
     }
 
+    // BUG-020: PATCH with prewrappedPlotDeks is accepted and tags are still updated
+    @Test
+    fun `PATCH tags with prewrappedPlotDeks succeeds and prewrapped fields are ignored for non-shared-plot routing`() {
+        val updated = knownRecord.copy(tags = listOf("family"))
+        every { mockUploadRepo.updateTags(knownId, listOf("family"), any(), any()) } returns true
+        every { mockUploadRepo.findUploadByIdForUser(knownId, any()) } returns updated
+
+        val plotId = UUID.randomUUID()
+        val wrappedItemDek = java.util.Base64.getEncoder().encodeToString("fakeDekBytes".toByteArray())
+        val response = app(
+            Request(PATCH, "/api/content/uploads/$knownId/tags")
+                .header("Content-Type", "application/json")
+                .body("""{"tags":["family"],"prewrappedPlotDeks":[{"plotId":"$plotId","wrappedItemDek":"$wrappedItemDek","itemDekFormat":"plot-aes256gcm-v1"}]}""")
+        )
+
+        assertEquals(OK, response.status)
+        verify { mockUploadRepo.updateTags(knownId, listOf("family"), any(), any()) }
+    }
+
     @Test
     fun `tags field present as empty array in list response for untagged upload`() {
         every { mockUploadRepo.listUploadsPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns UploadPage(listOf(knownRecord), null)

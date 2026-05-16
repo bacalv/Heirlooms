@@ -125,9 +125,42 @@ class HeirloomsApi(
     suspend fun restoreUpload(id: String): Upload =
         JSONObject(post("/api/content/uploads/$id/restore")).toUpload()
 
-    suspend fun updateTags(id: String, tags: List<String>): Upload {
+    /**
+     * Pre-wrapped plot DEK for client-side DEK re-wrap on shared-plot trellis routing.
+     * When the client holds the plot key it can include these to bypass staging (BUG-020).
+     */
+    data class PrewrappedPlotDek(
+        val plotId: String,
+        val wrappedItemDek: String,       // base64
+        val itemDekFormat: String,
+        val wrappedThumbnailDek: String?, // base64, nullable
+        val thumbnailDekFormat: String?,
+    )
+
+    suspend fun updateTags(
+        id: String,
+        tags: List<String>,
+        prewrappedPlotDeks: List<PrewrappedPlotDek> = emptyList(),
+    ): Upload {
         val tagsJson = "[${tags.joinToString(",") { "\"${it.replace("\"", "\\\"")}\"" }}]"
-        return JSONObject(patch("/api/content/uploads/$id/tags", """{"tags":$tagsJson}""")).toUpload()
+        val body = buildString {
+            append("""{"tags":$tagsJson""")
+            if (prewrappedPlotDeks.isNotEmpty()) {
+                append(""","prewrappedPlotDeks":[""")
+                prewrappedPlotDeks.forEachIndexed { i, dek ->
+                    if (i > 0) append(",")
+                    append("""{"plotId":${dek.plotId.jsonEsc()}""")
+                    append(""","wrappedItemDek":${dek.wrappedItemDek.jsonEsc()}""")
+                    append(""","itemDekFormat":${dek.itemDekFormat.jsonEsc()}""")
+                    if (dek.wrappedThumbnailDek != null) append(""","wrappedThumbnailDek":${dek.wrappedThumbnailDek.jsonEsc()}""")
+                    if (dek.thumbnailDekFormat != null) append(""","thumbnailDekFormat":${dek.thumbnailDekFormat.jsonEsc()}""")
+                    append("}")
+                }
+                append("]")
+            }
+            append("}")
+        }
+        return JSONObject(patch("/api/content/uploads/$id/tags", body)).toUpload()
     }
 
     suspend fun rotateUpload(id: String, rotation: Int): Upload =

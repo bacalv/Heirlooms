@@ -5,6 +5,7 @@ import digital.heirlooms.server.domain.upload.UploadSort
 import digital.heirlooms.server.domain.upload.validateTags
 import digital.heirlooms.server.filters.authUserId
 import digital.heirlooms.server.repository.upload.UploadRepository
+import digital.heirlooms.server.repository.plot.PrewrappedPlotDek
 import digital.heirlooms.server.representation.upload.toJson
 import digital.heirlooms.server.service.upload.UploadService
 import digital.heirlooms.server.storage.DirectUploadSupport
@@ -679,7 +680,7 @@ fun tagsContractRoute(uploadService: UploadService): ContractRoute {
     val id = Path.uuid().of("id")
     return "/uploads" / id / "tags" meta {
         summary = "Set tags"
-        description = "Replaces all tags on an upload."
+        description = "Replaces all tags on an upload. Optionally include prewrappedPlotDeks array for client-side DEK re-wrap on shared-plot trellis routing (BUG-020)."
         receiving(tagsRequestLens to TagsRequest(tags = listOf("family", "2026-summer")))
     } bindContract PATCH to { uploadId: UUID, _: String ->
         { request: Request ->
@@ -695,7 +696,9 @@ fun tagsContractRoute(uploadService: UploadService): ContractRoute {
                                 .body("""{"error":"invalid tag","tag":"${result.tag}","reason":"${result.reason}"}""")
                         is TagValidationResult.Valid -> {
                             val userId = request.authUserId()
-                            if (!uploadService.updateTags(uploadId, body.tags, userId)) {
+                            // BUG-020: parse optional prewrappedPlotDeks for shared-plot trellis routing.
+                            val prewrappedDeks = parsePrewrappedDeks(request.bodyString())
+                            if (!uploadService.updateTags(uploadId, body.tags, userId, prewrappedDeks)) {
                                 Response(NOT_FOUND)
                             } else {
                                 val record = uploadService.findUploadForUser(uploadId, userId)!!
@@ -710,5 +713,35 @@ fun tagsContractRoute(uploadService: UploadService): ContractRoute {
                 Response(INTERNAL_SERVER_ERROR).body("Failed to update tags: ${e.message}")
             }
         }
+    }
+}
+
+/**
+ * Parses optional prewrappedPlotDeks from the tags PATCH request body.
+ * Format: { "prewrappedPlotDeks": [{ "plotId": "...", "wrappedItemDek": "base64...",
+ *   "itemDekFormat": "...", "wrappedThumbnailDek": "base64..." (optional),
+ *   "thumbnailDekFormat": "..." (optional) }] }
+ * Returns empty map if field is absent or malformed (fully backward-compatible).
+ */
+private fun parsePrewrappedDeks(bodyString: String): Map<UUID, PrewrappedPlotDek> {
+    return try {
+        val node = ObjectMapper().readTree(bodyString) ?: return emptyMap()
+        val array = node.get("prewrappedPlotDeks")?.takeIf { it.isArray } ?: return emptyMap()
+        val dec = java.util.Base64.getDecoder()
+        val result = mutableMapOf<UUID, PrewrappedPlotDek>()
+        for (entry in array) {
+            val plotIdStr = entry.get("plotId")?.asText()?.takeIf { it.isNotBlank() } ?: continue
+            val plotId = try { UUID.fromString(plotIdStr) } catch (_: Exception) { continue }
+            val wrappedItemDekB64 = entry.get("wrappedItemDek")?.asText()?.takeIf { it.isNotBlank() } ?: continue
+            val itemDekFormat = entry.get("itemDekFormat")?.asText()?.takeIf { it.isNotBlank() } ?: continue
+            val wrappedItemDek = try { dec.decode(wrappedItemDekB64) } catch (_: Exception) { continue }
+            val wrappedThumbnailDek = entry.get("wrappedThumbnailDek")?.asText()?.takeIf { it.isNotBlank() }
+                ?.let { try { dec.decode(it) } catch (_: Exception) { null } }
+            val thumbnailDekFormat = entry.get("thumbnailDekFormat")?.asText()?.takeIf { it.isNotBlank() }
+            result[plotId] = PrewrappedPlotDek(wrappedItemDek, itemDekFormat, wrappedThumbnailDek, thumbnailDekFormat)
+        }
+        result
+    } catch (_: Exception) {
+        emptyMap()
     }
 }
