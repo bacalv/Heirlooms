@@ -26,7 +26,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [TST-008](queue/TST-008_shared-plot-e2e-smoke-test.md) | Shared plot E2E smoke test — formalise spec and identify automation strategy | Testing | High | TestManager | — |
 | [SEC-012](queue/SEC-012_tag-metadata-leakage-accepted-risk.md) | Tag metadata leakage — document and disclose accepted residual risk | Security | Medium | SecurityManager | ARCH-007 |
 | [BUG-021](queue/BUG-021_video-duration-zero-on-detail-view.md) | Video detail view shows 0-second duration — metadata not extracted on upload | Bug Fix | Medium | Developer | — |
-| [FEAT-004](queue/FEAT-004_android-invite-friend-from-friends-screen.md) | Android — invite a friend from the Friends screen | Feature | Medium | Developer | — |
 | [SEC-011](queue/SEC-011_device-revocation.md) | Device revocation — allow users to remove old devices from Devices & Access | Security | Medium | SecurityManager | — |
 | [BUG-019](queue/BUG-019_register-duplicate-device-id-wrong-error-message.md) | Registration shows "Username already exists" for duplicate device_id (409) collision | Bug Fix | Low | Developer | — |
 | [FEAT-003](queue/FEAT-003_android-account-pairing-recovery.md) | Android account pairing / recovery — pair a fresh Android install to an existing account | Feature | Medium | Developer | FEAT-003a |
@@ -105,6 +104,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [SEC-009](done/SEC-009_android-biometric-flag-secure.md) | Android: FLAG_SECURE on vault Activities (Part 1 only; Part 2 biometric deferred) | Security | 2026-05-15 |
 | [BUG-009](done/BUG-009_staging-approval-sharing-key-not-loaded.md) | Staging approval fails if Garden not visited — sharing key eager-load fix | Bug Fix | 2026-05-15 |
 | [TST-005](done/TST-005_playwright-infrastructure.md) | Playwright infrastructure setup | Testing | 2026-05-15 |
+| [FEAT-004](done/FEAT-004_android-invite-friend-from-friends-screen.md) | Android — invite a friend from the Friends screen | Feature | 2026-05-16 |
 | [FEAT-001](done/FEAT-001_invite-link-friend-connect.md) | Invite link friend-connect for existing users | Feature | 2026-05-15 |
 | [FEAT-002](done/FEAT-002_manual-add-to-shared-plot.md) | Manual "add to shared plot" from photo detail — Android + web | Feature | 2026-05-15 |
 | [ARCH-005](done/ARCH-005_envelope-format-amendment.md) | Envelope format amendment — add plot key algo, reserve M11 IDs | Architecture | 2026-05-15 |

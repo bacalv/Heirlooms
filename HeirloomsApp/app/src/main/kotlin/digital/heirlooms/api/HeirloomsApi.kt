@@ -632,6 +632,12 @@ class HeirloomsApi(
         InviteResponse(json.getString("token"), json.getString("expires_at"))
     }
 
+    /** Creates a new friend invite token via POST /api/auth/invites. */
+    suspend fun createFriendInvite(): InviteResponse = withContext(Dispatchers.IO) {
+        val json = JSONObject(post("/api/auth/invites", "{}"))
+        InviteResponse(json.getString("token"), json.getString("expires_at"))
+    }
+
     suspend fun pairingInitiate(): PairingInitiateResponse = withContext(Dispatchers.IO) {
         val json = JSONObject(post("/api/auth/pairing/initiate"))
         PairingInitiateResponse(json.getString("code"), json.getString("expires_at"))
