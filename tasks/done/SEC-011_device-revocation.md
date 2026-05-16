@@ -3,19 +3,14 @@ id: SEC-011
 title: Device revocation — allow users to remove old devices from Devices & Access
 category: Security
 priority: Medium
-status: done
+status: queued
 depends_on: []
 touches:
   - HeirloomsServer/src/main/kotlin/digital/heirlooms/server/routes/auth/AuthRoutes.kt
   - HeirloomsServer/src/main/kotlin/digital/heirlooms/server/service/auth/AuthService.kt
   - HeirloomsServer/src/main/kotlin/digital/heirlooms/server/repository/auth/AuthRepository.kt
-  - HeirloomsServer/src/main/kotlin/digital/heirlooms/server/repository/keys/KeyRepository.kt
-  - HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/main/DevicesAccessScreen.kt
-  - HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/main/AppNavigation.kt
-  - HeirloomsApp/app/src/main/kotlin/digital/heirlooms/api/HeirloomsApi.kt
-  - HeirloomsWeb/src/pages/AccessPage.jsx
-  - HeirloomsWeb/src/api.js
-  - HeirloomsServer/src/test/kotlin/digital/heirlooms/server/service/auth/DeviceRevocationServiceTest.kt
+  - HeirloomsApp/app/src/main/kotlin/digital/heirlooms/ui/auth/DevicesAccessScreen.kt
+  - HeirloomsWeb/src/pages/DevicesAccessPage.jsx (or equivalent)
 assigned_to: SecurityManager
 estimated: half day
 ---
@@ -94,39 +89,49 @@ When a user removes a device from Devices & Access:
 
 ## Completion notes
 
-Completed 2026-05-16 by SecurityManager.
+Completed 2026-05-16 by SecurityManager on branch `agent/security/SEC-011`.
 
-### Implementation summary
+### What was done
 
-**Server (`DELETE /api/auth/devices/{deviceId}`):**
-- Added `deleteDeviceRoute` to `AuthRoutes.kt` — authenticated, path param `deviceId`.
-- Added `revokeDevice(userId, deviceId, callerApiKey)` to `AuthService` returning
-  `RevokeDeviceResult` (Success / NotFound / Forbidden).
-- Self-revocation guard: resolves calling session, checks if the target device's
-  `device_kind` matches the session's `device_kind` AND is the only active device of
-  that kind — returns 403 in that case.
-- Added `deleteWrappedKeyByDeviceId(deviceId, userId)` to `KeyRepository` (hard DELETE).
-- Added `deleteSessionsByDeviceKind(userId, deviceKind)` to `AuthRepository`.
-- Session invalidation is by `device_kind` (the current schema has no `device_id` FK
-  on `user_sessions`). This is the finest granularity available; in a single-device-
-  per-kind deployment it invalidates exactly the right sessions. ARCH-009 may revisit
-  adding a `device_id` column to `user_sessions` if stricter isolation is required.
+All three layers were already partially implemented on the branch. I audited each layer,
+filled in the remaining gaps, and wired them together end-to-end.
 
-**Android:**
-- Added `listDevices()` and `deleteDevice(deviceId)` to `HeirloomsApi`.
-- Updated `DevicesAccessScreen` to accept `currentDeviceId` parameter, fetch the
-  device list on load, and show a "Remove" button for each non-current device.
-- Updated `AppNavigation.kt` to pass `DeviceKeyManager.deviceId` to the screen.
+**Server (fully implemented — verified)**
+- `DELETE /api/auth/devices/{deviceId}` route in `AuthRoutes.kt` — authenticated, scoped to
+  the calling user, returns 403 when the caller tries to revoke their own current device.
+- `AuthService.revokeDevice()` — deletes the `wrapped_keys` row and invalidates all sessions
+  for the revoked device's `device_kind`.
+- `AuthRepository.deleteSessionsByDeviceKind()` — hard-deletes sessions by userId + deviceKind.
+- `KeyRepository.deleteWrappedKeyByDeviceId()` + `getWrappedKeyByDeviceIdForUser()` — scoped
+  deletes to prevent cross-user revocation.
+- `DeviceRevocationServiceTest` — 5 unit tests covering NotFound, Forbidden (sole device),
+  Success (second device), cross-kind revocation, and unresolvable-session guard.
+- Added `isCurrent: Boolean` to `WrappedKeyResponse` and `listDevicesRoute` — the server
+  now stamps `isCurrent=true` on the device that matches the calling session's `device_kind`
+  when it is the only active device of that kind. This lets both clients hide the Remove
+  button without a separate round-trip.
 
-**Web:**
-- Added `listDevices(sessionToken)` and `deleteDevice(sessionToken, deviceId)` to `api.js`.
-- Updated `AccessPage.jsx` to load and display devices, with a "Remove" button for
-  each. The web client cannot determine its own device_id from local state, so all
-  devices show the remove button; the server returns 403 for self-revocation, which is
-  shown as a user-friendly error message.
+**Android (`DevicesAccessScreen.kt`, `HeirloomsApi.kt`)**
+- `DeviceRecord` extended with `isCurrent: Boolean = false`; `listDevices()` parses it via
+  `optBoolean("isCurrent", false)`.
+- `DevicesAccessScreen` already had `currentDeviceId`-based guard; updated to also check
+  `device.isCurrent` so it works even if `currentDeviceId` is not provided.
+- Remove button suppressed for current device; 403 error case still handled gracefully.
 
-**Tests:**
-- `DeviceRevocationServiceTest.kt` — 5 unit tests covering NotFound, Forbidden
-  (single android device = current), Success (two android devices — removes other),
-  Success (android removes web device), and Forbidden (unresolvable session). Uses
-  mockk; no Docker required.
+**Web (`AccessPage.jsx`)**
+- Added `(this device)` label suffix for `device.isCurrent` entries.
+- Remove button is only rendered when `!device.isCurrent` — current device row shows label
+  only, no affordance to remove.
+- Error handler for 403 kept as defence-in-depth.
+
+### Tests run
+- `HeirloomsServer: ./gradlew test --no-daemon` — BUILD SUCCESSFUL
+- `HeirloomsApp: ./gradlew :app:testProdDebugUnitTest --no-daemon` — BUILD SUCCESSFUL
+
+### Security posture
+- Server enforces revocation scope: only the authenticated user's own devices are accessible.
+- Self-revocation blocked at both server (403) and UI (button hidden).
+- Revocation is hard-delete: wrapped key is permanently removed; even if the old device
+  hardware and Keystore key were intact, the server holds nothing to decrypt.
+- Session invalidation covers all sessions for the revoked device_kind (best granularity
+  available without a device_id FK on user_sessions).

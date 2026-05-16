@@ -648,6 +648,7 @@ class HeirloomsApi(
                 deviceKind = o.getString("deviceKind"),
                 createdAt = o.getString("createdAt"),
                 lastUsedAt = o.getString("lastUsedAt"),
+                isCurrent = o.optBoolean("isCurrent", false),
             )
         }
     }
@@ -676,6 +677,7 @@ class HeirloomsApi(
         val deviceKind: String,
         val createdAt: String,
         val lastUsedAt: String,
+        val isCurrent: Boolean = false,
     )
 
     suspend fun authRegister(

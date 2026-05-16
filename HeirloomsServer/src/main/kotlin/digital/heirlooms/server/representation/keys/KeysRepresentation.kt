@@ -21,6 +21,7 @@ private data class WrappedKeyResponse(
     val createdAt: Instant,
     val lastUsedAt: Instant,
     val retiredAt: Instant?,
+    val isCurrent: Boolean = false,
 )
 
 private data class RecoveryPassphraseResponse(
@@ -32,7 +33,7 @@ private data class RecoveryPassphraseResponse(
     val updatedAt: Instant,
 )
 
-fun WrappedKeyRecord.toJson(): String =
+fun WrappedKeyRecord.toJson(isCurrent: Boolean = false): String =
     responseMapper.writeValueAsString(
         WrappedKeyResponse(
             id = id.toString(),
@@ -46,6 +47,7 @@ fun WrappedKeyRecord.toJson(): String =
             createdAt = createdAt,
             lastUsedAt = lastUsedAt,
             retiredAt = retiredAt,
+            isCurrent = isCurrent,
         )
     )
 

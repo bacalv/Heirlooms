@@ -275,7 +275,8 @@ fun DevicesAccessScreen(
                 Text("Loading devices…", style = MaterialTheme.typography.bodySmall, color = Forest)
             } else {
                 devices.forEach { device ->
-                    val isCurrent = currentDeviceId.isNotEmpty() && device.deviceId == currentDeviceId
+                    val isCurrent = device.isCurrent ||
+                        (currentDeviceId.isNotEmpty() && device.deviceId == currentDeviceId)
                     Row(
                         Modifier.fillMaxWidth().padding(vertical = 6.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,

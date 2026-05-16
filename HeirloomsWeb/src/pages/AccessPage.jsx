@@ -152,16 +152,20 @@ export function AccessPage() {
             {devices.map((device) => (
               <li key={device.deviceId} className="flex items-center justify-between px-3 py-2 bg-parchment/50">
                 <div>
-                  <p className="text-sm font-medium text-forest">{device.deviceLabel}</p>
+                  <p className="text-sm font-medium text-forest">
+                    {device.deviceLabel}{device.isCurrent ? ' (this device)' : ''}
+                  </p>
                   <p className="text-xs text-text-muted capitalize">{device.deviceKind}</p>
                 </div>
-                <button
-                  onClick={() => handleRemoveDevice(device.deviceId)}
-                  disabled={removingId === device.deviceId}
-                  className="text-xs px-2 py-1 border border-earth text-earth rounded hover:bg-earth/10 transition-colors disabled:opacity-40"
-                >
-                  {removingId === device.deviceId ? 'Removing…' : 'Remove'}
-                </button>
+                {!device.isCurrent && (
+                  <button
+                    onClick={() => handleRemoveDevice(device.deviceId)}
+                    disabled={removingId === device.deviceId}
+                    className="text-xs px-2 py-1 border border-earth text-earth rounded hover:bg-earth/10 transition-colors disabled:opacity-40"
+                  >
+                    {removingId === device.deviceId ? 'Removing…' : 'Remove'}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
