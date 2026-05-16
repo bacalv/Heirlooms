@@ -92,7 +92,7 @@ function PlotThumbCard({ upload, apiKey, plotId, onTagClick, onVideoPlay, onRota
       ) : (
         <Link
           to={`/photos/${upload.id}?from=garden`}
-          state={{ upload }}
+          state={{ upload, plotId }}
           className="w-full h-full rounded overflow-hidden border border-forest-08 bg-forest-04 block hover:opacity-90 transition-opacity relative"
         >
           {thumbnailContent}
@@ -116,7 +116,7 @@ function PlotThumbCard({ upload, apiKey, plotId, onTagClick, onVideoPlay, onRota
 
       {/* Pencil — go to detail page, appears on hover next to tag button */}
       <button
-        onClick={(e) => stop(e, () => navigate(`/photos/${upload.id}?from=garden`, { state: { upload } }))}
+        onClick={(e) => stop(e, () => navigate(`/photos/${upload.id}?from=garden`, { state: { upload, plotId } }))}
         className="absolute top-1 right-7 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity bg-black/40 rounded p-0.5"
         title="View details"
         aria-label="View details"
