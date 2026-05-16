@@ -213,7 +213,8 @@ public enum EnvelopeCrypto {
         )
 
         // AES-GCM encrypt the raw DEK bytes.
-        let dekBytes = dek.withUnsafeBytes { Data($0) }
+        var dekBytes = dek.withUnsafeBytes { Data($0) }
+        defer { dekBytes.resetBytes(in: 0..<dekBytes.count) }
         let (ciphertext, nonce, tag) = try encryptAESGCM(plaintext: dekBytes, key: wrapKey)
 
         // Build asymmetric envelope.

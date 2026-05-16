@@ -193,7 +193,8 @@ struct ActivateView: View {
             // Persist userId so HomeView can distinguish "Shared with you" vs "You shared".
             try KeychainManager.saveUserId(response.userId)
             // Store master key in its dedicated Keychain slot.
-            let masterKeyData = masterKey.withUnsafeBytes { Data($0) }
+            var masterKeyData = masterKey.withUnsafeBytes { Data($0) }
+            defer { masterKeyData.resetBytes(in: 0..<masterKeyData.count) }
             try KeychainManager.saveMasterKey(masterKeyData)
 
             await MainActor.run {
@@ -249,7 +250,8 @@ struct ActivateView: View {
             )
 
             // Step 4: Store in Keychain.
-            let plotKeyData = plotKey.withUnsafeBytes { Data($0) }
+            var plotKeyData = plotKey.withUnsafeBytes { Data($0) }
+            defer { plotKeyData.resetBytes(in: 0..<plotKeyData.count) }
             try KeychainManager.savePlotKey(plotKeyData)
             try KeychainManager.savePlotId(resolvedPlotId)
 

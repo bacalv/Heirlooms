@@ -23,7 +23,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | Developer | — |
 | [SEC-002](queue/SEC-002_auth-crypto-coverage.md) | 100% coverage plan for auth/crypto paths | Security | High | SecurityManager | TST-004 |
 | [SEC-016](queue/SEC-016_ios-ats-infoplist.md) | iOS — add committed Info.plist with ATS domain restriction | Security | High | Developer | SEC-013 |
-| [SEC-017](queue/SEC-017_ios-memory-zeroing-temp-file-cleanup.md) | iOS — zero DEK byte buffers after use and delete decrypted video temp files | Security | High | Developer | SEC-013 |
 | [RES-005](queue/RES-005_glossary-self-reference-audit.md) | Glossary self-reference audit — ensure every cited term has an entry | Research | Low | ResearchManager | — |
 | [OPS-003](queue/OPS-003_pre-production-staging-environment.md) | Pre-production staging environment — prod-snapshot + anonymisation pipeline | Operations | Low | OpsManager | — |
 | [UX-001](queue/UX-001_shared-plot-button-tap-targets.md) | Android: shared plot action buttons have insufficient tap targets | UX | Low | Developer | — |
@@ -38,6 +37,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
+| [SEC-017](done/SEC-017_ios-memory-zeroing-temp-file-cleanup.md) | iOS — zero DEK byte buffers after use, delete video temp files on dismiss | Security | 2026-05-16 |
 | [SEC-014](done/SEC-014_ios-vault-background-privacy-screen.md) | iOS vault — privacy screen on backgrounding | Security | 2026-05-16 |
 | [TAU-001](done/TAU-001_capsule-construction-guide.md) | Capsule construction guide — formal notation, diagrams, print viz, Manim scripts | Documentation | 2026-05-16 |
 | [ARCH-008](done/ARCH-008_chained-capsule-feasibility-and-care-mode-architecture.md) | Chained capsule feasibility and Care Mode architecture assessment | Architecture | 2026-05-16 |
