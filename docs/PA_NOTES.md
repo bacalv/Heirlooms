@@ -123,6 +123,70 @@ Agent naming convention: `developer-1`, `developer-2`, `security`, `test-manager
   session (BUG-019 through BUG-022, FEAT-003/004, SEC-011/012, ARCH-007, TST-008,
   OPS-003). Run "Let's plan the next iteration" to prioritise.
 
+## Legal
+
+Established 2026-05-16. Reports to CTO. Start a session: `@personalities/Legal.md`.
+
+Responsibilities: patent strategy (UK IPO, PCT route), UK GDPR compliance, company law, IP ownership and assignment, terms of service, international law. Works closely with Retirement Planner (exit readiness) and Research Manager (patentability of novel constructions).
+
+Legal briefs: `docs/legal/LEG-NNN_<slug>.md`
+
+**Priority areas flagged at establishment:**
+- Assess patentability of the window capsule construction (RES-002) before it is disclosed publicly
+- Review IP ownership and contractor assignment agreements
+- UK GDPR compliance review for posthumous data / executor access
+
+## Psychologist
+
+Established 2026-05-16. Reports to CTO. Start a session: `@personalities/Psychologist.md`.
+
+Responsibilities: grief-aware UX, executor psychology, digital legacy design, trauma-informed product decisions. Produces briefs to `docs/psychology/PSY-NNN_<slug>.md`.
+
+## Philosopher
+
+Established 2026-05-16. Reports to CTO. Start a session: `@personalities/Philosopher.md`.
+
+Responsibilities: ethics of posthumous consent, digital personhood, long-horizon product ethics, privacy as a value. Produces briefs to `docs/philosophy/PHI-NNN_<slug>.md`.
+
+## Key decisions (2026-05-16 session)
+
+- **Web invite generation**: add a task for web users to generate invite links (equivalent of FEAT-004 on Android) — not covered by WEB-001 which is display-only
+- **PQC migration TA spec**: defer until after M11 ships — TA will pick up RES-003 then, not now
+- **PQC classical component (X25519 vs P-256)**: defer to TA post-M11 with full RES-003 context
+- **PQC grace period**: 180 days approved — Bret agrees this balances security with user realism
+- **tlock user-facing positioning**: defer decision until Marketing Director produces a USP brief
+- **New personas approved**: Psychologist, Philosopher, and Legal all added (2026-05-16)
+- **Pension status**: partial — meaningful gap exists; Heirlooms carries material weight in retirement plan but not the sole vehicle
+- **Go/no-go gate**: none — Heirlooms is a long-term personal project; retirement not contingent on exit
+- **PQC user communication timing**: defer to Marketing Director (MKT-001 complete — can advise now)
+- **Enterprise positioning**: consumer first, enterprise later; Care Mode is the natural B2B wedge when product matures
+- **Incorporation**: Bret has a dormant limited company (former IT contracting) with outstanding VAT — decision: form a NEW limited company for Heirlooms; let dormant company proceed to strike-off
+- **Intellectual property assignment**: on incorporation, Bret must execute a deed assigning all pre-incorporation Heirlooms intellectual property to the new company; any contractor contributors need retrospective assignment agreements
+- **Heirlooms retirement role**: meaningful supplement — other savings could fund modest retirement; Heirlooms is significant upside but not essential
+- **Funding strategy preference order**: (1) revisit after first revenue, (2) stay bootstrapped, (3) small strategic round as last resort
+
+## Legal — key findings from LEG-001 (2026-05-16)
+
+**Window capsule: LIKELY PATENTABLE.** No active patent found anticipating tlock IBE lower-bound + XOR DEK blinding + Shamir threshold deletion upper-bound. Closest prior art is Kavousi et al. "Timed Secret Sharing" (ASIACRYPT 2024) — research paper only. Post-*Emotional Perception* [2026] UKSC 3, UK cryptographic method patent threshold is materially lower. Narrow claim on the specific combination recommended.
+
+**Envelope format: WEAK standalone.** Anticipated by JOSE/JWE and Signal-style designs. Add as dependent claims in the window capsule application.
+
+**HMAC tag scheme: WEAK + US FTO risk.** US9454673B1 (Skyhigh Networks) directly relevant. Treat as trade secret. FTO analysis needed before US launch.
+
+**URGENT gap — IP ownership**: No confirmation that Heirlooms is incorporated as a limited company, or that contractor IP assignments exist. Must resolve before filing.
+
+**Disclosure risk**: None identified (repo is private). Do not disclose externally before filing.
+
+**Filing estimate**: UK £10k–£15k (attorney). PCT adds £5k–£10k. Full international portfolio over 3–5 years: £30k–£70k.
+
+**Recommended actions (from Legal):**
+1. Confirm incorporation status; incorporate if not yet done
+2. Engage CIPA-registered patent attorney — target UK filing by mid-July 2026
+3. Identify contractors who contributed to M7/M10/M11 crypto code; confirm IP assignments
+4. Keep repo private until after filing
+5. Execute NDAs before any investor discussion referencing the window capsule
+6. US FTO analysis against US9454673B1 before US public launch of tag scheme
+
 ## Research Manager
 
 Established 2026-05-16. Reports directly to CTO. Start a session: `@personalities/ResearchManager.md`. Trigger research: say **"do research"**.

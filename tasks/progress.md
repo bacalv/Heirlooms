@@ -14,7 +14,16 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |---|---|---|---|---|---|
+| [STR-001](queue/STR-001_strategic-synthesis-top-20-features-direction-brief.md) | Strategic synthesis — top 20 features and direction brief for CTO | Strategy | Medium | PA | MKT-001, RES-004, ARCH-008, LEG-002, PSY-001, PHI-001, RET-002 |
+| [MKT-001](queue/MKT-001_strategic-direction-thinking-report.md) | Strategic direction thinking report — platform reframe, three segments, chained capsules | Marketing | Medium | MarketingDirector | — |
+| [RES-004](queue/RES-004_chained-capsule-cryptographic-assessment.md) | Chained capsule — cryptographic novelty assessment and conditional delivery literature review | Research | Medium | ResearchManager | RES-002 |
+| [ARCH-008](queue/ARCH-008_chained-capsule-feasibility-and-care-mode-architecture.md) | Chained capsule feasibility and Care Mode architecture assessment | Architecture | Medium | TechnicalArchitect | RES-004 |
+| [LEG-002](queue/LEG-002_care-mode-consent-chained-capsule-ip.md) | Care Mode consent framework, chained capsule IP, and white-label licensing | Legal | Medium | Legal | LEG-001 |
+| [PSY-001](queue/PSY-001_grief-reframe-care-mode-and-experience-psychology.md) | Grief reframe, Care Mode dignity, and Experience segment psychology | Psychology | Medium | Psychologist | — |
+| [PHI-001](queue/PHI-001_ethics-of-conditional-delivery-consent-and-digital-legacy.md) | Ethics of conditional delivery, consent before capacity loss, and the long-horizon promise | Philosophy | Medium | Philosopher | — |
+| [RET-002](queue/RET-002_three-segment-valuation-and-retirement-implications.md) | Three-segment valuation — Care Mode, Experience segment, and retirement implications | Retirement | Medium | RetirementPlanner | RET-001 |
 | [SIM-001](queue/SIM-001_trustless-expiry-impossibility.md) | Simulation: trustless expiry — weakest possible construction without custodians | Simulation | Low | ResearchManager | RES-002 |
+| [WEB-002](queue/WEB-002_web-invite-generation.md) | Web — generate and share invite links | Feature | Medium | Developer | — |
 | [OPS-003](queue/OPS-003_pre-production-staging-environment.md) | Pre-production staging environment — prod-snapshot + anonymisation pipeline | Operations | Low | OpsManager | — |
 | [TST-008](queue/TST-008_shared-plot-e2e-smoke-test.md) | Shared plot E2E smoke test — formalise spec and identify automation strategy | Testing | High | TestManager | — |
 | [SEC-012](queue/SEC-012_tag-metadata-leakage-accepted-risk.md) | Tag metadata leakage — document and disclose accepted residual risk | Security | Medium | SecurityManager | ARCH-007 |
@@ -35,15 +44,22 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Priority | Assigned to |
 |---|---|---|---|---|
-| [RES-002](in-progress/RES-002_window-capsule-expiry-cryptography.md) | Window capsule — cryptographic expiry, literature review and construction brief | Research | High | ResearchManager |
-| [ARCH-007](in-progress/ARCH-007_e2ee-tag-scheme.md) | E2EE tag scheme — HMAC token identifiers + encrypted display names | Architecture | High | architect |
-| [BUG-022](in-progress/BUG-022_web-detail-view-blank-for-shared-plot-image.md) | Web detail view blank for shared plot items — full image DEK not decrypted with plot key | Bug Fix | High | developer-1 |
-| [BUG-020](in-progress/BUG-020_shared-plot-auto-approve-needs-client-dek-rewrap.md) | Shared plot trellis auto-approve — client-side DEK re-wrap to avoid mandatory staging | Bug Fix | Medium | developer-2 |
+| [RES-004](in-progress/RES-004_chained-capsule-cryptographic-assessment.md) | Chained capsule — cryptographic novelty assessment | Research | Medium | ResearchManager |
 
 ## Done
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
+| [MKT-001](done/MKT-001_strategic-direction-thinking-report.md) | Strategic direction thinking report | Marketing | 2026-05-16 |
+| [PSY-001](done/PSY-001_grief-reframe-care-mode-and-experience-psychology.md) | Grief reframe, Care Mode dignity, Experience psychology | Psychology | 2026-05-16 |
+| [PHI-001](done/PHI-001_ethics-of-conditional-delivery-consent-and-digital-legacy.md) | Ethics of conditional delivery, consent, long-horizon promise | Philosophy | 2026-05-16 |
+| [LEG-002](done/LEG-002_care-mode-consent-chained-capsule-ip.md) | Care Mode consent, chained capsule intellectual property, white-label | Legal | 2026-05-16 |
+| [RET-002](done/RET-002_three-segment-valuation-and-retirement-implications.md) | Three-segment valuation and retirement implications | Retirement | 2026-05-16 |
+| [LEG-001](done/LEG-001_patent-assessment-window-capsule.md) | Patent assessment — window capsule construction and related novel IP | Legal | 2026-05-16 |
+| [ARCH-007](done/ARCH-007_e2ee-tag-scheme.md) | E2EE tag scheme — HMAC token identifiers + encrypted display names | Architecture | 2026-05-16 |
+| [BUG-022](done/BUG-022_web-detail-view-blank-for-shared-plot-image.md) | Web detail view blank for shared plot items — full image DEK not decrypted with plot key | Bug Fix | 2026-05-16 |
+| [BUG-020](done/BUG-020_shared-plot-auto-approve-needs-client-dek-rewrap.md) | Shared plot trellis auto-approve — client-side DEK re-wrap to avoid mandatory staging | Bug Fix | 2026-05-16 |
+| [RES-002](done/RES-002_window-capsule-expiry-cryptography.md) | Window capsule — cryptographic expiry, literature review and construction brief | Research | 2026-05-16 |
 | [RES-003](done/RES-003_pqc-migration-readiness-brief.md) | PQC migration readiness — algorithm break response plan for Technical Architect | Research | 2026-05-16 |
 | [WEB-001](done/WEB-001_friends-list-page.md) | Web: friends list page | Feature | 2026-05-16 |
 | [DONE-001](done/DONE-001_server-refactor-phases-1-8.md) | Server refactor phases 1–8 | Refactoring | 2026-05-14 |

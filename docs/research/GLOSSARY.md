@@ -1,7 +1,7 @@
 # Heirlooms Research — Cryptographic Glossary
 
 **Maintained by:** Research Manager  
-**Last updated:** 2026-05-16 (RES-003, PQC migration readiness)  
+**Last updated:** 2026-05-16 (RES-004, chained capsule cryptographic assessment)  
 **Purpose:** Plain-language definitions of terms used in research briefs. Updated at the end of every research task. Intended for any team member, not just cryptographers.
 
 ---
@@ -15,6 +15,12 @@ The period during which encrypted data is vulnerable following the compromise of
 The symmetric encryption algorithm used throughout Heirlooms to encrypt file content, thumbnails, metadata, and wrapped keys. AES-256 means the key is 256 bits long. GCM is an authenticated mode — it simultaneously encrypts and produces an authentication tag, so any tampering with the ciphertext is detected on decryption. Considered quantum-safe under Grover's algorithm (effective security drops to 128 bits, which remains computationally infeasible). Used in Heirlooms via the `aes256gcm-v1` algorithm identifier.
 
 **Algorithm agility** — see *Cryptographic agility*.
+
+**Applied pi calculus (and spi calculus)**
+A formal mathematical language for specifying and analysing security protocols. The applied pi calculus extends the pi calculus (a general model of concurrent processes communicating over channels) with cryptographic operations modelled as algebraic functions. The spi calculus (Abadi-Gordon 1999) is a closely related variant designed specifically for security protocols. Tools like ProVerif use the applied pi calculus to automatically verify security properties (secrecy, authentication) of protocols. Relevant to Heirlooms for formally modelling the chained capsule's unlock and cascade protocols and verifying that desired properties (e.g., "C₂ is never accessible to a non-winner") hold for an unbounded number of sessions.
+
+**Attribute-Based Encryption (ABE)**
+A public-key encryption scheme in which decryption is conditional on the decryptor's "attributes" satisfying a policy embedded in the ciphertext. Two main variants: Key-Policy ABE (KP-ABE), where the policy is in the decryption key; and Ciphertext-Policy ABE (CP-ABE, Bethencourt-Sahai-Waters 2007), where the policy is in the ciphertext. Policies can express boolean conditions over attributes, including time-based conditions (e.g., "current_time BETWEEN T₁ AND T₂"). Limitation: ABE requires a trusted attribute authority to issue keys, and time-based access is typically managed by re-keying rather than deletion of key material. Architecturally different from the Heirlooms window capsule model, which achieves time-bounding via tlock and custodian deletion. See also *Functional encryption (FE)*, *Window capsule*.
 
 **Asynchronous Proactive Secret Sharing (APSS)**
 A variant of Proactive Secret Sharing designed for networks where shareholders cannot be guaranteed to be online simultaneously. Standard PSS requires synchronised refresh epochs; APSS relaxes this requirement, allowing share refresh to proceed even when some shareholders are temporarily offline. Relevant for long-duration Heirlooms window capsules where custodian availability cannot be tightly coordinated. See also *Proactive Secret Sharing (PSS)*.
@@ -38,6 +44,18 @@ A digital signature scheme built on pairing-based cryptography. Used by drand's 
 ---
 
 ## C
+
+**Capsule reference token**
+An encrypted pointer embedded inside a sealed capsule (e.g., C₁) that, when C₁ is legitimately decrypted, reveals the information needed to access the next capsule in the chain (e.g., C₂). In Heirlooms' chained capsule design, the capsule reference token is stored as plaintext inside C₁'s encrypted payload and contains: the UUID of C₂, and a link key (L₂) that provides access to C₂'s key material. The token is rendered as a QR code in the client UI for easy scanning. The token is only readable if C₁ is correctly unlocked within its time window; if C₁ expires without being opened, the token is inaccessible and C₂ is permanently destroyed. See also *Chained capsule*, *First-solver-wins*, *Expiry-as-death*.
+
+**Chained capsule**
+A directed acyclic graph (DAG) of Heirlooms capsules in which unlocking one capsule (C₁) is a precondition for gaining access to the next capsule (C₂). The chain is implemented via a nested key hierarchy: C₂'s key material (or a link key that unlocks C₂) is stored inside C₁'s plaintext. The chain can encode competitive delivery (first solver of C₁'s puzzle wins C₂), time windows for each capsule, and an expiry-as-death property (if C₁'s window closes without a solve, C₂ is permanently inaccessible). The construction is proposed in RES-004 and builds on the window capsule construction from RES-002. See also *Window capsule*, *Capsule reference token*, *First-solver-wins*, *Expiry-as-death*.
+
+**Consent capsule**
+A cryptographically timestamped, digitally signed record of a person's consent to a specific action or monitoring by a designated party (e.g., a power of attorney (POA) holder), stored in Heirlooms and revocable by the consenting person at any time while they retain capacity. In Heirlooms' Care Mode, the consent capsule is implemented as a W3C Verifiable Credential (VC) signed by the person using their Heirlooms signing key, with a trusted timestamp applied at creation and a revocation registry entry that the person can update to revoke. The consent capsule is not a window capsule in the cryptographic sense — it does not contain time-locked content — but it functions as a policy anchor for the Care Mode monitoring relationship. See also *Verifiable credential (VC)*, *Self-sovereign identity (SSI)*, *Care Mode*.
+
+**Conditional proxy re-encryption (CPRE)**
+A variant of proxy re-encryption in which a proxy can transform a ciphertext for a designated recipient only if a specified condition is met. For example, the condition might be a time window, an attribute, or a matching tag. If the condition is not met, the proxy cannot re-encrypt. CPRE enables fine-grained, policy-based delegation of decryption rights without exposing the underlying plaintext to the proxy. Relevant to Heirlooms as an alternative design pattern for chained capsule delivery: instead of a key hierarchy embedded in C₁'s plaintext, a CPRE proxy could re-encrypt C₂'s ciphertext for the winner upon condition verification. See also *Proxy re-encryption (PRE)*, *NuCypher/Umbral*.
 
 **Custodian**
 In the window capsule design, a party that holds one Shamir share of K_b (the expiry half of the window key). Custodians release their share only to an authenticated receiver during the valid [unlock_time, expire_time] window, and destroy it at expire_time. Custodians can be individuals, legal entities (law firms, banks, notaries), or distributed Heirlooms nodes. The expiry guarantee is only as strong as the honesty of more than (N − M) custodians in a (M, N) threshold scheme. See also *Shamir's Secret Sharing*, *Window capsule*, *Verifiable deletion*.
@@ -78,6 +96,9 @@ A distributed randomness beacon operated by the League of Entropy, a consortium 
 
 ## E
 
+**Expiry-as-death**
+The property of a chained capsule chain in which the failure to solve C₁'s puzzle before C₁'s expire_time results in C₂ becoming permanently inaccessible to everyone — including the sender. The term was coined in the context of Heirlooms' RES-004 research. In the recommended implementation, expiry-as-death is achieved by embedding C₂'s key material inside C₁'s plaintext: since C₁ was never decrypted, C₂'s key material was never exposed and is destroyed transitively when C₁'s custodians delete their Shamir shares at expire_time. The property is trust-bounded (not trustless) under the same custodian-deletion trust model as the window capsule expiry. See also *Chained capsule*, *Window capsule*, *Custodian*, *Certified Deletion*.
+
 **Expire time**
 In a window capsule, the upper time bound after which the capsule becomes permanently undecryptable. Distinct from the *unlock time* (lower bound). After expire_time, custodians destroy their Shamir shares of K_b, making K_window irrecoverable even though K_a (the tlock component) remains permanently public. A receiver who did not access the capsule during [unlock_time, expire_time] can never access it. A receiver who did access it during the window holds K_window locally and is unaffected by the expiry. See also *Window capsule*, *Unlock time*, *Custodian*.
 
@@ -97,8 +118,17 @@ Heirlooms' versioned binary container for all encrypted blobs. Contains: version
 
 ## F
 
+**Fair exchange**
+A cryptographic protocol property in which two parties swap values (e.g., a signature for payment, or a secret for a key) such that either both parties receive what they expect or neither does. Fair exchange is impossible without a trusted third party (TTP) in purely classical settings, but blockchain smart contracts can replace the TTP with a trustless contract. In the chained capsule context, the first-solver-wins mechanism is NOT a fair exchange problem — it is an exclusive delivery problem where one winner gets C₂ and all others get nothing. The asymmetry distinguishes it from classical fair exchange. See also *First-solver-wins*, *Hash Time-Lock Contract (HTLC)*.
+
+**First-solver-wins**
+The competitive delivery property of a chained capsule in which the first of N recipients to submit a valid solution to C₁'s puzzle claims exclusive access to C₂. Implemented in Heirlooms via a server-mediated atomic claim: the first valid submission atomically marks C₂ as "claimed" for the winner; subsequent valid submissions from other recipients are rejected. The mechanism is analogous to a Hash Time-Lock Contract (HTLC) preimage reveal — whoever reveals the correct preimage first to the coordinator claims the locked output — but implemented off-chain with the Heirlooms server as coordinator rather than a blockchain. See also *Chained capsule*, *HTLC*, *Fair exchange*, *Verifiable Time-Lock Puzzle (VTLP)*.
+
 **Forward-secure encryption**
 An encryption scheme where compromise of a key at time T does not enable decryption of messages encrypted before T. Achieved by evolving the key forward in time — each new time period uses a new key derived from the previous one, and the previous key is deleted. Forward security protects past messages from future key compromise. It is distinct from the expiry problem in window capsules (where the goal is to prevent access *after* a time, not to protect past data from future key exposure). See also *Puncturable encryption*, *Window capsule*.
+
+**Functional encryption (FE)**
+A generalisation of public-key encryption in which a decryption key can be issued for a function f: decrypting a ciphertext with a key for function f reveals f(plaintext) rather than the full plaintext. For example, an inner-product FE key reveals only the inner product of the plaintext vector with the key vector. FE can model conditional decryption (the decryption key is issued for the function "output the message if condition C is satisfied; output ⊥ otherwise"). General-purpose FE with arbitrary functions remains computationally impractical in 2026; deployed FE is limited to linear functions (inner products). Attribute-Based Encryption (ABE) is a special case of FE. In the long horizon, FE with time-window conditions could replace the custodian-based window capsule, but is not deployable today. See also *Attribute-Based Encryption (ABE)*, *Witness Encryption (WE)*.
 
 **FIPS 203** (Federal Information Processing Standard 203)  
 The NIST standard published August 2024 specifying ML-KEM (Module-Lattice-based Key Encapsulation Mechanism, derived from CRYSTALS-Kyber). The primary post-quantum replacement for ECDH key agreement. Final and implementable.
@@ -131,6 +161,9 @@ A quantum algorithm that provides a quadratic speedup for unstructured search. A
 
 **Hardware Security Module (HSM)**
 A dedicated, physically tamper-resistant device for storing cryptographic keys and executing cryptographic operations. HSMs automatically zeroize (destroy) key material when tamper is detected (e.g., if the device is opened). Certified under FIPS 140-2/3 Level 3. In the context of window capsules, an HSM at a custodian node could hold Shamir shares and be programmed to zeroize them at expire_time, providing hardware-enforced deletion with physical tamper evidence. HSMs do not provide cryptographic proof of deletion (anyone who tampers with the device would see zeroization evidence), but they provide the strongest currently practical hardware guarantee. Contrast with *Intel SGX* (software enclave, more flexible but more vulnerable) and *AWS Nitro Enclaves* (cloud-hosted TEE).
+
+**Hash Time-Lock Contract (HTLC)**
+A type of smart contract (and the corresponding protocol) that locks funds or key material under two conditions: (1) a hash lock — release requires revealing a secret preimage of a published hash; (2) a time lock — if the preimage is not revealed before a deadline, the locked asset is returned to the sender. HTLCs are the foundational mechanism of the Bitcoin Lightning Network and cross-chain atomic swaps. In the chained capsule context, the HTLC is the on-chain analogue of the first-solver-wins atomic claim: the puzzle answer is the preimage; the key material for C₂ is the locked asset; the first solver to reveal the correct preimage claims C₂'s key. Heirlooms uses an off-chain server-mediated equivalent rather than an on-chain HTLC for v1. See also *First-solver-wins*, *Timed commitment*, *Fair exchange*.
 
 **HKDF** (HMAC-based Key Derivation Function)  
 A key derivation function that takes a shared secret (e.g. the output of ECDH) and derives one or more cryptographic keys of any desired length. Heirlooms uses HKDF-SHA-256 as part of the `p256-ecdh-hkdf-aes256gcm-v1` algorithm. Considered quantum-safe under Grover.
@@ -182,6 +215,9 @@ A cryptographic primitive used to securely transmit a symmetric key from one par
 
 **League of Entropy** — see existing entry (previously defined in RES-001 section).
 
+**Lit Protocol**
+A production-deployed decentralised threshold key management and conditional decryption network. Lit nodes each hold a share of a shared BLS key. When a user requests decryption, Lit nodes individually verify that the user satisfies the configured Access Control Conditions (which can include on-chain state such as token ownership, NFT holdings, smart contract conditions, and time windows). If the conditions are satisfied, nodes release their decryption key shares; the user combines enough shares (threshold) to reconstruct the decryption key. Lit Protocol uses a combination of threshold BLS cryptography and Trusted Execution Environments (TEEs). In 2024, Lit fulfilled over 24 million cryptographic requests. Relevant to Heirlooms as a potential vendor option for the custodian tier of window capsules and chained capsules, providing conditional key release without Heirlooms operating its own custodian infrastructure. See also *Custodian*, *Threshold signature*, *Window capsule*.
+
 **Lattice-based cryptography**  
 A family of cryptographic schemes whose security rests on the hardness of problems in high-dimensional lattices (e.g. Learning With Errors, Module-LWE). Believed to be resistant to both classical and quantum attacks. The basis of ML-KEM (FIPS 203) and ML-DSA (FIPS 204).
 
@@ -220,6 +256,9 @@ ML-KEM-768 parameter sizes relevant for implementation and wire format planning:
 **Nitro Enclave (AWS)**
 An isolated compute environment on AWS EC2 instances, providing hardware-backed isolation for sensitive workloads. Nitro Enclaves produce cryptographic attestation documents (signed by the AWS Nitro Attestation PKI) that prove the exact code running inside the enclave. When combined with AWS KMS, KMS key policies can be conditioned on enclave attestation measurements — only the specific, attested enclave code can call KMS. In the window capsule context, Heirlooms-operated custodian nodes running inside Nitro Enclaves could use a KMS-managed share encryption key that is automatically deleted at expire_time via a scheduled KMS key deletion, providing hardware-backed expiry enforcement. This shifts trust from the custodian's software to AWS + the enclave code attestation. See also *Hardware Security Module (HSM)*, *Intel SGX*.
 
+**NuCypher / Umbral (threshold proxy re-encryption)**
+NuCypher is a decentralised network (now part of Threshold Network) offering threshold proxy re-encryption via the Umbral scheme. Umbral is a split-key proxy re-encryption scheme: the re-encryption key is split into fragments held by independent re-encryption nodes ("Ursulas"). A threshold M of N nodes must cooperate to re-encrypt data for a delegatee. NuCypher also offers Condition-Based Decryption (CBD): decryption is only permitted if an on-chain or off-chain condition is satisfied. Time-based and attribute-based conditions are supported. Relevant to Heirlooms as a design analogue for the custodian tier: rather than holding Shamir shares of K_b, proxy re-encryption nodes hold fragments of a re-encryption key and only re-encrypt if the time-window condition is satisfied. See also *Proxy re-encryption (PRE)*, *Conditional proxy re-encryption (CPRE)*, *Lit Protocol*.
+
 **Neutral-atom quantum computer**  
 A type of quantum computer that uses individual neutral atoms (e.g. rubidium) trapped in optical tweezer arrays as qubits. Recent 2026 research suggests a neutral-atom machine with ~26,000 qubits could break ECC-256 in approximately 10 days.
 
@@ -244,6 +283,12 @@ Cryptography built on bilinear pairings — mathematical maps between elliptic c
 
 **Physical qubit**  
 An actual physical system (superconducting circuit, trapped ion, neutral atom, photon, etc.) used to represent a quantum bit. Physical qubits have high error rates; many physical qubits are combined into one logical qubit via error correction codes. Estimates for breaking P-256 range from ~10,000 (cat-qubit LDPC, optimistic) to millions (surface code, conservative).
+
+**Programmable cryptography**
+A framing (circa 2024) for a "second generation" of cryptographic primitives — specifically ZK-SNARKs, fully homomorphic encryption (FHE), and secure multi-party computation (MPC) — that allow arbitrary computations to be performed on top of cryptographic objects with guarantees of verifiability (prove a computation was done correctly), confidentiality (without revealing private inputs), and non-interactivity. Unlike classical cryptographic primitives (signatures, encryption, commitments) which are fixed in their operations, programmable cryptography allows a developer to express nearly any computation as a cryptographic object. In the chained capsule context, programmable cryptography could allow the puzzle-check and condition-verification logic to be executed directly on encrypted inputs (via FHE) or proved without revealing data (via ZK-SNARKs), removing the need for a trusted coordinator. Deployable for targeted applications within 5–7 years. See also *Functional encryption (FE)*, *Witness Encryption (WE)*.
+
+**Proxy re-encryption (PRE)**
+A cryptographic primitive that allows a semi-trusted proxy to transform a ciphertext encrypted under one public key into a ciphertext decryptable under a different public key, without the proxy ever seeing the plaintext. The original encryptor provides the proxy with a re-encryption key specific to the delegated recipient. PRE enables delegation of decryption rights (access control) without sharing private keys. Threshold PRE (used in NuCypher/Umbral) distributes the proxy's role across multiple nodes, so that no single node can perform re-encryption alone. Conditional PRE (CPRE) extends this: the proxy re-encrypts only if a condition is met (e.g., a time window is active). Temporally-scoped PRE is directly relevant to chained capsule delivery. See also *Conditional proxy re-encryption (CPRE)*, *Lit Protocol*.
 
 **Post-quantum cryptography (PQC)**  
 Cryptographic algorithms designed to be secure against both classical and quantum computers. Distinct from "quantum cryptography" (which uses quantum physics, e.g. QKD). NIST's finalised PQC standards are based on lattice problems (ML-KEM, ML-DSA), hash functions (SLH-DSA), and error-correcting codes (HQC).
@@ -281,6 +326,9 @@ The operation of decrypting a wrapped key using the current algorithm and re-enc
 
 ## S
 
+**Self-sovereign identity (SSI)**
+A digital identity model in which individuals control their own identity data without relying on a central authority. SSI uses Decentralised Identifiers (DIDs — W3C standard) as globally unique identifiers anchored to a registry (such as a blockchain or a distributed ledger) rather than a central provider. Identity claims are represented as Verifiable Credentials (VCs — W3C standard) cryptographically signed by an issuer and stored in the user's own wallet. Users share only the attributes relevant to each interaction (selective disclosure) and can revoke credentials at any time. Relevant to Heirlooms for the consent capsule in Care Mode: a person's consent to monitoring by a POA holder can be represented as a VC issued by the person, revocable by the person, and verifiable by care providers without contacting Heirlooms' servers. See also *Verifiable credential (VC)*, *Consent capsule*.
+
 **Shamir's Secret Sharing**  
 A cryptographic scheme for splitting a secret into N shares such that any K shares (the threshold) can reconstruct the secret, but fewer than K shares reveal nothing.
 
@@ -302,6 +350,9 @@ The most widely studied quantum error correction code. Requires approximately 1,
 ---
 
 ## T
+
+**Timed commitment**
+A cryptographic commitment scheme (Boneh-Naor 2000) in which a committed value is guaranteed to become recoverable after a specified time delay, even without the committer's cooperation — but cannot be recovered before that delay. A timed commitment combines a regular commitment (hiding and binding before the delay) with a time-lock puzzle (enabling recovery after the delay). Used in blockchain contexts (sealed-bid auctions, fair contract signing) where all parties commit to values simultaneously and the commitment can be "forced open" after a deadline if a party refuses to reveal. In the chained capsule context, a solver who has found C₁'s answer could use a timed commitment to prove they committed to a solution before the window closed, even if they submit the reveal after a network delay. See also *Time-lock puzzle*, *Timed Secret Sharing (TSS)*, *Hash Time-Lock Contract (HTLC)*.
 
 **Timed Secret Sharing (TSS)**
 A cryptographic primitive introduced by Kavousi, Abadi, and Jovanovic (ASIACRYPT 2024) that generalises secret sharing with both a lower time bound (secret cannot be reconstructed before T_unlock) and an upper time bound (secret cannot be reconstructed after T_expire). The most directly relevant academic prior work to Heirlooms' window capsule construction. The paper proposes two strategies for the upper bound: short-lived proofs and gradual release. Heirlooms' construction is a distinct practical instantiation using drand/tlock for the lower bound and custodian deletion for the upper bound — an approach the paper acknowledges but does not implement. See also *Window capsule*, *Short-lived proofs (timed secret sharing)*, *Gradual release (timed secret sharing)*.
@@ -335,8 +386,14 @@ In a window capsule, the lower time bound before which the capsule cannot be dec
 
 ## V
 
+**Verifiable credential (VC)**
+A W3C-standardised digital document containing cryptographically verifiable claims. A VC is issued by an issuer (e.g., a person, organisation, or institution), refers to a subject (e.g., the person giving consent), and contains signed claims (attributes). The issuer's signature allows any verifier to confirm the claims are authentic without contacting the issuer. VCs support selective disclosure (revealing only a subset of claims) and revocation (the issuer can invalidate the credential). In Heirlooms' Care Mode, the consent capsule is implemented as a VC: the person (issuer and subject) signs a consent claim granting a POA holder monitoring access; this consent is revocable by updating a revocation registry entry. See also *Self-sovereign identity (SSI)*, *Consent capsule*.
+
 **Verifiable Delay Function (VDF)**
 A function that takes a specified minimum amount of time to compute (even with unlimited parallelism), and produces a unique output with a short proof that can be verified quickly. VDFs can serve as a trustless time-lock mechanism: the output is only available after the delay has elapsed. Boneh et al. (2018) formalised VDFs. Relevant to Heirlooms as an alternative or supplement to drand/tlock for the lower bound in window capsules. VDFs do not require a distributed network like drand, but require trusted setup for some constructions. Not currently used in Heirlooms.
+
+**Verifiable Time-Lock Puzzle (VTLP)**
+An extension of time-lock puzzles (Rivest-Shamir-Wagner 1996) in which the puzzle generator publishes a succinct proof that the puzzle's solution satisfies a specified NP relation — without revealing the solution itself. This allows solvers to verify that the puzzle is "worth solving" (its solution will produce a useful output, e.g., unlocking the next capsule) before committing the computational resources required to solve it. The "Check-Before-you-Solve" paper (Xin, Papadopoulos, IEEE 2025) gives a construction instantiated with Groth16 ZK proofs: proving a VTLP for a BLS signature requires 1.37 seconds with constant proof size and 1ms verification, regardless of the puzzle difficulty parameter T. Directly applicable to Heirlooms chained capsules: the puzzle inside C₁ would be a VTLP, letting solvers verify that a correct solution exists and unlocks C₂ before investing effort. See also *Time-lock puzzle*, *Witness Encryption (WE)*, *First-solver-wins*.
 
 **Verifiable deletion**
 A cryptographic proof that a party has destroyed secret material (such as a Shamir share) without revealing the material itself. An open research problem as of 2026. In theory: a custodian commits to their share at sealing time; at expire_time they publish a proof of deletion derived from the commitment. Related to "proof of erasure." Solving this cleanly for the window capsule context would be a publishable research contribution and would make the expiry guarantee auditable rather than merely trusted. See also *Custodian*, *Window capsule*, *Certified Deletion*, *Deletion Certificate*.

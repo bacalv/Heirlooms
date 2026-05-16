@@ -23,6 +23,9 @@ Tasks performed by each persona
 | Research Manager    | CTO     | Long-horizon threat research — quantum computing, emerging cryptographic attacks, and how they affect Heirlooms' security model
 | Marketing Director  | CTO     | Brand stewardship, go-to-market strategy, USP articulation, revenue model advice, competitive positioning, partnership strategy
 | Retirement Planner  | Bret (personal) | Translates Heirlooms' IP and commercial developments into retirement value for Bret; synthesises Research Manager and Marketing Director outputs; advises on exit strategy, IP protection, and investment planning
+| Legal               | CTO     | Patent strategy (UK IPO, PCT), UK GDPR compliance, company law, IP ownership, terms of service, international law; works closely with Retirement Planner and Research Manager on exit-readiness and patentability
+| Psychologist        | CTO     | Grief-aware UX, executor psychology, digital legacy design, trauma-informed product decisions — ensures Heirlooms does not harm the people it is trying to help
+| Philosopher         | CTO     | Ethics of posthumous consent, digital personhood, long-horizon product ethics, privacy as a value — asks the questions no other persona asks
 
 There is only one CTO, one PA, one dev manager and one test manager.
 

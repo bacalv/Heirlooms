@@ -73,3 +73,23 @@ This task must:
 - Cryptographic agility notes (fit with envelope format)
 - Recommendations for the Technical Architect
 - PA Summary
+
+## Completion notes
+
+**Completed:** 2026-05-16  
+**Output:** `docs/research/RES-002_window-capsule-expiry-cryptography.md`
+
+**Key findings:**
+1. The tlock + Shamir deletion window capsule construction is novel as a complete practical system. The closest prior academic work is "Timed Secret Sharing" (Kavousi, Abadi, Jovanovic — ASIACRYPT 2024), which defines the same framework abstractly but does not instantiate it using drand/tlock or XOR blinding.
+2. Time-Specific Encryption (Paterson-Quaglia 2010) is the other important prior work: it formally models a time interval [T1,T2] for decryption but uses an online centralised time server and key distribution, not deletion.
+3. Trustless upper bound is information-theoretically impossible with classical cryptography. The construction achieves the strongest possible classical upper bound: threshold-honest custodian deletion.
+4. Quantum certified deletion (Bartusek-Raizes CRYPTO 2024; Katz-Sela Eurocrypt 2025) is the correct long-term solution but requires quantum infrastructure not available in production today.
+5. Proactive Secret Sharing (Herzberg 1995) is recommended as an enhancement for long-window capsules (>12 months).
+6. Patentability: the specific combination (drand lower bound + XOR blinding + threshold deletion upper bound) is likely patentable. Filing should precede public launch of the feature.
+
+**Decisions routed to CTO via PA Summary:**
+1. Should Heirlooms' own servers be the initial custodians, or should external institutional custodians be designed in from the start?
+2. Is patenting the window capsule construction a priority?
+3. Should PSS refresh be included in the initial spec or deferred?
+
+**Follow-on tasks:** SIM-001 is now unblocked (depends on RES-002).
