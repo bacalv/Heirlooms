@@ -46,4 +46,37 @@ This should be applied to ALL windows, not just vault screens — the same ratio
 
 ## Completion notes
 
-<!-- Agent appends here and moves file to tasks/done/ -->
+**Completed:** 2026-05-16
+**Agent:** developer-9
+
+### What was done
+
+Modified `HeirloomsiOS/HeirloomsApp/App.swift`:
+
+1. Added `@Environment(\.scenePhase) private var scenePhase` to `HeirloomsApp`.
+
+2. Applied a conditional `.overlay` on the `WindowGroup`'s `RootView` that renders `PrivacyScreenView()` whenever `scenePhase != .active`. This covers both `.inactive` (the state the OS transitions to just before taking the app-switcher screenshot) and `.background`.
+
+3. Added a new `PrivacyScreenView` struct: a black fullscreen `ZStack` with the `lock.shield.fill` SF Symbol (blue, 64pt) and "Heirlooms" label centred — matching the brand visual used in `ActivateView`.
+
+4. Added a subtle `.easeInOut(duration: 0.15)` animation so the overlay fades in/out smoothly without jarring the user on foreground.
+
+### Design decisions
+
+- **SwiftUI `scenePhase` over UIKit delegate:** The app uses the SwiftUI `@main App` lifecycle (no `SceneDelegate.swift` file exists). Using `@Environment(\.scenePhase)` is the idiomatic approach and avoids mixing UIKit delegate callbacks into the SwiftUI hierarchy.
+
+- **`.inactive` is the correct trigger:** `scenePhase` transitions to `.inactive` before the OS takes its screenshot (equivalent to `sceneWillResignActive`). Showing the overlay on both `.inactive` and `.background` is safe — it means the overlay is also visible if the user inspects the app switcher after the app is fully backgrounded.
+
+- **Applied to ALL windows:** The overlay is on the root `WindowGroup`, so it covers every screen in the app — matching the task requirement and the rationale for Android's FLAG_SECURE.
+
+- **No SceneDelegate needed:** A dedicated `SceneDelegate` would add boilerplate for no benefit. The SwiftUI-native approach is cleaner and equally reliable.
+
+- **Brand background colour:** The existing app uses `Color.black` for full-screen media views (`FullScreenMediaView`) and `.blue` as the accent/icon colour. `PrivacyScreenView` uses the same palette.
+
+### No server changes
+
+This is a pure iOS client change. No server, Android, or web changes were required.
+
+### New tasks spawned
+
+None.
