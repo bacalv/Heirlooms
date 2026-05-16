@@ -48,7 +48,7 @@ sequenceDiagram
 
     Server-->>Client: 200 { user_id&#44; device_id }
 
-    Note over Client: Vault session active; MK held in memory only
+    Note over Client: Vault session active&#59; MK held in memory only
 ```
 
 ---
@@ -69,7 +69,7 @@ sequenceDiagram
     Client->>Client: DEK ← random 256-bit key
     Client->>Client: nonce ← random 12 bytes
     Client->>Client: (ciphertext&#44; tag) = AES-256-GCM(DEK&#44; nonce&#44; f)
-    Note right of Client: // Client knows: DEK, f; produces encrypted blob
+    Note right of Client: // Client knows: DEK, f&#59; produces encrypted blob
 
     Client->>Client: n_d ← random 12 bytes
     Client->>Client: wrapped_DEK = AES-256-GCM(MK&#44; n_d&#44; DEK)
@@ -93,8 +93,8 @@ sequenceDiagram
     participant Server
     participant tlock
 
-    Note over Client: MK in session; capsule content already uploaded
-    Note over Server: Will store: DEK_tlock, wrapped keys; NOT DEK_client or DEK
+    Note over Client: MK in session&#59; capsule content already uploaded
+    Note over Server: Will store: DEK_tlock, wrapped keys&#59; NOT DEK_client or DEK
 
     Author->>Client: Initiate capsule seal (tlock enabled&#44; unlock_at = T)
 
@@ -130,7 +130,7 @@ sequenceDiagram
     Server->>Server: validate all envelopes&#59; verify SHA-256(DEK_tlock) == tlock_key_digest
     Server-->>Client: 200 { capsule_id&#44; shape: "sealed" }
 
-    Note over Client,Server: DEK and DEK_client exist only on client side; client may discard after sealing
+    Note over Client,Server: DEK and DEK_client exist only on client side&#59; client may discard after sealing
 ```
 
 ---
@@ -159,7 +159,7 @@ sequenceDiagram
     Server->>Server: Check now() >= unlock_at
 
     Server-->>Client: 200 { dek_tlock: DEK_tlock }
-    Note right of Server: // Server has served DEK_tlock; still does NOT know DEK_client
+    Note right of Server: // Server has served DEK_tlock&#59; still does NOT know DEK_client
 
     Client->>Client: DEK_client = ECDH-HKDF-unwrap(R_i.priv&#44; W_blind_i)
     Note right of Client: // Client recovers its mask from ECDH-wrapped copy
@@ -170,7 +170,7 @@ sequenceDiagram
     Client->>Client: f = AES-256-GCM-decrypt(DEK&#44; nonce&#44; ciphertext&#44; tag)
     Note right of Client: // Plaintext file content available to recipient
 
-    Note over Client,Server: SERVER-BLINDNESS PROPERTY: Server held DEK_tlock (one XOR half) but never DEK_client (other half); it never had DEK
+    Note over Client,Server: SERVER-BLINDNESS PROPERTY: Server held DEK_tlock (one XOR half) but never DEK_client (other half)&#59; it never had DEK
 ```
 
 ---
@@ -204,7 +204,7 @@ sequenceDiagram
     Client2->>Client2: S2 = ECDH-HKDF-unwrap(E2.priv&#44; W_S2)
     Note right of Client2: // Client2 knows: S2
 
-    Note over Client1,Client2: Threshold k=2 met; reconstruct DEK (off-server)
+    Note over Client1,Client2: Threshold k=2 met&#59; reconstruct DEK (off-server)
 
     Client1->>Client1: DEK = Lagrange-interpolate({(1&#44;S1)&#44;(2&#44;S2)})
     Note right of Client1: // DEK reconstructed entirely on executor device
@@ -263,13 +263,13 @@ sequenceDiagram
     participant Server
 
     Note over Client: MK in session
-    Note over Server: Stores: tag_tokens (HMAC tokens, opaque BYTEA); NO plaintext tags
+    Note over Server: Stores: tag_tokens (HMAC tokens, opaque BYTEA)&#59; NO plaintext tags
 
     User->>Client: Search for tag "grandmother"
 
     Client->>Client: K_tag = HKDF(MK&#44; salt=[]&#44; info="tag-token-v1")
     Client->>Client: T = HMAC-SHA-256(K_tag&#44; UTF-8("grandmother"))
-    Note right of Client: // T is a 256-bit opaque token; only this client can produce it
+    Note right of Client: // T is a 256-bit opaque token&#59; only this client can produce it
 
     Client->>Server: GET /api/uploads?tag_token={hex(T)}
     Note right of Server: // Server compares T against stored tag_tokens array values
