@@ -14,11 +14,10 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |---|---|---|---|---|---|
-| [OPS-004](queue/OPS-004_v055-test-environment-deployment.md) | v0.55 test environment deployment | Operations | High | OpsManager | *(all branches merged — ready for Docker restart)* |
-| [TST-010](queue/TST-010_manual-staging-checklist-v055.md) | Manual staging checklist v0.55 — **held until staging ready** | Testing | High | TestManager | OPS-004 |
 | [STR-001](queue/STR-001_strategic-synthesis-top-20-features-direction-brief.md) | Strategic synthesis — top 20 features and direction brief for CTO | Strategy | Medium | PA | *(ARCH-008 done — unblocked)* |
 | [BIO-002](queue/BIO-002_hi-claude-book-and-blog-concept.md) | "Hi Claude..." — book and blog series concept development | Biography | Medium | Biographer | BIO-001 |
-| [TST-011](queue/TST-011_android-device-farm-setup.md) | Android device farm setup — implement 3-device local farm | Testing | High | Developer | TST-009 |
+| [ARCH-011](queue/ARCH-011_unified-messaging-model.md) | Unified messaging model — capsule messages, shared plot messages, message trellises | Architecture | Medium | TechnicalArchitect | ARCH-003, ARCH-007 |
+| [REF-002](queue/REF-002_tag-to-label-rename.md) | Tag → Label rename across all platforms and documentation | Refactoring | Medium | Developer | — |
 | [TST-006](queue/TST-006_android-remote-control-investigation.md) | Investigate remote-controlled Android testing for E2E automation | Testing | Medium | TestManager | — |
 | [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | Developer | — |
 | [SEC-002](queue/SEC-002_auth-crypto-coverage.md) | 100% coverage plan for auth/crypto paths | Security | High | SecurityManager | TST-004 |
@@ -30,12 +29,15 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 ## In Progress
 
-*(none)*
+| ID | Title | Category | Priority | Assigned to |
+|----|-------|----------|----------|-------------|
+| [TST-010](in-progress/TST-010_manual-staging-checklist-v055.md) | Manual staging checklist v0.55 — **held pending OpsManager staging sign-off** | Testing | High | TestManager |
 
 ## Done
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
+| [OPS-004](done/OPS-004_v055-test-environment-deployment.md) | v0.55 test environment deployment | Operations | 2026-05-16 |
 | [SEC-016](done/SEC-016_ios-ats-infoplist.md) | iOS — add committed Info.plist with ATS domain restriction | Security | 2026-05-16 |
 | [SEC-017](done/SEC-017_ios-memory-zeroing-temp-file-cleanup.md) | iOS — zero DEK byte buffers after use, delete video temp files on dismiss | Security | 2026-05-16 |
 | [SEC-014](done/SEC-014_ios-vault-background-privacy-screen.md) | iOS vault — privacy screen on backgrounding | Security | 2026-05-16 |

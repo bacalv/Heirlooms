@@ -41,10 +41,18 @@ Create `docs/ops/new-environment.md` covering:
 
 ### 3. GCS bucket
 - Create bucket `heirlooms-uploads-<env>` (or reuse `heirlooms-uploads` with path prefix)
-- Set CORS config allowing PUT from the new environment's web domain:
+- Grant `heirlooms-server` SA `objectAdmin` on the bucket — **critical, easy to miss**:
   ```bash
-  gsutil cors set cors.json gs://heirlooms-uploads-<env>
+  gcloud storage buckets add-iam-policy-binding gs://heirlooms-uploads-<env> \
+    --member="serviceAccount:heirlooms-server@heirlooms-495416.iam.gserviceaccount.com" \
+    --role="roles/storage.objectAdmin"
   ```
+- Set CORS config allowing PUT/GET/OPTIONS from the new environment's web domain:
+  ```bash
+  # cors.json: [{"origin":["https://<env>.heirlooms.digital"],"method":["GET","PUT","POST","OPTIONS"],"responseHeader":["Content-Type","X-Goog-Resumable"],"maxAgeSeconds":3600}]
+  gcloud storage buckets update gs://heirlooms-uploads-<env> --cors-file=cors.json
+  ```
+  Missing CORS causes silent upload failures with "Couldn't upload" in the web app.
 - Store GCS credentials JSON in Secret Manager
 
 ### 4. Artifact Registry
@@ -54,7 +62,9 @@ Create `docs/ops/new-environment.md` covering:
 ### 5. Cloud Run services
 - Server: `gcloud run deploy heirlooms-server-<env>` with full env var + secret set
   (see OPS-001 for the staging command as a reference template)
-- Web: `gcloud run deploy heirlooms-web-<env>` with `VITE_API_URL` build arg
+- Web: `gcloud run deploy heirlooms-web-<env>` — **must pass `VITE_API_URL` as a build arg**,
+  not just as an env var. The Dockerfile has `ENV VITE_API_URL=$VITE_API_URL` in the build
+  stage; omitting the arg bakes the prod URL into the JS bundle silently.
 
 ### 6. Domains and SSL
 - Add custom domain mapping in Cloud Run

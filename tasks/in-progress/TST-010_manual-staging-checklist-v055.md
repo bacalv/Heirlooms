@@ -4,16 +4,16 @@ title: Manual staging test checklist — v0.55 iteration
 category: Testing
 priority: High
 assigned_to: TestManager
-status: held
+status: active
 touches: []
 depends_on: []
 ---
 
 ## Status note
 
-This task is **held** until staging is green for the v0.55 iteration. Activate it once
-the developer batch for this iteration has been deployed to staging and OpsManager
-confirms staging is healthy.
+**ACTIVE** — OPS-004 complete (2026-05-16). Deployed commit `8ff03fe`. Both test
+server (`https://test.api.heirlooms.digital`) and web (`https://test.heirlooms.digital`)
+health-checked green.
 
 Bugs resolved since TST-007 (do not re-test as regressions — just confirm they hold):
 - **BUG-020** (DONE 2026-05-16): Shared plot trellis auto-approve — client-side DEK
@@ -21,11 +21,10 @@ Bugs resolved since TST-007 (do not re-test as regressions — just confirm they
 - **BUG-022** (DONE 2026-05-16): Web detail view blank for shared plot images — full
   image DEK now decrypted correctly with plot key.
 
-Bugs still open going into this cycle (require explicit retest):
-- **BUG-021**: Video detail view shows 0-second duration — metadata not extracted on
-  upload. Medium priority.
-- **BUG-019**: Registration shows "Username already exists" for duplicate device_id
-  collision. Low priority.
+Bugs now fixed and deployed — **run Journeys 11 and 12** (do not skip):
+- **BUG-021** (DONE 2026-05-16): Video detail view shows 0-second duration — fixed.
+- **BUG-019** (DONE 2026-05-16): Registration shows "Username already exists" for
+  duplicate device_id collision — fixed.
 
 ---
 
@@ -327,45 +326,165 @@ already exists") when device_id collision is detected.
 
 ---
 
-## Journey 17: New surfaces — v0.55 additions
+## Journey 17a: Web invite link generation (WEB-002)
 
-<!-- PLACEHOLDER — fill this in once the developer batch for v0.55 is known. -->
-<!-- For each new feature or fix deployed in v0.55, add a journey here covering: -->
-<!--   - What was shipped -->
-<!--   - Steps to exercise it -->
-<!--   - Pass criteria -->
+**What's new:** Web users can now generate invite links from the Friends page — previously
+web-only users had no way to invite anyone.
 
-*(To be completed by PA / Developer when v0.55 scope is finalised.)*
+- [ ] Log in as User A on web
+- [ ] Navigate to Friends page
+- [ ] Click "Invite a friend" (or equivalent button)
+- [ ] Invite link is generated and displayed / copyable
+- [ ] Invite link reads `https://test.heirlooms.digital/invite?token=...` (not prod domain)
+- [ ] Open the invite link in a new browser session — registration page loads with token pre-filled
+
+**Result:** ___
+**Notes:** ___
+
+---
+
+## Journey 17b: Android account pairing / recovery (FEAT-003)
+
+**What's new:** Android users can now recover an existing account after clearing app data
+or installing on a new device, without needing a prior web session.
+
+**Setup:** User A exists with a known username and recovery phrase (or web session for QR pairing).
+
+- [ ] Clear app data on Android staging device (Settings → Apps → Heirlooms Test → Clear data)
+- [ ] Launch app — confirm "Sign in to existing account" option is visible on the welcome screen
+- [ ] Pair via recovery phrase (24-word phrase): enter phrase → vault unlocks and Garden loads
+- [ ] Confirm existing media and plot memberships are intact post-pairing
+- [ ] (If web pairing path also shipped): log in on web → Android shows QR pairing option → scan → paired successfully
+
+**Result:** ___
+**Notes:** ___
+
+---
+
+## Journey 17c: Android invite friend from Friends screen (FEAT-004)
+
+**What's new:** Android users can generate and share invite links directly from the
+Friends screen (burger menu → Friends).
+
+- [ ] Log in as User A on Android staging flavor
+- [ ] Burger menu → Friends
+- [ ] "Invite a friend" button is visible
+- [ ] Tap it — invite link is generated
+- [ ] Android share sheet opens with the link
+- [ ] Link reads `https://test.heirlooms.digital/invite?token=...` (not prod domain) — BUG-008 hold
+
+**Result:** ___
+**Notes:** ___
+
+---
+
+## Journey 17d: Closed plot visual indicator (UX-002)
+
+**What's new:** Closed shared plots now show a locked/disabled state — no more silent
+approve failures after accidentally closing a plot.
+
+**Setup:** User A is owner of a shared plot.
+
+- [ ] Close the shared plot via the status toggle (Shared screen → plot → status toggle)
+- [ ] Closed plot shows a distinct visual state (lock icon, greyed out, or similar) in the Shared screen
+- [ ] Closed plot shows distinct visual state in the Garden row
+- [ ] "Approve" action is disabled or hidden for staged items in the closed plot
+- [ ] "Share to plot" action is disabled or hidden
+- [ ] Re-open the plot — visual state returns to normal, actions re-enabled
+
+**Result:** ___
+**Notes:** ___
+
+---
+
+## Journey 17e: Device revocation (SEC-011)
+
+**What's new:** Users can now remove old devices from their account via Devices & Access.
+
+**Setup:** User A has at least two devices registered (e.g. Android + web session).
+
+- [ ] Navigate to Devices & Access (Settings → Devices & Access, or equivalent)
+- [ ] Both devices listed with identifiable labels (device name / platform)
+- [ ] Revoke the secondary device — confirm prompt shown before revocation
+- [ ] Revoked device no longer appears in the list
+- [ ] Session on the revoked device is invalidated — confirm revoked device gets a 401 on next API call
+- [ ] Primary device continues to function normally
+
+**Result:** ___
+**Notes:** ___
+
+---
+
+## Journey 17f: Biometric gate — account-level setting (SEC-015)
+
+**What's new:** Users can enable a biometric requirement to open the vault — stored
+server-side and synced across devices.
+
+**Setup:** User A logged in on Android staging and web.
+
+- [ ] Navigate to Settings → find biometric / vault security toggle
+- [ ] Toggle is OFF by default
+- [ ] Enable biometric gate — confirm setting is saved (no crash)
+- [ ] Force-kill and reopen the Android app — biometric prompt appears before vault opens
+- [ ] Authenticate with biometric → vault opens normally
+- [ ] Web app shows informational note: "Biometric protection is enabled on your account — this applies to your mobile devices only" (or equivalent)
+- [ ] Disable biometric gate in Settings — force-kill and reopen → vault opens without biometric prompt
+
+**Result:** ___
+**Notes:** ___
+
+---
+
+## Journey 17g: iOS background privacy screen (SEC-014)
+
+**Setup:** iOS staging build installed. Vault contains at least one photo.
+
+**What's new:** iOS now shows a privacy overlay (brand background + logo) in the app
+switcher when the vault is visible — equivalent to Android FLAG_SECURE.
+
+- [ ] Open the vault on iOS (view a photo in the vault)
+- [ ] Press Home button (or swipe up) to background the app while vault content is visible
+- [ ] Open the app switcher — Heirlooms thumbnail shows the privacy overlay, NOT vault content
+- [ ] Tap the app to return — vault content resumes correctly, overlay removed
+
+**Result:** ___
+**Notes:** ___
 
 ---
 
 ## Summary
 
-**Date tested:** ___
-**Tester:** ___
-**Staging build:** ___ (git SHA or build tag)
+**Date tested:** 2026-05-16
+**Tester:** Bret Calvey (CTO)
+**Staging build:** `8ff03fe` (server/web); Android built from HEAD same day
 
 | Journey | Result | Notes |
 |---------|--------|-------|
-| 1. Upload and view | | |
-| 2. Invite flow | | |
-| 3. Friend connection | | |
-| 4. Shared plot — creation and invite | | |
-| 5. Auto-approve without staging (BUG-020) | | |
-| 6. Web detail view decryption (BUG-022) | | |
-| 7. Staging approval flow | | |
-| 8. Member trellis creation | | |
-| 9. Web garden reactivity | | |
-| 10. Web upload methods | | |
-| 11. Video duration (BUG-021) | | |
-| 12. Duplicate device_id error (BUG-019) | | |
-| 13. Android session token security | | |
-| 14. Web CSP + session token | | |
-| 15. iOS regression | | |
-| 16. Android flavor smoke | | |
-| 17. New surfaces — v0.55 | | |
+| 1. Upload and view | PASS | |
+| 2. Invite flow | PASS | |
+| 3. Friend connection | PARTIAL | Friendship created and visible on Android. Web /friends route exists but no nav link. Invite link doesn't auto-route token. |
+| 4. Shared plot — creation and invite | PARTIAL | In-app invite and accept work. Shareable plot invite link not implemented on Android — BUG-008 hold skipped. |
+| 5. Auto-approve without staging (BUG-020) | PARTIAL | Works via photo detail view. Garden inline tag edit doesn't send prewrappedDeks so routing silently fails from there. |
+| 6. Web detail view decryption (BUG-022) | PASS | |
+| 7. Staging approval flow | PARTIAL | Approval works (1 item processed, routed to plot). BUG-009 hold untestable — app always opens to Garden on launch so sharing key is always loaded before approval screen. |
+| 8. Member trellis creation | BLOCKED | Passphrase setup fails 409 on POST /api/keys/devices (conflict with web pairing device entry). User B vault won't unlock after page refresh — can't test member trellis creation. |
+| 9. Web garden reactivity | PARTIAL | Routing from detail view works, garden row updates correctly. Tagging from garden inline editor doesn't trigger trellis routing (BUG-G). New uploads intermittently don't appear in Just Arrived without manual refresh. |
+| 10. Web upload methods | PASS | Drag-and-drop and paste both work after fixing CORS on test bucket. |
+| 11. Video duration (BUG-021) | PASS | Duration label correct. Two Android fixes required: MediaExtractor → MediaMetadataRetriever for duration extraction; VideoPlayer OkHttpDataSource → DefaultDataSource for file:// URIs (video wouldn't play). |
+| 12. Duplicate device_id error (BUG-019) | PASS | Validated during setup — second registration on same device showed device-specific error, not "Username already exists". |
+| 13. Android session token security | PASS | Only heirloom_prefs_enc.xml exists — session token stored in EncryptedSharedPreferences, no plaintext. |
+| 14. Web CSP + session token | PASS | CSP header present on HTML responses. Session token in sessionStorage (not localStorage) — cleared on tab close. Local Storage empty. |
+| 15. iOS regression | SKIPPED | No iOS staging build available. |
+| 16. Android flavor smoke | PARTIAL | Vault, login, Shared, Trellises all correct. Garden requires manual refresh (swipe down) before items appear — initial poll not loading on launch. |
+| 17a. Web invite link generation | PASS | Tested during Journey 2 setup — invite link generated and redeemed successfully. |
+| 17b. Android account pairing/recovery | PARTIAL | Account recovery via fresh device install worked. Web pairing flow confirmed. Full 24-word phrase recovery not tested. |
+| 17c. Android invite from Friends screen | PASS | Fixed BUG-C (POST→GET), invite link generated and friendship created. |
+| 17d. Closed plot visual indicator | PASS | Visual state changes correctly, approve disabled, re-open restores normal state. Garden UX issues noted: items appear outside row bounds; after tagging in Just Arrived, plot staging counts don't update without manual refresh. |
+| 17e. Device revocation | PARTIAL | Devices & Access screen loads and shows current Android device correctly. Web pairing session did not register a separate device entry — only one device visible, so multi-device revocation flow untestable. |
+| 17f. Biometric gate | PARTIAL | Biometric prompt flashes on reopen but dismisses immediately without blocking access — gate triggers but doesn't enforce. Web shows no informational note when biometric is enabled. |
+| 17g. iOS background privacy screen | SKIPPED | No iOS build available. |
 
-**Overall verdict:** ___
+**Overall verdict:** CONDITIONAL PASS — core E2EE upload, decrypt, sharing, approval flows all work. Several bugs found and fixed inline during the session. Remaining issues logged as new tasks before production release.
 
 ---
 
