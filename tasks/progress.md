@@ -14,8 +14,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |---|---|---|---|---|---|
-| [RES-002](queue/RES-002_window-capsule-expiry-cryptography.md) | Window capsule — cryptographic expiry, literature review and construction brief | Research | High | ResearchManager | — |
-| [RES-003](queue/RES-003_pqc-migration-readiness-brief.md) | PQC migration readiness — algorithm break response plan for Technical Architect | Research | High | ResearchManager | — |
 | [SIM-001](queue/SIM-001_trustless-expiry-impossibility.md) | Simulation: trustless expiry — weakest possible construction without custodians | Simulation | Low | ResearchManager | RES-002 |
 | [OPS-003](queue/OPS-003_pre-production-staging-environment.md) | Pre-production staging environment — prod-snapshot + anonymisation pipeline | Operations | Low | OpsManager | — |
 | [TST-008](queue/TST-008_shared-plot-e2e-smoke-test.md) | Shared plot E2E smoke test — formalise spec and identify automation strategy | Testing | High | TestManager | — |
@@ -41,7 +39,10 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 ## In Progress
 
-*(none)*
+| ID | Title | Category | Priority | Assigned to |
+|---|---|---|---|---|
+| [RES-002](in-progress/RES-002_window-capsule-expiry-cryptography.md) | Window capsule — cryptographic expiry, literature review and construction brief | Research | High | ResearchManager |
+| [RES-003](in-progress/RES-003_pqc-migration-readiness-brief.md) | PQC migration readiness — algorithm break response plan for Technical Architect | Research | High | ResearchManager |
 
 ## Done
 
@@ -108,6 +109,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [BUG-017](done/developer-4_BUG-017_android-plot-key-not-loaded-after-accept-invite.md) | Android: eagerly fetch plot key after accepting invite so thumbnails decrypt without restart | Bug Fix | 2026-05-15 |
 | [BUG-018](done/developer-1_BUG-018_shared-plot-trellis-no-staging-dek-not-rewrapped.md) | Shared-plot trellis always requires staging — prevent items flowing without DEK re-wrap | Bug Fix | 2026-05-15 |
 | [RES-001](done/RES-001_crypto-threat-horizon-40kft.md) | Cryptographic threat horizon — initial 40,000ft survey for CTO | Research | 2026-05-16 |
+| [RET-001](done/RET-001_initial-retirement-assessment.md) | Initial retirement assessment — questionnaire, intelligence gathering, and key decisions | Retirement Planning | 2026-05-16 |
 
 ## Brainstorming
 
