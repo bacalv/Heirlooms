@@ -3,7 +3,7 @@ id: TST-009
 title: Android device farm design — 3-device automated test infrastructure
 category: Testing
 priority: High
-status: queued
+status: done
 assigned_to: TestManager
 depends_on: []
 touches:
@@ -82,9 +82,24 @@ How should these be tested — white-box unit tests (Espresso/JVM), or black-box
 Produce a design document to `docs/testing/TST-009_android-device-farm-design.md`
 covering all six areas above with recommendations and a setup guide.
 
-Also produce a follow-on task file `TST-010_android-device-farm-setup.md` in
+Also produce a follow-on task file `TST-011_android-device-farm-setup.md` in
 `tasks/queue/` covering the actual implementation steps.
 
 ## Completion notes
 
-<!-- TestManager appends here and moves file to tasks/done/ -->
+Completed 2026-05-16 by TestManager.
+
+**Design document produced:** `docs/testing/TST-009_android-device-farm-design.md`
+
+**Key decisions:**
+- Dual-layer strategy: Espresso (white-box) for crypto paths, Maestro (black-box) for journey tests. Appium rejected due to setup overhead; Espresso-only rejected because journey tests need external-process isolation.
+- USB hub recommended over WiFi ADB for reliability during upload E2E tests.
+- Three device roles: farm-minapi (API 28), farm-current (API 34), farm-latest (API 35).
+- All automated tests target the staging flavor and test API exclusively. Prod flavor kept on farm-current for manual smoke tests only.
+- Secrets injected at runtime from GCP Secret Manager; no credentials committed.
+- First automation targets: J12 (flavor smoke) + J1 (upload + garden) as a combined PR gate.
+- Nightly schedule runs full journey suite across all three devices.
+
+**Follow-on task created:** TST-011 (`tasks/queue/TST-011_android-device-farm-setup.md`) covers the full implementation — ADB setup, APK deployment scripts, account provisioning, Maestro flows, Espresso CryptoSmokeTest, and GitHub Actions runner configuration.
+
+**TST-006 dependency noted:** TST-006 (Android remote-control investigation) remains queued. TST-011 should re-evaluate the Maestro recommendation if TST-006 concludes before setup begins. The Espresso crypto layer is unaffected.
