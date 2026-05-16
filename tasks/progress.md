@@ -36,7 +36,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | Developer | — |
 | [SEC-002](queue/SEC-002_auth-crypto-coverage.md) | 100% coverage plan for auth/crypto paths | Security | High | SecurityManager | TST-004 |
 | [SEC-013](queue/SEC-013_ios-client-security-review.md) | iOS client security review — parity with SEC-003 | Security | Medium | SecurityManager | — |
-| [SEC-014](queue/SEC-014_ios-vault-background-privacy-screen.md) | iOS vault — privacy screen on backgrounding | Security | Medium | Developer | SEC-013 |
 | [SEC-015](queue/SEC-015_biometric-gate-account-setting.md) | Biometric gate — account-level setting synced via server | Security | Medium | Developer | — |
 | [UX-001](queue/UX-001_shared-plot-button-tap-targets.md) | Android: shared plot action buttons have insufficient tap targets | UX | Low | Developer | — |
 | [DOC-001](queue/DOC-001_uml-sequence-diagrams.md) | UML sequence diagrams from test output | Docs | Low | Developer | TST-004 |
@@ -52,6 +51,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
+| [SEC-014](done/SEC-014_ios-vault-background-privacy-screen.md) | iOS vault — privacy screen on backgrounding | Security | 2026-05-16 |
 | [PUB-001](done/PUB-001_academic-paper-temporal-e2ee-capsule-construction.md) | Academic paper — temporal E2EE capsule with multi-layer recovery | Publication | 2026-05-16 |
 | [SIM-001](done/SIM-001_trustless-expiry-impossibility.md) | Simulation: trustless expiry — weakest possible construction without custodians | Simulation | 2026-05-16 |
 | [BIO-001](done/BIO-001_bret-web-research.md) | Bret — brief web research and biographical profile | Biography | 2026-05-16 |
