@@ -98,3 +98,21 @@ The PA Summary must include:
 - Whether any component requires new cryptographic machinery vs. composing existing primitives
 - Any elements that should be flagged to Legal for patent assessment
 - Recommended follow-on tasks
+
+## Completion notes
+
+**Completed:** 2026-05-16  
+**Output:** `docs/research/RES-004_chained-capsule-cryptographic-assessment.md`  
+**References appended:** REFERENCES.md, section RES-004 (29 references, [RES-004-001] through [RES-004-029])  
+**Glossary updated:** GLOSSARY.md — 15 new terms added: Applied pi calculus, Attribute-Based Encryption (ABE), Capsule reference token, Chained capsule, Conditional proxy re-encryption (CPRE), Consent capsule, Expiry-as-death, Fair exchange, First-solver-wins, Functional encryption (FE), Hash Time-Lock Contract (HTLC), Lit Protocol, NuCypher/Umbral, Programmable cryptography, Proxy re-encryption (PRE), Self-sovereign identity (SSI), Timed commitment, Verifiable credential (VC), Verifiable Time-Lock Puzzle (VTLP)
+
+**Key findings summary:**
+- Chained capsule is novel as a complete system; composable from existing primitives (RES-002 window capsule + key hierarchy + server-mediated atomic claim)
+- No component requires a new mathematical cryptographic primitive
+- First-solver-wins requires server-mediated locking (not purely cryptographic); HTLC is the on-chain analogue
+- Expiry-as-death is achievable at the same trust level as RES-002 by embedding C₂'s key material inside C₁'s plaintext
+- Consent capsule is a straightforward W3C VC application (no novel cryptography)
+- VTLP-NP (Xin 2025) is immediately applicable to the puzzle format; WE (CRYPTO 2025 framework) is the 5–7 year upgrade path
+- Patent flagged: chained key hierarchy + expiry cascade + capsule reference token — refer to Legal before public launch
+
+**Status transition:** in-progress → done
