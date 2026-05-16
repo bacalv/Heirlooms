@@ -50,9 +50,15 @@ final class AppState: ObservableObject {
     }
 
     @Published var phase: Phase = .needsActivation
+    /// SEC-015: whether the vault requires biometric authentication. Fetched from server on login.
+    @Published var requireBiometric: Bool = false
+    /// SEC-015: true once the user has passed the biometric gate in the current session.
+    @Published var biometricPassed: Bool = false
 
     init() {
         refreshPhase()
+        // Load cached biometric setting.
+        requireBiometric = UserDefaults.standard.bool(forKey: "require_biometric")
     }
 
     func refreshPhase() {
@@ -63,6 +69,23 @@ final class AppState: ObservableObject {
             phase = .needsPlotScan
         } else {
             phase = .needsActivation
+        }
+    }
+
+    /// SEC-015: fetch require_biometric from server and cache in UserDefaults.
+    func syncBiometricSetting() async {
+        guard let _ = try? KeychainManager.getSessionToken() else { return }
+        do {
+            let api = HeirloomsAPI()
+            let account = try await api.getAccount()
+            await MainActor.run {
+                requireBiometric = account.requireBiometric
+                UserDefaults.standard.set(account.requireBiometric, forKey: "require_biometric")
+                // If biometric was turned off remotely, clear the gate.
+                if !account.requireBiometric { biometricPassed = true }
+            }
+        } catch {
+            // Network failure — keep cached value.
         }
     }
 }
@@ -80,7 +103,16 @@ struct RootView: View {
         case .needsPlotScan:
             ActivateView(scanMode: .plotInvite)
         case .ready(let plotId):
-            HomeView(plotId: plotId)
+            // SEC-015: show biometric gate before vault when setting is enabled.
+            if appState.requireBiometric && !appState.biometricPassed {
+                BiometricGateView {
+                    appState.biometricPassed = true
+                }
+                .task { await appState.syncBiometricSetting() }
+            } else {
+                HomeView(plotId: plotId)
+                    .task { await appState.syncBiometricSetting() }
+            }
         }
     }
 }

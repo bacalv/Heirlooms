@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.LocalContext
 import digital.heirlooms.app.EndpointStore
 import digital.heirlooms.crypto.DeviceKeyManager
 import digital.heirlooms.crypto.VaultSession
+import digital.heirlooms.ui.auth.BiometricGateScreen
 
 /**
  * Entry-point for the main UI. Detects which first-run path to show:
@@ -29,6 +30,8 @@ fun MainApp() {
     var sessionToken by rememberSaveable { mutableStateOf(store.getSessionToken()) }
     var welcomed by rememberSaveable { mutableStateOf(store.getWelcomed()) }
     var vaultReady by rememberSaveable { mutableStateOf(deviceKeyManager.isVaultSetUp()) }
+    // SEC-015: biometric gate — false until user authenticates when require_biometric = true.
+    var biometricPassed by rememberSaveable { mutableStateOf(!store.getRequireBiometric()) }
 
     val hasLegacyApiKey = store.getApiKey().isNotEmpty()
 
@@ -70,15 +73,22 @@ fun MainApp() {
             if (!VaultSession.isUnlocked) {
                 deviceKeyManager.loadMasterKey()?.let { VaultSession.unlock(it) }
             }
-            MainNavigation(
-                apiKey = sessionToken,
-                onApiKeyReset = {
-                    store.clearSessionToken()
-                    sessionToken = ""
-                    VaultSession.lock()
-                },
-                store = store,
-            )
+            // SEC-015: show biometric gate before vault content when setting is enabled.
+            if (!biometricPassed) {
+                BiometricGateScreen(onAuthenticated = { biometricPassed = true })
+            } else {
+                MainNavigation(
+                    apiKey = sessionToken,
+                    onApiKeyReset = {
+                        store.clearSessionToken()
+                        sessionToken = ""
+                        VaultSession.lock()
+                        // Reset gate so next login re-prompts biometric.
+                        biometricPassed = !store.getRequireBiometric()
+                    },
+                    store = store,
+                )
+            }
         }
     }
 }

@@ -22,6 +22,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -30,10 +32,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import digital.heirlooms.api.HeirloomsApi
 import digital.heirlooms.app.BuildConfig
 import digital.heirlooms.app.EndpointStore
 import digital.heirlooms.ui.theme.Earth
@@ -43,6 +47,7 @@ import digital.heirlooms.ui.theme.Forest15
 import digital.heirlooms.ui.theme.HeirloomsSerifItalic
 import digital.heirlooms.ui.theme.Parchment
 import digital.heirlooms.ui.theme.TextMuted
+import kotlinx.coroutines.launch
 
 private val VIDEO_THRESHOLD_OPTIONS = listOf(
     60 to "1 min",
@@ -59,10 +64,14 @@ private val GARDEN_REFRESH_OPTIONS = listOf(
 )
 
 @Composable
-fun SettingsScreen(onApiKeyReset: () -> Unit, store: EndpointStore) {
+fun SettingsScreen(onApiKeyReset: () -> Unit, store: EndpointStore, apiKey: String = store.getApiKey()) {
+    val scope = rememberCoroutineScope()
     var showResetConfirm by remember { mutableStateOf(false) }
     var videoThreshold by remember { mutableStateOf(store.getVideoPlaybackThreshold()) }
     var gardenRefreshIntervalMs by remember { mutableStateOf(store.getGardenRefreshIntervalMs()) }
+    // SEC-015: biometric gate toggle.
+    var requireBiometric by remember { mutableStateOf(store.getRequireBiometric()) }
+    var biometricWorking by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = Parchment,
@@ -155,6 +164,57 @@ fun SettingsScreen(onApiKeyReset: () -> Unit, store: EndpointStore) {
                         )
                     }
                 }
+            }
+            HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Forest15)
+
+            // SEC-015: Biometric vault gate toggle.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Require biometric to open vault",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Forest,
+                    )
+                    Text(
+                        "Prompt for fingerprint or face ID each time you open the vault.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+                Switch(
+                    checked = requireBiometric,
+                    onCheckedChange = { newValue ->
+                        if (!biometricWorking) {
+                            biometricWorking = true
+                            scope.launch {
+                                try {
+                                    val sessionToken = store.getSessionToken().ifEmpty { apiKey }
+                                    val api = HeirloomsApi(apiKey = sessionToken)
+                                    val updated = api.patchAccount(requireBiometric = newValue)
+                                    requireBiometric = updated.requireBiometric
+                                    store.setRequireBiometric(updated.requireBiometric)
+                                } catch (_: Exception) {
+                                    // Network error — do not change the local state.
+                                } finally {
+                                    biometricWorking = false
+                                }
+                            }
+                        }
+                    },
+                    enabled = !biometricWorking,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Parchment,
+                        checkedTrackColor = Forest,
+                        uncheckedThumbColor = Forest,
+                        uncheckedTrackColor = Forest08,
+                    ),
+                )
             }
             HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Forest15)
 

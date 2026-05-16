@@ -11,6 +11,7 @@ import org.http4k.contract.ContractRoute
 import org.http4k.contract.div
 import org.http4k.contract.meta
 import org.http4k.core.Method.GET
+import org.http4k.core.Method.PATCH
 import org.http4k.core.Method.POST
 import org.http4k.core.Request
 import org.http4k.core.Response
@@ -36,6 +37,8 @@ fun authRoutes(authService: AuthService): List<ContractRoute> = listOf(
     setupExistingRoute(authService),
     logoutRoute(authService),
     meRoute(authService),
+    accountRoute(authService),
+    patchAccountRoute(authService),
     getInviteRoute(authService),
     registerRoute(authService),
     inviteConnectRoute(authService),
@@ -178,6 +181,46 @@ private fun meRoute(authService: AuthService): ContractRoute =
                 .body("""{"user_id":"${userInfo.id}","username":"${userInfo.username}","display_name":"${userInfo.displayName}"}""")
         } catch (e: Exception) {
             authLogger.error("me error", e)
+            Response(INTERNAL_SERVER_ERROR).body("Internal server error")
+        }
+    }
+
+// ---- GET /account ----------------------------------------------------------
+
+private fun accountRoute(authService: AuthService): ContractRoute =
+    "/account" meta {
+        summary = "Return the authenticated user's account settings"
+    } bindContract GET to { request: Request ->
+        try {
+            val user = authService.getAccount(request.authUserId())
+                ?: return@to Response(UNAUTHORIZED)
+            Response(OK).header("Content-Type", "application/json")
+                .body("""{"user_id":"${user.id}","username":"${user.username}","display_name":"${user.displayName}","require_biometric":${user.requireBiometric}}""")
+        } catch (e: Exception) {
+            authLogger.error("account error", e)
+            Response(INTERNAL_SERVER_ERROR).body("Internal server error")
+        }
+    }
+
+// ---- PATCH /account --------------------------------------------------------
+
+private fun patchAccountRoute(authService: AuthService): ContractRoute =
+    "/account" meta {
+        summary = "Update the authenticated user's account settings"
+    } bindContract PATCH to { request: Request ->
+        try {
+            val userId = request.authUserId()
+            val node = authMapper.readTree(request.bodyString())
+            val requireBiometricNode = node?.get("require_biometric")
+            if (requireBiometricNode != null && requireBiometricNode.isBoolean) {
+                authService.setRequireBiometric(userId, requireBiometricNode.asBoolean())
+            }
+            val user = authService.getAccount(userId)
+                ?: return@to Response(UNAUTHORIZED)
+            Response(OK).header("Content-Type", "application/json")
+                .body("""{"user_id":"${user.id}","username":"${user.username}","display_name":"${user.displayName}","require_biometric":${user.requireBiometric}}""")
+        } catch (e: Exception) {
+            authLogger.error("patch account error", e)
             Response(INTERNAL_SERVER_ERROR).body("Internal server error")
         }
     }

@@ -98,6 +98,13 @@ class AuthService(
     fun getMe(userId: UUID): digital.heirlooms.server.domain.auth.UserRecord? =
         authRepo.findUserById(userId)
 
+    fun getAccount(userId: UUID): digital.heirlooms.server.domain.auth.UserRecord? =
+        authRepo.findUserById(userId)
+
+    fun setRequireBiometric(userId: UUID, requireBiometric: Boolean) {
+        authRepo.setRequireBiometric(userId, requireBiometric)
+    }
+
     fun logout(apiKey: String?) {
         val session = resolveSession(apiKey) ?: return
         authRepo.deleteSession(session.id)

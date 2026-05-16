@@ -168,6 +168,13 @@ export async function getInvite(sessionToken) {
   return r.json() // { token, expires_at }
 }
 
+// SEC-015: fetch account settings including require_biometric.
+export async function getAccount(sessionToken) {
+  const r = await apiFetch('/api/auth/account', sessionToken)
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json() // { user_id, username, display_name, require_biometric }
+}
+
 export async function authInviteConnect(sessionToken, inviteToken) {
   return fetch(`${API_URL}/api/auth/invites/${encodeURIComponent(inviteToken)}/connect`, {
     method: 'POST',

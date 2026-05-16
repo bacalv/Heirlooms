@@ -292,6 +292,32 @@ public final class HeirloomsAPI {
         return try decode(data, as: PlotKeyResponse.self, context: "getPlotKey")
     }
 
+    // MARK: - Account settings
+
+    /// Fetches the authenticated user's account settings including `require_biometric`.
+    ///
+    /// Calls `GET /api/auth/account`.
+    public func getAccount() async throws -> AccountResponse {
+        let url = baseURL.appendingPathComponent("api/auth/account")
+        let request = try buildRequest(url: url, method: "GET")
+        let (data, response) = try await session.data(for: request)
+        try validateResponse(response, data: data, context: "getAccount")
+        return try decode(data, as: AccountResponse.self, context: "getAccount")
+    }
+
+    /// Updates the authenticated user's account settings.
+    ///
+    /// Calls `PATCH /api/auth/account`. Returns the updated account.
+    public func patchAccount(requireBiometric: Bool) async throws -> AccountResponse {
+        let url = baseURL.appendingPathComponent("api/auth/account")
+        var request = try buildRequest(url: url, method: "PATCH")
+        let body: [String: Any] = ["require_biometric": requireBiometric]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await session.data(for: request)
+        try validateResponse(response, data: data, context: "patchAccount")
+        return try decode(data, as: AccountResponse.self, context: "patchAccount")
+    }
+
     // MARK: - Pairing
 
     /// Completes the device-pairing flow by posting the wrapped master key to the web session.
