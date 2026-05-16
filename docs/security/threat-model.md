@@ -150,6 +150,7 @@ The following LOW and INFO findings are consciously not acted on at this time:
 | F-14 — static API key | Dev/test only; never deployed to production |
 | F-15 — no HTTP→HTTPS redirect in app | Cloud Run enforces HTTPS at the platform level |
 | F-16 — display_name not sanitised | Invite-only vault; web client responsible for escaping |
+| SEC-012 — Tag metadata leakage (token equality, frequency, co-occurrence, trellis correlation) | Structural consequence of deterministic HMAC token scheme (ARCH-007); no semantic content exposed; cross-user correlation is cryptographically prevented by per-user HKDF keying; accepted per SEC-012 (2026-05-16) |
 
 ---
 

@@ -3,12 +3,13 @@ id: SEC-012
 title: Tag metadata leakage — document and disclose accepted residual risk
 category: Security
 priority: Medium
-status: queued
+status: done
 depends_on: [ARCH-007]
 touches:
   - docs/security/
 assigned_to: SecurityManager
 estimated: 2–3 hours
+completed: 2026-05-16
 ---
 
 ## Background
@@ -61,4 +62,47 @@ same address 500 times without reading the letters.
 
 ## Completion notes
 
-<!-- SecurityManager appends here and moves file to tasks/done/ -->
+Completed 2026-05-16 by SecurityManager.
+
+### Files created / updated
+
+- **`docs/security/SEC-012_tag-metadata-leakage.md`** — formal accepted-risk document
+  (primary deliverable). Supersedes / consolidates the earlier draft at
+  `docs/security/tag-metadata-leakage.md` (that draft is retained as-is; it was
+  consistent with this document).
+- **`docs/security/threat-model.md`** — SEC-012 entry added to Accepted Risks table
+  (§8).
+
+### What the formal document covers
+
+1. **Residual leakage catalogue (§2)** — five specific leakage vectors documented:
+   tag equality within a vault, tag frequency, tag co-occurrence, tag count per item
+   (array length), and trellis criteria correlation. The last two were implicit in
+   ARCH-007 but not called out in the task brief; both are real and included.
+
+2. **Privacy guarantees (§3)** — formally verified that (a) semantic meaning cannot
+   be recovered from tokens, (b) cross-user correlation is cryptographically impossible
+   due to per-user HKDF keying, (c) display names are confidential via AES-256-GCM,
+   and (d) auto-tag namespace isolation holds.
+
+3. **Threat model verification table (§4)** — each of the five ARCH-007 privacy claims
+   checked against the scheme design and confirmed. Threat model holds.
+
+4. **Formal risk acceptance (§5)** — Risk ID SEC-012-TAG-METADATA, severity Low,
+   accepted by Security Manager 2026-05-16. Review trigger documented.
+
+5. **Heirlooms' commitment (§6)** — four commitments (no inference, no sale, no
+   monetisation, no profiling) stated in perpetuity including post-acquisition.
+
+6. **User-facing disclosure wording (§7)** — verbatim from the task brief, plus
+   placement guidance (Settings privacy notice, privacy policy, tagging onboarding).
+
+7. **Future work aspiration (§8)** — client-side tag evaluation as the long-term
+   solution; three blockers and three re-evaluation triggers stated explicitly.
+
+8. **Threat model integration note (§9)** — exact row to append to threat-model.md §8.
+
+### No code changes
+
+SEC-012 is a documentation and risk-acceptance task only. No production code was
+modified.
