@@ -279,6 +279,26 @@ See `tasks/progress.md` for the full queue.
 Persona files: `personalities/` — PA, Developer, DevManager, TestManager, OpsManager, SecurityManager, TechnicalArchitect, ResearchManager.
 Start any session: `@personalities/PA.md`
 
+## Session wrap-up (2026-05-17 — v0.56 deploy + sharing flow tests)
+
+### What happened this session
+
+**v0.56 deployed to test environment** — Server (revision 00012-4jc) and web (revision 00011-rsn) deployed to `test.api.heirlooms.digital` / `test.heirlooms.digital`. Both healthy. Android APK build deferred — Bret to sideload manually.
+
+**23 API smoke tests run against test environment** — All passed. Covered: health, auth, challenge/login, register, pairing, invite generation, devices (BUG-029 endpoint confirmed), biometric account patch (BUG-028), friends, passphrase, link flow.
+
+**TST-013 delivered** — `SharingFlowIntegrationTest.kt` written (6 tests: 4 integration via Testcontainers + LocalFileStore, 2 unit for the sha256 auth contract). All pass via `./gradlew test`. Side-fixed a pre-existing build failure in `SessionAuthFilterUnitTest.kt`.
+
+**Sharing flow smoke script delivered** — `scripts/smoke_sharing_flow.py` runs 11 checks against the live test API: register two users, friend connect, upload, share, byte-exact retrieval, plus 3 negative cases. Passed 11/11 twice.
+
+### Known gotchas for next session
+
+- **TST-012 still the gate** — manual staging checklist not yet run. Android APK must be sideloaded first (journeys require Android + web). BUG-025 and BUG-026 not yet retested.
+- **Android APK** — `cd HeirloomsApp && ./gradlew assembleStagingDebug`, then `adb install -r app/build/outputs/apk/staging/debug/app-staging-debug.apk`.
+- **Production deploy** — pending TST-012 conditional pass.
+
+---
+
 ## Session wrap-up (2026-05-17 — Legal / Retirement Planning session)
 
 ### What happened this session
