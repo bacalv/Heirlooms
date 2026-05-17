@@ -153,9 +153,14 @@ export function VaultUnlockPage({ apiKey, onUnlocked }) {
       })
       if (!putR.ok) throw new Error(`Passphrase upload failed: ${putR.status}`)
 
-      const spki = await deviceKeyManager.generateAndStoreKeypair()
-      await registerDevice(apiKey, masterKey, spki)
-      deviceKeyManager.markVaultSetUp()
+      // Only register the device if it hasn't been registered already.
+      // After a web pairing flow the server already has a wrapped_keys row for
+      // this browser, so calling POST /api/keys/devices again would 409.
+      if (!deviceKeyManager.isVaultSetUp()) {
+        const spki = await deviceKeyManager.generateAndStoreKeypair()
+        await registerDevice(apiKey, masterKey, spki)
+        deviceKeyManager.markVaultSetUp()
+      }
 
       vaultSession.unlock(masterKey)
       await ensureSharingKey(apiKey, masterKey)

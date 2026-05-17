@@ -5,6 +5,7 @@ import { pairingQr, pairingStatus } from '../api'
 import { unwrapMasterKeyForDevice, toB64url, ALG_P256_ECDH_HKDF_V1 } from '../crypto/vaultCrypto'
 import { unlock } from '../crypto/vaultSession'
 import { savePairingMaterial } from '../crypto/webPairingStore'
+import { markVaultSetUp } from '../crypto/deviceKeyManager'
 
 export function PairPage({ onPaired }) {
   const [code, setCode] = useState('')
@@ -61,6 +62,7 @@ export function PairPage({ onPaired }) {
               wrappedMasterKey: wrappedBytes,
               wrapFormat: ALG_P256_ECDH_HKDF_V1,
             })
+            markVaultSetUp()
             unlock(masterKey)
             onPaired(data.session_token, masterKey)
             window.location.replace('/')
