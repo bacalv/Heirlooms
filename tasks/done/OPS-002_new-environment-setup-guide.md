@@ -98,4 +98,59 @@ Create `docs/ops/new-environment.md` covering:
 
 ## Completion notes
 
-<!-- OpsManager appends here and moves file to tasks/done/ -->
+**Completed by:** OpsManager  
+**Date:** 2026-05-17  
+**Branch:** `agent/ops-manager-1/OPS-002`  
+**Deliverable:** `docs/ops/new-environment.md`
+
+**What was written:**
+
+The guide covers all 10 sections specified in the task, in runbook format
+matching `docs/ops/runbook.md`:
+
+1. GCP project setup — project creation, API enablement, and the three
+   mandatory IAM role grants (`cloudsql.client`, `secretmanager.secretAccessor`,
+   `storage.objectAdmin`) sourced from `docs/sessions/2026-05-14_PA_NOTES_archive.md`
+   (section "GCP permissions — what actually worked")
+
+2. Cloud SQL — create database and user inside the shared `heirlooms-db`
+   instance; store password in Secret Manager
+
+3. GCS bucket — create `heirlooms-uploads-<env>`; grant `objectAdmin` to the
+   server SA (critical — easy to miss); set CORS config with explicit warning
+   about silent upload failures; store GCS credentials in Secret Manager
+
+4. Artifact Registry — tag convention table for prod/test/feature envs;
+   authentication command
+
+5. Cloud Run server — full `gcloud run deploy` command with all env vars and
+   secrets; config diff table vs production; health check and log triage
+
+6. Cloud Run web — `VITE_API_URL` build arg gotcha documented prominently:
+   omitting `--build-arg` bakes an empty string into the JS bundle silently;
+   `--platform linux/amd64` requirement noted; full deploy command
+
+7. Domains and SSL — domain mapping commands; GoDaddy DNS record set; SSL
+   auto-provisioning note
+
+8. Secret Manager checklist — all three secrets, generation command for API key
+
+9. Flyway / first run — migration verification via `flyway_schema_history`;
+   founding user seed confirmation; first invite token command
+
+10. Android flavor — `build.gradle.kts` snippet for a new product flavor;
+    existing flavors (`prod`, `staging`) documented as reference
+
+11. Post-setup checklist — 9-point ordered checklist covering health, CORS,
+    SA grant, API key, Flyway, registration, upload end-to-end
+
+**Sources used:**
+- `docs/sessions/2026-05-14_PA_NOTES_archive.md` — exact IAM commands, Cloud
+  Run deploy commands, domain mapping DNS records, VITE_API_URL note
+- `docs/ops/runbook.md` (OPS-001) — staging deploy commands as reference
+  template, CORS config, Docker restart protocol reference
+- `HeirloomsWeb/Dockerfile` — confirmed `ARG VITE_API_URL` / `ENV VITE_API_URL`
+  build-stage declaration
+- `HeirloomsApp/app/build.gradle.kts` — confirmed existing flavor structure
+- `docs/PA_NOTES.md` — GCS bucket separation decision (2026-05-16),
+  naming convention (test not staging)
