@@ -38,7 +38,19 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 ## In Progress
 
-*(none)*
+| ID | Title | Category | Agent | Depends on |
+|----|-------|----------|-------|-----------|
+| [BUG-023](in-progress/BUG-023_passphrase-save-409-after-web-pairing.md) | Passphrase save 409 after web pairing | Bug Fix | developer-12 | — |
+| [BUG-029](in-progress/BUG-029_web-pairing-no-device-entry.md) | Web pairing no device entry | Bug Fix | developer-12 | BUG-023 |
+| [BUG-027](in-progress/BUG-027_garden-not-loading-on-launch.md) | Garden not loading on launch | Bug Fix | developer-13 | — |
+| [BUG-024](in-progress/BUG-024_garden-inline-tag-no-trellis-routing.md) | Garden inline tag no trellis routing | Bug Fix | developer-13 | BUG-027 |
+| [BUG-028](in-progress/BUG-028_biometric-gate-not-enforcing.md) | Biometric gate not enforcing | Bug Fix | developer-14 | — |
+| [TST-004](in-progress/TST-004_playwright-e2e-suite.md) | Playwright E2E suite | Testing | developer-15 | — |
+| [ARCH-012](in-progress/ARCH-012_android-package-restructure-brief.md) | Android package restructure brief | Architecture | tech-architect-1 | — |
+| [ARCH-013](in-progress/ARCH-013_web-app-restructure-brief.md) | Web app restructure brief | Architecture | tech-architect-2 | — |
+| [ARCH-011](in-progress/ARCH-011_unified-messaging-model.md) | Unified messaging model | Architecture | tech-architect-3 | — |
+| [OPS-002](in-progress/OPS-002_new-environment-setup-guide.md) | New environment setup guide | Operations | ops-manager-1 | — |
+| [SEC-002](in-progress/SEC-002_auth-crypto-coverage.md) | Auth/crypto coverage plan (phases 1+2) | Security | security-manager-1 | — |
 
 ## Done
 
