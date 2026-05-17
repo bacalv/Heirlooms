@@ -12,7 +12,7 @@ import org.junit.Test
  * Unit tests for [HeirloomsApi.createFriendInvite].
  *
  * Uses [MockWebServer] so no real network connection is made.  The test verifies that:
- * - The client issues a POST to /api/auth/invites
+ * - The client issues a GET to /api/auth/invites (server only has GET; POST was a bug fixed in TST-010)
  * - The response body is parsed correctly into [HeirloomsApi.InviteResponse]
  */
 class CreateFriendInviteTest {
@@ -33,7 +33,7 @@ class CreateFriendInviteTest {
     }
 
     @Test
-    fun `createFriendInvite sends POST to correct path`() = runTest {
+    fun `createFriendInvite sends GET to correct path`() = runTest {
         server.enqueue(
             MockResponse()
                 .setResponseCode(200)
@@ -43,7 +43,7 @@ class CreateFriendInviteTest {
         api.createFriendInvite()
 
         val request = server.takeRequest()
-        assertEquals("POST", request.method)
+        assertEquals("GET", request.method)
         assertEquals("/api/auth/invites", request.path)
     }
 

@@ -14,50 +14,39 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |---|---|---|---|---|---|
-| [LEG-003](queue/LEG-003_patent-assessment-rес005-presence-gated-constructions.md) | Patent assessment — RES-005 presence-gated delivery and count-conditional trigger | Legal | High | Legal | LEG-001, LEG-002 |
-| [ARCH-014](queue/ARCH-014_res005-technical-impact-assessment.md) | Technical impact assessment — RES-005 presence-gated delivery and count-conditional trigger | Architecture | Medium | TechnicalArchitect | ARCH-003, ARCH-006, ARCH-008, ARCH-010 |
-| [ARCH-012](queue/ARCH-012_android-package-restructure-brief.md) | Android app — package restructure and refactor brief | Architecture | High | TechnicalArchitect | — |
-| [ARCH-013](queue/ARCH-013_web-app-restructure-brief.md) | Web app — module restructure and refactor brief | Architecture | High | TechnicalArchitect | — |
-| [BUG-023](queue/BUG-023_passphrase-save-409-after-web-pairing.md) | Passphrase save fails 409 after web pairing | Bug Fix | High | Developer | — |
-| [BUG-024](queue/BUG-024_garden-inline-tag-no-trellis-routing.md) | Garden inline tag edit doesn't trigger trellis routing | Bug Fix | Medium | Developer | — |
-| [BUG-027](queue/BUG-027_garden-not-loading-on-launch.md) | Garden not loading on launch — requires swipe to refresh | Bug Fix | Medium | Developer | — |
-| [BUG-028](queue/BUG-028_biometric-gate-not-enforcing.md) | Biometric gate flashes but doesn't block vault access | Bug Fix | Medium | Developer | — |
-| [BUG-029](queue/BUG-029_web-pairing-no-device-entry.md) | Web pairing session not registered as a device entry | Bug Fix | Medium | Developer | BUG-023 |
+| [BUG-029](in-progress/BUG-029_web-pairing-no-device-entry.md) | Web pairing no device entry | Bug Fix | Medium | Developer | BUG-023 ✓ |
 | [BUG-025](queue/BUG-025_web-friends-no-nav-link.md) | Web Friends page has no navigation link | Bug Fix | Low | Developer | — |
 | [BUG-026](queue/BUG-026_invite-link-no-auto-route.md) | Invite link doesn't auto-route token for logged-in users | Bug Fix | Low | Developer | — |
 | [STR-001](queue/STR-001_strategic-synthesis-top-20-features-direction-brief.md) | Strategic synthesis — top 20 features and direction brief for CTO | Strategy | Medium | PA | *(ARCH-008 done — unblocked)* |
 | [BIO-002](queue/BIO-002_hi-claude-book-and-blog-concept.md) | "Hi Claude..." — book and blog series concept development | Biography | Medium | Biographer | BIO-001 |
-| [ARCH-011](queue/ARCH-011_unified-messaging-model.md) | Unified messaging model — capsule messages, shared plot messages, message trellises | Architecture | Medium | TechnicalArchitect | ARCH-003, ARCH-007 |
 | [REF-002](queue/REF-002_tag-to-label-rename.md) | Tag → Label rename across all platforms and documentation | Refactoring | Medium | Developer | — |
 | [TST-006](queue/TST-006_android-remote-control-investigation.md) | Investigate remote-controlled Android testing for E2E automation | Testing | Medium | TestManager | — |
-| [TST-004](queue/TST-004_playwright-e2e-suite.md) | Playwright E2E suite (actor-based, staging) | Testing | Medium | Developer | — |
-| [SEC-002](queue/SEC-002_auth-crypto-coverage.md) | 100% coverage plan for auth/crypto paths | Security | High | SecurityManager | TST-004 |
+| [TST-012](queue/TST-012_manual-staging-checklist-v056.md) | Manual staging checklist v0.56 — **held until staging ready** | Testing | High | TestManager | *(all v0.56 branches merged)* |
+| [DOC-001](queue/DOC-001_uml-sequence-diagrams.md) | UML sequence diagrams from test output | Docs | Low | Developer | TST-004 ✓ |
 | [RES-005](queue/RES-005_glossary-self-reference-audit.md) | Glossary self-reference audit — ensure every cited term has an entry | Research | Low | ResearchManager | — |
 | [OPS-003](queue/OPS-003_pre-production-staging-environment.md) | Pre-production staging environment — prod-snapshot + anonymisation pipeline | Operations | Low | OpsManager | — |
 | [UX-001](queue/UX-001_shared-plot-button-tap-targets.md) | Android: shared plot action buttons have insufficient tap targets | UX | Low | Developer | — |
-| [DOC-001](queue/DOC-001_uml-sequence-diagrams.md) | UML sequence diagrams from test output | Docs | Low | Developer | TST-004 |
-| [OPS-002](queue/OPS-002_new-environment-setup-guide.md) | New environment setup guide | Operations | Low | OpsManager | — |
 
 ## In Progress
 
-| ID | Title | Category | Agent | Depends on |
-|----|-------|----------|-------|-----------|
-| [BUG-023](in-progress/BUG-023_passphrase-save-409-after-web-pairing.md) | Passphrase save 409 after web pairing | Bug Fix | developer-12 | — |
-| [BUG-029](in-progress/BUG-029_web-pairing-no-device-entry.md) | Web pairing no device entry | Bug Fix | developer-12 | BUG-023 |
-| [BUG-027](in-progress/BUG-027_garden-not-loading-on-launch.md) | Garden not loading on launch | Bug Fix | developer-13 | — |
-| [BUG-024](in-progress/BUG-024_garden-inline-tag-no-trellis-routing.md) | Garden inline tag no trellis routing | Bug Fix | developer-13 | BUG-027 |
-| [BUG-028](in-progress/BUG-028_biometric-gate-not-enforcing.md) | Biometric gate not enforcing | Bug Fix | developer-14 | — |
-| [TST-004](in-progress/TST-004_playwright-e2e-suite.md) | Playwright E2E suite | Testing | developer-15 | — |
-| [ARCH-012](in-progress/ARCH-012_android-package-restructure-brief.md) | Android package restructure brief | Architecture | tech-architect-1 | — |
-| [ARCH-013](in-progress/ARCH-013_web-app-restructure-brief.md) | Web app restructure brief | Architecture | tech-architect-2 | — |
-| [ARCH-011](in-progress/ARCH-011_unified-messaging-model.md) | Unified messaging model | Architecture | tech-architect-3 | — |
-| [OPS-002](in-progress/OPS-002_new-environment-setup-guide.md) | New environment setup guide | Operations | ops-manager-1 | — |
-| [SEC-002](in-progress/SEC-002_auth-crypto-coverage.md) | Auth/crypto coverage plan (phases 1+2) | Security | security-manager-1 | — |
+| ID | Title | Category | Agent |
+|----|-------|----------|-------|
+| [BUG-029](in-progress/BUG-029_web-pairing-no-device-entry.md) | Web pairing no device entry | Bug Fix | developer-12 |
 
 ## Done
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
+| [BUG-023](done/BUG-023_passphrase-save-409-after-web-pairing.md) | Passphrase save 409 after web pairing — guard registerDevice, fix PairPage | Bug Fix | 2026-05-17 |
+| [BUG-024](done/BUG-024_garden-inline-tag-no-trellis-routing.md) | Garden inline tag now sends prewrappedDeks for trellis routing | Bug Fix | 2026-05-17 |
+| [BUG-027](done/BUG-027_garden-not-loading-on-launch.md) | Garden loads on launch; staging counts refresh after tagging | Bug Fix | 2026-05-17 |
+| [BUG-028](done/BUG-028_biometric-gate-not-enforcing.md) | Biometric gate — rememberSaveable → remember, gate now enforces | Bug Fix | 2026-05-17 |
+| [TST-004](done/TST-004_playwright-e2e-suite.md) | Playwright E2E suite — 5 journeys, 17 tests | Testing | 2026-05-17 |
+| [ARCH-011](done/ARCH-011_unified-messaging-model.md) | Unified messaging model design brief | Architecture | 2026-05-17 |
+| [ARCH-012](done/ARCH-012_android-package-restructure-brief.md) | Android 7-phase restructure brief | Architecture | 2026-05-17 |
+| [ARCH-013](done/ARCH-013_web-app-restructure-brief.md) | Web 8-phase restructure brief | Architecture | 2026-05-17 |
+| [OPS-002](done/OPS-002_new-environment-setup-guide.md) | New environment setup guide | Operations | 2026-05-17 |
+| [SEC-002](done/SEC-002_auth-crypto-coverage.md) | Auth/crypto coverage — 128 unit tests (phases 1+2) | Security | 2026-05-17 |
 | [TST-010](done/TST-010_manual-staging-checklist-v055.md) | Manual staging checklist v0.55 — conditional pass, 7 bugs logged | Testing | 2026-05-16 |
 | [OPS-004](done/OPS-004_v055-test-environment-deployment.md) | v0.55 test environment deployment | Operations | 2026-05-16 |
 | [SEC-016](done/SEC-016_ios-ats-infoplist.md) | iOS — add committed Info.plist with ATS domain restriction | Security | 2026-05-16 |

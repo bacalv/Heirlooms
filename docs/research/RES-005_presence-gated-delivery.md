@@ -377,7 +377,9 @@ In neither case does the server compute or hold `DEK_B`. It holds only `mask_B =
 
 ### Supported predicates
 
-The predicate is stored as a simple policy record at sealing time. The server evaluates it against the integer presence count at w2. Supported forms:
+The predicate is stored as a policy record at sealing time. The server evaluates it against the **proof set** at w2 — the set of recipient identities who submitted valid presence proofs. Because each proof is `H(K_ticket_i)` and `K_ticket_i` is specific to recipient i, the server can unambiguously identify which named recipient submitted each proof. The predicate therefore has access to both the count and the identity of every winner.
+
+**Count-only predicates** (evaluated against `|proof_set|`):
 
 | Predicate | Meaning |
 |---|---|
@@ -385,6 +387,34 @@ The predicate is stored as a simple policy record at sealing time. The server ev
 | `count >= N` | At least N opened — quorum release |
 | `count < N` | Fewer than N opened — failure-to-engage fallback |
 | `count == M` | All named recipients opened — unanimity required |
+
+**Named-recipient predicates** (evaluated against membership of `proof_set`):
+
+| Predicate | Meaning |
+|---|---|
+| `bob IN proof_set` | Bob specifically must have opened |
+| `bob NOT IN proof_set` | Fires only if Bob did not open |
+| `{bob, charlie} ⊆ proof_set` | Both Bob and Charlie must have opened |
+
+**Composite predicates** (combining count and named requirements):
+
+| Predicate | Meaning |
+|---|---|
+| `bob IN proof_set AND count >= 3` | Bob plus at least 2 others |
+| `bob IN proof_set AND count == M` | Bob and everyone else (full attendance + named) |
+| `{bob, charlie} ⊆ proof_set AND count >= 2` | Both named recipients opened (sufficient on their own) |
+| `bob IN proof_set OR count >= 4` | Either Bob specifically, or a large enough crowd without him |
+
+The policy is stored as a structured record at sealing time rather than as a free-form expression, to keep server-side evaluation simple and auditable. A minimal v1 policy structure covers the most useful cases:
+
+```json
+{
+  "required_ids": ["bob_id"],
+  "min_count": 3
+}
+```
+
+This expresses "Bob must be in the proof set AND total count must be ≥ 3." Both fields are optional: omitting `required_ids` gives a count-only predicate; omitting `min_count` gives a named-only predicate. More expressive policies (disjunctions, exclusions, thresholds over named subsets) can be added in later versions without changing the underlying cryptographic mechanism — the predicate is always evaluated against the same proof set.
 
 ### Multiple predicates and branching
 
