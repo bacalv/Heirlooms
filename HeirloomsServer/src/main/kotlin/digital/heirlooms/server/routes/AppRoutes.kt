@@ -37,6 +37,7 @@ import digital.heirlooms.server.filters.rateLimitFilter
 import digital.heirlooms.server.routes.auth.authRoutes
 import digital.heirlooms.server.routes.capsule.capsuleReverseLookupRoute
 import digital.heirlooms.server.routes.capsule.capsuleRoutes
+import digital.heirlooms.server.routes.capsule.executorShareRoutes
 import digital.heirlooms.server.routes.keys.keysRoutes
 import digital.heirlooms.server.routes.plot.trellisRoutes
 import digital.heirlooms.server.routes.plot.plotItemRoutes
@@ -55,8 +56,11 @@ import digital.heirlooms.server.repository.connection.NominationRepository
 import digital.heirlooms.server.repository.connection.PostgresNominationRepository
 import digital.heirlooms.server.repository.capsule.RecipientLinkRepository
 import digital.heirlooms.server.repository.capsule.PostgresRecipientLinkRepository
+import digital.heirlooms.server.repository.capsule.ExecutorShareRepository
+import digital.heirlooms.server.repository.capsule.PostgresExecutorShareRepository
 import digital.heirlooms.server.service.connection.ConnectionService
 import digital.heirlooms.server.service.connection.NominationService
+import digital.heirlooms.server.service.capsule.ExecutorShareService
 import digital.heirlooms.server.routes.upload.checkContentHashContractRoute
 import digital.heirlooms.server.routes.upload.compostUploadContractRoute
 import digital.heirlooms.server.routes.upload.confirmUploadContractRoute
@@ -143,6 +147,7 @@ fun buildApp(
     connectionRepo = PostgresConnectionRepository(database.dataSource),
     nominationRepo = PostgresNominationRepository(database.dataSource),
     recipientLinkRepo = PostgresRecipientLinkRepository(database.dataSource),
+    executorShareRepo = PostgresExecutorShareRepository(database.dataSource),
     thumbnailGenerator = thumbnailGenerator,
     metadataExtractor = metadataExtractor,
     previewDurationSeconds = previewDurationSeconds,
@@ -185,6 +190,14 @@ internal fun buildApp(
     recipientLinkRepo: RecipientLinkRepository = object : RecipientLinkRepository {
         override fun linkRecipient(capsuleId: java.util.UUID, recipientId: java.util.UUID, connectionId: java.util.UUID, callerUserId: java.util.UUID) = RecipientLinkRepository.LinkResult.CapsuleNotFound
     },
+    executorShareRepo: ExecutorShareRepository = object : ExecutorShareRepository {
+        override fun getCapsuleShareConfig(capsuleId: java.util.UUID, ownerUserId: java.util.UUID) = null
+        override fun isAcceptedNominationForOwner(nominationId: java.util.UUID, ownerUserId: java.util.UUID) = false
+        override fun insertSharesBatch(capsuleId: java.util.UUID, shares: List<ExecutorShareRepository.ShareRow>) {}
+        override fun findShareForExecutor(capsuleId: java.util.UUID, callerUserId: java.util.UUID) = ExecutorShareRepository.MineQueryResult.NotAnExecutor
+        override fun findAllShares(capsuleId: java.util.UUID) = emptyList<digital.heirlooms.server.domain.capsule.ExecutorShareRecord>()
+        override fun getCapsuleShamirConfig(capsuleId: java.util.UUID) = null
+    },
     thumbnailGenerator: (ByteArray, String) -> ByteArray? = ::generateThumbnail,
     metadataExtractor: (ByteArray, String) -> MediaMetadata = MetadataExtractor()::extract,
     previewDurationSeconds: Int = 15,
@@ -204,6 +217,7 @@ internal fun buildApp(
     val socialService = digital.heirlooms.server.service.social.SocialService(socialRepo)
     val connectionService = ConnectionService(connectionRepo)
     val nominationService = NominationService(nominationRepo)
+    val executorShareService = ExecutorShareService(executorShareRepo)
 
     val contentContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
@@ -237,7 +251,7 @@ internal fun buildApp(
     val capsuleContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
         descriptionPath = "/openapi.json"
-        routes += capsuleRoutes(capsuleService) + plotRoutes(plotService) + trellisRoutes(flowService) + plotItemRoutes(flowService) + sharedPlotRoutes(sharedPlotService)
+        routes += capsuleRoutes(capsuleService) + plotRoutes(plotService) + trellisRoutes(flowService) + plotItemRoutes(flowService) + sharedPlotRoutes(sharedPlotService) + executorShareRoutes(executorShareService)
     }
 
     val keysContract = contract {
