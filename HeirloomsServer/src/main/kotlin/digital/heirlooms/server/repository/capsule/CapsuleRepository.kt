@@ -99,7 +99,10 @@ class PostgresCapsuleRepository(private val dataSource: DataSource) : CapsuleRep
         dataSource.connection.use { conn ->
             val record = conn.prepareStatement(
                 """SELECT id, created_at, updated_at, created_by_user, shape, state,
-                          unlock_at, cancelled_at, delivered_at
+                          unlock_at, cancelled_at, delivered_at,
+                          wrapped_capsule_key, capsule_key_format,
+                          tlock_round, tlock_chain_id, tlock_wrapped_key, tlock_key_digest,
+                          shamir_threshold, shamir_total_shares
                    FROM capsules WHERE id = ? AND user_id = ?"""
             ).use { stmt ->
                 stmt.setObject(1, id)
@@ -465,7 +468,30 @@ class PostgresCapsuleRepository(private val dataSource: DataSource) : CapsuleRep
         unlockAt = getObject("unlock_at", OffsetDateTime::class.java),
         cancelledAt = getTimestamp("cancelled_at")?.toInstant(),
         deliveredAt = getTimestamp("delivered_at")?.toInstant(),
+        // M11 fields — may be null if the column does not exist in the ResultSet
+        // (e.g. for list queries that do not select them)
+        wrappedCapsuleKey  = tryGetBytes("wrapped_capsule_key"),
+        capsuleKeyFormat   = tryGetString("capsule_key_format"),
+        tlockRound         = tryGetLong("tlock_round"),
+        tlockChainId       = tryGetString("tlock_chain_id"),
+        tlockWrappedKey    = tryGetBytes("tlock_wrapped_key"),
+        tlockKeyDigest     = tryGetBytes("tlock_key_digest"),
+        shamirThreshold    = tryGetInt("shamir_threshold"),
+        shamirTotalShares  = tryGetInt("shamir_total_shares"),
     )
+
+    /** Helper: returns null if the column is not in the ResultSet or is SQL NULL. */
+    private fun ResultSet.tryGetBytes(col: String): ByteArray? =
+        try { getBytes(col) } catch (_: Exception) { null }
+
+    private fun ResultSet.tryGetString(col: String): String? =
+        try { getString(col) } catch (_: Exception) { null }
+
+    private fun ResultSet.tryGetLong(col: String): Long? =
+        try { getLong(col).takeUnless { wasNull() } } catch (_: Exception) { null }
+
+    private fun ResultSet.tryGetInt(col: String): Int? =
+        try { getInt(col).takeUnless { wasNull() } } catch (_: Exception) { null }
 
     private fun ResultSet.toUploadRecord() = UploadRecord(
         id = getObject("id", UUID::class.java),
