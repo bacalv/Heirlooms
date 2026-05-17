@@ -15,7 +15,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |---|---|---|---|---|---|
 | [LEG-003](queue/LEG-003_patent-assessment-rес005-presence-gated-constructions.md) | Patent assessment — RES-005 presence-gated delivery and count-conditional trigger | Legal | High | Legal | LEG-001, LEG-002 |
-| [ARCH-014](queue/ARCH-014_res005-technical-impact-assessment.md) | Technical impact assessment — RES-005 presence-gated delivery and count-conditional trigger | Architecture | Medium | TechnicalArchitect | ARCH-003, ARCH-006, ARCH-008, ARCH-010 |
 | [BUG-025](queue/BUG-025_web-friends-no-nav-link.md) | Web Friends page has no navigation link | Bug Fix | Low | Developer | — |
 | [BUG-026](queue/BUG-026_invite-link-no-auto-route.md) | Invite link doesn't auto-route token for logged-in users | Bug Fix | Low | Developer | — |
 | [STR-001](queue/STR-001_strategic-synthesis-top-20-features-direction-brief.md) | Strategic synthesis — top 20 features and direction brief for CTO | Strategy | Medium | PA | *(ARCH-008 done — unblocked)* |
@@ -44,6 +43,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [TOOL-001](done/TOOL-001_kotlin-api-client-module.md) | Kotlin API client module — Phase 1 capsule lifecycle CLI | Tools | 2026-05-17 |
 | [DEV-001](done/DEV-001.md) | M11 Wave 0 — V33 + V34 Flyway migrations (schema only) | Feature | 2026-05-17 |
 | [PLAN-001](done/PLAN-001_m11-task-breakdown.md) | M11 task breakdown — DEV-001 through DEV-006 created | Planning | 2026-05-17 |
+| [ARCH-014](done/ARCH-014_res005-technical-impact-assessment.md) | Technical impact assessment — RES-005 presence-gated delivery and count-conditional trigger | Architecture | 2026-05-17 |
 | [ARCH-015](done/ARCH-015_api-stability-contract.md) | API stability contract — frozen surface, policy, 8 regression pairs | Architecture | 2026-05-17 |
 | [TST-014](done/TST-014_m11-local-stack-feasibility.md) | M11 local stack — feasibility and design brief | Testing | 2026-05-17 |
 | [TST-013](done/TST-013_sharing-flow-integration-test.md) | Sharing flow integration test — 6 tests (4 integration + 2 unit) | Testing | 2026-05-17 |
