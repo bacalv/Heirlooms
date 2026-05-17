@@ -3,7 +3,7 @@ id: ARCH-014
 title: Technical impact assessment — RES-005 presence-gated delivery and count-conditional trigger
 category: Architecture
 priority: Medium
-status: queued
+status: done
 assigned_to: TechnicalArchitect
 depends_on: [ARCH-003, ARCH-006, ARCH-008, ARCH-010]
 touches:
@@ -159,4 +159,18 @@ Flag any blocker that would require amending M11 before it ships.
 
 ## Completion notes
 
-<!-- TechnicalArchitect appends here and moves file to tasks/done/ -->
+**Completed:** 2026-05-17
+**Agent:** TechnicalArchitect (tech-architect-5)
+**Output:** `docs/briefs/ARCH-014_res005-technical-impact.md`
+
+All 7 questions answered. Key findings:
+
+1. **Schema:** Two new tables for §1 (`capsule_presence_recipients`, `capsule_presence_proofs`) and one for §3 (`capsule_triggers`) — proposed as V33, all additive.
+2. **API:** Two new endpoints for §1 (`POST /presence`, `GET /presence/winners`) plus optional sealing extensions (`presence[]`, `triggers[]`). §3 trigger evaluation folds into the existing w2 scheduler job.
+3. **Envelope format:** No new binary algorithm ID needed. Reserve `presence-ticket-v1` as a logical format name in `docs/envelope_format.md` before M12 implementation starts.
+4. **TimeLockProvider:** No changes required. The tlock path is identical to the base window capsule.
+5. **Milestone sequencing:** §1 as M12; §3 as M13. Dead man's switch has no hard dependency on M13 posthumous delivery but belongs in M13 UX. Recommend adding `capsule_triggers` table in V33 regardless to avoid a schema migration at M13.
+6. **ARCH-008 compatibility:** §3 is a parallel mechanism to chained capsules (not a merge). No schema or API conflicts. ARCH-008 should be amended to acknowledge count-predicate triggers as a first-class trigger type alongside puzzle-solve.
+7. **Predicate integrity and overlapping predicates:** Accept honest-but-curious model for v1. Server validates predicate structure only; non-overlapping enforcement is left to client UX guidance.
+
+**No M11 blocker identified.** The only pre-M12 action required is the `presence-ticket-v1` reservation in `docs/envelope_format.md`.
