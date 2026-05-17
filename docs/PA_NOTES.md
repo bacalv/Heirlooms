@@ -279,6 +279,27 @@ See `tasks/progress.md` for the full queue.
 Persona files: `personalities/` — PA, Developer, DevManager, TestManager, OpsManager, SecurityManager, TechnicalArchitect, ResearchManager.
 Start any session: `@personalities/PA.md`
 
+## Session wrap-up (2026-05-17 — Legal / Retirement Planning session)
+
+### What happened this session
+
+**Patent filing steps briefed** — Legal Counsel walked through the full filing sequence: UK IPO → PCT → national phase. Cost: £10,000–£15,000 immediate (UK filing), £30,000–£70,000 total over 3–5 years. Mid-July 2026 target for UK filing established.
+
+**Funding options assessed** — Bank loan to newly incorporated company ruled out (no trading history). Two viable paths: director's loan (Bret lends personal funds into the company) or SEIS angel investment.
+
+**RET-003 produced** — Retirement Planner assessed both paths and strongly recommended director's loan over SEIS. Key finding: SEIS at this stage costs £111,000–£1,800,000 in base-scenario exit proceeds to raise £25,000. SEIS also cannot fund the initial filing (patent must be filed before approaching investors; HMRC advance assurance takes 4–6 weeks). PCT and national phase deferred to 12-month and 30-month marks respectively — only £10,000–£15,000 needed immediately.
+
+**Key open question for Bret** — Does Bret have accessible personal cash savings (outside ISA and pension) of £10,000–£15,000? Answer determines whether director's loan path is clear or whether staged attorney billing / other bridging is needed.
+
+### Known gotchas for next session (Legal)
+
+- **CRN not yet received** — Certificate of Incorporation is pending (applied 2026-05-17, up to 2 working days). CRN required before: signing LEG-004 (IP assignment deed), sending JUXT outside interests declaration, and filing the patent in the company's name.
+- **LEG-003 still queued** — RES-005 patent assessment (presence-gated delivery + count-conditional trigger) must be completed before briefing a patent attorney. Do not engage attorney without LEG-003 in hand.
+- **No attorney engaged yet** — CIPA-registered patent attorney experienced in cryptographic methods must be commissioned. Target engagement within 2 weeks of CRN receipt to hit mid-July 2026 filing date.
+- **JUXT consent sequence** — Declaration (LEG-005) drafted; send immediately on CRN receipt; ideally have written JUXT consent before patent is filed.
+
+---
+
 ## Session wrap-up (2026-05-17)
 
 ### What happened this session
