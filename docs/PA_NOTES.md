@@ -319,3 +319,32 @@ Start any session: `@personalities/PA.md`
 - **BUG-025, BUG-026** still queued (web friends nav link, invite link auto-route). Low priority — can batch into a maintenance pass.
 - **ARCH-012/013 refactor briefs are ready** — web and Android package restructures are documented but not dispatched. Prerequisite for meaningful unit test coverage. Plan these as M-prefix milestone tasks when iteration bandwidth allows.
 - The `tasks/progress.md` queue stale entry for BUG-029 was cleaned up in this session.
+
+---
+
+## Key decisions (2026-05-17 — strategy session)
+
+- **Server-first strategy approved** — App development (Android, web, iOS) is frozen at current feature set. No new features to client apps until M11 + M12 backend is complete and stable.
+- **M11 + M12 backend is the next priority** — After TST-012 passes and production is deployed, iteration planning begins for M11 (strong sealing, tlock, Shamir) and M12 (milestone delivery). ARCH-003/004/005/006 specs are already done and approved.
+- **Standalone Kotlin client approved** — `tools/api-client/` Gradle module (TOOL-001) to serve as M11/M12 proving ground and patent demonstration artefact. Phase 1: full capsule lifecycle against current API. Phase 2: tlock + Shamir extensions post-M11.
+- **API stability contract required** — ARCH-015 tasked before M11 starts. Must define frozen endpoint surface, stability policy, versioning approach, and enforcement via integration tests simulating frozen client request shapes.
+- **iOS work is a parallel personal stream** — Getting the iOS app onto Bret's mother's phone (requires IOS-001 QR scanner completion) runs in parallel with server development. It does not block M11. iOS fixes raised as IOS-NNN tasks as needed; they do not interrupt the server stream.
+- **Priority patent application strategy** — LEG-006 tasked to Legal to assess what a UK priority application actually protects vs a full application, and whether it prevents third-party implementation during the gap. Outcome will inform filing sequencing.
+- **Attorney fee reduction options** — Marketing Director assessed three approaches: (1) hybrid cash + equity arrangement with a CIPA sole practitioner, (2) shopping to boutique/sole practitioners (30–40% cheaper than large firms), (3) priority filing first to buy 12 months at low cost. No decision taken — pending LEG-006 output and Bret's personal cash assessment.
+- **JUXT investment options assessed** — Marketing Director outlined four structures: Jon Pither personally via SEIS, JUXT Ltd straight equity, convertible loan note, services-for-equity. Recommended sequencing: get JUXT consent (LEG-005) before any investment conversation. Investment conversation strongest after patent is filed.
+
+## Sequence from here
+
+```
+Now          → TST-012 (Bret, hands-on)
+              → Production deploy (OpsManager, Bret approval)
+
+After prod   → Two parallel streams:
+
+  SERVER STREAM (agents)              PERSONAL STREAM (Bret)
+  ──────────────────────              ──────────────────────
+  ARCH-015: API stability contract    iOS testing on own phone
+  M11 iteration planning              IOS-001 dispatched if fixes needed
+  M11 backend implementation          Mother's phone install (no fixed date)
+  TOOL-001: Kotlin client module
+```
