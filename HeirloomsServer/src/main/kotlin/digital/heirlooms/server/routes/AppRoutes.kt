@@ -60,10 +60,17 @@ import digital.heirlooms.server.repository.capsule.ExecutorShareRepository
 import digital.heirlooms.server.repository.capsule.PostgresExecutorShareRepository
 import digital.heirlooms.server.repository.capsule.SealRepository
 import digital.heirlooms.server.repository.capsule.PostgresSealRepository
+import digital.heirlooms.server.repository.capsule.TlockKeyRepository
+import digital.heirlooms.server.repository.capsule.PostgresTlockKeyRepository
+import digital.heirlooms.server.repository.capsule.CapsuleRecipientKeyRepository
+import digital.heirlooms.server.repository.capsule.PostgresCapsuleRecipientKeyRepository
 import digital.heirlooms.server.crypto.tlock.TimeLockProvider
 import digital.heirlooms.server.crypto.tlock.DisabledTimeLockProvider
 import digital.heirlooms.server.service.capsule.SealCapsuleService
+import digital.heirlooms.server.service.capsule.TlockKeyService
 import digital.heirlooms.server.routes.capsule.sealCapsuleRoutes
+import digital.heirlooms.server.routes.capsule.tlockKeyRoute
+import digital.heirlooms.server.routes.capsule.capsuleRecipientKeysRoute
 import digital.heirlooms.server.service.connection.ConnectionService
 import digital.heirlooms.server.service.connection.NominationService
 import digital.heirlooms.server.service.capsule.ExecutorShareService
@@ -156,6 +163,8 @@ fun buildApp(
     recipientLinkRepo = PostgresRecipientLinkRepository(database.dataSource),
     executorShareRepo = PostgresExecutorShareRepository(database.dataSource),
     sealRepo = PostgresSealRepository(database.dataSource),
+    tlockKeyRepo = PostgresTlockKeyRepository(database.dataSource),
+    capsuleRecipientKeyRepo = PostgresCapsuleRecipientKeyRepository(database.dataSource),
     thumbnailGenerator = thumbnailGenerator,
     metadataExtractor = metadataExtractor,
     previewDurationSeconds = previewDurationSeconds,
@@ -213,6 +222,18 @@ internal fun buildApp(
         override fun countAcceptedNominations(ownerUserId: java.util.UUID) = 0
         override fun writeSealAtomically(capsuleId: java.util.UUID, ownerUserId: java.util.UUID, params: SealRepository.SealWriteParams) = java.time.Instant.now()
     },
+    tlockKeyRepo: TlockKeyRepository = object : TlockKeyRepository {
+        override fun isRecipient(capsuleId: java.util.UUID, callerUserId: java.util.UUID) = false
+        override fun loadTlockFields(capsuleId: java.util.UUID) = null
+        override fun getCapsuleOwnerId(capsuleId: java.util.UUID) = null
+    },
+    capsuleRecipientKeyRepo: CapsuleRecipientKeyRepository = object : CapsuleRecipientKeyRepository {
+        override fun isCapsuleOwner(capsuleId: java.util.UUID, callerUserId: java.util.UUID) = false
+        override fun isAuthenticatedRecipient(capsuleId: java.util.UUID, callerUserId: java.util.UUID) = false
+        override fun capsuleExists(capsuleId: java.util.UUID) = false
+        override fun findAllRows(capsuleId: java.util.UUID) = emptyList<CapsuleRecipientKeyRepository.RecipientKeyRow>()
+        override fun findOwnRow(capsuleId: java.util.UUID, callerUserId: java.util.UUID) = null
+    },
     thumbnailGenerator: (ByteArray, String) -> ByteArray? = ::generateThumbnail,
     metadataExtractor: (ByteArray, String) -> MediaMetadata = MetadataExtractor()::extract,
     previewDurationSeconds: Int = 15,
@@ -235,6 +256,7 @@ internal fun buildApp(
     val nominationService = NominationService(nominationRepo)
     val executorShareService = ExecutorShareService(executorShareRepo)
     val sealCapsuleService = SealCapsuleService(sealRepo, timeLockProvider)
+    val tlockKeyService = TlockKeyService(tlockKeyRepo, timeLockProvider)
 
     val contentContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
@@ -268,7 +290,7 @@ internal fun buildApp(
     val capsuleContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
         descriptionPath = "/openapi.json"
-        routes += capsuleRoutes(capsuleService) + plotRoutes(plotService) + trellisRoutes(flowService) + plotItemRoutes(flowService) + sharedPlotRoutes(sharedPlotService) + executorShareRoutes(executorShareService) + sealCapsuleRoutes(sealCapsuleService)
+        routes += capsuleRoutes(capsuleService) + plotRoutes(plotService) + trellisRoutes(flowService) + plotItemRoutes(flowService) + sharedPlotRoutes(sharedPlotService) + executorShareRoutes(executorShareService) + sealCapsuleRoutes(sealCapsuleService) + listOf(tlockKeyRoute(tlockKeyService), capsuleRecipientKeysRoute(capsuleRecipientKeyRepo))
     }
 
     val keysContract = contract {
