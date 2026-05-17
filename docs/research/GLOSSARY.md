@@ -1,7 +1,7 @@
 # Heirlooms Research — Cryptographic Glossary
 
 **Maintained by:** Research Manager  
-**Last updated:** 2026-05-16 (RES-004, chained capsule cryptographic assessment)  
+**Last updated:** 2026-05-17 (RES-005, glossary self-reference audit)  
 **Purpose:** Plain-language definitions of terms used in research briefs. Updated at the end of every research task. Intended for any team member, not just cryptographers.
 
 ---
@@ -31,6 +31,9 @@ A password-based key derivation function (KDF) designed to be memory-hard: it re
 ---
 
 ## B
+
+**Bloom filter**
+A probabilistic data structure that efficiently tests whether an element is a member of a set, with a tunable false-positive rate and no false negatives. Used in Green and Miers' (2015) puncturable encryption construction to track which ciphertexts the secret key has been punctured on. The Bloom filter approach enables O(1) per-message puncturing overhead rather than linear growth. See also *Puncturable Encryption*.
 
 **Birthday bound**  
 A statistical limit derived from the birthday paradox. For AES-GCM with 96-bit random nonces, the probability of two nonces colliding approaches 50% after approximately 2^48 messages under the same key. NIST recommends treating 2^32 operations as a practical safety limit. A nonce collision under AES-GCM is catastrophic — it allows plaintext recovery and forgery. In Heirlooms, per-file DEKs used for a single file are never at risk of hitting this bound.
@@ -66,6 +69,9 @@ A cryptographic proof that a piece of information has been destroyed, in a way t
 **Commitment Scheme**
 A two-phase cryptographic protocol in which a party commits to a value (the "commit" phase) without revealing it, and later reveals it (the "open" phase). The commitment is binding (the party cannot change the value after committing) and hiding (the commitment reveals nothing about the value). Used in Heirlooms window capsules: custodians commit to their Shamir shares at sealing time, providing an audit trail. At expire_time, they publish a deletion certificate — though classical commitment-based deletion certificates can be faked (a party can retain the share and still pretend to delete it). Contrast with *Certified Deletion* (which is binding). See also *Verifiable deletion*.
 
+**Care Mode**
+A planned Heirlooms feature that allows a trusted person (e.g. a power of attorney (POA) holder) to access a user's vault under a set of conditions the user has explicitly consented to — for example, loss of decision-making capacity. Access is governed by a *Consent capsule* (a signed, revocable W3C Verifiable Credential) that the user can withdraw at any time while they retain capacity. Care Mode does not bypass E2EE; it works by granting the designated party access to the user's plot keys under the conditions specified in the consent record. See also *Consent capsule*, *Verifiable credential (VC)*, *Self-sovereign identity (SSI)*.
+
 **Cat-qubit**  
 A type of physical qubit that encodes quantum information in superpositions of coherent states of a microwave resonator. Cat qubits have biased noise properties — one type of error is exponentially suppressed — making them potentially more resource-efficient for fault-tolerant quantum computation than surface-code qubits. Recent 2025–2026 papers using cat-qubit architectures have materially reduced physical qubit estimates for breaking P-256.
 
@@ -80,6 +86,9 @@ The property of a system that allows its underlying cryptographic algorithms to 
 
 ## D
 
+**DAG** (Directed Acyclic Graph)
+A data structure consisting of nodes connected by directed edges, with no cycles (no path leads back to its starting node). Used in the *Chained capsule* description to characterise the chain topology: each capsule node points forward to the next, and there are no backward or circular links. See also *Chained capsule*.
+
 **Deletion Certificate**
 A statement (or cryptographic proof) published by a custodian after destroying their Shamir share, asserting that the deletion has taken place. Classical deletion certificates (e.g., a signed timestamped statement, or a hash preimage) are weak — a dishonest custodian can publish the certificate while secretly retaining the share. Quantum certified deletion eliminates this weakness. In the absence of quantum infrastructure, Heirlooms relies on institutional accountability (named custodians), on-chain audit trails, and hardware enforcement (Nitro/HSM) as defence-in-depth. See also *Certified Deletion*, *Verifiable deletion*, *Custodian*.
 
@@ -88,6 +97,9 @@ A random symmetric key generated per uploaded file. Each file's bytes, thumbnail
 
 **DEK re-wrap**
 The operation of decrypting a Data Encryption Key that was wrapped under one algorithm (e.g. AES-256-GCM under the old master key) and immediately re-encrypting it under the new algorithm (e.g. AES-256-GCM under the new master key). The DEK plaintext value is transiently in memory on the client device but never transmitted. Re-wrap cost is O(DEKs), not O(file bytes) — this is what makes PQC migration tractable even for large vaults. See also *Re-wrap*, *Migration phase*.
+
+**Double Ratchet**
+A cryptographic protocol (Signal, 2016) that combines two ratchet mechanisms to provide forward secrecy and break-in recovery in encrypted messaging. The Diffie-Hellman ratchet generates new key material with each message exchange; the symmetric-key ratchet derives per-message keys from a chain key. Each message is encrypted under a unique key; compromise of one key does not expose past or future messages. Signal's SPQR (Sparse Post-Quantum Ratchet) runs alongside the Double Ratchet, adding a ML-KEM-768 component to form the *Triple Ratchet*. See also *SPQR*, *Triple Ratchet*, *Forward-secure encryption*.
 
 **drand** (Distributed Randomness)  
 A distributed randomness beacon operated by the League of Entropy, a consortium of organisations including Cloudflare, EPFL, and others. Nodes use threshold BLS signatures over BLS12-381 to collaboratively produce publicly verifiable, unbiasable random values at regular intervals ("rounds"). Used as the foundation for the tlock time-lock scheme. drand acknowledges that BLS12-381 is not quantum-safe but estimates the threat is at least 5 years away.
@@ -105,6 +117,9 @@ In a window capsule, the upper time bound after which the capsule becomes perman
 **Epoch (secret sharing context)**
 A time period in Proactive Secret Sharing during which a fixed set of shares is valid. At the end of each epoch, shareholders execute a share refresh protocol, generating new shares of the same underlying secret. Old shares are deleted and become useless. A mobile adversary that compromises fewer than the threshold of shareholders within a single epoch cannot reconstruct the secret, even if it compromises different shareholders in different epochs. The epoch length is a security parameter — shorter epochs provide stronger security against slow-moving adversaries but require more frequent protocol executions. See also *Proactive Secret Sharing (PSS)*, *Mobile adversary*.
 
+**ECDSA** (Elliptic Curve Digital Signature Algorithm)
+A classical digital signature scheme based on elliptic curve cryptography. Used widely in TLS, code signing, and blockchain systems. Like ECDH, it is **not quantum-safe** — Shor's algorithm breaks the ECDLP on which it relies. ML-DSA (FIPS 204) is the post-quantum replacement for ECDSA in contexts requiring digital signatures. See also *ECDLP*, *ML-DSA*, *Shor's algorithm*.
+
 **ECDH** (Elliptic Curve Diffie-Hellman)  
 A key agreement protocol in which two parties each have a keypair on an elliptic curve. They exchange public keys and each independently derives the same shared secret from their own private key and the other party's public key. In Heirlooms, P-256 ECDH is used to wrap the master key to each device's public key (`p256-ecdh-hkdf-aes256gcm-v1`). **Broken by Shor's algorithm** on a quantum computer.
 
@@ -117,6 +132,11 @@ Heirlooms' versioned binary container for all encrypted blobs. Contains: version
 ---
 
 ## F
+
+**FALCON** — see *FIPS 206*.
+
+**FHE** (Fully Homomorphic Encryption)
+A cryptographic scheme that allows arbitrary computations to be performed directly on encrypted data, producing an encrypted result that, when decrypted, matches the result of the same computation on the plaintext. FHE eliminates the need to decrypt before processing, making it a powerful tool for privacy-preserving computation. In the chained capsule context, FHE could allow the puzzle-check and condition-verification logic to be executed on encrypted inputs without a trusted coordinator. Practical general-purpose FHE remains computationally expensive in 2026 but is advancing rapidly. FHE is one of the three "programmable cryptography" primitives alongside ZK-SNARKs and MPC. See also *Programmable cryptography*, *ZK-SNARK*, *MPC*.
 
 **Fair exchange**
 A cryptographic protocol property in which two parties swap values (e.g., a signature for payment, or a secret for a key) such that either both parties receive what they expect or neither does. Fair exchange is impossible without a trusted third party (TTP) in purely classical settings, but blockchain smart contracts can replace the TTP with a trustless contract. In the chained capsule context, the first-solver-wins mechanism is NOT a fair exchange problem — it is an exclusive delivery problem where one winner gets C₂ and all others get nothing. The asymmetry distinguishes it from classical fair exchange. See also *First-solver-wins*, *Hash Time-Lock Contract (HTLC)*.
@@ -171,6 +191,8 @@ A key derivation function that takes a shared secret (e.g. the output of ECDH) a
 **HPKE** (Hybrid Public Key Encryption)
 A standardised public-key encryption framework (RFC 9180) that combines a Key Encapsulation Mechanism (KEM), a Key Derivation Function (KDF), and an Authenticated Encryption with Associated Data (AEAD) scheme. HPKE is the recommended compositional framework for post-quantum-hybrid encryption. Apple's CryptoKit (iOS 26) high-level PQ API is based on HPKE with X-Wing as the KEM component. For Heirlooms, HPKE is the conceptual model underlying the `hybrid-p256-mlkem768-hkdf-aes256gcm-v1` algorithm ID.
 
+**HNDL attack window** — see *Attack window* and *HNDL*. The period during which HNDL-harvested data remains decryptable because the PQC migration has not yet completed. Closed progressively across the phases described in *Migration phase*.
+
 **HNDL** (Harvest Now, Decrypt Later)  
 A surveillance strategy in which an adversary captures and stores encrypted traffic today, intending to decrypt it when a sufficiently powerful quantum computer becomes available. Particularly relevant for long-lived data: a family photo archive encrypted today may still be sensitive in 30 years. Multiple intelligence and cybersecurity agencies (US DHS, UK NCSC, ENISA, ACSC) base their post-quantum migration guidance on the assumption that nation-state actors are actively conducting HNDL operations. This is the most immediate reason Heirlooms needs a P-256 migration plan — the threat is not future, it is present.
 
@@ -178,7 +200,9 @@ A surveillance strategy in which an adversary captures and stores encrypted traf
 A post-quantum key encapsulation mechanism selected by NIST in March 2025 as a second KEM standard alongside ML-KEM. Based on error-correcting codes rather than lattices, providing algorithm diversity.
 
 **Hybrid key exchange**  
-A key agreement scheme that combines a classical algorithm (e.g. X25519 or P-256) with a post-quantum algorithm (e.g. ML-KEM) such that an attacker must break *both* to recover the shared secret. Provides HNDL protection immediately — a future quantum computer cannot retrospectively decrypt traffic protected by a hybrid scheme unless it can also break the post-quantum component. X25519+ML-KEM-768 is already deployed in over one-third of HTTPS traffic on Cloudflare's network.
+A key agreement scheme that combines a classical algorithm (e.g. X25519 or P-256) with a post-quantum algorithm (e.g. ML-KEM) such that an attacker must break *both* to recover the shared secret. Provides HNDL protection immediately — a future quantum computer cannot retrospectively decrypt traffic protected by a hybrid scheme unless it can also break the post-quantum component. X25519+ML-KEM-768 is already deployed in over one-third of HTTPS traffic on Cloudflare's network. See also *ML-KEM*, *HKDF*, *X-Wing*, *HPKE*.
+
+**Hybrid scheme** — see *Hybrid key exchange*.
 
 ---
 
@@ -213,16 +237,23 @@ A cryptographic primitive used to securely transmit a symmetric key from one par
 
 ## L
 
-**League of Entropy** — see existing entry (previously defined in RES-001 section).
+**LDPC** (Low-Density Parity-Check codes)
+A class of error-correcting codes used in quantum error correction. LDPC-based codes can achieve lower physical-to-logical qubit ratios than surface codes, potentially enabling fault-tolerant quantum computation at a fraction of the hardware cost. Cat-qubit LDPC architectures are among the most optimistic current estimates for breaking ECC-256, requiring as few as ~10,000 physical qubits. See also *Surface code*, *Logical qubit*, *Cat-qubit*, *Fault-tolerant quantum computer*.
+
+**Learning With Errors (LWE)**
+A hard mathematical problem in lattice cryptography: given a matrix A and a vector b = A·s + e (where s is a secret vector and e is a small random error vector), find s. Solving LWE is believed to be hard for both classical and quantum computers. Module-LWE (a structured variant) is the security foundation of ML-KEM and ML-DSA. See also *Lattice-based cryptography*, *ML-KEM*, *ML-DSA*.
+
+**League of Entropy**  
+The consortium of independent organisations (Cloudflare, EPFL, Kudelski Security, Protocol Labs, and others) that operate the drand distributed randomness beacon. Threshold BLS signatures require a quorum of nodes to cooperate, so no single member can bias or predict the output. See also *drand*, *BLS signature scheme*, *Threshold signature*.
+
+**Link key**
+In the chained capsule construction, a symmetric key (L₂) embedded in the plaintext payload of C₁ that grants access to C₂'s key material. The link key is only exposed when C₁ is correctly unlocked within its time window; if C₁ expires without being opened, L₂ is never revealed and C₂ becomes permanently inaccessible. The link key is part of the *Capsule reference token*. See also *Capsule reference token*, *Chained capsule*, *Expiry-as-death*.
 
 **Lit Protocol**
 A production-deployed decentralised threshold key management and conditional decryption network. Lit nodes each hold a share of a shared BLS key. When a user requests decryption, Lit nodes individually verify that the user satisfies the configured Access Control Conditions (which can include on-chain state such as token ownership, NFT holdings, smart contract conditions, and time windows). If the conditions are satisfied, nodes release their decryption key shares; the user combines enough shares (threshold) to reconstruct the decryption key. Lit Protocol uses a combination of threshold BLS cryptography and Trusted Execution Environments (TEEs). In 2024, Lit fulfilled over 24 million cryptographic requests. Relevant to Heirlooms as a potential vendor option for the custodian tier of window capsules and chained capsules, providing conditional key release without Heirlooms operating its own custodian infrastructure. See also *Custodian*, *Threshold signature*, *Window capsule*.
 
 **Lattice-based cryptography**  
-A family of cryptographic schemes whose security rests on the hardness of problems in high-dimensional lattices (e.g. Learning With Errors, Module-LWE). Believed to be resistant to both classical and quantum attacks. The basis of ML-KEM (FIPS 203) and ML-DSA (FIPS 204).
-
-**League of Entropy**  
-The consortium of independent organisations (Cloudflare, EPFL, Kudelski Security, Protocol Labs, and others) that operate the drand distributed randomness beacon. Threshold BLS signatures require a quorum of nodes to cooperate, so no single member can bias or predict the output.
+A family of cryptographic schemes whose security rests on the hardness of problems in high-dimensional lattices (e.g. *Learning With Errors*, Module-LWE). Believed to be resistant to both classical and quantum attacks. The basis of ML-KEM (FIPS 203) and ML-DSA (FIPS 204). See also *Learning With Errors (LWE)*.
 
 **Logical qubit**  
 An error-corrected qubit, constructed from many physical qubits, that behaves reliably enough for computation. Breaking P-256 requires ~1,193 logical qubits. The ratio of physical to logical qubits depends on the error correction code — surface codes require roughly 1,000 physical qubits per logical qubit; more advanced codes (cat-qubit LDPC) potentially require far fewer.
@@ -242,6 +273,9 @@ An adversary in a distributed system that does not remain fixed to a single set 
 
 **Master key**  
 In Heirlooms, a 256-bit random symmetric key generated on a user's first device. Never leaves any device in plaintext. Each device holds its own copy, wrapped (encrypted) to that device's P-256 public key. The master key wraps per-plot keys; plot keys wrap per-file DEKs.
+
+**MPC** (Secure Multi-Party Computation)
+A cryptographic technique allowing multiple parties to jointly compute a function over their private inputs, without any party learning another's input. The output is revealed to all parties (or a designated recipient), but the inputs remain private. In the context of programmable cryptography, MPC enables distributed computation on encrypted data — for example, multiple custodian nodes could jointly evaluate a condition on sealed capsule data without any single node seeing it. See also *Programmable cryptography*, *FHE*, *ZK-SNARK*, *Threshold signature*.
 
 **Migration phase**
 In the Heirlooms PQC migration, a numbered stage of the overall migration plan, tracked per-device in `devices.pqc_migration_phase`: Phase 0 — hybrid key codec implemented (no production impact); Phase 1 — ML-KEM keypair generated and uploaded; Phase 2 — master key re-wrapped from P-256 to hybrid scheme (silent, on next auth); Phase 3 — new master key generated, all DEKs re-wrapped (background service); Phase 4 — shared plot keys and item sharing DEKs re-wrapped. Each phase closes one layer of the HNDL attack window. See also *DEK re-wrap*, *Re-wrap*, *Attack window*.
@@ -264,6 +298,9 @@ A type of quantum computer that uses individual neutral atoms (e.g. rubidium) tr
 
 **Neuromorphic computing**  
 Computing architectures inspired by the structure and function of biological neural systems — event-driven, sparse, massively parallel. Examples: Intel Loihi, IBM NorthPole. Not currently a path to breaking standard cryptographic primitives; the primary security concern is side-channel attacks against neuromorphic hardware itself, not cryptanalysis.
+
+**NISQ** (Noisy Intermediate-Scale Quantum)
+The current era of quantum hardware: devices with tens to hundreds of physical qubits, but with error rates too high for fault-tolerant computation. NISQ devices cannot run Shor's algorithm against real-world key sizes. Breaking P-256 requires a *fault-tolerant* quantum computer with many logical qubits — a capability beyond NISQ. See also *Fault-tolerant quantum computer*, *Physical qubit*, *Logical qubit*.
 
 **NIST** (National Institute of Standards and Technology)  
 US federal agency responsible for cryptographic standards. Published FIPS 203, 204, and 205 in August 2024, finalising the first post-quantum cryptographic standards.
@@ -290,6 +327,9 @@ A framing (circa 2024) for a "second generation" of cryptographic primitives —
 **Proxy re-encryption (PRE)**
 A cryptographic primitive that allows a semi-trusted proxy to transform a ciphertext encrypted under one public key into a ciphertext decryptable under a different public key, without the proxy ever seeing the plaintext. The original encryptor provides the proxy with a re-encryption key specific to the delegated recipient. PRE enables delegation of decryption rights (access control) without sharing private keys. Threshold PRE (used in NuCypher/Umbral) distributes the proxy's role across multiple nodes, so that no single node can perform re-encryption alone. Conditional PRE (CPRE) extends this: the proxy re-encrypts only if a condition is met (e.g., a time window is active). Temporally-scoped PRE is directly relevant to chained capsule delivery. See also *Conditional proxy re-encryption (CPRE)*, *Lit Protocol*.
 
+**PQC migration**
+The process of transitioning Heirlooms' cryptographic stack from classical (quantum-vulnerable) algorithms to post-quantum algorithms, across all platforms and key types, without disrupting users or requiring a flag-day migration. The migration is phased (see *Migration phase*): Phase 0 implements hybrid codec support; Phase 1 generates ML-KEM keypairs; Phase 2 re-wraps the master key under the hybrid scheme; Phase 3 generates a new master key and re-wraps all DEKs; Phase 4 re-wraps shared plot keys and sharing DEKs. The primary threat motivating the migration is HNDL (Harvest Now, Decrypt Later) — data that is already being captured by adversaries and will be decryptable once a fault-tolerant quantum computer exists. See also *Post-quantum cryptography (PQC)*, *Migration phase*, *HNDL*, *Re-wrap*, *DEK re-wrap*, *Hybrid key exchange*, *Attack window*.
+
 **Post-quantum cryptography (PQC)**  
 Cryptographic algorithms designed to be secure against both classical and quantum computers. Distinct from "quantum cryptography" (which uses quantum physics, e.g. QKD). NIST's finalised PQC standards are based on lattice problems (ML-KEM, ML-DSA), hash functions (SLH-DSA), and error-correcting codes (HQC).
 
@@ -306,6 +346,9 @@ A public-key encryption scheme where the secret key can be "punctured" on a spec
 
 ## Q
 
+**QKD** (Quantum Key Distribution)
+A method of distributing cryptographic keys using quantum physics (e.g. polarised photons) in a way that any eavesdropping is detectable — measurement disturbs the quantum states, revealing the interception. QKD provides information-theoretic security for key exchange but requires specialised quantum communication infrastructure (quantum channels, single-photon hardware). Distinct from post-quantum cryptography (PQC), which uses classical hardware and software. PQC, not QKD, is the practical migration path for Heirlooms. See also *Post-quantum cryptography (PQC)*.
+
 **Q-Day** (also Y2Q)  
 The hypothetical future date on which a quantum computer becomes capable of breaking currently deployed public-key cryptography (particularly RSA and ECC). Not a single fixed date — different systems will become vulnerable at different times depending on key sizes and algorithm choices. Recent research has moved credible Q-Day estimates for ECC closer to 2030–2035.
 
@@ -320,7 +363,10 @@ The fundamental unit of quantum information. Unlike a classical bit (0 or 1), a 
 ## R
 
 **Re-wrap**
-The operation of decrypting a wrapped key using the current algorithm and re-encrypting it under a new algorithm, without ever exposing the key's plaintext value outside the client device. In Heirlooms, re-wrapping a master key means: (1) the device decrypts the existing P-256-wrapped master key using its local private key; (2) immediately re-encrypts the master key under the new ML-KEM-768 public key; (3) uploads the new wrapped key. The master key value never leaves the device. Re-wrap cost is O(keys), not O(files) — this is the architectural property that makes PQC migration tractable. See also *Key rotation*, *DEK*, *Attack window*.
+The operation of decrypting a wrapped key using the current algorithm and re-encrypting it under a new algorithm, without ever exposing the key's plaintext value outside the client device. In Heirlooms, re-wrapping a master key means: (1) the device decrypts the existing P-256-wrapped master key using its local private key; (2) immediately re-encrypts the master key under the new ML-KEM-768 public key; (3) uploads the new wrapped key. The master key value never leaves the device. Re-wrap cost (the computational and network burden of the re-wrapping process) is O(keys), not O(files) — this is the architectural property that makes PQC migration tractable even for large vaults. See also *Key rotation*, *DEK re-wrap*, *DEK*, *Attack window*, *PQC migration*.
+
+**RSA** (Rivest–Shamir–Adleman)
+A classical public-key cryptosystem based on the difficulty of factoring large integers. Widely used for key exchange and digital signatures prior to the adoption of elliptic curve alternatives. RSA is **not quantum-safe** — Shor's algorithm solves integer factorisation in polynomial time, rendering RSA breakable on a fault-tolerant quantum computer. RSA is not used in Heirlooms; P-256 ECDH is used for key wrapping. See also *Shor's algorithm*, *P-256*, *Q-Day*.
 
 ---
 
@@ -341,6 +387,8 @@ One of the two strategies proposed by Kavousi et al. (2024) for enforcing an upp
 **Shor's algorithm**  
 A quantum algorithm published by Peter Shor in 1994 that solves integer factorisation and the discrete logarithm problem (including ECDLP) in polynomial time. This is what makes RSA, Diffie-Hellman, and all elliptic curve cryptography (including P-256 and BLS12-381) quantum-vulnerable. Does not affect symmetric cryptography or hash functions.
 
+**SPHINCS+** — see *SLH-DSA*.
+
 **SLH-DSA** (Stateless Hash-based Digital Signature Algorithm)  
 Post-quantum digital signature standard (FIPS 205). Derived from SPHINCS+. Based entirely on hash functions — if SHA-256 is secure, SLH-DSA is secure. Slower and produces larger signatures than ML-DSA but provides algorithm diversity as a backup.
 
@@ -350,6 +398,8 @@ The most widely studied quantum error correction code. Requires approximately 1,
 ---
 
 ## T
+
+**TEE** (Trusted Execution Environment) — see *Intel SGX* and *Nitro Enclave (AWS)*. A TEE is a hardware-isolated compute environment that provides confidentiality and integrity guarantees for code and data running inside it, even against a compromised host OS or hypervisor. Lit Protocol and Heirlooms custodian nodes both use TEEs as a defence-in-depth layer for share storage and time-gated deletion.
 
 **Timed commitment**
 A cryptographic commitment scheme (Boneh-Naor 2000) in which a committed value is guaranteed to become recoverable after a specified time delay, even without the committer's cooperation — but cannot be recovered before that delay. A timed commitment combines a regular commitment (hiding and binding before the delay) with a time-lock puzzle (enabling recovery after the delay). Used in blockchain contexts (sealed-bid auctions, fair contract signing) where all parties commit to values simultaneously and the commitment can be "forced open" after a deadline if a party refuses to reveal. In the chained capsule context, a solver who has found C₁'s answer could use a timed commitment to prove they committed to a solution before the window closed, even if they submit the reveal after a network delay. See also *Time-lock puzzle*, *Timed Secret Sharing (TSS)*, *Hash Time-Lock Contract (HTLC)*.
@@ -374,6 +424,9 @@ A time-lock encryption scheme built on drand's randomness beacon and IBE over BL
 
 **Threshold signature**  
 A signature produced collaboratively by K-of-N parties, where no single party holds the full private key. drand uses threshold BLS signatures across League of Entropy nodes to produce its randomness — K nodes must cooperate to produce each round's signature, preventing any single node from biasing the output.
+
+**Triple Ratchet**
+Signal's name for the combined ratchet protocol formed by running the *Double Ratchet* alongside the *SPQR* post-quantum ratchet (using ML-KEM-768). Both the classical DH ratchet and the ML-KEM ratchet must be broken simultaneously for an attacker to recover session keys. The Triple Ratchet provides hybrid PQC security for messaging without requiring a flag-day migration. See also *SPQR*, *Double Ratchet*, *Hybrid key exchange*.
 
 ---
 
@@ -405,15 +458,22 @@ A cryptographic proof that a party has destroyed secret material (such as a Sham
 **Window capsule**
 A Heirlooms capsule construction (proposed by CTO, 2026-05-16) with both an unlock time (lower bound, enforced by tlock) and an expire time (upper bound, enforced by threshold custodian deletion). Content is permanently undecryptable by anyone — server, sender, receiver, or adversary — after expire_time, provided the threshold of custodians honestly destroys their Shamir shares of K_b. The construction is: K_window = K_a ⊕ K_b, where K_a is tlock-encrypted (trustless lower bound) and K_b is Shamir-split across N custodians (trust-bounded upper bound). The expiry guarantee is not trustless — see *Verifiable deletion*, *Custodian*. Formalisation is the subject of RES-002.
 
+**Witness Encryption (WE)**
+A cryptographic scheme (Garg, Gentry, Sahai, Waters — STOC 2013) that allows encrypting a message to an NP statement: only a party holding a valid witness for the statement can decrypt. General-purpose WE is currently impractical (requires multilinear maps or obfuscation). Special-purpose WE for targeted applications is now closer to practical (Garg et al., CRYPTO 2025: WE from linearly verifiable SNARKs). In the window capsule context, WE could theoretically provide a trustless upper bound — the decryption witness could be "proof that no blockchain block exists with timestamp > expire_time" — eliminating the need for custodians. This remains a research horizon: no production-ready WE implementation capable of expressing time-window conditions exists as of 2026. Horizon estimate: 5–10 years for special-purpose practical deployment. See also *Window capsule*, *Timed Secret Sharing (TSS)*.
+
 ---
 
 ## X
-
-**Witness Encryption (WE)**
-A cryptographic scheme (Garg, Gentry, Sahai, Waters — STOC 2013) that allows encrypting a message to an NP statement: only a party holding a valid witness for the statement can decrypt. General-purpose WE is currently impractical (requires multilinear maps or obfuscation). Special-purpose WE for targeted applications is now closer to practical (Garg et al., CRYPTO 2025: WE from linearly verifiable SNARKs). In the window capsule context, WE could theoretically provide a trustless upper bound — the decryption witness could be "proof that no blockchain block exists with timestamp > expire_time" — eliminating the need for custodians. This remains a research horizon: no production-ready WE implementation capable of expressing time-window conditions exists as of 2026. Horizon estimate: 5–10 years for special-purpose practical deployment. See also *Window capsule*, *Timed Secret Sharing (TSS)*.
 
 **X-Wing**
 A general-purpose post-quantum hybrid KEM (draft-connolly-cfrg-xwing-kem-10, March 2026) combining X25519 and ML-KEM-768. An attacker must break both the classical X25519 component and the post-quantum ML-KEM-768 component simultaneously to recover the shared secret. Adopted by Apple in CryptoKit (iOS 26) as `XWingMLKEM768X25519`, with formal verification and Secure Enclave support. Internet-Draft status as of May 2026 (not yet an RFC). Heirlooms' Android/web hybrid scheme uses P-256 (not X25519) as the classical component — the Technical Architect must decide whether to adopt X25519 uniformly to enable X-Wing on all platforms.
 
 **X25519**  
 An elliptic curve Diffie-Hellman function using Curve25519 (a Montgomery curve). Widely used in TLS and other protocols. Like P-256, it is **not quantum-safe** (vulnerable to Shor's algorithm). The X25519+ML-KEM-768 hybrid key exchange is the current de facto standard for post-quantum TLS deployment.
+
+---
+
+## Z
+
+**ZK-SNARK** (Zero-Knowledge Succinct Non-Interactive Argument of Knowledge)
+A cryptographic proof system that allows one party (the prover) to convince another party (the verifier) that a statement is true, without revealing any information beyond the truth of the statement, and without interaction after setup. "Succinct" means the proof is small and fast to verify, regardless of the complexity of the computation being proved. In the chained capsule context, ZK-SNARKs enable a solver to prove they hold a valid puzzle answer without revealing it, or prove a condition has been met without exposing the underlying data. Groth16 is a widely used ZK-SNARK construction (used in the VTLP paper referenced in this glossary). ZK-SNARKs are one of the three "programmable cryptography" primitives alongside FHE and MPC. See also *Programmable cryptography*, *FHE*, *MPC*, *Verifiable Time-Lock Puzzle (VTLP)*, *Witness Encryption (WE)*.
