@@ -46,6 +46,10 @@ import digital.heirlooms.server.routes.plot.sharedPlotRoutes
 import digital.heirlooms.server.routes.plot.flowRoutes
 import digital.heirlooms.server.routes.social.friendsRoutes
 import digital.heirlooms.server.routes.social.sharingKeyRoutes
+import digital.heirlooms.server.routes.connection.connectionRoutes
+import digital.heirlooms.server.repository.connection.ConnectionRepository
+import digital.heirlooms.server.repository.connection.PostgresConnectionRepository
+import digital.heirlooms.server.service.connection.ConnectionService
 import digital.heirlooms.server.routes.upload.checkContentHashContractRoute
 import digital.heirlooms.server.routes.upload.compostUploadContractRoute
 import digital.heirlooms.server.routes.upload.confirmUploadContractRoute
@@ -129,6 +133,7 @@ fun buildApp(
     socialRepo = PostgresSocialRepository(database.dataSource),
     blobRepo = PostgresBlobRepository(database.dataSource),
     diagRepo = PostgresDiagRepository(database.dataSource),
+    connectionRepo = PostgresConnectionRepository(database.dataSource),
     thumbnailGenerator = thumbnailGenerator,
     metadataExtractor = metadataExtractor,
     previewDurationSeconds = previewDurationSeconds,
@@ -149,6 +154,14 @@ internal fun buildApp(
     socialRepo: SocialRepository,
     blobRepo: BlobRepository,
     diagRepo: DiagRepository,
+    connectionRepo: ConnectionRepository = object : ConnectionRepository {
+        override fun listConnections(ownerUserId: java.util.UUID) = emptyList<digital.heirlooms.server.domain.connection.ConnectionRecord>()
+        override fun getConnection(id: java.util.UUID, ownerUserId: java.util.UUID) = null
+        override fun createConnection(ownerUserId: java.util.UUID, contactUserId: java.util.UUID?, displayName: String, email: String?, sharingPubkey: String?, roles: List<String>) = throw UnsupportedOperationException("no-op stub")
+        override fun updateConnection(id: java.util.UUID, ownerUserId: java.util.UUID, displayName: String?, roles: List<String>?, sharingPubkey: String?, clearSharingPubkey: Boolean) = null
+        override fun deleteConnection(id: java.util.UUID, ownerUserId: java.util.UUID) = ConnectionRepository.DeleteResult.NotFound
+        override fun lookupSharingPubkey(contactUserId: java.util.UUID) = null
+    },
     thumbnailGenerator: (ByteArray, String) -> ByteArray? = ::generateThumbnail,
     metadataExtractor: (ByteArray, String) -> MediaMetadata = MetadataExtractor()::extract,
     previewDurationSeconds: Int = 15,
@@ -166,6 +179,7 @@ internal fun buildApp(
     val sharedPlotService = digital.heirlooms.server.service.plot.SharedPlotService(plotRepo, memberRepo)
     val keyService = digital.heirlooms.server.service.keys.KeyService(keyRepo)
     val socialService = digital.heirlooms.server.service.social.SocialService(socialRepo)
+    val connectionService = ConnectionService(connectionRepo)
 
     val contentContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
@@ -214,6 +228,12 @@ internal fun buildApp(
         routes += friendsRoutes(socialService)
     }
 
+    val connectionContract = contract {
+        renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
+        descriptionPath = "/openapi.json"
+        routes += connectionRoutes(connectionService)
+    }
+
     val authContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
         descriptionPath = "/openapi.json"
@@ -257,6 +277,7 @@ internal fun buildApp(
         "/api/auth" bind rateLimitFilter(AuthRateLimiter.challengeAndLogin, "/challenge", "/login").then(authContract),
         "/api" bind capsuleContract,
         "/api" bind socialContract,
+        "/api" bind connectionContract,
         "/api" bind diagContract,
         "/health" bind GET to { Response(OK).body("ok") },
         "/api/settings" bind GET to { Response(OK).header("Content-Type", "application/json").body("""{"previewDurationSeconds":$previewDurationSeconds}""") },
