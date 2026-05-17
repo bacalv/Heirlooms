@@ -30,8 +30,13 @@ fun MainApp() {
     var sessionToken by rememberSaveable { mutableStateOf(store.getSessionToken()) }
     var welcomed by rememberSaveable { mutableStateOf(store.getWelcomed()) }
     var vaultReady by rememberSaveable { mutableStateOf(deviceKeyManager.isVaultSetUp()) }
-    // SEC-015: biometric gate — false until user authenticates when require_biometric = true.
-    var biometricPassed by rememberSaveable { mutableStateOf(!store.getRequireBiometric()) }
+    // BUG-028 / SEC-015: biometric gate — must NOT use rememberSaveable here.
+    // rememberSaveable persists across process death/recreation (cold opens) via the
+    // Activity's saved-state Bundle. If we save biometricPassed=true, a cold open after
+    // the user authenticated in a previous session skips the gate entirely.
+    // Using plain remember means the state is always re-derived from the store on each
+    // fresh process start, so the gate fires correctly on every cold open.
+    var biometricPassed by remember { mutableStateOf(!store.getRequireBiometric()) }
 
     val hasLegacyApiKey = store.getApiKey().isNotEmpty()
 
