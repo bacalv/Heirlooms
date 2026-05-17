@@ -80,4 +80,41 @@ old).
 
 ## Completion notes
 
-<!-- TechnicalArchitect appends here and moves file to tasks/done/ -->
+Completed 2026-05-17 by TechnicalArchitect.
+
+**Output:** `docs/briefs/ARCH-015_api-stability-contract.md`
+
+**Summary of findings:**
+
+1. **Frozen surface enumerated.** ~80 routes across auth, keys, uploads, capsules,
+   plots, trellises, social, and diagnostics. Full table in brief §1.
+
+2. **Stability policy defined.** Permitted: new endpoints, new optional
+   response/request fields, internal refactors. Prohibited: removed/renamed endpoints,
+   removed/renamed response fields, auth flow changes, envelope format changes,
+   tightened validation.
+
+3. **Versioning recommendation:** no versioning. Strict no-breaking-change policy
+   enforced exclusively by frozen-client regression tests. Rationale: the freeze is
+   time-bounded (M11+M12, ~2-4 months); M11 additions are genuinely additive; tests
+   provide a stronger guarantee than version headers at this scale.
+
+4. **8 critical regression test pairs identified** (FC-01 through FC-08) covering:
+   challenge+login, register, encrypted upload initiate+confirm, upload list
+   pagination, sharing flow, capsule create+list, capsule seal (pre-M11 POST path),
+   and sharing key registration+retrieval. Recommended class: `FrozenClientRegressionTest.kt`.
+
+5. **M11 wave-by-wave assessment complete.** Waves 0-4 and 6: fully additive, no
+   frozen client impact. Wave 5 (sealing): requires keeping `POST /seal` unchanged
+   and adding `PUT /seal` as the new M11 path. Wave 7 (read-path): adding nullable
+   fields to `GET /api/capsules/{id}` response — backwards-compatible given lenient
+   deserialisers.
+
+**Critical action items for the developer implementing M11:**
+- Wave 5: **do not modify** `POST /api/capsules/{id}/seal`. Add `PUT` alongside it.
+- Wave 7: verify client deserialiser leniency before deploying amended `GET /capsules/{id}`.
+- Keep `/api/flows/*` deprecated aliases live throughout M11 and M12.
+
+**Open questions raised for CTO:** 4 items in brief §7 (pre-M11 sealed capsule
+delivery in M12; deserialiser verification; /api/flows alias removal timing;
+GET /api/friends vs GET /api/connections routing after V31 migration).
