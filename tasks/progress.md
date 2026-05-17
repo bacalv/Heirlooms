@@ -16,7 +16,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 |---|---|---|---|---|---|
 | [LEG-003](queue/LEG-003_patent-assessment-rес005-presence-gated-constructions.md) | Patent assessment — RES-005 presence-gated delivery and count-conditional trigger | Legal | High | Legal | LEG-001, LEG-002 |
 | [ARCH-014](queue/ARCH-014_res005-technical-impact-assessment.md) | Technical impact assessment — RES-005 presence-gated delivery and count-conditional trigger | Architecture | Medium | TechnicalArchitect | ARCH-003, ARCH-006, ARCH-008, ARCH-010 |
-| [BUG-029](in-progress/BUG-029_web-pairing-no-device-entry.md) | Web pairing no device entry | Bug Fix | Medium | Developer | BUG-023 ✓ |
 | [BUG-025](queue/BUG-025_web-friends-no-nav-link.md) | Web Friends page has no navigation link | Bug Fix | Low | Developer | — |
 | [BUG-026](queue/BUG-026_invite-link-no-auto-route.md) | Invite link doesn't auto-route token for logged-in users | Bug Fix | Low | Developer | — |
 | [STR-001](queue/STR-001_strategic-synthesis-top-20-features-direction-brief.md) | Strategic synthesis — top 20 features and direction brief for CTO | Strategy | Medium | PA | *(ARCH-008 done — unblocked)* |
@@ -31,14 +30,13 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 ## In Progress
 
-| ID | Title | Category | Agent |
-|----|-------|----------|-------|
-| [BUG-029](in-progress/BUG-029_web-pairing-no-device-entry.md) | Web pairing no device entry | Bug Fix | developer-12 |
+*(none)*
 
 ## Done
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
+| [BUG-029](done/BUG-029_web-pairing-no-device-entry.md) | Web pairing — register persistent device key after pairing | Bug Fix | 2026-05-17 |
 | [BUG-023](done/BUG-023_passphrase-save-409-after-web-pairing.md) | Passphrase save 409 after web pairing — guard registerDevice, fix PairPage | Bug Fix | 2026-05-17 |
 | [BUG-024](done/BUG-024_garden-inline-tag-no-trellis-routing.md) | Garden inline tag now sends prewrappedDeks for trellis routing | Bug Fix | 2026-05-17 |
 | [BUG-027](done/BUG-027_garden-not-loading-on-launch.md) | Garden loads on launch; staging counts refresh after tagging | Bug Fix | 2026-05-17 |

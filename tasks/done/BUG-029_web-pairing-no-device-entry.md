@@ -36,3 +36,14 @@ pairing completion is hitting a 409, silently failing to register the device.
 - Pairing a web browser results in a distinct device entry in `wrapped_keys`
 - The web device appears in Devices & Access alongside the Android device
 - The web device can be revoked from the Android Devices & Access screen
+
+## Completion notes
+
+**Root cause**: `PairPage.jsx` never called `POST /api/keys/devices` after pairing. The server's `completePairing()` creates a web session and stores the wrapped master key, but does not insert a `wrapped_keys` row. The web device's public key exists only ephemerally in the QR payload; it is never persisted on the server.
+
+**Fix** (`HeirloomsWeb/src/pages/PairPage.jsx`):
+After the master key is unwrapped via the ephemeral ECDH keypair, generate the browser's persistent device keypair (`generateAndStoreKeypair`), wrap the master key for it (`wrapMasterKeyForDevice`), and register it with `POST /api/keys/devices` using the just-issued session token as the API key. 409 is handled gracefully (already registered → continue).
+
+No server changes required — `POST /api/keys/devices` is already fully implemented.
+
+**Tests**: `HeirloomsWeb/src/test/vaultUnlock.test.jsx` — added BUG-029 describe block asserting that `POST /api/keys/devices` is called with the pairing session token and correct `deviceKind: 'web'` body. All 4 tests pass.

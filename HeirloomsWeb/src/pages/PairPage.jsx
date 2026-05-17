@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import QRCode from 'qrcode'
 import { WorkingDots } from '../brand/WorkingDots'
-import { pairingQr, pairingStatus } from '../api'
-import { unwrapMasterKeyForDevice, toB64url, ALG_P256_ECDH_HKDF_V1 } from '../crypto/vaultCrypto'
+import { API_URL, pairingQr, pairingStatus } from '../api'
+import { unwrapMasterKeyForDevice, wrapMasterKeyForDevice, toB64url, toB64, ALG_P256_ECDH_HKDF_V1 } from '../crypto/vaultCrypto'
 import { unlock } from '../crypto/vaultSession'
 import { savePairingMaterial } from '../crypto/webPairingStore'
-import { markVaultSetUp } from '../crypto/deviceKeyManager'
+import { markVaultSetUp, generateAndStoreKeypair, getDeviceId, getDeviceLabel } from '../crypto/deviceKeyManager'
 
 export function PairPage({ onPaired }) {
   const [code, setCode] = useState('')
@@ -56,6 +56,22 @@ export function PairPage({ onPaired }) {
             clearInterval(pollRef.current)
             const wrappedBytes = Uint8Array.from(atob(data.wrapped_master_key.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0))
             const masterKey = await unwrapMasterKeyForDevice(wrappedBytes, privateKeyRef.current)
+            const persistentSpki = await generateAndStoreKeypair()
+            const persistentWrapped = await wrapMasterKeyForDevice(masterKey, persistentSpki)
+            const regResp = await fetch(`${API_URL}/api/keys/devices`, {
+              method: 'POST',
+              headers: { 'X-Api-Key': data.session_token, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                deviceId: getDeviceId(),
+                deviceLabel: getDeviceLabel(),
+                deviceKind: 'web',
+                pubkeyFormat: 'p256-spki',
+                pubkey: toB64(persistentSpki),
+                wrappedMasterKey: toB64(persistentWrapped),
+                wrapFormat: ALG_P256_ECDH_HKDF_V1,
+              }),
+            })
+            if (!regResp.ok && regResp.status !== 409) throw new Error(`Device reg failed: ${regResp.status}`)
             await savePairingMaterial({
               privateKey: privateKeyRef.current,
               publicKeyRaw: spkiBytes,

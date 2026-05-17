@@ -172,6 +172,48 @@ describe('VaultUnlockPage — passphrase setup (BUG-023)', () => {
   })
 })
 
+// ---- PairPage BUG-029 tests --------------------------------------------------
+
+describe('PairPage — device registration after pairing (BUG-029)', () => {
+  it('calls POST /api/keys/devices with session token after pairing completes', async () => {
+    const onPaired = vi.fn()
+
+    global.fetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ session_id: 'sess-1' }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          state: 'complete',
+          session_token: 'pair-tok-789',
+          wrapped_master_key: btoa(String.fromCharCode(...new Uint8Array(100).fill(8))),
+        }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({}) })
+
+    pairWrapper(onPaired)
+
+    fireEvent.change(screen.getByPlaceholderText('Pairing code'), { target: { value: '12345678' } })
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+
+    await waitFor(
+      () => expect(onPaired).toHaveBeenCalledWith('pair-tok-789', expect.any(Uint8Array)),
+      { timeout: 4000 },
+    )
+
+    const devicePostCalls = global.fetch.mock.calls.filter(
+      ([url, opts]) => url?.includes('/api/keys/devices') && opts?.method === 'POST',
+    )
+    expect(devicePostCalls).toHaveLength(1)
+    const [, opts] = devicePostCalls[0]
+    expect(opts.headers['X-Api-Key']).toBe('pair-tok-789')
+    const body = JSON.parse(opts.body)
+    expect(body.deviceKind).toBe('web')
+    expect(body.pubkeyFormat).toBe('p256-spki')
+    expect(body.deviceId).toBe('test-device-id')
+  }, 10000)
+})
+
 // ---- PairPage BUG-023 tests --------------------------------------------------
 
 describe('PairPage — markVaultSetUp called after pairing (BUG-023)', () => {
