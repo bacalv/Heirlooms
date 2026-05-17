@@ -231,6 +231,9 @@ fun GardenScreen(
         vm.ensureSharingKey(api)
         vm.loadFriends(api)
         vm.loadSharedMemberships(api)
+        // Populate staging counts immediately on screen entry rather than waiting
+        // for the first poll interval to elapse.
+        vm.refreshSharedStagingCounts(api)
     }
 
     LaunchedEffect(Unit) {
@@ -360,7 +363,13 @@ fun GardenScreen(
                                         if (added.isNotEmpty()) RecentTagsStore(context).record(added)
                                         vm.optimisticTag(uploadId, newTags)
                                         scope.launch {
-                                            try { api.updateTags(uploadId, newTags) }
+                                            try {
+                                                api.updateTags(uploadId, newTags)
+                                                // Refresh staging counts immediately so plot row
+                                                // badges update within the 5-second acceptance window
+                                                // rather than waiting for the next poll interval.
+                                                vm.refreshSharedStagingCounts(api)
+                                            }
                                             catch (_: Exception) { vm.optimisticTag(uploadId, oldTags) }
                                         }
                                     },

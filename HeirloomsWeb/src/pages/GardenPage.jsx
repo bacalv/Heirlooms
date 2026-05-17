@@ -1142,7 +1142,11 @@ export function GardenPage() {
         } else {
           setUploadStatus('Done')
           setTimeout(() => setUploadStatus(''), 1500)
+          // Immediate refresh picks up the upload; the follow-up at ~2 s gives the
+          // server time to complete trellis routing so Just Arrived reflects the
+          // new item reliably without requiring a manual page reload.
           setPlotRefreshKey((k) => k + 1)
+          setTimeout(() => setPlotRefreshKey((k) => k + 1), 2000)
         }
       } catch (err) {
         setUploadError(`Couldn't upload "${file.name}".`)
