@@ -85,4 +85,53 @@ Phase 2 extensions are natural additions.
 
 ## Completion notes
 
-<!-- Developer appends here and moves file to tasks/done/ -->
+Completed 2026-05-17 by developer-17.
+
+### What was built
+
+`tools/api-client/` — standalone Kotlin/Gradle module implementing Phase 1 of
+the capsule lifecycle CLI. Follows the same Gradle pattern as `tools/reimport/`.
+
+**Files created:**
+- `build.gradle.kts` — Kotlin JVM + application plugin; OkHttp 4.12.0 + Jackson
+- `settings.gradle.kts` — root project name
+- `gradlew` + `gradle/wrapper/` — Gradle 8.5 wrapper (copied from reimport)
+- `src/main/kotlin/digital/heirlooms/tools/apiclient/`
+  - `ClientConfig.kt` — config loading from system props / env vars / config.properties file
+  - `HeirloomsClient.kt` — HTTP client class with one method per lifecycle step
+  - `Main.kt` — entry point; orchestrates all 7 steps, exits 0/1
+- `src/test/kotlin/digital/heirlooms/tools/apiclient/`
+  - `ClientConfigTest.kt` — 6 unit tests for config loading and hex decoding
+  - `AuthKeyTest.kt` — 3 unit tests for auth_key → auth_verifier contract
+- `config.properties.template` — credentials template (actual file is .gitignored)
+- `.gitignore` — ignores build/ and config.properties
+- `README.md` — configuration, usage, expected output, code structure, Phase 2 notes
+
+### Acceptance criteria met
+
+- `./gradlew clean build --no-daemon` — BUILD SUCCESSFUL (9 tasks, all tests pass)
+- 9 unit tests across 2 test classes — all pass
+- README explains configuration and how to run
+- No hardcoded credentials; supports system props, env vars, and config file
+- Phase 2 extension points documented in code comments and README
+
+### API choices
+
+- Uses `POST /api/content/uploads/initiate` with `storage_class: "public"` for
+  Phase 1 (no E2EE). Phase 2 will switch to `storage_class: "encrypted"` and
+  inject a crypto delegate.
+- Uses `POST /api/capsules/{id}/seal` (no body) per ARCH-015 Wave 5 compatibility
+  strategy. Phase 2 will use `PUT /api/capsules/{id}/seal` with crypto body.
+- `addUploadToCapsule()` uses `PATCH /api/capsules/{id}` — ARCH-015 does not
+  define a separate `POST /api/capsules/{id}/items` endpoint.
+- Auth follows the two-step challenge/login flow; auth_key is the raw 32-byte
+  value whose SHA-256 equals the auth_verifier stored on the server.
+
+### Running against test environment
+
+```bash
+cd tools/api-client
+cp config.properties.template config.properties
+# Fill in heirlooms.username and heirlooms.auth_key
+./gradlew run --no-daemon
+```
