@@ -35,7 +35,7 @@ The intent: wake him once for urgent things (e.g. 2am access request), then back
 - Domain: `heirlooms.digital`
 - GitHub: `github.com/bacalv/Heirlooms`
 - GCP project: `heirlooms-495416`, region: `us-central1`
-- Current version: v0.53.1 (14 May 2026)
+- Current version: v0.56 (in progress — all tasks merged, pending TST-012 sign-off)
 - Android versionCode: 59
 
 ## Live environments
@@ -120,24 +120,25 @@ Agent naming convention: `developer-1`, `developer-2`, `security`, `test-manager
 
 ## Pending actions (requires Bret)
 
-- **TST-010 manual staging checklist**: test environment is live and pre-setup is done
-  (accounts `tst010_user_a` / `tst010_user_b` created, friendship confirmed). Bret needs
-  to work through the 17 journeys with physical devices (Android staging APK + web).
-  Annotated checklist: `tasks/in-progress/TST-010_manual-staging-checklist-v055.md`.
-  Note: journeys 11 (BUG-021) and 12 (BUG-019) are pre-skipped — fixes deployed but not
-  yet redeployed to test environment.
+- **TST-012 staging deploy + sign-off (v0.56)**: All v0.56 tasks are merged to main
+  (including BUG-029 fix). Before activating TST-012:
+  1. Docker Desktop restart
+  2. Build and deploy server + web images to test environment
+  3. Build and sideload Android staging APK
+  4. Activate `tasks/queue/TST-012_manual-staging-checklist-v056.md` and work through journeys.
+  Key new journeys to verify: web pairing device entry (BUG-029), garden load on launch
+  (BUG-027), inline-tag trellis routing (BUG-024), biometric gate (BUG-028).
+
+- **v0.55 / v0.56 production release**: pending TST-012 conditional pass.
+  Promote only after staging sign-off. All known v0.55 bugs (BUG-019–029) are fixed.
 
 - **Xcode toolchain mismatch**: SourceKit shows "SDK not supported by compiler" errors
   (swiftlang-6.0.3.1.5 vs 6.0.3.1.10). Fix: Xcode → Settings → Locations →
   Command Line Tools — select the matching toolchain. Not blocking any agent work.
 
-- **Tag → Label rename scope decision**: REF-002 queued. Bret approved full rename
-  (user-facing, API, code, docs). Dispatch when TAU-001 documentation updates are ready
-  to be included in the same pass. See task: `tasks/queue/REF-002_tag-to-label-rename.md`.
+- **SEC-009 Part 2 decision deferred**: Keystore-backed biometric gate — deferred to future iteration.
 
-- **v0.55 production release**: BUG-020, BUG-022, WEB-001 all resolved. SEC-011, SEC-015,
-  FEAT-003/004, BUG-019/021 all merged. iOS security hardening (SEC-013–017) merged.
-  TST-010 staging checklist must pass before promoting to production.
+- **Tag → Label rename (REF-002)**: queued. Dispatch when ready for a separate pass.
 
 ## Legal
 
@@ -277,3 +278,23 @@ No briefs produced yet — persona just established. First session should begin 
 See `tasks/progress.md` for the full queue.
 Persona files: `personalities/` — PA, Developer, DevManager, TestManager, OpsManager, SecurityManager, TechnicalArchitect, ResearchManager.
 Start any session: `@personalities/PA.md`
+
+## Session wrap-up (2026-05-17)
+
+### What happened this session
+
+**TST-010 completed (v0.55 manual staging checklist)** — Ran all 22 journeys with Bret on physical devices. Conditional pass. 7 bugs logged (BUG-023 through BUG-029). 3 infrastructure issues fixed (GCS SA grant, VITE_API_URL in Dockerfile, GCS CORS).
+
+**v0.56 iteration dispatched** — Full planning cycle, 9 agents dispatched in parallel. All 9 tasks completed and merged. Key deliverables: BUG-023–028 fixed, ARCH-012/013 briefs produced, TST-004 Playwright suite, SEC-002 auth unit tests, OPS-002 guide.
+
+**Unit test mandate established** — All future tasks must include unit tests. No exceptions. Logged as a systemic feedback memory.
+
+**BUG-029 fixed (this session, manually)** — Web pairing never called `POST /api/keys/devices`, so the web browser was invisible in Devices & Access. Fix: `PairPage.jsx` now generates the persistent device keypair and registers it using the pairing session token immediately after the ECDH unwrap. Regression test added to `vaultUnlock.test.jsx`.
+
+### Known gotchas for next session
+
+- **TST-012 is the gate** — don't start any new iteration planning until staging checklist passes.
+- **Docker Desktop restart required** before each build/deploy (known friction, not a task).
+- **BUG-025, BUG-026** still queued (web friends nav link, invite link auto-route). Low priority — can batch into a maintenance pass.
+- **ARCH-012/013 refactor briefs are ready** — web and Android package restructures are documented but not dispatched. Prerequisite for meaningful unit test coverage. Plan these as M-prefix milestone tasks when iteration bandwidth allows.
+- The `tasks/progress.md` queue stale entry for BUG-029 was cleaned up in this session.
