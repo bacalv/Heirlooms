@@ -1,0 +1,15 @@
+# Heirlooms API Client — Configuration Template
+# Copy this file to config.properties and fill in your credentials.
+# config.properties is .gitignored — never commit credentials.
+
+# Target environment (optional — defaults to test)
+heirlooms.base_url=https://test.api.heirlooms.digital
+
+# Your Heirlooms account username
+heirlooms.username=your_username_here
+
+# 32-byte auth key as a 64-character lowercase hex string.
+# This is the raw key whose SHA-256 equals the auth_verifier stored on the server.
+# Generate with:   python3 -c "import os,binascii; print(binascii.hexlify(os.urandom(32)).decode())"
+# Then register the account using the matching auth_verifier = sha256(auth_key_bytes).
+heirlooms.auth_key=0000000000000000000000000000000000000000000000000000000000000000

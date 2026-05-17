@@ -28,7 +28,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [DEV-004](queue/DEV-004.md) | M11 Wave 4 — executor share distribution | Feature | High | Developer | DEV-003 |
 | [DEV-005](queue/DEV-005.md) | M11 Wave 5 — /seal endpoint (16-step validation) | Feature | High | Developer | DEV-004 |
 | [DEV-006](queue/DEV-006.md) | M11 Waves 6+7 — /tlock-key delivery + read-path amendments | Feature | High | Developer | DEV-005 |
-| [TOOL-001](queue/TOOL-001_kotlin-api-client-module.md) | Kotlin API client module — standalone capsule lifecycle demo | Tools | High | Developer | ARCH-015 ✓ |
 | [DOC-001](queue/DOC-001_uml-sequence-diagrams.md) | UML sequence diagrams from test output | Docs | Low | Developer | TST-004 ✓ |
 | [RES-005](queue/RES-005_glossary-self-reference-audit.md) | Glossary self-reference audit — ensure every cited term has an entry | Research | Low | ResearchManager | — |
 | [OPS-003](queue/OPS-003_pre-production-staging-environment.md) | Pre-production staging environment — prod-snapshot + anonymisation pipeline | Operations | Low | OpsManager | — |
@@ -42,6 +41,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
+| [TOOL-001](done/TOOL-001_kotlin-api-client-module.md) | Kotlin API client module — Phase 1 capsule lifecycle CLI | Tools | 2026-05-17 |
 | [DEV-001](done/DEV-001.md) | M11 Wave 0 — V33 + V34 Flyway migrations (schema only) | Feature | 2026-05-17 |
 | [PLAN-001](done/PLAN-001_m11-task-breakdown.md) | M11 task breakdown — DEV-001 through DEV-006 created | Planning | 2026-05-17 |
 | [ARCH-015](done/ARCH-015_api-stability-contract.md) | API stability contract — frozen surface, policy, 8 regression pairs | Architecture | 2026-05-17 |

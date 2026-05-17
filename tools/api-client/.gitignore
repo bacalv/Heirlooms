@@ -1,0 +1,10 @@
+# Gradle
+.gradle/
+build/
+
+# Credentials — never commit
+config.properties
+
+# IDE
+.idea/
+*.iml
