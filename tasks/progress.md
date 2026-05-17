@@ -36,6 +36,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
+| [TST-013](done/TST-013_sharing-flow-integration-test.md) | Sharing flow integration test — 6 tests (4 integration + 2 unit) | Testing | 2026-05-17 |
 | [BUG-029](done/BUG-029_web-pairing-no-device-entry.md) | Web pairing — register persistent device key after pairing | Bug Fix | 2026-05-17 |
 | [BUG-023](done/BUG-023_passphrase-save-409-after-web-pairing.md) | Passphrase save 409 after web pairing — guard registerDevice, fix PairPage | Bug Fix | 2026-05-17 |
 | [BUG-024](done/BUG-024_garden-inline-tag-no-trellis-routing.md) | Garden inline tag now sends prewrappedDeks for trellis routing | Bug Fix | 2026-05-17 |
