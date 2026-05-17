@@ -4,6 +4,8 @@ import java.util.Properties
 
 enum class StorageBackend { LOCAL, S3, GCS }
 
+enum class TlockProvider { STUB, SIDECAR, DISABLED }
+
 data class AppConfig(
     val serverPort: Int,
     val storageBackend: StorageBackend,
@@ -21,6 +23,11 @@ data class AppConfig(
     val apiKey: String,
     val previewDurationSeconds: Int = 15,
     val authSecret: String = "",
+    val tlockProvider: TlockProvider = TlockProvider.DISABLED,
+    /** Base64url-encoded 32-byte secret. Required when tlockProvider=STUB. */
+    val tlockStubSecret: String = "",
+    /** HTTP URL for the sidecar. Required when tlockProvider=SIDECAR. */
+    val tlockSidecarUrl: String = "",
 ) {
     companion object {
 
@@ -67,6 +74,9 @@ data class AppConfig(
                 apiKey                 = env("API_KEY")                       ?: "",
                 previewDurationSeconds = env("PREVIEW_DURATION_SECONDS")?.toIntOrNull() ?: 15,
                 authSecret             = env("AUTH_SECRET")                   ?: "",
+                tlockProvider          = parseTlockProvider(env("TLOCK_PROVIDER")),
+                tlockStubSecret        = env("TLOCK_STUB_SECRET")             ?: "",
+                tlockSidecarUrl        = env("TLOCK_SIDECAR_URL")             ?: "",
             )
         }
 
@@ -97,7 +107,16 @@ data class AppConfig(
                 apiKey                 = prop("api.key")                            ?: "",
                 previewDurationSeconds = prop("preview.duration.seconds")?.toIntOrNull() ?: 15,
                 authSecret             = prop("auth.secret")                         ?: "",
+                tlockProvider          = parseTlockProvider(prop("tlock.provider")),
+                tlockStubSecret        = prop("tlock.stub.secret")                   ?: "",
+                tlockSidecarUrl        = prop("tlock.sidecar.url")                   ?: "",
             )
+        }
+
+        private fun parseTlockProvider(value: String?): TlockProvider = when (value?.uppercase()) {
+            "STUB"     -> TlockProvider.STUB
+            "SIDECAR"  -> TlockProvider.SIDECAR
+            else       -> TlockProvider.DISABLED
         }
     }
 }

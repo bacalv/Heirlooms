@@ -9,6 +9,10 @@ import digital.heirlooms.server.repository.keys.PostgresKeyRepository
 import digital.heirlooms.server.repository.storage.PostgresBlobRepository
 import digital.heirlooms.server.repository.upload.PostgresUploadRepository
 import digital.heirlooms.server.routes.buildApp
+import digital.heirlooms.server.config.TlockProvider
+import digital.heirlooms.server.crypto.tlock.DisabledTimeLockProvider
+import digital.heirlooms.server.crypto.tlock.StubTimeLockProvider
+import digital.heirlooms.server.crypto.tlock.TimeLockProvider
 import digital.heirlooms.server.service.cleanup.PendingBlobsCleanupService
 import digital.heirlooms.server.service.upload.ExifExtractionService
 import digital.heirlooms.server.storage.FileStore
@@ -103,7 +107,47 @@ fun main() {
         logger.info("CORS allowed origins: {}", corsAllowedOrigins)
     }
 
-    val app = buildApp(storage, database, previewDurationSeconds = config.previewDurationSeconds, authSecret = authSecret)
+    // Initialise the TimeLockProvider — fail fast if misconfigured
+    val tlockProvider: TimeLockProvider = when (config.tlockProvider) {
+        TlockProvider.DISABLED -> {
+            logger.info("TimeLockProvider: disabled (tlock sealing not available)")
+            DisabledTimeLockProvider
+        }
+        TlockProvider.STUB -> {
+            if (config.tlockStubSecret.isEmpty()) {
+                logger.error("FATAL: TLOCK_PROVIDER=stub but TLOCK_STUB_SECRET is not set")
+                throw IllegalStateException("FATAL: TLOCK_PROVIDER=stub but TLOCK_STUB_SECRET is not set")
+            }
+            val secret = try {
+                java.util.Base64.getUrlDecoder().decode(config.tlockStubSecret)
+            } catch (e: Exception) {
+                logger.error("FATAL: TLOCK_STUB_SECRET is not valid base64url: {}", e.message)
+                throw IllegalStateException("FATAL: TLOCK_STUB_SECRET is not valid base64url", e)
+            }
+            if (secret.size != 32) {
+                logger.error("FATAL: TLOCK_STUB_SECRET must decode to exactly 32 bytes, got {}", secret.size)
+                throw IllegalStateException("FATAL: TLOCK_STUB_SECRET must decode to exactly 32 bytes")
+            }
+            logger.info("TimeLockProvider: stub (staging mode)")
+            StubTimeLockProvider(secret)
+        }
+        TlockProvider.SIDECAR -> {
+            if (config.tlockSidecarUrl.isEmpty()) {
+                logger.error("FATAL: TLOCK_PROVIDER=sidecar but TLOCK_SIDECAR_URL is not set")
+                throw IllegalStateException("FATAL: TLOCK_PROVIDER=sidecar but TLOCK_SIDECAR_URL is not set")
+            }
+            logger.info("TimeLockProvider: sidecar at {}", config.tlockSidecarUrl)
+            // M12: SidecarTimeLockProvider — not yet implemented
+            throw UnsupportedOperationException("Sidecar tlock provider is M12 scope — not yet implemented")
+        }
+    }
+
+    val app = buildApp(
+        storage, database,
+        previewDurationSeconds = config.previewDurationSeconds,
+        authSecret = authSecret,
+        timeLockProvider = tlockProvider,
+    )
     if (config.apiKey.isNotEmpty()) logger.info("Static API key auth enabled (development/test mode)")
     val server = corsFilter(corsAllowedOrigins).then(
         sessionAuthFilter(PostgresAuthRepository(database.dataSource), config.apiKey).then(app)

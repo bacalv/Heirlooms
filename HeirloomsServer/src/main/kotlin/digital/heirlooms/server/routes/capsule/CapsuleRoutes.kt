@@ -53,7 +53,9 @@ fun capsuleRoutes(capsuleService: CapsuleService): List<ContractRoute> = listOf(
     listCapsulesRoute(capsuleService),
     getCapsuleRoute(capsuleService),
     patchCapsuleRoute(capsuleService),
-    sealCapsuleRoute(capsuleService),
+    // NOTE: The old sealCapsuleRoute (POST /capsules/:id/seal) has been superseded
+    // by SealCapsuleRoute.kt (DEV-005) which registers both PUT and POST verbs
+    // with the full 16-step M11 validation. The new routes are added in AppRoutes.kt.
     cancelCapsuleRoute(capsuleService),
 )
 
@@ -90,26 +92,6 @@ private fun patchCapsuleRoute(capsuleService: CapsuleService): ContractRoute {
         description = "Updates editable fields on a capsule."
     } bindContract PATCH to { capsuleId: UUID ->
         { request: Request -> patchCapsuleHandler(capsuleService, capsuleId, request) }
-    }
-}
-
-private fun sealCapsuleRoute(capsuleService: CapsuleService): ContractRoute {
-    val id = Path.uuid().of("id")
-    return "/capsules" / id / "seal" meta {
-        summary = "Seal a capsule"
-        description = "Seals an open-shape capsule in state 'open'. The capsule must have at least one upload."
-    } bindContract POST to { capsuleId: UUID, _: String ->
-        { request: Request ->
-            when (val result = capsuleService.sealCapsule(capsuleId, request.authUserId())) {
-                is CapsuleRepository.SealResult.Success ->
-                    Response(OK).header("Content-Type", "application/json").body(result.detail.toDetailJson())
-                CapsuleRepository.SealResult.NotFound -> Response(NOT_FOUND)
-                CapsuleRepository.SealResult.WrongState ->
-                    Response(CONFLICT).body("""{"error":"capsule cannot be sealed in its current state"}""")
-                CapsuleRepository.SealResult.Empty ->
-                    Response(UNPROCESSABLE_ENTITY).body("""{"error":"Cannot seal an empty capsule"}""")
-            }
-        }
     }
 }
 
