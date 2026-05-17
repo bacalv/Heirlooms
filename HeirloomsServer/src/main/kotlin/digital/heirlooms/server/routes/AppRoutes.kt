@@ -47,9 +47,16 @@ import digital.heirlooms.server.routes.plot.flowRoutes
 import digital.heirlooms.server.routes.social.friendsRoutes
 import digital.heirlooms.server.routes.social.sharingKeyRoutes
 import digital.heirlooms.server.routes.connection.connectionRoutes
+import digital.heirlooms.server.routes.connection.nominationRoutes
+import digital.heirlooms.server.routes.capsule.recipientLinkRoute
 import digital.heirlooms.server.repository.connection.ConnectionRepository
 import digital.heirlooms.server.repository.connection.PostgresConnectionRepository
+import digital.heirlooms.server.repository.connection.NominationRepository
+import digital.heirlooms.server.repository.connection.PostgresNominationRepository
+import digital.heirlooms.server.repository.capsule.RecipientLinkRepository
+import digital.heirlooms.server.repository.capsule.PostgresRecipientLinkRepository
 import digital.heirlooms.server.service.connection.ConnectionService
+import digital.heirlooms.server.service.connection.NominationService
 import digital.heirlooms.server.routes.upload.checkContentHashContractRoute
 import digital.heirlooms.server.routes.upload.compostUploadContractRoute
 import digital.heirlooms.server.routes.upload.confirmUploadContractRoute
@@ -134,6 +141,8 @@ fun buildApp(
     blobRepo = PostgresBlobRepository(database.dataSource),
     diagRepo = PostgresDiagRepository(database.dataSource),
     connectionRepo = PostgresConnectionRepository(database.dataSource),
+    nominationRepo = PostgresNominationRepository(database.dataSource),
+    recipientLinkRepo = PostgresRecipientLinkRepository(database.dataSource),
     thumbnailGenerator = thumbnailGenerator,
     metadataExtractor = metadataExtractor,
     previewDurationSeconds = previewDurationSeconds,
@@ -162,6 +171,20 @@ internal fun buildApp(
         override fun deleteConnection(id: java.util.UUID, ownerUserId: java.util.UUID) = ConnectionRepository.DeleteResult.NotFound
         override fun lookupSharingPubkey(contactUserId: java.util.UUID) = null
     },
+    nominationRepo: NominationRepository = object : NominationRepository {
+        override fun createNomination(ownerUserId: java.util.UUID, connectionId: java.util.UUID, message: String?) = throw UnsupportedOperationException("no-op stub")
+        override fun listByOwner(ownerUserId: java.util.UUID) = emptyList<digital.heirlooms.server.domain.connection.NominationRecord>()
+        override fun listReceived(nomineeUserId: java.util.UUID) = emptyList<digital.heirlooms.server.domain.connection.NominationRecord>()
+        override fun getById(id: java.util.UUID) = null
+        override fun getContactUserId(connectionId: java.util.UUID) = null
+        override fun hasActiveNomination(connectionId: java.util.UUID) = false
+        override fun setRespondedStatus(id: java.util.UUID, status: String) = null
+        override fun setRevoked(id: java.util.UUID) = null
+        override fun getConnectionOwnerUserId(connectionId: java.util.UUID) = null
+    },
+    recipientLinkRepo: RecipientLinkRepository = object : RecipientLinkRepository {
+        override fun linkRecipient(capsuleId: java.util.UUID, recipientId: java.util.UUID, connectionId: java.util.UUID, callerUserId: java.util.UUID) = RecipientLinkRepository.LinkResult.CapsuleNotFound
+    },
     thumbnailGenerator: (ByteArray, String) -> ByteArray? = ::generateThumbnail,
     metadataExtractor: (ByteArray, String) -> MediaMetadata = MetadataExtractor()::extract,
     previewDurationSeconds: Int = 15,
@@ -180,6 +203,7 @@ internal fun buildApp(
     val keyService = digital.heirlooms.server.service.keys.KeyService(keyRepo)
     val socialService = digital.heirlooms.server.service.social.SocialService(socialRepo)
     val connectionService = ConnectionService(connectionRepo)
+    val nominationService = NominationService(nominationRepo)
 
     val contentContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
@@ -231,7 +255,13 @@ internal fun buildApp(
     val connectionContract = contract {
         renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
         descriptionPath = "/openapi.json"
-        routes += connectionRoutes(connectionService)
+        routes += connectionRoutes(connectionService) + nominationRoutes(nominationService)
+    }
+
+    val nominationCapsuleContract = contract {
+        renderer = OpenApi3(ApiInfo("Heirlooms API", "v1"), Jackson)
+        descriptionPath = "/openapi.json"
+        routes += listOf(recipientLinkRoute(recipientLinkRepo))
     }
 
     val authContract = contract {
@@ -278,6 +308,7 @@ internal fun buildApp(
         "/api" bind capsuleContract,
         "/api" bind socialContract,
         "/api" bind connectionContract,
+        "/api" bind nominationCapsuleContract,
         "/api" bind diagContract,
         "/health" bind GET to { Response(OK).body("ok") },
         "/api/settings" bind GET to { Response(OK).header("Content-Type", "application/json").body("""{"previewDurationSeconds":$previewDurationSeconds}""") },
