@@ -234,9 +234,11 @@ Established 2026-05-16. Reports directly to CTO. Start a session: `@personalitie
 
 **Completed research:**
 - [RES-001](../docs/research/RES-001_crypto-threat-horizon-40kft.md) — 40,000ft cryptographic threat horizon brief. Key finding: P-256 has a credible 8-year window; HNDL is a present threat; Heirlooms' envelope format and DEK-per-file model are strong PQC migration foundations.
+- [RES-002](../docs/research/RES-002_window-capsule-expiry-cryptography.md) — Window capsule (unlock + expire time) cryptographic construction and literature review. Key finding: tlock + Shamir deletion construction is substantially novel; patentable as a combination.
+- [RES-004](../docs/research/RES-004_chained-capsule-cryptographic-assessment.md) — Chained capsule cryptographic assessment. Key finding: composable from existing primitives; first-solver-wins requires server-mediated atomic claim.
+- [RES-005](../docs/research/RES-005_presence-gated-delivery.md) — Presence-gated post-window delivery construction. Key finding: novel two-phase capsule where a time window acts as a presence gate; only recipients who prove they opened during [w1, w2] receive content after expiry. Route to Legal before any external disclosure.
 
 **Queued research:**
-- [RES-002](../tasks/queue/RES-002_window-capsule-expiry-cryptography.md) — Window capsule (unlock + expire time) cryptographic construction and literature review
 - [RES-003](../tasks/queue/RES-003_pqc-migration-readiness-brief.md) — PQC migration readiness brief for Technical Architect (three-layer attack window, migration phases, re-wrap service spec)
 - [SIM-001](../tasks/queue/SIM-001_trustless-expiry-impossibility.md) — Simulation: trustless expiry impossibility (throw-away, depends on RES-002)
 

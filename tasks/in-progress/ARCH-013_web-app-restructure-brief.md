@@ -108,3 +108,35 @@ The existing test suite uses Vitest + React Testing Library. For each phase, spe
 - The driving motivation is test coverage, not aesthetics
 - Bret's explicit requirement (2026-05-16): developers must write unit tests alongside
   every feature and fix going forward
+
+## Completion notes
+
+Completed 2026-05-17. Deliverable: `docs/briefs/web-refactor-brief.md`.
+
+Key decisions made in the brief:
+
+1. **`encryptAndUpload` moved to `src/crypto/encryptAndUpload.js`** (Phase 1b) —
+   it is currently exported from a page component and imported by `AuthLayout.jsx`,
+   which is an architectural violation. Moving it to the crypto layer fixes the
+   dependency direction and is the highest-value single change in the plan.
+
+2. **8 phases total** (Phase 1, 1b, 2–7). Phases 1 and 1b can run in parallel if
+   two developers are assigned; otherwise linear sequencing is safest.
+
+3. **Barrel re-export approach** for `api.js` — all existing import paths continue
+   to work via `src/api.js → src/api/index.js` until Phase 6 removes it. No Vite
+   config changes required.
+
+4. **`TagsPanel` consolidation** noted as the one case where two near-identical
+   inner components (`InlineTagEditor` in GardenPage and PhotoDetailPage) should
+   be merged into a single `src/components/TagsPanel.jsx`. This is the only
+   exception to the pure-restructuring rule; risk is low.
+
+5. **HMR side-effects flagged** for three module-scope singletons (`ffmpegInstance`,
+   `cachedSettings`, `thumbnailCache`) — all acceptable, none cause user data risk.
+
+6. **Test priorities**: `encryptAndUpload` unit tests and `api.js` domain module
+   tests are highest value. Both must be written in their respective phases, not
+   deferred.
+
+Total estimated effort: 27–39 developer-hours across 7–8 days.

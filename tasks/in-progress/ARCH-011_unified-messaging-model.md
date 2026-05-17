@@ -85,4 +85,31 @@ A brief at `docs/briefs/ARCH-011_unified-messaging-model.md` covering:
 
 ## Completion notes
 
-<!-- TechnicalArchitect appends here and moves file to tasks/done/ -->
+**Completed:** 2026-05-17
+**Author:** TechnicalArchitect
+**Deliverable:** `docs/briefs/ARCH-011_unified-messaging-model.md`
+
+### Summary of decisions made
+
+1. **Messages are a first-class entity** — new `messages` table (not uploads, not embedded envelopes). Body stored inline as BYTEA (64 KB max). Two new migration files: V33 (messages + `plots` column additions) and V34 (message trellises).
+
+2. **Three encryption paths** cover all visibility scopes:
+   - `capsule-message-aes256gcm-v1`: HKDF-derived sub-key from `capsule_master_key` (info `"capsule-message-v1"`) for broadcast capsule messages.
+   - `plot-aes256gcm-v1` (existing M10 ID): reused for broadcast shared plot messages.
+   - `message-aes256gcm-v1`: per-message DEK with per-recipient P-256 ECDH wrapping for selective visibility in both contexts.
+
+3. **Message trellises are a new entity** (`message_trellises` / `message_trellis_members` tables), not rows in the existing `trellises` table. They govern read access at query time (not write routing at upload time). Label tokens use a new HKDF context `"message-label-v1"` per ARCH-007 pattern.
+
+4. **Moderation maps to the staging conceptual model**: `message_policy = 'auto_approve'` mirrors `requires_staging = false`; `'owner_approve'` mirrors `requires_staging = true`. State is stored in `messages.status` (not `plot_staging_decisions`).
+
+5. **Recipient identity blinding** via per-message HMAC tokens prevents the server from inferring the social graph from `message_recipient_keys` rows.
+
+6. **Six open questions** documented for CTO, two blocking: OQ-1 (which milestone) and OQ-2 (selective visibility as opt-in vs. default).
+
+7. **New algorithm IDs to register in `docs/envelope_format.md`:** `capsule-message-aes256gcm-v1`, `message-aes256gcm-v1`. No binary envelope format version bump needed.
+
+### Care Mode interaction (ARCH-008)
+Confirmed out of scope for this brief. Care Mode executor messages require a third scope column (`care_session_id`); deferred to M13 per ARCH-008 sequencing.
+
+### ARCH-007 interaction
+`label_token` uses the same HMAC scheme as upload tag tokens, with a new HKDF context string (`"message-label-v1"`) to keep message labels cryptographically separate from upload tags.

@@ -99,3 +99,34 @@ the extracted units.
   testable units
 - Bret's explicit requirement (2026-05-16): developers must write unit tests alongside
   every feature and fix going forward
+
+## Completion notes
+
+**Completed:** 2026-05-17  
+**Branch:** agent/tech-architect-1/ARCH-012  
+**Deliverable:** `docs/briefs/android-refactor-brief.md`
+
+Brief covers all four required sections:
+
+1. **Package structure** — Full target layout with 8 API sub-classes + facade pattern,
+   5 upload pipeline classes, screen decomposition for all four god-screen pairs, and
+   5 nav sub-graph files. Naming conventions defined for screens, panels, sheets, modals,
+   VMs, helpers, and nav graphs.
+
+2. **Phased execution plan** — 7 phases (6 concrete + 1 audit), each with before/after
+   description, effort estimate, files touched, risk level, and specific risk flags.
+   Order: API (safest) → Upload → Garden → PhotoDetail → SharedPlots → Navigation → Audit.
+
+3. **Test coverage targets** — Per-phase test file list and what each test proves.
+   Phase completion criterion requires tests written and passing before merge.
+
+4. **Constraints and risks** — Hard constraints documented (no Gradle split, no behaviour
+   changes, one phase per branch). Risk register with three High-severity items:
+   ActivityResultLauncher scoping, ExoPlayer lifecycle, and Compose state hoisting pattern.
+
+Key architectural decisions made:
+- `HeirloomsApi` retained as a facade delegator (all 50+ call sites unchanged)
+- `UploadEncryption` / `UploadTransport` circular dependency prevented via callback
+  injection pattern rather than direct import
+- `ActivityResultLauncher` registrations must stay in `GardenScreen` (host composable)
+- ExoPlayer `DisposableEffect` ownership stays in `VideoPlayerPanel` composable

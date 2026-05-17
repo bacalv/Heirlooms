@@ -60,8 +60,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import android.util.Base64
 import digital.heirlooms.api.HeirloomsApi
 import digital.heirlooms.api.Upload
+import digital.heirlooms.crypto.VaultCrypto
+import digital.heirlooms.crypto.VaultSession
 import digital.heirlooms.ui.brand.OliveBranchArrival
 import digital.heirlooms.ui.common.HeirloomsImage
 import digital.heirlooms.ui.common.LocalHeirloomsApi
@@ -119,6 +122,74 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 private const val THUMBNAIL_SIZE_DP = 108
+
+/**
+ * Builds pre-wrapped plot DEKs for all shared plots whose plot key is held in [VaultSession].
+ * Mirrors [PhotoDetailViewModel.buildPrewrappedDeks].  The server uses whichever entries
+ * match a firing trellis and discards the rest, allowing the server to insert directly into
+ * plot_items without requiring staging (BUG-024).
+ */
+private fun buildPrewrappedDeks(upload: Upload): List<HeirloomsApi.PrewrappedPlotDek> {
+    val wrappedDek = upload.wrappedDek ?: return emptyList()
+    val plotKeys = VaultSession.plotKeys
+    if (plotKeys.isEmpty()) return emptyList()
+
+    return try {
+        val rawDek = when (upload.dekFormat) {
+            VaultCrypto.ALG_P256_ECDH_HKDF_V1 -> {
+                val privkey = VaultSession.sharingPrivkey ?: return emptyList()
+                VaultCrypto.unwrapWithSharingKey(wrappedDek, privkey)
+            }
+            VaultCrypto.ALG_PLOT_AES256GCM_V1 -> {
+                val sourceKey = plotKeys.values.firstOrNull { key ->
+                    runCatching { VaultCrypto.unwrapDekWithPlotKey(wrappedDek, key) }.isSuccess
+                } ?: return emptyList()
+                VaultCrypto.unwrapDekWithPlotKey(wrappedDek, sourceKey)
+            }
+            else -> VaultCrypto.unwrapDekWithMasterKey(wrappedDek, VaultSession.masterKey)
+        }
+
+        val rawThumbDek: ByteArray? = upload.wrappedThumbnailDek?.let { wrappedThumb ->
+            runCatching {
+                when (upload.thumbnailDekFormat) {
+                    VaultCrypto.ALG_P256_ECDH_HKDF_V1 -> {
+                        val privkey = VaultSession.sharingPrivkey ?: return@runCatching null
+                        VaultCrypto.unwrapWithSharingKey(wrappedThumb, privkey)
+                    }
+                    VaultCrypto.ALG_PLOT_AES256GCM_V1 -> {
+                        val sourceKey = plotKeys.values.firstOrNull { key ->
+                            runCatching { VaultCrypto.unwrapDekWithPlotKey(wrappedThumb, key) }.isSuccess
+                        } ?: return@runCatching null
+                        VaultCrypto.unwrapDekWithPlotKey(wrappedThumb, sourceKey)
+                    }
+                    else -> VaultCrypto.unwrapDekWithMasterKey(wrappedThumb, VaultSession.masterKey)
+                }
+            }.getOrNull()
+        }
+
+        plotKeys.mapNotNull { (plotId, plotKey) ->
+            runCatching {
+                val rewrappedItem = VaultCrypto.wrapDekWithPlotKey(rawDek, plotKey)
+                val rewrappedItemB64 = Base64.encodeToString(rewrappedItem, Base64.NO_WRAP)
+                val (rewrappedThumbB64, thumbFormat) = if (rawThumbDek != null) {
+                    val rewrapped = VaultCrypto.wrapDekWithPlotKey(rawThumbDek, plotKey)
+                    Base64.encodeToString(rewrapped, Base64.NO_WRAP) to VaultCrypto.ALG_PLOT_AES256GCM_V1
+                } else {
+                    null to null
+                }
+                HeirloomsApi.PrewrappedPlotDek(
+                    plotId = plotId,
+                    wrappedItemDek = rewrappedItemB64,
+                    itemDekFormat = VaultCrypto.ALG_PLOT_AES256GCM_V1,
+                    wrappedThumbnailDek = rewrappedThumbB64,
+                    thumbnailDekFormat = thumbFormat,
+                )
+            }.getOrNull()
+        }
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
 
 @Composable
 fun GardenScreen(
@@ -231,6 +302,9 @@ fun GardenScreen(
         vm.ensureSharingKey(api)
         vm.loadFriends(api)
         vm.loadSharedMemberships(api)
+        // Populate staging counts immediately on screen entry rather than waiting
+        // for the first poll interval to elapse.
+        vm.refreshSharedStagingCounts(api)
     }
 
     LaunchedEffect(Unit) {
@@ -355,13 +429,20 @@ fun GardenScreen(
                                             catch (_: Exception) { vm.optimisticRotate(uploadId, currentRotation) }
                                         }
                                     },
-                                    onTagsUpdated = { uploadId, oldTags, newTags ->
-                                        val added = newTags.filter { it !in oldTags }
+                                    onTagsUpdated = { upload, newTags ->
+                                        val added = newTags.filter { it !in upload.tags }
                                         if (added.isNotEmpty()) RecentTagsStore(context).record(added)
-                                        vm.optimisticTag(uploadId, newTags)
+                                        vm.optimisticTag(upload.id, newTags)
                                         scope.launch {
-                                            try { api.updateTags(uploadId, newTags) }
-                                            catch (_: Exception) { vm.optimisticTag(uploadId, oldTags) }
+                                            try {
+                                                val prewrappedDeks = buildPrewrappedDeks(upload)
+                                                api.updateTags(upload.id, newTags, prewrappedDeks)
+                                                // Refresh staging counts immediately so plot row
+                                                // badges update within the 5-second acceptance window
+                                                // rather than waiting for the next poll interval.
+                                                vm.refreshSharedStagingCounts(api)
+                                            }
+                                            catch (_: Exception) { vm.optimisticTag(upload.id, upload.tags) }
                                         }
                                     },
                                     onRenamePlot = { newName ->
@@ -499,7 +580,7 @@ private fun PlotRowSection(
     availableTags: List<String> = emptyList(),
     friends: List<HeirloomsApi.Friend> = emptyList(),
     onQuickRotate: (uploadId: String, currentRotation: Int) -> Unit,
-    onTagsUpdated: (uploadId: String, oldTags: List<String>, newTags: List<String>) -> Unit,
+    onTagsUpdated: (upload: Upload, newTags: List<String>) -> Unit,
     onRenamePlot: (name: String) -> Unit = {},
     onDeletePlot: () -> Unit = {},
     ownerDisplayName: String? = null,
@@ -765,7 +846,7 @@ private fun PlotRowSection(
                                 onDismiss = { showTagSheet = false },
                                 onTagsUpdated = { newTags ->
                                     showTagSheet = false
-                                    onTagsUpdated(upload.id, upload.tags, newTags)
+                                    onTagsUpdated(upload, newTags)
                                 },
                             )
                         }
