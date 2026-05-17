@@ -1,0 +1,68 @@
+---
+id: TST-014
+title: M11 local stack — feasibility and design for iteration sign-off
+category: Testing
+priority: High
+assigned_to: TestManager
+depends_on: []
+touches:
+  - HeirloomsServer/src/test/
+  - tasks/queue/TOOL-001_kotlin-api-client-module.md
+branch: M11
+---
+
+# TST-014 — M11 local stack: feasibility and design for iteration sign-off
+
+## Context
+
+Heirlooms is moving to a **server-first** development strategy for M11 and M12. The test
+environment (Cloud Run + GCS + Cloud SQL) will not be redeployed after every M11 iteration.
+Instead, each iteration should be signed off by running an automated test suite against a
+**fully local stack** — no cloud dependencies, no Docker Desktop restart, no manual deploy.
+
+The pattern already exists in `SharingFlowIntegrationTest.kt`, which starts the server
+in-process via `buildApp`, uses Testcontainers for a real PostgreSQL instance, and
+`LocalFileStore` for file storage. M11 needs this elevated into a first-class iteration
+gate.
+
+## Objective
+
+Assess the feasibility of a local stack for M11 iteration sign-off and produce a design
+brief covering:
+
+1. **Stack definition** — what components are needed (server, DB, file store, any stubs)
+2. **Test driver** — whether to extend the existing Testcontainers integration tests, use
+   the standalone Kotlin API client (TOOL-001), or both
+3. **Coverage scope** — which API surfaces must be covered for an M11 iteration pass
+4. **Iteration gate definition** — what a passing run looks like; what is an automatic
+   fail vs a known skip
+5. **CI integration** — can this run in GitHub Actions without cloud credentials?
+
+## Questions to answer
+
+- Can the full server start in-process for all M11 endpoints, or are there hard
+  dependencies on GCS / Cloud SQL that must be stubbed?
+- `LocalFileStore` already exists — is it suitable as the file store for all M11 tests,
+  or does the capsule / tlock path require a different stub?
+- Should the TOOL-001 Kotlin client be the external test driver (black-box, HTTP over
+  localhost) or should tests stay in-process (faster, but less realistic)?
+- Is Testcontainers the right PostgreSQL provider, or would an in-memory alternative
+  (e.g. H2 with PostgreSQL compatibility mode) be sufficient and faster for unit-level
+  iteration tests?
+- What does a clean run look like end-to-end — one Gradle command? A shell script?
+
+## Deliverable
+
+Produce a brief (`docs/testing/TST-014_m11-local-stack-design.md`) covering:
+
+- Recommended stack architecture (diagram or table)
+- Recommended test driver approach
+- Gradle task / command to run the full iteration gate
+- Any open questions or blockers for the Test Manager to flag to the CTO
+
+Do **not** implement the stack in this task — design only. Implementation will follow as
+a separate task once the CTO approves the design.
+
+## Completion notes
+
+*(agent appends here on completion)*

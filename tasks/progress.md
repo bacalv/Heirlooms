@@ -23,6 +23,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [REF-002](queue/REF-002_tag-to-label-rename.md) | Tag → Label rename across all platforms and documentation | Refactoring | Medium | Developer | — |
 | [TST-006](queue/TST-006_android-remote-control-investigation.md) | Investigate remote-controlled Android testing for E2E automation | Testing | Medium | TestManager | — |
 | [TST-012](queue/TST-012_manual-staging-checklist-v056.md) | Manual staging checklist v0.56 — **held until staging ready** | Testing | High | TestManager | *(all v0.56 branches merged)* |
+| [TST-014](queue/TST-014_m11-local-stack-feasibility.md) | M11 local stack — feasibility and design for iteration sign-off | Testing | High | TestManager | — |
 | [DOC-001](queue/DOC-001_uml-sequence-diagrams.md) | UML sequence diagrams from test output | Docs | Low | Developer | TST-004 ✓ |
 | [RES-005](queue/RES-005_glossary-self-reference-audit.md) | Glossary self-reference audit — ensure every cited term has an entry | Research | Low | ResearchManager | — |
 | [OPS-003](queue/OPS-003_pre-production-staging-environment.md) | Pre-production staging environment — prod-snapshot + anonymisation pipeline | Operations | Low | OpsManager | — |

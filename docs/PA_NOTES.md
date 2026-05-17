@@ -353,6 +353,12 @@ Start any session: `@personalities/PA.md`
 - **Attorney fee reduction options** — Marketing Director assessed three approaches: (1) hybrid cash + equity arrangement with a CIPA sole practitioner, (2) shopping to boutique/sole practitioners (30–40% cheaper than large firms), (3) priority filing first to buy 12 months at low cost. No decision taken — pending LEG-006 output and Bret's personal cash assessment.
 - **JUXT investment options assessed** — Marketing Director outlined four structures: Jon Pither personally via SEIS, JUXT Ltd straight equity, convertible loan note, services-for-equity. Recommended sequencing: get JUXT consent (LEG-005) before any investment conversation. Investment conversation strongest after patent is filed.
 
+## M11 branch strategy (2026-05-17)
+
+- **`main`** — frozen at v0.56. Used for TST-012 manual sign-off and the production deploy. No M11 work lands here until M11 is ready to release.
+- **`M11`** — long-lived development branch. All M11 agent tasks branch off `origin/M11` and merge back into `M11`. When creating agent workspaces for M11 tasks, the `create-agent-workspace.sh` script must be given the base branch `M11` (not `main`).
+- **Iteration sign-off for M11** — no test environment deploy between iterations. Instead, a local stack (Testcontainers PostgreSQL + LocalFileStore + in-process server) will be used. TST-014 is investigating the design.
+
 ## Sequence from here
 
 ```
