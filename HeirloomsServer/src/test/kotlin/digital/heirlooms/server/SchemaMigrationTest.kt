@@ -363,4 +363,203 @@ class SchemaMigrationTest {
         exec("DELETE FROM uploads WHERE id = '$uploadId'")
         exec("DELETE FROM plots WHERE id = '$plotId'")
     }
+
+    // ---- V33 M11 connections schema canary tests ----------------------------
+
+    @Test
+    fun `V33 connections table exists with expected columns`() {
+        val n = count("""
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_name = 'connections'
+              AND column_name IN ('id','owner_user_id','contact_user_id','display_name','email',
+                                  'sharing_pubkey','roles','created_at','updated_at')
+        """.trimIndent())
+        assertEquals(9, n, "connections table should have all 9 expected columns after V33")
+    }
+
+    @Test
+    fun `V33 executor_nominations table exists with expected columns`() {
+        val n = count("""
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_name = 'executor_nominations'
+              AND column_name IN ('id','owner_user_id','connection_id','status',
+                                  'offered_at','responded_at','revoked_at','message')
+        """.trimIndent())
+        assertEquals(8, n, "executor_nominations table should have all 8 expected columns after V33")
+    }
+
+    @Test
+    fun `V33 capsule_recipients has connection_id column`() {
+        val n = count("""
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_name = 'capsule_recipients'
+              AND column_name = 'connection_id'
+        """.trimIndent())
+        assertEquals(1, n, "capsule_recipients should have connection_id column after V33")
+    }
+
+    @Test
+    fun `V33 backfill produces one connection per direction for each friendship`() {
+        // Seed two users and a friendship, then verify two connections are produced.
+        val userA = UUID.randomUUID()
+        val userB = UUID.randomUUID()
+        // friendships.user_id_1 < user_id_2 (UUID ordering)
+        val (uid1, uid2) = if (userA.toString() < userB.toString()) Pair(userA, userB) else Pair(userB, userA)
+
+        exec("INSERT INTO users (id, username, display_name) VALUES ('$uid1', 'conn-test-a-${uid1}', 'User A')")
+        exec("INSERT INTO users (id, username, display_name) VALUES ('$uid2', 'conn-test-b-${uid2}', 'User B')")
+        exec("INSERT INTO friendships (user_id_1, user_id_2) VALUES ('$uid1', '$uid2')")
+
+        // Run the V33 backfill SQL again for just this friendship pair (idempotent via ON CONFLICT DO NOTHING).
+        exec("""
+            INSERT INTO connections (id, owner_user_id, contact_user_id, display_name, sharing_pubkey, roles, created_at)
+            SELECT
+                gen_random_uuid(),
+                u1.id AS owner_user_id,
+                u2.id AS contact_user_id,
+                u2.display_name,
+                ask.pubkey,
+                ARRAY['recipient'],
+                f.created_at
+            FROM friendships f
+            JOIN users u1 ON u1.id = f.user_id_1
+            JOIN users u2 ON u2.id = f.user_id_2
+            LEFT JOIN account_sharing_keys ask ON ask.user_id = u2.id
+            WHERE f.user_id_1 = '$uid1' AND f.user_id_2 = '$uid2'
+            UNION ALL
+            SELECT
+                gen_random_uuid(),
+                u2.id AS owner_user_id,
+                u1.id AS contact_user_id,
+                u1.display_name,
+                ask.pubkey,
+                ARRAY['recipient'],
+                f.created_at
+            FROM friendships f
+            JOIN users u1 ON u1.id = f.user_id_1
+            JOIN users u2 ON u2.id = f.user_id_2
+            LEFT JOIN account_sharing_keys ask ON ask.user_id = u1.id
+            WHERE f.user_id_1 = '$uid1' AND f.user_id_2 = '$uid2'
+            ON CONFLICT DO NOTHING
+        """.trimIndent())
+
+        val n = count("""
+            SELECT COUNT(*) FROM connections
+            WHERE (owner_user_id = '$uid1' AND contact_user_id = '$uid2')
+               OR (owner_user_id = '$uid2' AND contact_user_id = '$uid1')
+        """.trimIndent())
+        assertEquals(2, n, "backfill should produce exactly one connection per direction for each friendship pair")
+
+        // Cleanup
+        exec("DELETE FROM connections WHERE owner_user_id = '$uid1' OR owner_user_id = '$uid2'")
+        exec("DELETE FROM friendships WHERE user_id_1 = '$uid1' AND user_id_2 = '$uid2'")
+        exec("DELETE FROM users WHERE id = '$uid1' OR id = '$uid2'")
+    }
+
+    @Test
+    fun `V33 connections check constraint rejects row with no contact_user_id and no email`() {
+        val userId = FOUNDING_USER_UUID
+        assertThrows<SQLException> {
+            exec("""
+                INSERT INTO connections (id, owner_user_id, contact_user_id, display_name, email)
+                VALUES (gen_random_uuid(), '$userId', NULL, 'No Contact', NULL)
+            """.trimIndent())
+        }
+    }
+
+    @Test
+    fun `V33 executor_nominations status check constraint rejects invalid status`() {
+        val userId = FOUNDING_USER_UUID
+        // Create a minimal connection to reference
+        val connId = UUID.randomUUID()
+        exec("""
+            INSERT INTO connections (id, owner_user_id, contact_user_id, display_name)
+            VALUES ('$connId', '$userId', '$userId', 'Self Connection')
+        """.trimIndent())
+        assertThrows<SQLException> {
+            exec("""
+                INSERT INTO executor_nominations (owner_user_id, connection_id, status)
+                VALUES ('$userId', '$connId', 'invalid_status')
+            """.trimIndent())
+        }
+        exec("DELETE FROM connections WHERE id = '$connId'")
+    }
+
+    // ---- V34 M11 capsule crypto schema canary tests -------------------------
+
+    @Test
+    fun `V34 capsules has all nine new crypto columns`() {
+        val n = count("""
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_name = 'capsules'
+              AND column_name IN ('wrapped_capsule_key','capsule_key_format','tlock_round',
+                                  'tlock_chain_id','tlock_wrapped_key','tlock_dek_tlock',
+                                  'tlock_key_digest','shamir_threshold','shamir_total_shares')
+        """.trimIndent())
+        assertEquals(9, n, "capsules table should have all 9 new crypto columns after V34")
+    }
+
+    @Test
+    fun `V34 capsules has sealed_at column`() {
+        val n = count("""
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_name = 'capsules'
+              AND column_name = 'sealed_at'
+        """.trimIndent())
+        assertEquals(1, n, "capsules table should have sealed_at column after V34")
+    }
+
+    @Test
+    fun `V34 capsule_recipient_keys table exists with expected columns`() {
+        val n = count("""
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_name = 'capsule_recipient_keys'
+              AND column_name IN ('capsule_id','connection_id','wrapped_capsule_key',
+                                  'capsule_key_format','wrapped_blinding_mask','created_at')
+        """.trimIndent())
+        assertEquals(6, n, "capsule_recipient_keys should have all 6 expected columns after V34")
+    }
+
+    @Test
+    fun `V34 executor_shares table exists with expected columns`() {
+        val n = count("""
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_name = 'executor_shares'
+              AND column_name IN ('id','capsule_id','nomination_id','share_index',
+                                  'wrapped_share','share_format','distributed_at')
+        """.trimIndent())
+        assertEquals(7, n, "executor_shares should have all 7 expected columns after V34")
+    }
+
+    @Test
+    fun `V34 capsule_key_format check constraint rejects unknown format`() {
+        val userId = FOUNDING_USER_UUID
+        val capsuleId = UUID.randomUUID()
+        exec("""
+            INSERT INTO capsules (id, created_at, updated_at, created_by_user, shape, state, unlock_at, user_id)
+            VALUES ('$capsuleId', NOW(), NOW(), 'test', 'open', 'open', NOW() + INTERVAL '1 year', '$userId')
+        """.trimIndent())
+        assertThrows<SQLException> {
+            exec("""
+                UPDATE capsules SET capsule_key_format = 'unknown-format-v99' WHERE id = '$capsuleId'
+            """.trimIndent())
+        }
+        exec("DELETE FROM capsules WHERE id = '$capsuleId'")
+    }
+
+    @Test
+    fun `V34 shamir threshold lte total check constraint rejects threshold greater than total`() {
+        val userId = FOUNDING_USER_UUID
+        val capsuleId = UUID.randomUUID()
+        exec("""
+            INSERT INTO capsules (id, created_at, updated_at, created_by_user, shape, state, unlock_at, user_id)
+            VALUES ('$capsuleId', NOW(), NOW(), 'test', 'open', 'open', NOW() + INTERVAL '1 year', '$userId')
+        """.trimIndent())
+        assertThrows<SQLException> {
+            exec("""
+                UPDATE capsules SET shamir_threshold = 5, shamir_total_shares = 3 WHERE id = '$capsuleId'
+            """.trimIndent())
+        }
+        exec("DELETE FROM capsules WHERE id = '$capsuleId'")
+    }
 }

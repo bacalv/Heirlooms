@@ -23,8 +23,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [REF-002](queue/REF-002_tag-to-label-rename.md) | Tag → Label rename across all platforms and documentation | Refactoring | Medium | Developer | — |
 | [TST-006](queue/TST-006_android-remote-control-investigation.md) | Investigate remote-controlled Android testing for E2E automation | Testing | Medium | TestManager | — |
 | [TST-012](queue/TST-012_manual-staging-checklist-v056.md) | Manual staging checklist v0.56 — **held until staging ready** | Testing | High | TestManager | *(all v0.56 branches merged)* |
-| [DEV-001](queue/DEV-001.md) | M11 Wave 0 — V33 + V34 Flyway migrations (schema only) | Feature | High | Developer | — |
-| [DEV-002](queue/DEV-002.md) | M11 Wave 1 — connections CRUD endpoints | Feature | High | Developer | DEV-001 |
+| [DEV-002](queue/DEV-002.md) | M11 Wave 1 — connections CRUD endpoints | Feature | High | Developer | ~~DEV-001~~ ✓ |
 | [DEV-003](queue/DEV-003.md) | M11 Waves 2+3 — executor nominations + recipient linking | Feature | High | Developer | DEV-002 |
 | [DEV-004](queue/DEV-004.md) | M11 Wave 4 — executor share distribution | Feature | High | Developer | DEV-003 |
 | [DEV-005](queue/DEV-005.md) | M11 Wave 5 — /seal endpoint (16-step validation) | Feature | High | Developer | DEV-004 |
@@ -43,6 +42,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
+| [DEV-001](done/DEV-001.md) | M11 Wave 0 — V33 + V34 Flyway migrations (schema only) | Feature | 2026-05-17 |
 | [PLAN-001](done/PLAN-001_m11-task-breakdown.md) | M11 task breakdown — DEV-001 through DEV-006 created | Planning | 2026-05-17 |
 | [ARCH-015](done/ARCH-015_api-stability-contract.md) | API stability contract — frozen surface, policy, 8 regression pairs | Architecture | 2026-05-17 |
 | [TST-014](done/TST-014_m11-local-stack-feasibility.md) | M11 local stack — feasibility and design brief | Testing | 2026-05-17 |
