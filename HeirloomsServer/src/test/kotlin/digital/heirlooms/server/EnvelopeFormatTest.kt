@@ -192,6 +192,38 @@ class EnvelopeFormatTest {
         assertThrows<EnvelopeFormatException> { EnvelopeFormat.validateAsymmetric(blob) }
     }
 
+    @Test
+    fun `algorithm ID length byte of zero is rejected`() {
+        // algIdLen == 0 is explicitly disallowed by the validator
+        val blob = byteArrayOf(0x01, 0x00) + randomBytes(12) + randomBytes(8) + randomBytes(16)
+        assertThrows<EnvelopeFormatException> { EnvelopeFormat.validateSymmetric(blob) }
+    }
+
+    @Test
+    fun `algorithm ID length zero also rejected by validateAsymmetric`() {
+        val blob = byteArrayOf(0x01, 0x00) + randomBytes(65) + randomBytes(12) + randomBytes(8) + randomBytes(16)
+        assertThrows<EnvelopeFormatException> { EnvelopeFormat.validateAsymmetric(blob) }
+    }
+
+    @Test
+    fun `validateAsymmetric rejects algorithm ID mismatch when expectedAlgorithmId set`() {
+        // Build a valid asymmetric blob then ask it to be validated as a different (also asymmetric) id
+        val ephPubkey = p256EphemeralPubkey()
+        val blob = asymEnvelope(AlgorithmIds.P256_ECDH_HKDF_AES256GCM_V1, ephPubkey, randomBytes(12), randomBytes(8), randomBytes(16))
+        // Pass a non-null but deliberately wrong expectedAlgorithmId
+        assertThrows<EnvelopeFormatException> {
+            EnvelopeFormat.validateAsymmetric(blob, "p256-ecdh-hkdf-aes256gcm-v2")
+        }
+    }
+
+    @Test
+    fun `validateAsymmetric version byte 0x02 is rejected`() {
+        val algBytes = AlgorithmIds.P256_ECDH_HKDF_AES256GCM_V1.toByteArray(Charsets.UTF_8)
+        val blob = byteArrayOf(0x02, algBytes.size.toByte()) + algBytes +
+            p256EphemeralPubkey() + randomBytes(12) + randomBytes(8) + randomBytes(16)
+        assertThrows<EnvelopeFormatException> { EnvelopeFormat.validateAsymmetric(blob) }
+    }
+
     // ---- Non-throwing convenience wrappers ----
 
     @Test
@@ -209,5 +241,22 @@ class EnvelopeFormatTest {
     fun `isValidAsymmetric returns true for a well-formed asymmetric blob`() {
         val blob = asymEnvelope(AlgorithmIds.P256_ECDH_HKDF_AES256GCM_V1, p256EphemeralPubkey(), randomBytes(12), randomBytes(8), randomBytes(16))
         assertTrue(EnvelopeFormat.isValidAsymmetric(blob))
+    }
+
+    @Test
+    fun `isValidAsymmetric returns false for a structurally bad blob`() {
+        assertFalse(EnvelopeFormat.isValidAsymmetric(byteArrayOf(0x00, 0x00)))
+    }
+
+    @Test
+    fun `isValidSymmetric returns false when expectedAlgorithmId does not match`() {
+        val blob = symEnvelope(AlgorithmIds.AES256GCM_V1, randomBytes(12), randomBytes(8), randomBytes(16))
+        assertFalse(EnvelopeFormat.isValidSymmetric(blob, AlgorithmIds.MASTER_AES256GCM_V1))
+    }
+
+    @Test
+    fun `isValidAsymmetric returns false when expectedAlgorithmId does not match`() {
+        val blob = asymEnvelope(AlgorithmIds.P256_ECDH_HKDF_AES256GCM_V1, p256EphemeralPubkey(), randomBytes(12), randomBytes(8), randomBytes(16))
+        assertFalse(EnvelopeFormat.isValidAsymmetric(blob, "p256-ecdh-hkdf-aes256gcm-v2"))
     }
 }
