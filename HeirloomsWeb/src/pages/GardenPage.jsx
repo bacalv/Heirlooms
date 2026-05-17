@@ -24,11 +24,13 @@ import { API_URL, apiFetch, initiateEncryptedUpload, initiateResumableUpload, pu
 import { ShareModal } from '../components/ShareModal'
 import { WorkingDots } from '../brand/WorkingDots'
 import { ConfirmDialog } from '../components/ConfirmDialog'
-import { getMasterKey, getSharingPrivkey } from '../crypto/vaultSession'
+import { getMasterKey, getSharingPrivkey, getPlotKey, setPlotKey } from '../crypto/vaultSession'
 import {
   generateDek, encryptSymmetric, wrapDekUnderMasterKey, ALG_AES256GCM_V1, ALG_MASTER_AES256GCM_V1,
   decryptSymmetric, unwrapDekWithMasterKey, fromB64, toB64, aesGcmEncryptWithAad,
   generatePlotKey, wrapPlotKeyForMember,
+  unwrapDekWithPlotKey, wrapDekWithPlotKey, unwrapWithSharingKey, unwrapPlotKey,
+  ALG_P256_ECDH_HKDF_V1, ALG_PLOT_AES256GCM_V1,
 } from '../crypto/vaultCrypto'
 import { InviteMemberModal } from '../components/InviteMemberModal'
 import { parse as parseExif } from 'exifr'
@@ -636,6 +638,98 @@ function SortablePlotRow({ plot, membership, isFirst, isLast, apiKey, onEdit, on
 
 // ---- Main GardenPage -------------------------------------------------------
 
+/**
+ * Builds pre-wrapped plot DEKs for all shared plots whose plot key is cached in
+ * vaultSession or can be fetched from the server.  Mirrors the Android
+ * buildPrewrappedDeks helper (BUG-024).  The server uses whichever entries match a
+ * firing trellis and discards the rest, allowing direct insert into plot_items
+ * without requiring staging.
+ *
+ * @param {object} upload  - upload object (must have wrappedDek, dekFormat fields)
+ * @param {Array}  plots   - all plots currently shown in the garden
+ * @param {string} apiKey  - user's API key (for fetching plot keys not yet cached)
+ * @returns {Array} prewrappedPlotDeks — may be empty if vault has no plot keys
+ */
+async function buildPrewrappedDeks(upload, plots, apiKey) {
+  if (!upload.wrappedDek) return []
+  const masterKey = getMasterKey()
+  const sharingPrivkey = getSharingPrivkey()
+  const sharedPlots = plots.filter((p) => p.visibility === 'shared')
+  if (sharedPlots.length === 0) return []
+
+  // Unwrap the raw DEK once
+  let rawDek
+  try {
+    const wrappedDek = fromB64(upload.wrappedDek)
+    if (upload.dekFormat === ALG_P256_ECDH_HKDF_V1) {
+      if (!sharingPrivkey) return []
+      rawDek = await unwrapWithSharingKey(wrappedDek, sharingPrivkey)
+    } else if (upload.dekFormat === ALG_PLOT_AES256GCM_V1) {
+      // Try each cached plot key until one works
+      let found = false
+      for (const p of sharedPlots) {
+        const pk = getPlotKey(p.id)
+        if (!pk) continue
+        try { rawDek = await unwrapDekWithPlotKey(wrappedDek, pk); found = true; break } catch {}
+      }
+      if (!found) return []
+    } else {
+      rawDek = await unwrapDekWithMasterKey(wrappedDek, masterKey)
+    }
+  } catch { return [] }
+
+  // Unwrap thumbnail DEK (best-effort)
+  let rawThumbDek = null
+  if (upload.wrappedThumbnailDek) {
+    try {
+      const wrappedThumb = fromB64(upload.wrappedThumbnailDek)
+      if (upload.thumbnailDekFormat === ALG_P256_ECDH_HKDF_V1) {
+        if (sharingPrivkey) rawThumbDek = await unwrapWithSharingKey(wrappedThumb, sharingPrivkey)
+      } else if (upload.thumbnailDekFormat === ALG_PLOT_AES256GCM_V1) {
+        for (const p of sharedPlots) {
+          const pk = getPlotKey(p.id)
+          if (!pk) continue
+          try { rawThumbDek = await unwrapDekWithPlotKey(wrappedThumb, pk); break } catch {}
+        }
+      } else {
+        rawThumbDek = await unwrapDekWithMasterKey(wrappedThumb, masterKey)
+      }
+    } catch {}
+  }
+
+  // Re-wrap under every plot key we can access
+  const result = []
+  for (const plot of sharedPlots) {
+    let plotKey = getPlotKey(plot.id)
+    if (!plotKey) {
+      // Fetch and cache the plot key if not yet loaded
+      try {
+        if (!sharingPrivkey) continue
+        const resp = await apiFetch(`/api/plots/${plot.id}/plot-key`, apiKey)
+        if (!resp.ok) continue
+        const { wrappedPlotKey } = await resp.json()
+        plotKey = await unwrapPlotKey(fromB64(wrappedPlotKey), sharingPrivkey)
+        setPlotKey(plot.id, plotKey)
+      } catch { continue }
+    }
+    try {
+      const rewrappedItem = await wrapDekWithPlotKey(rawDek, plotKey)
+      const entry = {
+        plotId: plot.id,
+        wrappedItemDek: toB64(rewrappedItem),
+        itemDekFormat: ALG_PLOT_AES256GCM_V1,
+      }
+      if (rawThumbDek) {
+        const rewrappedThumb = await wrapDekWithPlotKey(rawThumbDek, plotKey)
+        entry.wrappedThumbnailDek = toB64(rewrappedThumb)
+        entry.thumbnailDekFormat = ALG_PLOT_AES256GCM_V1
+      }
+      result.push(entry)
+    } catch {}
+  }
+  return result
+}
+
 async function getVideoDurationSeconds(file) {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file)
@@ -1091,9 +1185,16 @@ export function GardenPage() {
   }
 
   async function handleQuickUpdateTags(uploadId, tags) {
+    // Build pre-wrapped DEKs for shared plots so the server can perform DEK re-wrap
+    // on trellis routing without requiring staging (BUG-024).
+    const upload = quickTagUpload
+    const prewrappedPlotDeks = upload ? await buildPrewrappedDeks(upload, plots, apiKey).catch(() => []) : []
+    const body = prewrappedPlotDeks.length > 0
+      ? { tags, prewrappedPlotDeks }
+      : { tags }
     const r = await apiFetch(`/api/content/uploads/${uploadId}/tags`, apiKey, {
       method: 'PATCH',
-      body: JSON.stringify({ tags }),
+      body: JSON.stringify(body),
     })
     if (!r.ok) {
       let msg = `HTTP ${r.status}`
