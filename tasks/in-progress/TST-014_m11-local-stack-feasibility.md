@@ -65,4 +65,45 @@ a separate task once the CTO approves the design.
 
 ## Completion notes
 
-*(agent appends here on completion)*
+Completed 2026-05-17 by TestManager (agent/test-manager-5/TST-014).
+
+Design brief produced at `docs/testing/TST-014_m11-local-stack-design.md`.
+
+**Feasibility answers (summary):**
+
+1. **In-process server: feasible.** `buildApp` accepts `FileStore` and `Database` by
+   constructor injection with no hard GCS/Cloud SQL dependencies. The tlock path
+   requires `StubTimeLockProvider` to be injected (not yet implemented on the M11
+   branch).
+
+2. **`LocalFileStore` is fully suitable.** All M11 capsule crypto columns are stored
+   in PostgreSQL (`BYTEA`), not in the file store. `LocalFileStore` covers all upload
+   content paths. Pre-signed URL routes (which require `DirectUploadSupport`) return
+   501 and are acceptable skips.
+
+3. **TOOL-001 is not the iteration gate driver.** Tests stay in-process (http4k
+   `HttpHandler` — same pattern as `SharingFlowIntegrationTest.kt`). TOOL-001 is
+   reserved for supplementary black-box validation against a live server. This avoids
+   a blocking dependency on ARCH-015.
+
+4. **Testcontainers (real PostgreSQL 16), not H2.** M11 schema uses PostgreSQL-specific
+   features (`gen_random_uuid()`, `BYTEA` constraints, `JSONB`) that H2 does not
+   support. The Testcontainers pattern is already proven by two existing test classes.
+
+5. **Clean run: `./gradlew :HeirloomsServer:test`.** No shell script needed. Env vars
+   for Testcontainers are already configured in `build.gradle.kts`. A dedicated
+   `integrationTest` Gradle task is recommended once test volume warrants it.
+
+**Key blocker flagged to CTO:** `buildApp` must be extended to accept a
+`TimeLockProvider` parameter before Wave 5/6 integration tests can be written. The
+first M11 developer task implementing `/seal` must include this change.
+
+**M11 schema blocker:** V31/V32 connections and capsule crypto migrations
+(ARCH-010 §3) are not yet in the codebase. The highest existing migration is
+`V32__add_require_biometric_to_users.sql`, so the M11 schema migrations will be V33
+and V34 (or higher). Developer tasks must check the current highest version before
+naming migration files.
+
+**CI feasibility: confirmed.** GitHub Actions `ubuntu-latest` runners support Docker
+natively. No cloud credentials are needed. Recommended workflow file specified in the
+brief (§7).
