@@ -18,7 +18,6 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [BUG-025](queue/BUG-025_web-friends-no-nav-link.md) | Web Friends page has no navigation link | Bug Fix | Low | Developer | — |
 | [BUG-026](queue/BUG-026_invite-link-no-auto-route.md) | Invite link doesn't auto-route token for logged-in users | Bug Fix | Low | Developer | — |
 | [STR-001](queue/STR-001_strategic-synthesis-top-20-features-direction-brief.md) | Strategic synthesis — top 20 features and direction brief for CTO | Strategy | Medium | PA | *(ARCH-008 done — unblocked)* |
-| [BIO-002](queue/BIO-002_hi-claude-book-and-blog-concept.md) | "Hi Claude..." — book and blog series concept development | Biography | Medium | Biographer | BIO-001 |
 | [REF-002](queue/REF-002_tag-to-label-rename.md) | Tag → Label rename across all platforms and documentation | Refactoring | Medium | Developer | — |
 | [TST-006](queue/TST-006_android-remote-control-investigation.md) | Investigate remote-controlled Android testing for E2E automation | Testing | Medium | TestManager | — |
 | [TST-012](queue/TST-012_manual-staging-checklist-v056.md) | Manual staging checklist v0.56 — **held until staging ready** | Testing | High | TestManager | *(all v0.56 branches merged)* |
@@ -37,8 +36,8 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
-| [DEV-004](done/DEV-004.md) | M11 Wave 4 — executor share distribution (3 endpoints, 36 tests) | Feature | 2026-05-17 |
-| [DEV-003](done/DEV-003.md) | M11 Waves 2+3 — executor nominations + recipient linking (7 endpoints, 63 tests) | Feature | 2026-05-17 |
+| [BIO-002](done/BIO-002_hi-claude-book-and-blog-concept.md) | "Hi Claude..." — book and blog series concept development | Biography | 2026-05-17 |
+| [DEV-004](done/DEV-004.md) | M11 Wave 4 — executor share distribution (3 endpoints, 36 tests) | Feature | 2026-05-17 || [DEV-003](done/DEV-003.md) | M11 Waves 2+3 — executor nominations + recipient linking (7 endpoints, 63 tests) | Feature | 2026-05-17 |
 | [DEV-002](done/DEV-002.md) | M11 Wave 1 — connections CRUD endpoints (5 endpoints, 35 tests) | Feature | 2026-05-17 |
 | [TOOL-001](done/TOOL-001_kotlin-api-client-module.md) | Kotlin API client module — Phase 1 capsule lifecycle CLI | Tools | 2026-05-17 |
 | [DEV-001](done/DEV-001.md) | M11 Wave 0 — V33 + V34 Flyway migrations (schema only) | Feature | 2026-05-17 |

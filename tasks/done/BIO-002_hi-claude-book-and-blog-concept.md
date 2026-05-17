@@ -129,4 +129,23 @@ third.
 
 ## Completion notes
 
-<!-- Biographer appends here and moves file to tasks/done/ -->
+**Completed:** 2026-05-17  
+**Biographer:** Claude Sonnet 4.6
+
+All 8 sections produced at `docs/biography/BIO-002_hi-claude-book-concept.md`.
+
+Key decisions embedded in the concept:
+
+- **Title confirmed:** "Hi Claude..." with subtitle "A man, his grandmother's photos, and an accidental cryptographic breakthrough"
+- **12 chapters designed** for dual book/blog format; each standalone-readable, rewards reading in sequence
+- **Launch post sequence:** Chapter 1 (origin), Chapter 3 (the cryptographic promise), Chapter 9 (the AI team) — in that order
+- **Cadence:** Monthly, no exceptions
+- **Platform:** Substack (email list ownership, paid tier for book pre-sales)
+- **Chapter 6 ("The Construction"):** Must be held until after patent filing (mid-July 2026). Recommend drafting privately now; publish as a marketing event on the day of filing
+- **Sample opening (Chapter 1):** 5 paragraphs drafted; reader laughs in paragraph 1, feels something by paragraph 3–4
+- **6 open questions** for direct conversation with Bret before Chapter 11 can be written; most important: the founding trigger and who the product is actually for
+
+Disclosure-safe content: 10 of 12 chapters can be written and published now.  
+On hold pre-patent: Chapter 6 (full), Chapter 7 (technical portion only).  
+On hold pending JUXT consent: Chapter 8.  
+On hold pending direct conversation: Chapters 10 and 11.
