@@ -23,7 +23,13 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [REF-002](queue/REF-002_tag-to-label-rename.md) | Tag → Label rename across all platforms and documentation | Refactoring | Medium | Developer | — |
 | [TST-006](queue/TST-006_android-remote-control-investigation.md) | Investigate remote-controlled Android testing for E2E automation | Testing | Medium | TestManager | — |
 | [TST-012](queue/TST-012_manual-staging-checklist-v056.md) | Manual staging checklist v0.56 — **held until staging ready** | Testing | High | TestManager | *(all v0.56 branches merged)* |
-| [TST-014](queue/TST-014_m11-local-stack-feasibility.md) | M11 local stack — feasibility and design for iteration sign-off | Testing | High | TestManager | — |
+| [DEV-001](queue/DEV-001.md) | M11 Wave 0 — V33 + V34 Flyway migrations (schema only) | Feature | High | Developer | — |
+| [DEV-002](queue/DEV-002.md) | M11 Wave 1 — connections CRUD endpoints | Feature | High | Developer | DEV-001 |
+| [DEV-003](queue/DEV-003.md) | M11 Waves 2+3 — executor nominations + recipient linking | Feature | High | Developer | DEV-002 |
+| [DEV-004](queue/DEV-004.md) | M11 Wave 4 — executor share distribution | Feature | High | Developer | DEV-003 |
+| [DEV-005](queue/DEV-005.md) | M11 Wave 5 — /seal endpoint (16-step validation) | Feature | High | Developer | DEV-004 |
+| [DEV-006](queue/DEV-006.md) | M11 Waves 6+7 — /tlock-key delivery + read-path amendments | Feature | High | Developer | DEV-005 |
+| [TOOL-001](queue/TOOL-001_kotlin-api-client-module.md) | Kotlin API client module — standalone capsule lifecycle demo | Tools | High | Developer | ARCH-015 ✓ |
 | [DOC-001](queue/DOC-001_uml-sequence-diagrams.md) | UML sequence diagrams from test output | Docs | Low | Developer | TST-004 ✓ |
 | [RES-005](queue/RES-005_glossary-self-reference-audit.md) | Glossary self-reference audit — ensure every cited term has an entry | Research | Low | ResearchManager | — |
 | [OPS-003](queue/OPS-003_pre-production-staging-environment.md) | Pre-production staging environment — prod-snapshot + anonymisation pipeline | Operations | Low | OpsManager | — |
@@ -37,6 +43,9 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
+| [PLAN-001](done/PLAN-001_m11-task-breakdown.md) | M11 task breakdown — DEV-001 through DEV-006 created | Planning | 2026-05-17 |
+| [ARCH-015](done/ARCH-015_api-stability-contract.md) | API stability contract — frozen surface, policy, 8 regression pairs | Architecture | 2026-05-17 |
+| [TST-014](done/TST-014_m11-local-stack-feasibility.md) | M11 local stack — feasibility and design brief | Testing | 2026-05-17 |
 | [TST-013](done/TST-013_sharing-flow-integration-test.md) | Sharing flow integration test — 6 tests (4 integration + 2 unit) | Testing | 2026-05-17 |
 | [BUG-029](done/BUG-029_web-pairing-no-device-entry.md) | Web pairing — register persistent device key after pairing | Bug Fix | 2026-05-17 |
 | [BUG-023](done/BUG-023_passphrase-save-409-after-web-pairing.md) | Passphrase save 409 after web pairing — guard registerDevice, fix PairPage | Bug Fix | 2026-05-17 |
