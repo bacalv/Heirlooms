@@ -14,6 +14,8 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Priority | Assigned to | Depends on |
 |---|---|---|---|---|---|
+| [LEG-003](queue/LEG-003_patent-assessment-rес005-presence-gated-constructions.md) | Patent assessment — RES-005 presence-gated delivery and count-conditional trigger | Legal | High | Legal | LEG-001, LEG-002 |
+| [ARCH-014](queue/ARCH-014_res005-technical-impact-assessment.md) | Technical impact assessment — RES-005 presence-gated delivery and count-conditional trigger | Architecture | Medium | TechnicalArchitect | ARCH-003, ARCH-006, ARCH-008, ARCH-010 |
 | [ARCH-012](queue/ARCH-012_android-package-restructure-brief.md) | Android app — package restructure and refactor brief | Architecture | High | TechnicalArchitect | — |
 | [ARCH-013](queue/ARCH-013_web-app-restructure-brief.md) | Web app — module restructure and refactor brief | Architecture | High | TechnicalArchitect | — |
 | [BUG-023](queue/BUG-023_passphrase-save-409-after-web-pairing.md) | Passphrase save fails 409 after web pairing | Bug Fix | High | Developer | — |
