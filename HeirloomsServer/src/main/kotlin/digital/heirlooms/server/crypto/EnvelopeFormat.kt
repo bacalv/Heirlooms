@@ -8,9 +8,11 @@ object AlgorithmIds {
     const val PLOT_AES256GCM_V1            = "plot-aes256gcm-v1"
     const val P256_ECDH_HKDF_AES256GCM_V1 = "p256-ecdh-hkdf-aes256gcm-v1"
     const val ARGON2ID_AES256GCM_V1        = "argon2id-aes256gcm-v1"
+    // M11: asymmetric envelope for per-capsule DEK and Shamir shares (ARCH-003 §1)
+    const val CAPSULE_ECDH_AES256GCM_V1   = "capsule-ecdh-aes256gcm-v1"
 
     val SYMMETRIC  = setOf(AES256GCM_V1, MASTER_AES256GCM_V1, PLOT_AES256GCM_V1, ARGON2ID_AES256GCM_V1)
-    val ASYMMETRIC = setOf(P256_ECDH_HKDF_AES256GCM_V1)
+    val ASYMMETRIC = setOf(P256_ECDH_HKDF_AES256GCM_V1, CAPSULE_ECDH_AES256GCM_V1)
     val ALL        = SYMMETRIC + ASYMMETRIC
 }
 
