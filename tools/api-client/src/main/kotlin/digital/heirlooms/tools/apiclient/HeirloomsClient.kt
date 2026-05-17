@@ -108,69 +108,28 @@ class HeirloomsClient(
      * Phase 1 uses storage_class "public" (plaintext bytes sent to GCS).
      * Phase 2 will inject an encryption step between initiate and PUT.
      *
-     * Returns the upload ID (UUID string) from the uploads list.
+     * Returns the upload ID (UUID string) from the upload record.
+     *
+     * Uses POST /api/content/upload (direct upload) so the flow works with
+     * local storage as well as GCS. The initiate/PUT/confirm flow is GCS-only.
      */
-    fun uploadFile(fileBytes: ByteArray, mimeType: String = "application/octet-stream"): String {
+    fun uploadFile(fileBytes: ByteArray, mimeType: String = "image/jpeg"): String {
         log("uploadFile", "size=${fileBytes.size} mimeType=$mimeType")
 
-        // Step 2a: initiate — get signed upload URL
-        val initiateResp = post(
-            path = "/api/content/uploads/initiate",
-            body = mapOf("mimeType" to mimeType, "storage_class" to "public"),
+        val uploadResp = postBinary(
+            path = "/api/content/upload",
+            bytes = fileBytes,
+            contentType = mimeType,
         )
-        require(initiateResp.code == 200) {
-            "upload initiate failed: HTTP ${initiateResp.code} — ${initiateResp.bodyString()}"
+        require(uploadResp.code == 201) {
+            "upload failed: HTTP ${uploadResp.code} — ${uploadResp.bodyString()}"
         }
-        val initiateNode = parseJson(initiateResp.bodyString())
-        val storageKey = initiateNode.get("storageKey")?.asText()
-            ?: error("initiate response missing storageKey")
-        val uploadUrl = initiateNode.get("uploadUrl")?.asText()
-            ?: error("initiate response missing uploadUrl")
-        log("uploadFile", "initiate OK — storageKey=${storageKey.take(16)}… uploadUrl=${uploadUrl.take(40)}…")
-
-        // Step 2b: PUT bytes directly to GCS signed URL
-        putToSignedUrl(uploadUrl, fileBytes, mimeType)
-        log("uploadFile", "PUT to GCS OK — ${fileBytes.size} bytes uploaded")
-
-        // Step 2c: confirm — register the upload in the Heirlooms database
-        val confirmResp = post(
-            path = "/api/content/uploads/confirm",
-            body = mapOf(
-                "storageKey" to storageKey,
-                "mimeType" to mimeType,
-                "fileSize" to fileBytes.size,
-                "storage_class" to "public",
-            ),
-        )
-        require(confirmResp.code == 201) {
-            "upload confirm failed: HTTP ${confirmResp.code} — ${confirmResp.bodyString()}"
-        }
-        log("uploadFile", "confirm OK — upload registered")
-
-        // Step 2d: resolve upload ID by storageKey (confirm returns 201 with no body)
-        val uploadId = resolveUploadIdByStorageKey(storageKey)
-            ?: error("could not find upload with storageKey=$storageKey after confirm")
-        log("uploadFile", "resolved upload ID: $uploadId")
+        val uploadNode = parseJson(uploadResp.bodyString())
+        val uploadId = uploadNode.get("id")?.asText()
+            ?: error("upload response missing id")
+        val storageKey = uploadNode.get("storageKey")?.asText() ?: "?"
+        log("uploadFile", "OK — upload_id=$uploadId storageKey=${storageKey.take(16)}…")
         return uploadId
-    }
-
-    /**
-     * Resolves the upload UUID by listing uploads and matching on storageKey.
-     * Used because confirm (POST /uploads/confirm) returns 201 with no body.
-     */
-    private fun resolveUploadIdByStorageKey(storageKey: String): String? {
-        val listResp = get("/api/content/uploads?limit=50")
-        require(listResp.code == 200) {
-            "list uploads failed: HTTP ${listResp.code} — ${listResp.bodyString()}"
-        }
-        val listNode = parseJson(listResp.bodyString())
-        val uploads = listNode.get("uploads") ?: listNode.get("items") ?: return null
-        for (upload in uploads) {
-            if (upload.get("storageKey")?.asText() == storageKey) {
-                return upload.get("id")?.asText()
-            }
-        }
-        return null
     }
 
     // -------------------------------------------------------------------------
@@ -257,21 +216,34 @@ class HeirloomsClient(
     // -------------------------------------------------------------------------
 
     /**
-     * Seals the capsule [capsuleId] using POST /api/capsules/{id}/seal.
+     * Seals the capsule [capsuleId].
      *
-     * Phase 1: simple state transition — no crypto body.
-     * Phase 2: will use PUT /api/capsules/{id}/seal with recipient_keys[], tlock, shamir fields.
-     * The separation between POST (Phase 1) and PUT (Phase 2/M11) is by design per ARCH-015.
+     * If [connectionId] and [wrappedCapsuleKey] are provided (M11 path), sends a
+     * recipient_keys block so the server can store the per-recipient ECDH envelope.
+     * Otherwise falls back to a no-body POST (pre-M11 backwards-compat path).
      *
      * Returns the full capsule detail JSON node after sealing.
      */
-    fun sealCapsule(capsuleId: String): JsonNode {
-        log("sealCapsule", "capsule_id=$capsuleId")
+    fun sealCapsule(
+        capsuleId: String,
+        connectionId: String? = null,
+        wrappedCapsuleKey: String? = null,
+    ): JsonNode {
+        log("sealCapsule", "capsule_id=$capsuleId m11=${connectionId != null}")
 
-        val sealResp = post(
-            path = "/api/capsules/$capsuleId/seal",
-            body = null,
-        )
+        val body: Any? = if (connectionId != null && wrappedCapsuleKey != null) {
+            mapOf(
+                "recipient_keys" to listOf(
+                    mapOf(
+                        "connection_id" to connectionId,
+                        "wrapped_capsule_key" to wrappedCapsuleKey,
+                        "capsule_key_format" to "capsule-ecdh-aes256gcm-v1",
+                    )
+                )
+            )
+        } else null
+
+        val sealResp = post(path = "/api/capsules/$capsuleId/seal", body = body)
         require(sealResp.code == 200) {
             "seal capsule failed: HTTP ${sealResp.code} — ${sealResp.bodyString()}"
         }
@@ -361,16 +333,14 @@ class HeirloomsClient(
         return http.newCall(req).execute()
     }
 
-    private fun putToSignedUrl(url: String, bytes: ByteArray, mimeType: String) {
-        val reqBody = bytes.toRequestBody(mimeType.toMediaType())
+    private fun postBinary(path: String, bytes: ByteArray, contentType: String): Response {
+        val reqBody = bytes.toRequestBody(contentType.toMediaType())
         val req = Request.Builder()
-            .url(url)
-            .put(reqBody)
+            .url("${config.baseUrl}$path")
+            .post(reqBody)
+            .addHeader("X-Api-Key", requireToken())
             .build()
-        val resp = http.newCall(req).execute()
-        require(resp.code in 200..299) {
-            "PUT to signed URL failed: HTTP ${resp.code} — ${resp.body?.string()}"
-        }
+        return http.newCall(req).execute()
     }
 
     private fun requireToken(): String =

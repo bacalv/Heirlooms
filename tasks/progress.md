@@ -26,6 +26,14 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 | [RES-005](queue/RES-005_glossary-self-reference-audit.md) | Glossary self-reference audit — ensure every cited term has an entry | Research | Low | ResearchManager | — |
 | [OPS-003](queue/OPS-003_pre-production-staging-environment.md) | Pre-production staging environment — prod-snapshot + anonymisation pipeline | Operations | Low | OpsManager | — |
 | [UX-001](queue/UX-001_shared-plot-button-tap-targets.md) | Android: shared plot action buttons have insufficient tap targets | UX | Low | Developer | — |
+| [TOOL-002](queue/TOOL-002_interactive-repl.md) | Interactive REPL — heirlooms> command shell for the capsule API | Tools | Medium | Developer | TOOL-001 ✓ |
+| [ARCH-016](queue/ARCH-016_hub-architecture-and-underwear.md) | Hub architecture and underwear layer — plan implementation milestone (brief complete) | Architecture | Medium | PA | M11 merged |
+| [DEV-007](queue/DEV-007_hub-phase1-gradle-underwear-scaffolding.md) | Hub Phase 1 — Gradle restructure + underwear scaffolding (FileStore migration, hub-common) | Refactoring | Medium | Developer | ARCH-016, M11 merged |
+| [DEV-008](queue/DEV-008_hub-phase2-vault-hub-extraction.md) | Hub Phase 2 — VaultHub extraction (CapsuleService, cleanest seam) | Refactoring | Medium | Developer | DEV-007 |
+| [DEV-009](queue/DEV-009_hub-phase3-media-hub-and-jackson.md) | Hub Phase 3 — MediaHub extraction + underwear/jackson (SharesPort dirty seam fix) | Refactoring | Medium | Developer | DEV-008 |
+| [DEV-010](queue/DEV-010_hub-phase4-identity-social-hubs.md) | Hub Phase 4 — IdentityHub + SocialHub extraction (UserLifecycleOrchestrator dirty seam fix) | Refactoring | Medium | Developer | DEV-009 |
+| [DEV-011](queue/DEV-011_hub-phase5-plot-hub-extraction.md) | Hub Phase 5 — PlotHub extraction (Heirlooms-specific domain, last hub) | Refactoring | Medium | Developer | DEV-010 |
+| [DEV-012](queue/DEV-012_hub-phase6-vault-server-app.md) | Hub Phase 6 — vault-server standalone app assembly (proof-of-concept vault product) | Feature | Medium | Developer | DEV-011 |
 
 ## In Progress
 
@@ -35,6 +43,7 @@ Tasks move through: **queue** → **in-progress** → **done** (or **brainstormi
 
 | ID | Title | Category | Completed |
 |----|-------|----------|-----------|
+| [BIO-003](done/BIO-003_first-live-walk.md) | The First Live Walk — M11 capsule walkthrough scene note, 2026-05-17 | Biography | 2026-05-17 |
 | [DEV-006](done/DEV-006.md) | M11 Waves 6+7 — /tlock-key delivery + read-path amendments — M11 server implementation COMPLETE | Feature | 2026-05-17 |
 | [BIO-002](done/BIO-002_hi-claude-book-and-blog-concept.md) | "Hi Claude..." — book and blog series concept development | Biography | 2026-05-17 |
 | [DEV-005](done/DEV-005.md) | M11 Wave 5 — /seal endpoint (16-step, tlock, Shamir; 717 tests pass) | Feature | 2026-05-17 |

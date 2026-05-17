@@ -65,7 +65,10 @@ fun main(args: Array<String>) {
 
         // ---- Step 5: Seal the capsule -------------------------------------------
         println("\n[api-client] --- Step 5: Seal the capsule ---")
-        val sealedDetail = client.sealCapsule(capsuleId)
+        val connectionId = System.getenv("DEMO_CONNECTION_ID")
+        val wrappedCapsuleKey = System.getenv("DEMO_WRAPPED_CAPSULE_KEY")
+        if (connectionId != null) println("[api-client] M11 seal: connection_id=$connectionId")
+        val sealedDetail = client.sealCapsule(capsuleId, connectionId, wrappedCapsuleKey)
         val sealedState = sealedDetail.get("state")?.asText()
         require(sealedState == "sealed") {
             "Expected state=sealed after seal, got state=$sealedState"

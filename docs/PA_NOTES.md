@@ -374,3 +374,26 @@ After prod   → Two parallel streams:
   M11 backend implementation          Mother's phone install (no fixed date)
   TOOL-001: Kotlin client module
 ```
+
+---
+
+## Session wrap-up (2026-05-17 — M11 live walkthrough)
+
+### What happened this session
+
+**First live M11 capsule walkthrough.** Bret asked to see the M11 system run interactively. With no app clients available, the walkthrough was done step-by-step in conversation: local PostgreSQL container, M11 server on port 8080 with stub tlock, seven API calls narrated one at a time. Capsule `858fda4f-9af0-4824-a1ca-4e3ba6d86e5b` sealed at `2026-05-17T22:32:52Z`, unlock `2027-05-17`, message: *"Hello from the future. This capsule was sealed on 2026-05-17."*
+
+**ARCH-016 updated mid-walkthrough.** A question about why the upload went through the server (LocalFileStore has no signed URL mechanism) turned into an architectural note: the Phase 1 underwear scaffolding must ship `LocalHttpFileStore` — a minimal embedded HTTP server that gives local storage real signed URLs so the initiate → direct-to-storage → confirm flow works identically in all environments. Direct upload route (`POST /api/content/upload`) should move to `/api/internal/upload` and be excluded from the public OpenAPI spec. Note written into ARCH-016 brief before the walkthrough continued.
+
+**TOOL-002 queued.** At the end of the walkthrough Bret asked for an interactive REPL (`heirlooms>` prompt, JLine3, tab completion, commands: `auth`, `upload`, `create`, `seal`, `list`, `get`, `connections`, `tlock-key`, `quit`, fat JAR). Queued as TOOL-002, depends on TOOL-001.
+
+**TOOL-001 CLI amended.** Two targeted changes made to `tools/api-client/HeirloomsClient.kt` during the walkthrough to make it work with local storage: (1) `uploadFile` now uses `POST /api/content/upload` (direct binary upload) instead of the GCS initiate/PUT/confirm flow; (2) `sealCapsule` now accepts optional `connectionId` + `wrappedCapsuleKey` params and sends a `recipient_keys` block when present. `Main.kt` reads `DEMO_CONNECTION_ID` and `DEMO_WRAPPED_CAPSULE_KEY` env vars for the M11 seal path. These changes are on `main` — not reverted, as they are genuine improvements.
+
+**BIO-003 written and merged.** Biographer scene note for the walkthrough. Disclosure-safe. Brackets the day with BIO-005 (DEV-005 seal moment, earlier same day).
+
+### Known gotchas for next session
+
+- **Local demo containers still running** — `docker rm -f heirlooms-demo` to stop PostgreSQL. M11 server process stops when terminal closes.
+- **TST-012 still the gate** — unchanged from previous session. Production deploy pending.
+- **TOOL-001 CLI changes on main** — the two amendments (direct upload, M11 seal with recipient_keys) are committed. No tests were added for the new paths; consider adding to the TOOL-002 acceptance criteria.
+- **Capsule `858fda4f` is in the local demo DB only** — not in test or production. The local DB disappears when the Docker container is removed.
